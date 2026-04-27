@@ -658,7 +658,18 @@
     "copied": "Copied!",
     "loadMore": "Load more",
     "pageBadge": "p.{n}",
-    "closeEsc": "Close (Esc)"
+    "closeEsc": "Close (Esc)",
+    "viewToggle": "View",
+    "viewCards": "Cards",
+    "viewList": "List",
+    "selectImage": "Select image",
+    "selectAll": "Select all on page",
+    "clearSelection": "Clear",
+    "selectedCount": "{n} selected",
+    "bulkComingSoon": "Actions coming in Phase 3…",
+    "colDescription": "Description",
+    "colPage": "Page",
+    "colDimensions": "Size"
   },
   "linkReport": {
     "title": "Link Check",

@@ -658,7 +658,18 @@
     "copied": "Kopieret!",
     "loadMore": "Hent flere",
     "pageBadge": "s.{n}",
-    "closeEsc": "Luk (Esc)"
+    "closeEsc": "Luk (Esc)",
+    "viewToggle": "Visning",
+    "viewCards": "Kort",
+    "viewList": "Liste",
+    "selectImage": "Vælg billede",
+    "selectAll": "Vælg alle på siden",
+    "clearSelection": "Ryd",
+    "selectedCount": "{n} valgt",
+    "bulkComingSoon": "Handlinger kommer i Phase 3…",
+    "colDescription": "Beskrivelse",
+    "colPage": "Side",
+    "colDimensions": "Størrelse"
   },
   "linkReport": {
     "title": "Link-tjek",
