@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { documents, documentImages, visionQualityRatings } from '@trail/db';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { basename } from 'node:path';
+import { resolveKbId } from '@trail/core';
 import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
 import { storage, imagePath } from '../lib/storage.js';
 import { defaultAudienceForAuth, isVisibleToAudience } from '../services/audience.js';
@@ -183,4 +184,175 @@ imageRoutes.get('/documents/:docId/images/:filename/rating', async (c) => {
     .get();
 
   return c.json({ rating: row?.rating ?? null });
+});
+
+// ── F163.1 — bulk endpoints (multi-select on Image Gallery) ─────────────
+
+/**
+ * Hard-delete a batch of images. DROPs document_images rows + best-effort
+ * purges storage blobs. Cascades:
+ *   - vision_quality_ratings rows (FK ON DELETE CASCADE)
+ *   - document_images_fts rows (DELETE trigger from migration 0025)
+ *
+ * Tenant-scope: a probe with image-ids from another tenant returns 0
+ * deleted; we never DELETE rows we couldn't first SELECT scoped.
+ *
+ * Audience: Bearer-keys (tool audience) are forbidden — image deletion
+ * is an operator-only action. Curator session-cookie passes.
+ *
+ * Storage purge is best-effort: if the blob is missing or unlink fails,
+ * we log and surface in storageWarnings but the DB delete still
+ * commits. Orphan blobs can be GC'd later by a sweep.
+ */
+imageRoutes.post('/knowledge-bases/:kbId/images/bulk-delete', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
+  if (!kbId) return c.json({ error: 'Not found' }, 404);
+
+  // Audience guard — operator-only.
+  if (c.get('authType') === 'bearer') {
+    return c.json({ error: 'Bulk-delete is operator-only (session-cookie required)' }, 403);
+  }
+
+  const body = (await c.req.json().catch(() => null)) as { imageIds?: unknown } | null;
+  const imageIds = Array.isArray(body?.imageIds) ? body!.imageIds.filter((x): x is string => typeof x === 'string') : [];
+  if (imageIds.length === 0) return c.json({ error: 'imageIds[] required' }, 400);
+
+  // Hard cap to keep one query under SQLite's parameter limit and
+  // bound the latency. Larger batches chunk client-side.
+  if (imageIds.length > 500) {
+    return c.json({ error: 'Max 500 images per request' }, 400);
+  }
+
+  // Scoped SELECT first — fail-closed on cross-tenant.
+  const scoped = await trail.db
+    .select({
+      id: documentImages.id,
+      storagePath: documentImages.storagePath,
+    })
+    .from(documentImages)
+    .innerJoin(documents, eq(documents.id, documentImages.documentId))
+    .where(
+      and(
+        inArray(documentImages.id, imageIds),
+        eq(documents.tenantId, tenant.id),
+        eq(documentImages.knowledgeBaseId, kbId),
+      ),
+    )
+    .all();
+
+  if (scoped.length === 0) {
+    return c.json({ deleted: 0, storageWarnings: [] });
+  }
+
+  const scopedIds = scoped.map((r) => r.id);
+  const storagePaths = scoped.map((r) => r.storagePath);
+
+  // DELETE — cascades fire automatically.
+  await trail.db
+    .delete(documentImages)
+    .where(inArray(documentImages.id, scopedIds))
+    .run();
+
+  // Best-effort blob purge.
+  const storageWarnings: string[] = [];
+  for (const path of storagePaths) {
+    try {
+      await storage.delete(path);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[bulk-delete] storage.delete failed for ${path}: ${msg}`);
+      storageWarnings.push(`${path}: ${msg}`);
+    }
+  }
+
+  return c.json({ deleted: scopedIds.length, storageWarnings });
+});
+
+/**
+ * Bulk-rate a set of images with the same rating (typically 'down'
+ * for "flag these as low quality"). Reuses F164 Phase 5 schema —
+ * UPSERTs into vision_quality_ratings keyed by (user_id, image_id).
+ *
+ * Tenant-scope: same JOIN-then-loop pattern as bulk-delete. rating=null
+ * deletes existing ratings.
+ *
+ * Curator + Bearer both allowed; rating is information-only and
+ * already curator-scoped via user_id (a Bearer-key has its own user
+ * stamped at auth time).
+ */
+imageRoutes.post('/knowledge-bases/:kbId/images/bulk-rate', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const user = getUser(c);
+  const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
+  if (!kbId) return c.json({ error: 'Not found' }, 404);
+
+  const body = (await c.req.json().catch(() => null)) as
+    | { imageIds?: unknown; rating?: unknown }
+    | null;
+  const imageIds = Array.isArray(body?.imageIds) ? body!.imageIds.filter((x): x is string => typeof x === 'string') : [];
+  const rating = body?.rating;
+  if (imageIds.length === 0) return c.json({ error: 'imageIds[] required' }, 400);
+  if (rating !== 'up' && rating !== 'down' && rating !== null) {
+    return c.json({ error: 'rating must be "up", "down", or null' }, 400);
+  }
+  if (imageIds.length > 500) {
+    return c.json({ error: 'Max 500 images per request' }, 400);
+  }
+
+  // Scoped SELECT — also pulls vision_model so we can stamp it on the rating row.
+  const scoped = await trail.db
+    .select({
+      id: documentImages.id,
+      visionModel: documentImages.visionModel,
+    })
+    .from(documentImages)
+    .innerJoin(documents, eq(documents.id, documentImages.documentId))
+    .where(
+      and(
+        inArray(documentImages.id, imageIds),
+        eq(documents.tenantId, tenant.id),
+        eq(documentImages.knowledgeBaseId, kbId),
+      ),
+    )
+    .all();
+
+  if (scoped.length === 0) {
+    return c.json({ rated: 0 });
+  }
+
+  if (rating === null) {
+    await trail.db
+      .delete(visionQualityRatings)
+      .where(
+        and(
+          inArray(visionQualityRatings.imageId, scoped.map((r) => r.id)),
+          eq(visionQualityRatings.userId, user.id),
+        ),
+      )
+      .run();
+    return c.json({ rated: scoped.length });
+  }
+
+  // UPSERT each row — single batched VALUES with ON CONFLICT keyed by
+  // the (user_id, image_id) unique index (F164 Phase 5).
+  const now = new Date().toISOString();
+  for (const row of scoped) {
+    const id = `vqr_${crypto.randomUUID().slice(0, 12)}`;
+    await trail.execute(
+      `
+      INSERT INTO vision_quality_ratings (id, image_id, user_id, tenant_id, rating, model, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, image_id) DO UPDATE SET
+        rating = excluded.rating,
+        model = excluded.model,
+        updated_at = excluded.updated_at
+      `,
+      [id, row.id, user.id, tenant.id, rating, row.visionModel ?? null, now, now],
+    );
+  }
+
+  return c.json({ rated: scoped.length });
 });

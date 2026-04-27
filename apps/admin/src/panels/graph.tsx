@@ -665,6 +665,43 @@ export function GraphPanel() {
             })}
           </div>
         </div>
+
+        {hotNodes.length > 0 ? (
+          <div class="bg-[color:var(--color-bg-card)]/95 backdrop-blur-sm border border-[color:var(--color-border)] rounded-md p-3 shadow-lg min-w-[240px]">
+            <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-2">
+              {t('graph.hotTitle')}
+            </div>
+            <div class="space-y-1.5">
+              {hotNodes.map((n) => {
+                const slug = n.filename.replace(/\.md$/i, '');
+                return (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => {
+                      const cam = sigmaRef.current?.getCamera().getState();
+                      if (cam) saveCamera(kbId, cam as CameraState);
+                      route(`/kb/${kbId}/neurons/${encodeURIComponent(slug)}`);
+                    }}
+                    class="w-full flex items-center gap-2 text-left hover:bg-[color:var(--color-bg)]/60 rounded px-1.5 py-1 transition group"
+                  >
+                    <div class="flex-1 min-w-0">
+                      <div class="text-[11px] truncate text-[color:var(--color-fg-muted)] group-hover:text-[color:var(--color-fg)] transition">
+                        {n.label}
+                      </div>
+                      <div class="mt-0.5 h-[3px] rounded-full bg-[color:var(--color-border)] overflow-hidden">
+                        <div
+                          class="h-full rounded-full bg-[color:var(--color-accent)]"
+                          style={{ width: `${Math.round(n.usageWeight * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {hover ? (
@@ -727,42 +764,6 @@ export function GraphPanel() {
             <span class="truncate max-w-[110px] font-medium">{edgeHover.sourceLabel}</span>
             <span class="text-[color:var(--color-fg-subtle)] flex-shrink-0">→</span>
             <span class="truncate max-w-[110px] font-medium">{edgeHover.targetLabel}</span>
-          </div>
-        </div>
-      ) : null}
-      {hotNodes.length > 0 ? (
-        <div class="absolute bottom-4 left-4 z-10 bg-[color:var(--color-bg-card)]/95 backdrop-blur-sm border border-[color:var(--color-border)] rounded-md p-3 shadow-lg min-w-[200px] max-w-[260px]">
-          <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-2">
-            {t('graph.hotTitle')}
-          </div>
-          <div class="space-y-1.5">
-            {hotNodes.map((n) => {
-              const slug = n.filename.replace(/\.md$/i, '');
-              return (
-                <button
-                  key={n.id}
-                  type="button"
-                  onClick={() => {
-                    const cam = sigmaRef.current?.getCamera().getState();
-                    if (cam) saveCamera(kbId, cam as CameraState);
-                    route(`/kb/${kbId}/neurons/${encodeURIComponent(slug)}`);
-                  }}
-                  class="w-full flex items-center gap-2 text-left hover:bg-[color:var(--color-bg)]/60 rounded px-1.5 py-1 transition group"
-                >
-                  <div class="flex-1 min-w-0">
-                    <div class="text-[11px] truncate text-[color:var(--color-fg-muted)] group-hover:text-[color:var(--color-fg)] transition">
-                      {n.label}
-                    </div>
-                    <div class="mt-0.5 h-[3px] rounded-full bg-[color:var(--color-border)] overflow-hidden">
-                      <div
-                        class="h-full rounded-full bg-[color:var(--color-accent)]"
-                        style={{ width: `${Math.round(n.usageWeight * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
           </div>
         </div>
       ) : null}
