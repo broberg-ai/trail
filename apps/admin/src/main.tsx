@@ -18,6 +18,7 @@ import { CostPanel } from './panels/cost';
 import { QualityComparePanel } from './panels/quality-compare';
 import { LinkReportPanel } from './panels/link-report';
 import { JobsPanel } from './panels/jobs';
+import { ImagesPanel } from './panels/images';
 import { NotFound } from './panels/not-found';
 import { initTheme } from './theme';
 import './index.css';
@@ -37,6 +38,7 @@ function Main() {
           <Route path="/kb/:kbId/graph" component={GraphPanel} />
           <Route path="/kb/:kbId/work" component={WorkPanel} />
           <Route path="/kb/:kbId/sources" component={SourcesPanel} />
+          <Route path="/kb/:kbId/images" component={ImagesPanel} />
           <Route path="/kb/:kbId/sources/:sourceId/compare" component={QualityComparePanel} />
           <Route path="/kb/:kbId/search" component={SearchPanel} />
           <Route path="/kb/:kbId/chat" component={ChatPanel} />

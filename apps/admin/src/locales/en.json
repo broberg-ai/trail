@@ -8,6 +8,7 @@
     "queue": "Queue",
     "linkCheck": "Links",
     "sources": "Sources",
+    "images": "Images",
     "cost": "Cost",
     "settings": "Settings",
     "accountSettings": "Account settings",
@@ -640,6 +641,24 @@
       "duration": "Duration",
       "cost": "Cost"
     }
+  },
+  "images": {
+    "title": "Images",
+    "summary": "Showing {n} image",
+    "summaryPlural": "Showing {n} images",
+    "summaryEmpty": "No images found.",
+    "searchPlaceholder": "Search image descriptions…",
+    "filterAllSources": "All sources",
+    "filterBySource": "Filter by source",
+    "empty": "No images yet — upload PDFs or standalone images on the Sources tab.",
+    "emptySearch": "No images match \"{q}\".",
+    "noDescription": "No description yet.",
+    "openSource": "Open source",
+    "copyUrl": "Copy URL",
+    "copied": "Copied!",
+    "loadMore": "Load more",
+    "pageBadge": "p.{n}",
+    "closeEsc": "Close (Esc)"
   },
   "linkReport": {
     "title": "Link Check",

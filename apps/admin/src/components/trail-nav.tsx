@@ -31,6 +31,7 @@ export function TrailNav({ kbId }: { kbId: string }) {
     { href: `/kb/${kbId}/queue`, label: t('nav.queue'), match: '/queue', badge: pending },
     { href: `/kb/${kbId}/link-check`, label: t('nav.linkCheck'), match: '/link-check', badge: brokenLinks },
     { href: `/kb/${kbId}/sources`, label: t('nav.sources'), match: '/sources' },
+    { href: `/kb/${kbId}/images`, label: t('nav.images'), match: '/images' },
     { href: `/kb/${kbId}/cost`, label: t('nav.cost'), match: '/cost' },
     { href: `/kb/${kbId}/settings`, label: t('nav.settings'), match: '/settings' },
   ] as const;

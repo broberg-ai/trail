@@ -8,6 +8,7 @@
     "queue": "Kø",
     "linkCheck": "Links",
     "sources": "Kilder",
+    "images": "Billeder",
     "cost": "Omkostning",
     "settings": "Indstillinger",
     "accountSettings": "Kontoindstillinger",
@@ -640,6 +641,24 @@
       "duration": "Varighed",
       "cost": "Pris"
     }
+  },
+  "images": {
+    "title": "Billeder",
+    "summary": "Viser {n} billede",
+    "summaryPlural": "Viser {n} billeder",
+    "summaryEmpty": "Ingen billeder fundet.",
+    "searchPlaceholder": "Søg i billed-beskrivelser…",
+    "filterAllSources": "Alle kilder",
+    "filterBySource": "Filtrér efter kilde",
+    "empty": "Ingen billeder endnu — upload PDF'er eller billeder på Kilder-fanen.",
+    "emptySearch": "Ingen billeder matcher \"{q}\".",
+    "noDescription": "Ingen beskrivelse endnu.",
+    "openSource": "Åbn kilde",
+    "copyUrl": "Kopiér URL",
+    "copied": "Kopieret!",
+    "loadMore": "Hent flere",
+    "pageBadge": "s.{n}",
+    "closeEsc": "Luk (Esc)"
   },
   "linkReport": {
     "title": "Link-tjek",

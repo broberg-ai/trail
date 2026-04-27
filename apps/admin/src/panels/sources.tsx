@@ -80,7 +80,17 @@ export function SourcesPanel() {
   // and the tab counts are both derived from it via narrowByFilter.
   const [allDocs, setAllDocs] = useState<Document[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // F163 — when navigated from the image-gallery's "Open source" link
+  // (?expanded=docId), pre-fill expanded-set so the row is open + can
+  // be scrolled into view.
+  const expandedFromUrl = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('expanded');
+  }, []);
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    return expandedFromUrl ? new Set([expandedFromUrl]) : new Set();
+  });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState<null | 'retry' | 'reingest' | 'archive'>(null);
   const [bulkToast, setBulkToast] = useState<string | null>(null);
@@ -185,6 +195,24 @@ export function SourcesPanel() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  // F163 — once the doc-list arrives, scroll the URL-targeted row into
+  // view. One-shot: clear the URL param so a subsequent reload doesn't
+  // re-scroll, and so the row stays where the user puts it after.
+  useEffect(() => {
+    if (!expandedFromUrl || !allDocs) return;
+    const target = allDocs.find((d) => d.id === expandedFromUrl);
+    if (!target) return;
+    // Wait one frame so the DOM has rendered the row before scrolling.
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-doc-id="${expandedFromUrl}"]`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Strip the query param without a re-navigation so refresh stays clean.
+      const url = new URL(window.location.href);
+      url.searchParams.delete('expanded');
+      window.history.replaceState({}, '', url.toString());
+    });
+  }, [allDocs, expandedFromUrl]);
 
   useKbEvents(kbId, (e) => {
     if (
@@ -648,6 +676,7 @@ function SourceRow({
   const isArchived = doc.archived;
   return (
     <li
+      data-doc-id={doc.id}
       class={
         'border rounded-md transition ' +
         (isArchived

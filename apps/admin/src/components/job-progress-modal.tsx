@@ -448,8 +448,8 @@ function Lightbox({
           onClose();
         }}
         class="absolute top-4 right-4 inline-flex items-center justify-center w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-white text-3xl font-bold leading-none transition cursor-pointer"
-        aria-label="Close (Esc)"
-        title="Close (Esc)"
+        aria-label={t('images.closeEsc')}
+        title={t('images.closeEsc')}
       >
         ×
       </button>

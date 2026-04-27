@@ -636,6 +636,43 @@ export function getImageRating(
   );
 }
 
+// ── F163 image gallery ──────────────────────────────────────────────────
+
+export interface ImageHit {
+  id: string;
+  documentId: string;
+  filename: string;
+  /** Absolute proxy URL — same-origin auth via session cookie. */
+  url: string;
+  alt: string;
+  page: number | null;
+  width: number;
+  height: number;
+  visionModel: string | null;
+  createdAt: string;
+}
+
+export interface ImageListResponse {
+  hits: ImageHit[];
+  nextCursor: string | null;
+}
+
+export function listImages(
+  kbId: string,
+  opts: { q?: string; docId?: string; cursor?: string; limit?: number } = {},
+): Promise<ImageListResponse> {
+  const params = new URLSearchParams();
+  if (opts.q) params.set('q', opts.q);
+  if (opts.docId) params.set('docId', opts.docId);
+  if (opts.cursor) params.set('cursor', opts.cursor);
+  if (opts.limit) params.set('limit', String(opts.limit));
+  // Curator audience for the in-admin gallery — heuristics + internal-
+  // tagged Neuron images should be visible to the KB owner.
+  params.set('audience', 'curator');
+  const qs = params.toString();
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/images?${qs}`);
+}
+
 // ── Search ───────────────────────────────────────────────────────
 
 export interface DocumentSearchHit {
