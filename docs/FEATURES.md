@@ -337,6 +337,7 @@ Mirror af F149's pluggable ingest pattern, anvendt på chat-routen. Abstraherer 
 | F164 | [Background jobs framework + bulk Vision-rerun](features/F164-background-jobs-bulk-vision.md) | Planned | 1 | [plan](features/F164-background-jobs-bulk-vision.md) |
 | F163.1 | [Image Gallery: bulk-actions (multi-select + flag/delete)](features/F163.1-image-gallery-bulk-actions.md) | Planned | 1 | [plan](features/F163.1-image-gallery-bulk-actions.md) |
 | F163.2 | [Image auto-flag (Vision-prompt + regex) + Flagged filter](features/F163.2-image-auto-flag-and-filter.md) | Planned | 1 | [plan](features/F163.2-image-auto-flag-and-filter.md) |
+| F163.3 | [Image-detail Lightbox port (CMS-style: side-panel + EXIF + tags + pagination)](features/F163.3-image-detail-cms-style.md) | Planned | 1 | [plan](features/F163.3-image-detail-cms-style.md) |
 
 ---
 
