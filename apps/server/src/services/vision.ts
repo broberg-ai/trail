@@ -254,6 +254,86 @@ async function describeViaOpenRouter(
  * downstream caller (PDF pipeline) treats the result identically
  * regardless of which provider produced it.
  */
+/**
+ * F163.2 — auto-flag signal + reason produced by either the structured
+ * Vision-prompt marker or the regex backstop. Surfaced to vision-rerun
+ * handler so it can stamp `document_images.auto_flag_signal` + `_reason`.
+ */
+export interface AutoFlagSignal {
+  signal: boolean;
+  reason: string | null;
+}
+
+export interface DescribeResult {
+  description: string | null;
+  autoFlag: AutoFlagSignal;
+}
+
+const QUALITY_MARKER_RE = /\[QUALITY:\s*(normal|low)\]\s*$/i;
+
+const EMBED_PROMPT = (page: number): string =>
+  `Describe this image from page ${page} of a document in 1-2 short sentences.\n` +
+  `Focus on content (diagrams, charts, labels, people, objects). Do not speculate.\n` +
+  `If the image is decorative or contains no information, reply with exactly: "decorative".\n\n` +
+  `End your response with EXACTLY ONE OF these markers on a new line:\n` +
+  `  [QUALITY: normal]   — image has identifiable content worth keeping\n` +
+  `  [QUALITY: low]      — image is too small/unclear/decorative/blank to be useful`;
+
+const AUTO_FLAG_PATTERNS: ReadonlyArray<{ pattern: RegExp; reason: string }> = [
+  { pattern: /too small (and|to|for)\s+(unclear|identify|provide|make)/i, reason: 'too-small-and-unclear' },
+  { pattern: /minimal graphic element/i, reason: 'minimal-graphic' },
+  { pattern: /(decorative|placeholder) (mark|element|item)/i, reason: 'decorative-marker' },
+  { pattern: /faint or low-contrast/i, reason: 'low-contrast' },
+  { pattern: /(very small|tiny) (dark|light|black|white) (square|rectangle|shape|element)/i, reason: 'small-shape' },
+  { pattern: /pixel-like shape/i, reason: 'pixel-like' },
+  { pattern: /unable to (make out|discern|identify) (specific|any|the)/i, reason: 'unable-to-identify' },
+];
+
+/**
+ * F163.2 — parse the Vision response, strip the [QUALITY: ...] marker
+ * if present, and derive the auto-flag signal from either the marker
+ * (primary) or the regex backstop on the cleaned description text.
+ *
+ * Exported so PDF pipeline + vision-rerun handler share one source of
+ * truth on what counts as auto-flag.
+ */
+export function parseQualitySignal(rawText: string | null): {
+  cleanText: string | null;
+  autoFlag: AutoFlagSignal;
+} {
+  if (!rawText) return { cleanText: null, autoFlag: { signal: false, reason: null } };
+  const trimmed = rawText.trim();
+  if (!trimmed) return { cleanText: null, autoFlag: { signal: false, reason: null } };
+
+  const markerMatch = trimmed.match(QUALITY_MARKER_RE);
+  const cleanText = (markerMatch ? trimmed.replace(QUALITY_MARKER_RE, '').trim() : trimmed) || null;
+
+  // Vision-prompt marker takes precedence — it's the model's authoritative
+  // judgment with full pixel context. If model says 'normal' we trust it
+  // even if the description text happens to mention "too small" (could be
+  // talking ABOUT a small inset of an otherwise legible image).
+  if (markerMatch) {
+    const isLow = markerMatch[1]?.toLowerCase() === 'low';
+    return {
+      cleanText,
+      autoFlag: isLow
+        ? { signal: true, reason: 'vision-prompt-low' }
+        : { signal: false, reason: null },
+    };
+  }
+  // Regex backstop fires ONLY when the prompt-marker was absent —
+  // catches old-style descriptions from before this feature shipped
+  // and cases where the model dropped the marker instruction.
+  if (cleanText) {
+    for (const { pattern, reason } of AUTO_FLAG_PATTERNS) {
+      if (pattern.test(cleanText)) {
+        return { cleanText, autoFlag: { signal: true, reason: `regex:${reason}` } };
+      }
+    }
+  }
+  return { cleanText, autoFlag: { signal: false, reason: null } };
+}
+
 async function describeEmbeddedViaOpenRouter(
   pngBytes: Uint8Array | Buffer,
   context: { page: number },
@@ -282,13 +362,7 @@ async function describeEmbeddedViaOpenRouter(
             role: 'user',
             content: [
               { type: 'image_url', image_url: { url: dataUrl } },
-              {
-                type: 'text',
-                text:
-                  `Describe this image from page ${context.page} of a document in 1-2 short sentences.\n` +
-                  `Focus on content (diagrams, charts, labels, people, objects). Do not speculate.\n` +
-                  `If the image is decorative or contains no information, reply with exactly: "decorative".`,
-              },
+              { type: 'text', text: EMBED_PROMPT(context.page) },
             ],
           },
         ],
@@ -302,6 +376,8 @@ async function describeEmbeddedViaOpenRouter(
       choices?: Array<{ message?: { content?: string } }>;
     };
     const text = (data.choices?.[0]?.message?.content ?? '').trim();
+    // Note: marker stripping happens later in parseQualitySignal()
+    // called by the rich wrapper. Decorative-sentinel check on RAW text.
     if (!text || text.toLowerCase() === 'decorative') return null;
     return text;
   } finally {
@@ -345,13 +421,7 @@ async function describeEmbeddedViaAnthropic(
                 type: 'image',
                 source: { type: 'base64', media_type: 'image/png', data: base64 },
               },
-              {
-                type: 'text',
-                text:
-                  `Describe this image from page ${context.page} of a document in 1-2 short sentences.\n` +
-                  `Focus on content (diagrams, charts, labels, people, objects). Do not speculate.\n` +
-                  `If the image is decorative or contains no information, reply with exactly: "decorative".`,
-              },
+              { type: 'text', text: EMBED_PROMPT(context.page) },
             ],
           },
         ],
@@ -393,15 +463,40 @@ async function describeEmbeddedViaAnthropic(
  * so a hung Anthropic socket doesn't hold up the OpenRouter retry.
  */
 export function createVisionBackend(): DescribeImage | null {
+  const rich = createVisionBackendWithMetadata();
+  if (!rich) return null;
+  // PDF pipeline + other DescribeImage consumers get marker-stripped
+  // text without auto-flag info. Vision-rerun handler uses the rich
+  // version directly to stamp auto_flag_signal.
+  return async (pngBytes, context) => {
+    const result = await rich(pngBytes, context);
+    return result.description;
+  };
+}
+
+/**
+ * F163.2 — same provider chain as createVisionBackend, but returns
+ * `DescribeResult` so the caller can read auto_flag info and stamp
+ * document_images.auto_flag_signal/reason. Marker is stripped from
+ * `description` before return so callers never see it leak.
+ */
+export type DescribeImageWithMetadata = (
+  pngBytes: Uint8Array | Buffer,
+  context: { page: number; width?: number; height?: number; filename?: string },
+) => Promise<DescribeResult>;
+
+export function createVisionBackendWithMetadata(): DescribeImageWithMetadata | null {
   const hasAnthropic = getAnthropicKey().length > 0;
   const hasOpenRouter = (process.env.OPENROUTER_API_KEY ?? '').length > 0;
   if (!hasAnthropic && !hasOpenRouter) return null;
 
   return async (pngBytes, context) => {
     let firstError: unknown = null;
+    let raw: string | null = null;
+
     if (hasAnthropic) {
       try {
-        return await describeEmbeddedViaAnthropic(pngBytes, context);
+        raw = await describeEmbeddedViaAnthropic(pngBytes, { page: context.page });
       } catch (err) {
         firstError = err;
         if (!hasOpenRouter) throw err;
@@ -410,13 +505,10 @@ export function createVisionBackend(): DescribeImage | null {
         );
       }
     }
-    if (hasOpenRouter) {
+    if (raw === null && hasOpenRouter && firstError !== null) {
       try {
-        return await describeEmbeddedViaOpenRouter(pngBytes, context);
+        raw = await describeEmbeddedViaOpenRouter(pngBytes, { page: context.page });
       } catch (err) {
-        // Both providers failed — surface the openrouter error, but
-        // include a hint about the anthropic error if it was the cause
-        // (gives operator a single message to debug from).
         if (firstError) {
           throw new Error(
             `vision both-providers-failed: anthropic=${firstError instanceof Error ? firstError.message : String(firstError)} | openrouter=${err instanceof Error ? err.message : String(err)}`,
@@ -424,8 +516,13 @@ export function createVisionBackend(): DescribeImage | null {
         }
         throw err;
       }
+    } else if (raw === null && hasOpenRouter && !hasAnthropic) {
+      raw = await describeEmbeddedViaOpenRouter(pngBytes, { page: context.page });
     }
-    // Unreachable given the guard above, but TS wants the explicit fallback.
-    return null;
+
+    // raw is null if Anthropic returned the "decorative" sentinel —
+    // legitimate result, not an error. Pass through with no auto-flag.
+    const { cleanText, autoFlag } = parseQualitySignal(raw);
+    return { description: cleanText, autoFlag };
   };
 }

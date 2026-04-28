@@ -146,6 +146,17 @@ imageRoutes.post('/documents/:docId/images/:filename/rating', async (c) => {
     [id, row.id, user.id, tenant.id, rating, row.visionModel ?? null, now, now],
   );
 
+  // F163.2 — curator override: 'up' rating clears any auto-flag-signal
+  // ("I've seen this and it's good enough"). 'down' leaves auto-signal
+  // alone (orthogonal stack — both signals can co-exist).
+  if (rating === 'up') {
+    await trail.db
+      .update(documentImages)
+      .set({ autoFlagSignal: 0, autoFlagReason: null })
+      .where(eq(documentImages.id, row.id))
+      .run();
+  }
+
   return c.json({ ok: true, rating });
 });
 

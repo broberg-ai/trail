@@ -245,6 +245,12 @@ export const documentImages = sqliteTable(
     visionModel: text('vision_model'),
     visionAt: text('vision_at'),
     visionCostCents: integer('vision_cost_cents'),
+    // F163.2 — Vision-pipeline auto-flag. Set by either the structured
+    // [QUALITY: low] marker in the Vision response or the regex
+    // backstop on the description text. Curator-flag is separate
+    // (vision_quality_ratings); the UI surfaces the union of both.
+    autoFlagSignal: integer('auto_flag_signal').notNull().default(0),
+    autoFlagReason: text('auto_flag_reason'),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
     updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
   },
@@ -252,6 +258,7 @@ export const documentImages = sqliteTable(
     index('idx_doc_images_document').on(table.documentId),
     index('idx_doc_images_kb').on(table.tenantId, table.knowledgeBaseId),
     index('idx_doc_images_hash').on(table.tenantId, table.knowledgeBaseId, table.contentHash),
+    index('idx_doc_images_auto_flag').on(table.tenantId, table.knowledgeBaseId, table.autoFlagSignal),
   ],
 );
 

@@ -31,7 +31,7 @@ import { documentImages, documents, type TrailDatabase } from '@trail/db';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import pLimit from 'p-limit';
 import { storage } from '../../../lib/storage.js';
-import { createVisionBackend, getActiveVisionModel } from '../../vision.js';
+import { createVisionBackendWithMetadata, getActiveVisionModel } from '../../vision.js';
 import type { JobContext, JobHandler } from '../types.js';
 
 export interface VisionRerunPayload {
@@ -65,7 +65,9 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
   }
 
   const filter = payload.filter ?? 'null-only';
-  const backend = createVisionBackend();
+  // F163.2 — use the metadata-aware backend so we can stamp
+  // auto_flag_signal alongside the description.
+  const backend = createVisionBackendWithMetadata();
   if (!backend) {
     throw new Error(
       'No Vision backend configured (set ANTHROPIC_API_KEY or OPENROUTER_API_KEY)',
@@ -151,31 +153,42 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
           failed += 1;
           return;
         }
-        const description = await backend(new Uint8Array(bytes), {
+        const result = await backend(new Uint8Array(bytes), {
           page: row.page ?? 0,
           width: row.width,
           height: row.height,
           filename: row.filename,
         });
         const visionAt = new Date().toISOString();
-        if (!description) {
-          // Decorative sentinel — mark as scanned so NULL-filter
-          // still re-tries IF curator wants to retry, but vision_at
-          // gives an audit trail of "we tried, model said decorative".
+        if (!result.description) {
+          // Decorative sentinel — mark as scanned + auto-flag (Vision
+          // told us nothing's worth describing; that's exactly what
+          // F163.2's filter wants to surface).
           await ctx.trail.db
             .update(documentImages)
-            .set({ visionAt, visionModel: model, updatedAt: visionAt })
+            .set({
+              visionAt,
+              visionModel: model,
+              autoFlagSignal: 1,
+              autoFlagReason: 'vision-decorative',
+              updatedAt: visionAt,
+            })
             .where(eq(documentImages.id, row.id))
             .run();
           decorative += 1;
           return;
         }
+        // F163.2 — stamp auto_flag_signal alongside description.
+        // Curator-overrides via 'up'-rating clear it (handled in the
+        // POST /rating endpoint); we don't proactively re-clear here.
         await ctx.trail.db
           .update(documentImages)
           .set({
-            visionDescription: description,
+            visionDescription: result.description,
             visionModel: model,
             visionAt,
+            autoFlagSignal: result.autoFlag.signal ? 1 : 0,
+            autoFlagReason: result.autoFlag.reason,
             updatedAt: visionAt,
           })
           .where(eq(documentImages.id, row.id))
