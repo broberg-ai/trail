@@ -14,14 +14,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { useRoute } from 'preact-iso';
 import {
   listImages,
-  listSources,
+  listImageSources,
   bulkDeleteImages,
   bulkRateImages,
+  submitJob,
   type ImageHit,
+  type ImageSource,
   type FlagFilter,
   ApiError,
 } from '../api';
-import type { Document } from '@trail/shared';
+import { showJob } from '../lib/jobs-store';
 import { t, useLocale } from '../lib/i18n';
 import { CenteredLoader } from '../components/centered-loader';
 import { Modal, ModalButton } from '../components/modal';
@@ -30,6 +32,14 @@ import { lockBodyScroll } from '../lib/scroll-lock';
 const LIMIT = 36;
 const SEARCH_DEBOUNCE_MS = 250;
 const VIEW_STORAGE_KEY = 'trail.images.view';
+
+type StatusValue = '' | FlagFilter | 'missing-description';
+
+function statusToApi(v: StatusValue): { flag?: FlagFilter; missingDescription?: boolean } {
+  if (v === '') return {};
+  if (v === 'missing-description') return { missingDescription: true };
+  return { flag: v };
+}
 
 function readView(): 'cards' | 'list' {
   if (typeof localStorage === 'undefined') return 'cards';
@@ -51,8 +61,12 @@ export function ImagesPanel() {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [docFilter, setDocFilter] = useState<string>(''); // empty = all
   // F163.2 — flag-status filter: undefined = all, else any|auto|user|none.
-  const [flagFilter, setFlagFilter] = useState<FlagFilter | ''>('');
-  const [sourceList, setSourceList] = useState<Document[] | null>(null);
+  // F163.2 / F163.2.x — single status-filter dropdown spans both flag-
+  // status (any|auto|user|none) and "missing description". v1 keeps
+  // them mutually exclusive — pick one or none. Translation to API
+  // params happens at the call-site.
+  const [statusFilter, setStatusFilter] = useState<StatusValue>('');
+  const [sourceList, setSourceList] = useState<ImageSource[] | null>(null);
   const [openHit, setOpenHit] = useState<ImageHit | null>(null);
   // F163.1 Phase 2 — selection + view-mode state.
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -61,6 +75,8 @@ export function ImagesPanel() {
   const [bulkBusy, setBulkBusy] = useState<null | 'flag' | 'delete'>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // F163.2.x — per-image rescan-in-flight tracker.
+  const [rescanBusy, setRescanBusy] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (typeof localStorage !== 'undefined') {
@@ -80,17 +96,13 @@ export function ImagesPanel() {
     return () => clearTimeout(id);
   }, [query]);
 
-  // Load source-list once for the filter dropdown.
+  // Load source-list once for the filter dropdown. Uses the dedicated
+  // /images/sources endpoint so we only show docs that ACTUALLY have
+  // images — text-only sources are excluded (would always return 0 hits).
   useEffect(() => {
     if (!kbId) return;
-    listSources(kbId, 'all')
-      .then((list) =>
-        setSourceList(
-          list
-            .filter((d) => d.kind === 'source' && !d.archived)
-            .sort((a, b) => a.filename.localeCompare(b.filename)),
-        ),
-      )
+    listImageSources(kbId)
+      .then((r) => setSourceList(r.sources))
       .catch(() => setSourceList([]));
   }, [kbId]);
 
@@ -109,7 +121,7 @@ export function ImagesPanel() {
     listImages(kbId, {
       q: debouncedQuery || undefined,
       docId: docFilter || undefined,
-      flag: flagFilter || undefined,
+      ...statusToApi(statusFilter),
       limit: LIMIT,
     })
       .then((r) => {
@@ -127,7 +139,7 @@ export function ImagesPanel() {
     return () => {
       cancelled = true;
     };
-  }, [kbId, debouncedQuery, docFilter, flagFilter]);
+  }, [kbId, debouncedQuery, docFilter, statusFilter]);
 
   const loadMore = useCallback(async () => {
     if (!kbId || !cursor || loading) return;
@@ -136,7 +148,7 @@ export function ImagesPanel() {
       const r = await listImages(kbId, {
         q: debouncedQuery || undefined,
         docId: docFilter || undefined,
-        flag: flagFilter || undefined,
+        ...statusToApi(statusFilter),
         limit: LIMIT,
         cursor,
       });
@@ -148,13 +160,38 @@ export function ImagesPanel() {
     } finally {
       setLoading(false);
     }
-  }, [kbId, cursor, loading, debouncedQuery, docFilter, flagFilter]);
+  }, [kbId, cursor, loading, debouncedQuery, docFilter, statusFilter]);
 
   const docFilterLabel = useMemo(() => {
     if (!docFilter || !sourceList) return t('images.filterAllSources');
     const d = sourceList.find((s) => s.id === docFilter);
     return d?.title ?? d?.filename ?? docFilter;
   }, [docFilter, sourceList]);
+
+  // F163.2.x — per-image Vision rescan. Submits a vision-rerun job
+  // scoped to a single image-id. Hands the curator off to the F164
+  // progress modal so they can watch the result land. Useful for the
+  // "Mangler beskrivelse" filter — one click per row instead of
+  // re-running the whole doc.
+  const onRescanImage = useCallback(async (imageId: string) => {
+    if (!kbId || rescanBusy.has(imageId)) return;
+    setRescanBusy((prev) => new Set(prev).add(imageId));
+    try {
+      const r = await submitJob({
+        kind: 'vision-rerun',
+        payload: { imageIds: [imageId] },
+      });
+      showJob(r.id);
+    } catch (err) {
+      setToast(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setRescanBusy((prev) => {
+        const next = new Set(prev);
+        next.delete(imageId);
+        return next;
+      });
+    }
+  }, [kbId, rescanBusy]);
 
   // Bulk-flag: thumbs-down via F164 Phase 5 endpoint. Reversible, so
   // no confirm modal. Optimistic — clear selection immediately, show
@@ -248,7 +285,7 @@ export function ImagesPanel() {
             onChange={setDocFilter}
           />
         ) : null}
-        <StatusFilter value={flagFilter} onChange={setFlagFilter} />
+        <StatusFilter value={statusFilter} onChange={setStatusFilter} />
         <ViewToggle value={view} onChange={setView} />
       </section>
 
@@ -309,6 +346,8 @@ export function ImagesPanel() {
           selected={selected}
           onToggleSelect={toggleSelected}
           onOpen={(hit) => setOpenHit(hit)}
+          onRescan={onRescanImage}
+          rescanBusy={rescanBusy}
         />
       ) : null}
 
@@ -442,11 +481,15 @@ function ImageList({
   selected,
   onToggleSelect,
   onOpen,
+  onRescan,
+  rescanBusy,
 }: {
   hits: ImageHit[];
   selected: Set<string>;
   onToggleSelect: (id: string) => void;
   onOpen: (hit: ImageHit) => void;
+  onRescan: (imageId: string) => void;
+  rescanBusy: Set<string>;
 }) {
   return (
     <div class="overflow-x-auto rounded-md border border-[color:var(--color-border)]">
@@ -515,6 +558,20 @@ function ImageList({
                         </span>
                       )}
                     </span>
+                    {!hit.alt ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRescan(hit.id);
+                        }}
+                        disabled={rescanBusy.has(hit.id)}
+                        class="flex-shrink-0 px-2 py-1 text-[11px] font-mono rounded border border-[color:var(--color-accent)]/40 text-[color:var(--color-accent)] hover:bg-[color:var(--color-accent)]/10 disabled:opacity-50 transition"
+                        title={t('images.rescanHint')}
+                      >
+                        {rescanBusy.has(hit.id) ? '…' : t('images.rescan')}
+                      </button>
+                    ) : null}
                   </div>
                 </td>
                 <td class="px-3 py-2 font-mono text-xs text-[color:var(--color-fg-subtle)]">
@@ -649,7 +706,7 @@ function SourceFilter({
   onChange,
 }: {
   label: string;
-  sources: Document[];
+  sources: ImageSource[];
   value: string;
   onChange: (v: string) => void;
 }) {
@@ -766,7 +823,7 @@ function ImageDetail({
 }: {
   hit: ImageHit;
   kbId: string;
-  source: Document | null;
+  source: ImageSource | null;
   onClose: () => void;
 }) {
   const closeRef = useRef(onClose);
@@ -907,8 +964,8 @@ function StatusFilter({
   value,
   onChange,
 }: {
-  value: FlagFilter | '';
-  onChange: (v: FlagFilter | '') => void;
+  value: StatusValue;
+  onChange: (v: StatusValue) => void;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -931,17 +988,18 @@ function StatusFilter({
     };
   }, [open]);
 
-  const select = (v: FlagFilter | '') => {
+  const select = (v: StatusValue) => {
     onChange(v);
     setOpen(false);
   };
 
-  const options: Array<{ value: FlagFilter | ''; key: string }> = [
+  const options: Array<{ value: StatusValue; key: string }> = [
     { value: '', key: 'images.statusAll' },
     { value: 'any', key: 'images.statusFlagged' },
     { value: 'auto', key: 'images.statusAutoFlagged' },
     { value: 'user', key: 'images.statusUserFlagged' },
     { value: 'none', key: 'images.statusNotFlagged' },
+    { value: 'missing-description', key: 'images.statusMissingDescription' },
   ];
   const activeLabel = options.find((o) => o.value === value)?.key ?? 'images.statusAll';
 

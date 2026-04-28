@@ -53,6 +53,9 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
   // 'auto' = auto only, 'user' = curator-down only, 'none' = neither.
   // Empty / unrecognised → no filter (all images).
   const flagFilter = parseFlagFilter(c.req.query('flag'));
+  // F163.2.x — "missing description" filter for the gallery's per-row
+  // "Kør vision"-flow. true = only rows where vision_description IS NULL.
+  const missingDescription = c.req.query('missingDescription') === 'true';
   // F163 — cursor pagination so the gallery can load-more on scroll.
   // Browse mode: cursor = base64(`${created_at}|${id}`); we paginate
   // with WHERE (created_at, id) < (cursor.created_at, cursor.id) so
@@ -72,6 +75,9 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
   // Reuses an EXISTS-subquery against vision_quality_ratings so we
   // don't have to JOIN the table when no flag-filter is requested.
   const flagClause = buildFlagClause(flagFilter);
+  const missingDescClause = missingDescription
+    ? `AND di.vision_description IS NULL`
+    : '';
 
   // Build args + WHERE additions for filters (docId + cursor + flag).
   let result;
@@ -91,6 +97,7 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
          AND di.knowledge_base_id = ?
          ${docClause}
          ${flagClause}
+         ${missingDescClause}
        ORDER BY rank
        LIMIT ? OFFSET ?
     `;
@@ -116,6 +123,7 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
          ${cursorClause}
          ${docClause}
          ${flagClause}
+         ${missingDescClause}
        ORDER BY di.created_at DESC, di.id DESC
        LIMIT ?
     `;
@@ -260,6 +268,56 @@ async function fetchCuratorFlaggedSet(
     (result.rows as Array<{ image_id: unknown }>).map((r) => String(r.image_id)),
   );
 }
+
+/**
+ * F163.2.x — list of source-docs in this KB that have at least one
+ * image-row. Used by the gallery's source-filter dropdown so we don't
+ * surface text-only docs that would always return 0 hits.
+ *
+ * Includes per-doc image-count so the UI can render "Filename (12)"
+ * if it ever wants the visibility — v1 just uses filename + title.
+ */
+imagesSearchRoutes.get('/knowledge-bases/:kbId/images/sources', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
+  if (!kbId) return c.json({ error: 'Not found' }, 404);
+
+  const result = await trail.execute(
+    `
+    SELECT d.id AS doc_id, d.filename, d.title, d.path, d.tags,
+           COUNT(di.id) AS image_count
+      FROM documents d
+      JOIN document_images di ON di.document_id = d.id
+     WHERE d.tenant_id = ?
+       AND d.knowledge_base_id = ?
+       AND d.kind = 'source'
+       AND d.archived = 0
+     GROUP BY d.id
+     ORDER BY d.filename ASC
+    `,
+    [tenant.id, kbId],
+  );
+
+  // Audience-filter parent doc — heuristic / internal Neuron images are
+  // hidden from non-curator audiences. (Curator default for the gallery.)
+  const audience: Audience =
+    parseAudienceParam(c.req.query('audience')) ??
+    defaultAudienceForAuth(c.get('authType'));
+
+  const sources = (result.rows as Array<Record<string, unknown>>)
+    .filter((row) =>
+      isVisibleToAudience(audience, String(row.path), row.tags as string | null),
+    )
+    .map((row) => ({
+      id: String(row.doc_id),
+      filename: String(row.filename),
+      title: (row.title as string | null) ?? null,
+      imageCount: Number(row.image_count ?? 0),
+    }));
+
+  return c.json({ sources });
+});
 
 /**
  * FTS5 sanitiser identical to the one in /search and /retrieve. See

@@ -35,8 +35,13 @@ import { applyDimensionFlag, createVisionBackendWithMetadata, getActiveVisionMod
 import type { JobContext, JobHandler } from '../types.js';
 
 export interface VisionRerunPayload {
-  /** One or many docs. Bulk path passes all KB sources here. */
-  documentIds: string[];
+  /** One or many docs. Bulk path passes all KB sources here. Mutually
+   *  exclusive with imageIds at runtime — imageIds wins if both are
+   *  set, since it's the more specific scope. */
+  documentIds?: string[];
+  /** Per-image scope. Used by the gallery-row "Kør vision" button to
+   *  re-scan a single image without touching its siblings. */
+  imageIds?: string[];
   /** 'null-only' = only re-vision NULL rows (default). 'all' = re-vision everything. */
   filter?: 'null-only' | 'all';
 }
@@ -60,11 +65,13 @@ const PER_IMAGE_CONCURRENCY = Number(process.env.TRAIL_VISION_CONCURRENCY ?? 4);
 
 export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResult> = async (ctx) => {
   const payload = ctx.payload as VisionRerunPayload | null;
-  if (!payload?.documentIds?.length) {
-    throw new Error('vision-rerun: payload.documentIds[] required');
+  const hasImageIds = (payload?.imageIds?.length ?? 0) > 0;
+  const hasDocIds = (payload?.documentIds?.length ?? 0) > 0;
+  if (!hasImageIds && !hasDocIds) {
+    throw new Error('vision-rerun: payload.imageIds[] or payload.documentIds[] required');
   }
 
-  const filter = payload.filter ?? 'null-only';
+  const filter = payload!.filter ?? 'null-only';
   // F163.2 — use the metadata-aware backend so we can stamp
   // auto_flag_signal alongside the description.
   const backend = createVisionBackendWithMetadata();
@@ -74,21 +81,6 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
     );
   }
   const model = getActiveVisionModel();
-
-  // Validate all docs belong to this tenant + are sources.
-  const docs = await ctx.trail.db
-    .select({ id: documents.id, tenantId: documents.tenantId, kind: documents.kind })
-    .from(documents)
-    .where(inArray(documents.id, payload.documentIds))
-    .all();
-  for (const d of docs) {
-    if (d.tenantId !== ctx.tenantId) {
-      throw new Error(`vision-rerun: doc ${d.id} not in tenant ${ctx.tenantId}`);
-    }
-    if (d.kind !== 'source') {
-      throw new Error(`vision-rerun: doc ${d.id} is not a source`);
-    }
-  }
 
   const candidatesQuery = ctx.trail.db
     .select({
@@ -102,16 +94,46 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
     })
     .from(documentImages);
 
-  const candidates = await (filter === 'all'
-    ? candidatesQuery.where(inArray(documentImages.documentId, payload.documentIds)).all()
-    : candidatesQuery
-        .where(
-          and(
-            inArray(documentImages.documentId, payload.documentIds),
-            isNull(documentImages.visionDescription),
-          ),
-        )
-        .all());
+  let candidates;
+  if (hasImageIds) {
+    // Per-image scope. Tenant_id sits on document_images directly so
+    // we filter there — no need to validate the parent doc separately.
+    // 'filter' param is ignored: user explicitly picked these ids.
+    candidates = await candidatesQuery
+      .where(
+        and(
+          inArray(documentImages.id, payload!.imageIds!),
+          eq(documentImages.tenantId, ctx.tenantId),
+        ),
+      )
+      .all();
+  } else {
+    // Doc-scope. Validate all docs belong to this tenant + are sources.
+    const docs = await ctx.trail.db
+      .select({ id: documents.id, tenantId: documents.tenantId, kind: documents.kind })
+      .from(documents)
+      .where(inArray(documents.id, payload!.documentIds!))
+      .all();
+    for (const d of docs) {
+      if (d.tenantId !== ctx.tenantId) {
+        throw new Error(`vision-rerun: doc ${d.id} not in tenant ${ctx.tenantId}`);
+      }
+      if (d.kind !== 'source') {
+        throw new Error(`vision-rerun: doc ${d.id} is not a source`);
+      }
+    }
+
+    candidates = await (filter === 'all'
+      ? candidatesQuery.where(inArray(documentImages.documentId, payload!.documentIds!)).all()
+      : candidatesQuery
+          .where(
+            and(
+              inArray(documentImages.documentId, payload!.documentIds!),
+              isNull(documentImages.visionDescription),
+            ),
+          )
+          .all());
+  }
 
   const total = candidates.length;
   if (total === 0) {
@@ -212,17 +234,21 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
   await Promise.all(tasks);
 
   // Sample-grid for visual verification (Phase 5 modal): up to 6 random
-  // newly-described images. RANDOM() at SQLite-level keeps it cheap.
+  // newly-described images from the scope we just operated on.
+  // RANDOM() at SQLite-level keeps it cheap.
+  const sampleScope = hasImageIds
+    ? { col: 'id', vals: payload!.imageIds! }
+    : { col: 'document_id', vals: payload!.documentIds! };
   const samples = await ctx.trail.execute(
     `
     SELECT id, document_id, filename, vision_description
       FROM document_images
-     WHERE document_id IN (${payload.documentIds.map(() => '?').join(',')})
+     WHERE ${sampleScope.col} IN (${sampleScope.vals.map(() => '?').join(',')})
        AND vision_description IS NOT NULL
      ORDER BY RANDOM()
      LIMIT 6
     `,
-    payload.documentIds,
+    sampleScope.vals,
   );
 
   const sampleImages = (samples.rows as Array<Record<string, unknown>>).map((r) => ({

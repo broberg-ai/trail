@@ -660,6 +660,17 @@ export interface ImageHit {
 
 export type FlagFilter = 'any' | 'auto' | 'user' | 'none';
 
+export interface ImageSource {
+  id: string;
+  filename: string;
+  title: string | null;
+  imageCount: number;
+}
+
+export function listImageSources(kbId: string): Promise<{ sources: ImageSource[] }> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/images/sources?audience=curator`);
+}
+
 export interface ImageListResponse {
   hits: ImageHit[];
   nextCursor: string | null;
@@ -698,6 +709,7 @@ export function listImages(
     cursor?: string;
     limit?: number;
     flag?: FlagFilter;
+    missingDescription?: boolean;
   } = {},
 ): Promise<ImageListResponse> {
   const params = new URLSearchParams();
@@ -706,6 +718,7 @@ export function listImages(
   if (opts.cursor) params.set('cursor', opts.cursor);
   if (opts.limit) params.set('limit', String(opts.limit));
   if (opts.flag) params.set('flag', opts.flag);
+  if (opts.missingDescription) params.set('missingDescription', 'true');
   // Curator audience for the in-admin gallery — heuristics + internal-
   // tagged Neuron images should be visible to the KB owner.
   params.set('audience', 'curator');
