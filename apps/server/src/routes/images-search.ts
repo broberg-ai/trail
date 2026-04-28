@@ -49,6 +49,10 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
     defaultAudienceForAuth(c.get('authType'));
   // F163 — optional per-source filter for the image-gallery panel.
   const docIdFilter = c.req.query('docId') ?? null;
+  // F163.2 — flag-status filter. 'any' = auto OR curator-flagged,
+  // 'auto' = auto only, 'user' = curator-down only, 'none' = neither.
+  // Empty / unrecognised → no filter (all images).
+  const flagFilter = parseFlagFilter(c.req.query('flag'));
   // F163 — cursor pagination so the gallery can load-more on scroll.
   // Browse mode: cursor = base64(`${created_at}|${id}`); we paginate
   // with WHERE (created_at, id) < (cursor.created_at, cursor.id) so
@@ -64,14 +68,20 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
   const ftsQuery = query ? sanitizeFtsQuery(query) : '';
   const overFetch = limit * 3; // audience-filter eats some, hence over-fetch
 
-  // Build args + WHERE additions for filters (docId + cursor).
+  // F163.2 — flag-WHERE clause shared between FTS + browse paths.
+  // Reuses an EXISTS-subquery against vision_quality_ratings so we
+  // don't have to JOIN the table when no flag-filter is requested.
+  const flagClause = buildFlagClause(flagFilter);
+
+  // Build args + WHERE additions for filters (docId + cursor + flag).
   let result;
   if (ftsQuery) {
     const offset = decodeFtsCursor(cursorRaw);
-    const filterClause = docIdFilter ? 'AND di.document_id = ?' : '';
+    const docClause = docIdFilter ? 'AND di.document_id = ?' : '';
     const sql = `
       SELECT di.id, di.document_id, di.filename, di.page, di.width, di.height,
              di.vision_description, di.vision_model, di.created_at,
+             di.auto_flag_signal, di.auto_flag_reason,
              d.path AS doc_path, d.tags AS doc_tags
         FROM document_images_fts fts
         JOIN document_images di ON di.rowid = fts.rowid
@@ -79,7 +89,8 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
        WHERE fts.vision_description MATCH ?
          AND di.tenant_id = ?
          AND di.knowledge_base_id = ?
-         ${filterClause}
+         ${docClause}
+         ${flagClause}
        ORDER BY rank
        LIMIT ? OFFSET ?
     `;
@@ -92,17 +103,19 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
     const cursorClause = cursor
       ? 'AND (di.created_at < ? OR (di.created_at = ? AND di.id < ?))'
       : '';
-    const filterClause = docIdFilter ? 'AND di.document_id = ?' : '';
+    const docClause = docIdFilter ? 'AND di.document_id = ?' : '';
     const sql = `
       SELECT di.id, di.document_id, di.filename, di.page, di.width, di.height,
              di.vision_description, di.vision_model, di.created_at,
+             di.auto_flag_signal, di.auto_flag_reason,
              d.path AS doc_path, d.tags AS doc_tags
         FROM document_images di
         JOIN documents d ON d.id = di.document_id
        WHERE di.tenant_id = ?
          AND di.knowledge_base_id = ?
          ${cursorClause}
-         ${filterClause}
+         ${docClause}
+         ${flagClause}
        ORDER BY di.created_at DESC, di.id DESC
        LIMIT ?
     `;
@@ -119,6 +132,15 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
   );
   const pageRows = visibleRows.slice(0, limit);
 
+  // F163.2 — surface auto-flag info to the gallery so the UI can
+  // render badges + the curator-flag union (curator side comes via a
+  // separate `userFlagged` lookup below — kept light-weight for the
+  // common no-flag case).
+  const flaggedIds = await fetchCuratorFlaggedSet(
+    trail,
+    pageRows.map((r) => String(r.id)),
+  );
+
   const hits = pageRows.map((row) => ({
     id: String(row.id),
     documentId: String(row.document_id),
@@ -130,6 +152,9 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
     height: row.height as number,
     visionModel: (row.vision_model as string | null) ?? null,
     createdAt: String(row.created_at),
+    autoFlagSignal: Number(row.auto_flag_signal ?? 0) === 1,
+    autoFlagReason: (row.auto_flag_reason as string | null) ?? null,
+    userFlagged: flaggedIds.has(String(row.id)),
   }));
 
   // Compute nextCursor only when there's more — i.e. the over-fetch
@@ -176,6 +201,64 @@ function decodeFtsCursor(raw: string | null): number {
 
 function encodeFtsCursor(offset: number): string {
   return String(offset);
+}
+
+type FlagFilter = 'any' | 'auto' | 'user' | 'none' | null;
+
+function parseFlagFilter(raw: string | undefined): FlagFilter {
+  if (!raw) return null;
+  const v = raw.trim().toLowerCase();
+  if (v === 'any' || v === 'auto' || v === 'user' || v === 'none') return v;
+  return null;
+}
+
+/**
+ * F163.2 — translate flag-filter to a SQL WHERE clause. Curator-flag
+ * is "EXISTS row in vqr with rating='down'" — we don't filter by user_id
+ * on purpose, so a flag from any curator on the team counts. v2 might
+ * expose ?ratedBy=me for personal-only filtering.
+ */
+function buildFlagClause(filter: FlagFilter): string {
+  if (filter === null) return '';
+  const vqrDownExists = `EXISTS (
+    SELECT 1 FROM vision_quality_ratings vqr
+     WHERE vqr.image_id = di.id AND vqr.rating = 'down'
+  )`;
+  switch (filter) {
+    case 'any':
+      return `AND (di.auto_flag_signal = 1 OR ${vqrDownExists})`;
+    case 'auto':
+      return `AND di.auto_flag_signal = 1`;
+    case 'user':
+      return `AND ${vqrDownExists}`;
+    case 'none':
+      return `AND di.auto_flag_signal = 0 AND NOT ${vqrDownExists}`;
+  }
+}
+
+/**
+ * F163.2 — for the visible page of hits, return the set of image-ids
+ * that have at least one curator-down rating. One bulk SELECT instead
+ * of a JOIN in the main query keeps the no-flag case fast.
+ */
+async function fetchCuratorFlaggedSet(
+  trail: ReturnType<typeof getTrail>,
+  imageIds: string[],
+): Promise<Set<string>> {
+  if (imageIds.length === 0) return new Set();
+  const placeholders = imageIds.map(() => '?').join(',');
+  const result = await trail.execute(
+    `
+    SELECT DISTINCT image_id
+      FROM vision_quality_ratings
+     WHERE image_id IN (${placeholders})
+       AND rating = 'down'
+    `,
+    imageIds,
+  );
+  return new Set(
+    (result.rows as Array<{ image_id: unknown }>).map((r) => String(r.image_id)),
+  );
 }
 
 /**
