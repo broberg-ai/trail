@@ -290,12 +290,30 @@ const AUTO_FLAG_PATTERNS: ReadonlyArray<{ pattern: RegExp; reason: string }> = [
 ];
 
 /**
+ * F163.2.1 — minimum-dimension threshold for auto-flag. Images smaller
+ * than `TRAIL_VISION_AUTO_FLAG_MIN_DIM` on EITHER axis get auto-flagged
+ * with reason 'small-dimensions:WxH'. Default 80 catches Christian's
+ * example case (62×40 in Sannes Zoneterapi-bog) without false-positives
+ * on diagram-thumbnails (typically ≥120×120).
+ *
+ * Either-axis check is intentional: a 1000×40 thin strip is a layout
+ * divider just as a 40×40 square is decorative pixel-fragment.
+ */
+function getMinFlagDim(): number {
+  const v = Number(process.env.TRAIL_VISION_AUTO_FLAG_MIN_DIM ?? 80);
+  return Number.isFinite(v) && v > 0 ? v : 80;
+}
+
+/**
  * F163.2 — parse the Vision response, strip the [QUALITY: ...] marker
  * if present, and derive the auto-flag signal from either the marker
  * (primary) or the regex backstop on the cleaned description text.
  *
  * Exported so PDF pipeline + vision-rerun handler share one source of
  * truth on what counts as auto-flag.
+ *
+ * For dimension-based flagging, use deriveAutoFlag() which combines
+ * this with a width/height threshold check.
  */
 export function parseQualitySignal(rawText: string | null): {
   cleanText: string | null;
@@ -332,6 +350,33 @@ export function parseQualitySignal(rawText: string | null): {
     }
   }
   return { cleanText, autoFlag: { signal: false, reason: null } };
+}
+
+/**
+ * F163.2.1 — layer a dimension-threshold check on top of an existing
+ * text-derived signal. Text wins if it already flagged; otherwise the
+ * dim-check fires when EITHER axis is below TRAIL_VISION_AUTO_FLAG_MIN_DIM.
+ *
+ * Why a layer-on-top instead of re-parsing: the vision-rerun handler
+ * has already received `result.autoFlag` from the backend, which was
+ * computed from the RAW response before marker-stripping. Re-parsing
+ * `result.description` would lose the [QUALITY:] verdict. Sweep-job
+ * is text-only and calls this with `existing` derived from
+ * parseQualitySignal in the same call site.
+ */
+export function applyDimensionFlag(
+  existing: AutoFlagSignal,
+  width?: number | null,
+  height?: number | null,
+): AutoFlagSignal {
+  if (existing.signal) return existing;
+  const minDim = getMinFlagDim();
+  const w = width ?? null;
+  const h = height ?? null;
+  if (w !== null && h !== null && (w < minDim || h < minDim)) {
+    return { signal: true, reason: `small-dimensions:${w}x${h}` };
+  }
+  return existing;
 }
 
 async function describeEmbeddedViaOpenRouter(

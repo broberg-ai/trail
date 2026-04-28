@@ -31,7 +31,7 @@ import { documentImages, documents, type TrailDatabase } from '@trail/db';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import pLimit from 'p-limit';
 import { storage } from '../../../lib/storage.js';
-import { createVisionBackendWithMetadata, getActiveVisionModel } from '../../vision.js';
+import { applyDimensionFlag, createVisionBackendWithMetadata, getActiveVisionModel } from '../../vision.js';
 import type { JobContext, JobHandler } from '../types.js';
 
 export interface VisionRerunPayload {
@@ -179,16 +179,20 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
           return;
         }
         // F163.2 — stamp auto_flag_signal alongside description.
-        // Curator-overrides via 'up'-rating clear it (handled in the
-        // POST /rating endpoint); we don't proactively re-clear here.
+        // F163.2.1 — layer dim-check on top of the model's text-based
+        // signal. Re-parsing result.description would lose the
+        // [QUALITY:] marker (it's been stripped), so we keep the
+        // existing signal as authoritative for text and only override
+        // when text said 'normal' AND image is dimensionally tiny.
+        const finalFlag = applyDimensionFlag(result.autoFlag, row.width, row.height);
         await ctx.trail.db
           .update(documentImages)
           .set({
             visionDescription: result.description,
             visionModel: model,
             visionAt,
-            autoFlagSignal: result.autoFlag.signal ? 1 : 0,
-            autoFlagReason: result.autoFlag.reason,
+            autoFlagSignal: finalFlag.signal ? 1 : 0,
+            autoFlagReason: finalFlag.reason,
             updatedAt: visionAt,
           })
           .where(eq(documentImages.id, row.id))

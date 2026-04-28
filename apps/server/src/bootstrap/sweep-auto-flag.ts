@@ -18,24 +18,25 @@
  */
 
 import { documentImages, type TrailDatabase } from '@trail/db';
-import { and, eq, isNotNull } from 'drizzle-orm';
-import { parseQualitySignal } from '../services/vision.js';
+import { and, eq, isNotNull, or } from 'drizzle-orm';
+import { applyDimensionFlag, parseQualitySignal } from '../services/vision.js';
 
 export async function sweepAutoFlag(trail: TrailDatabase): Promise<void> {
   if (process.env.TRAIL_VISION_AUTO_FLAG_SWEEP !== '1') return;
 
+  // Pull width/height too — the dim-check kicks in even on rows that
+  // don't have a description yet (e.g. F161 backfill that never ran
+  // Vision). For those, parseQualitySignal returns no flag and the
+  // dim-check is the only signal that fires.
   const candidates = await trail.db
     .select({
       id: documentImages.id,
       visionDescription: documentImages.visionDescription,
+      width: documentImages.width,
+      height: documentImages.height,
     })
     .from(documentImages)
-    .where(
-      and(
-        eq(documentImages.autoFlagSignal, 0),
-        isNotNull(documentImages.visionDescription),
-      ),
-    )
+    .where(eq(documentImages.autoFlagSignal, 0))
     .all();
 
   if (candidates.length === 0) {
@@ -50,24 +51,31 @@ export async function sweepAutoFlag(trail: TrailDatabase): Promise<void> {
   const now = new Date().toISOString();
 
   for (const row of candidates) {
-    if (!row.visionDescription) continue;
-    // Marker won't be present on legacy rows (they predate the
-    // QUALITY-marker prompt), so parseQualitySignal will only fire the
-    // regex backstop. That's exactly what this sweep is for.
-    const { autoFlag } = parseQualitySignal(row.visionDescription);
-    if (!autoFlag.signal) continue;
+    // Text-based signal first (regex backstop on legacy rows; marker
+    // won't be present since they predate the QUALITY-marker prompt).
+    const { autoFlag: textFlag } = parseQualitySignal(row.visionDescription);
+    // Layer dim-check on top — F163.2.1 catches small images even
+    // when description is empty / missing the regex tells.
+    const finalFlag = applyDimensionFlag(textFlag, row.width, row.height);
+    if (!finalFlag.signal) continue;
+
     await trail.db
       .update(documentImages)
       .set({
         autoFlagSignal: 1,
-        autoFlagReason: autoFlag.reason,
+        autoFlagReason: finalFlag.reason,
         updatedAt: now,
       })
       .where(eq(documentImages.id, row.id))
       .run();
     flagged += 1;
-    if (autoFlag.reason) {
-      reasonHist[autoFlag.reason] = (reasonHist[autoFlag.reason] ?? 0) + 1;
+    if (finalFlag.reason) {
+      // Group small-dimensions:WxH variants into a single histogram
+      // bucket so the log isn't a wall of unique reasons.
+      const bucket = finalFlag.reason.startsWith('small-dimensions:')
+        ? 'small-dimensions'
+        : finalFlag.reason;
+      reasonHist[bucket] = (reasonHist[bucket] ?? 0) + 1;
     }
   }
 
