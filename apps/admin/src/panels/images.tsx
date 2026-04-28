@@ -664,19 +664,19 @@ function SourceFilter({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        class="inline-flex items-center gap-2 px-3 py-2 pr-8 text-sm rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)] hover:border-[color:var(--color-border-strong)] focus:border-[color:var(--color-accent)] focus:outline-none active:scale-[0.99] transition cursor-pointer min-w-[200px] text-left"
+        class="relative flex items-center gap-2 pl-3 pr-8 py-2 text-sm rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)] hover:border-[color:var(--color-border-strong)] focus:border-[color:var(--color-accent)] focus:outline-none active:scale-[0.99] transition cursor-pointer w-[240px] text-left"
         aria-label={t('images.filterBySource')}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span class="truncate flex-1">{label}</span>
+        <span class="truncate flex-1 min-w-0">{label}</span>
         <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[color:var(--color-fg-muted)]">
           ▾
         </span>
       </button>
       {open ? (
         <div
-          class="absolute left-0 top-full mt-1 z-20 min-w-[280px] max-h-[60vh] overflow-y-auto rounded-md border border-[color:var(--color-border-strong)] bg-[color:var(--color-bg-card)] shadow-2xl"
+          class="absolute left-0 top-full mt-1 z-20 w-[320px] max-h-[60vh] overflow-y-auto rounded-md border border-[color:var(--color-border-strong)] bg-[color:var(--color-bg-card)] shadow-2xl"
           role="listbox"
           aria-label={t('images.filterBySource')}
         >
@@ -715,6 +715,7 @@ function DropdownItem({
       role="option"
       aria-selected={active}
       onClick={onClick}
+      title={label}
       class={
         'w-full text-left px-3 py-2 text-sm transition flex items-center gap-2 ' +
         (active
@@ -724,12 +725,12 @@ function DropdownItem({
     >
       <span
         class={
-          'inline-block w-3 text-[color:var(--color-accent)] ' + (active ? 'opacity-100' : 'opacity-0')
+          'inline-block w-3 flex-shrink-0 text-[color:var(--color-accent)] ' + (active ? 'opacity-100' : 'opacity-0')
         }
       >
         ✓
       </span>
-      <span class="truncate flex-1">{label}</span>
+      <span class="truncate flex-1 min-w-0">{label}</span>
     </button>
   );
 }
@@ -761,6 +762,34 @@ function ImageDetail({
   }, []);
 
   useEffect(() => lockBodyScroll(), []);
+
+  // Push a history entry on open so browser-back closes the Lightbox
+  // first, instead of jumping back to the previous page (e.g. /sources
+  // if the user reached /images via the trail-nav). On unmount, if the
+  // user closed via UI (X / ESC / backdrop), we consume our pushed
+  // entry by calling history.back() — net zero entries leftover.
+  // If the close was triggered by browser-back (popstate), we skip the
+  // back-call to avoid a double-back loop.
+  useEffect(() => {
+    let closedByPop = false;
+    history.pushState({ trailLightbox: true }, '');
+    const onPop = () => {
+      closedByPop = true;
+      closeRef.current();
+    };
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      if (!closedByPop) {
+        // Only consume our pushed entry if popstate didn't already.
+        try {
+          history.back();
+        } catch {
+          // ignore — some embed contexts disallow programmatic back
+        }
+      }
+    };
+  }, []);
 
   const [copied, setCopied] = useState(false);
   const onCopy = async () => {
