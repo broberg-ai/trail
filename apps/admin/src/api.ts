@@ -650,7 +650,15 @@ export interface ImageHit {
   height: number;
   visionModel: string | null;
   createdAt: string;
+  /** F163.2 — Vision auto-flag signal (prompt-marker or regex backstop). */
+  autoFlagSignal: boolean;
+  /** Reason tag, e.g. 'vision-prompt-low' or 'regex:too-small-and-unclear'. */
+  autoFlagReason: string | null;
+  /** F163.2 — at least one curator has rated this image 'down'. */
+  userFlagged: boolean;
 }
+
+export type FlagFilter = 'any' | 'auto' | 'user' | 'none';
 
 export interface ImageListResponse {
   hits: ImageHit[];
@@ -684,13 +692,20 @@ export function bulkRateImages(
 
 export function listImages(
   kbId: string,
-  opts: { q?: string; docId?: string; cursor?: string; limit?: number } = {},
+  opts: {
+    q?: string;
+    docId?: string;
+    cursor?: string;
+    limit?: number;
+    flag?: FlagFilter;
+  } = {},
 ): Promise<ImageListResponse> {
   const params = new URLSearchParams();
   if (opts.q) params.set('q', opts.q);
   if (opts.docId) params.set('docId', opts.docId);
   if (opts.cursor) params.set('cursor', opts.cursor);
   if (opts.limit) params.set('limit', String(opts.limit));
+  if (opts.flag) params.set('flag', opts.flag);
   // Curator audience for the in-admin gallery — heuristics + internal-
   // tagged Neuron images should be visible to the KB owner.
   params.set('audience', 'curator');

@@ -18,6 +18,7 @@ import {
   bulkDeleteImages,
   bulkRateImages,
   type ImageHit,
+  type FlagFilter,
   ApiError,
 } from '../api';
 import type { Document } from '@trail/shared';
@@ -49,6 +50,8 @@ export function ImagesPanel() {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [docFilter, setDocFilter] = useState<string>(''); // empty = all
+  // F163.2 — flag-status filter: undefined = all, else any|auto|user|none.
+  const [flagFilter, setFlagFilter] = useState<FlagFilter | ''>('');
   const [sourceList, setSourceList] = useState<Document[] | null>(null);
   const [openHit, setOpenHit] = useState<ImageHit | null>(null);
   // F163.1 Phase 2 — selection + view-mode state.
@@ -106,6 +109,7 @@ export function ImagesPanel() {
     listImages(kbId, {
       q: debouncedQuery || undefined,
       docId: docFilter || undefined,
+      flag: flagFilter || undefined,
       limit: LIMIT,
     })
       .then((r) => {
@@ -123,7 +127,7 @@ export function ImagesPanel() {
     return () => {
       cancelled = true;
     };
-  }, [kbId, debouncedQuery, docFilter]);
+  }, [kbId, debouncedQuery, docFilter, flagFilter]);
 
   const loadMore = useCallback(async () => {
     if (!kbId || !cursor || loading) return;
@@ -132,6 +136,7 @@ export function ImagesPanel() {
       const r = await listImages(kbId, {
         q: debouncedQuery || undefined,
         docId: docFilter || undefined,
+        flag: flagFilter || undefined,
         limit: LIMIT,
         cursor,
       });
@@ -143,7 +148,7 @@ export function ImagesPanel() {
     } finally {
       setLoading(false);
     }
-  }, [kbId, cursor, loading, debouncedQuery, docFilter]);
+  }, [kbId, cursor, loading, debouncedQuery, docFilter, flagFilter]);
 
   const docFilterLabel = useMemo(() => {
     if (!docFilter || !sourceList) return t('images.filterAllSources');
@@ -243,6 +248,7 @@ export function ImagesPanel() {
             onChange={setDocFilter}
           />
         ) : null}
+        <StatusFilter value={flagFilter} onChange={setFlagFilter} />
         <ViewToggle value={view} onChange={setView} />
       </section>
 
@@ -387,11 +393,18 @@ function ImageTile({
           loading="lazy"
           class="w-full h-full object-cover transition group-hover:scale-105"
         />
-        {hit.page != null ? (
-          <span class="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[10px] font-mono bg-black/60 text-white">
-            {t('images.pageBadge', { n: hit.page })}
-          </span>
-        ) : null}
+        <div class="absolute top-1.5 right-1.5 flex items-center gap-1">
+          <FlagBadges
+            autoFlag={hit.autoFlagSignal}
+            autoFlagReason={hit.autoFlagReason}
+            userFlagged={hit.userFlagged}
+          />
+          {hit.page != null ? (
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-black/60 text-white">
+              {t('images.pageBadge', { n: hit.page })}
+            </span>
+          ) : null}
+        </div>
         <span
           onClick={(e) => {
             e.stopPropagation();
@@ -488,11 +501,21 @@ function ImageList({
                   />
                 </td>
                 <td class="px-3 py-2 text-[12px] leading-snug text-[color:var(--color-fg-muted)]">
-                  {hit.alt || (
-                    <span class="italic text-[color:var(--color-fg-subtle)]">
-                      {t('images.noDescription')}
+                  <div class="flex items-center gap-2">
+                    <FlagBadges
+                      autoFlag={hit.autoFlagSignal}
+                      autoFlagReason={hit.autoFlagReason}
+                      userFlagged={hit.userFlagged}
+                      compact
+                    />
+                    <span class="flex-1 min-w-0">
+                      {hit.alt || (
+                        <span class="italic text-[color:var(--color-fg-subtle)]">
+                          {t('images.noDescription')}
+                        </span>
+                      )}
                     </span>
-                  )}
+                  </div>
                 </td>
                 <td class="px-3 py-2 font-mono text-xs text-[color:var(--color-fg-subtle)]">
                   {hit.page != null ? t('images.pageBadge', { n: hit.page }) : '—'}
@@ -867,5 +890,138 @@ function ImageDetail({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * F163.2 — flag-status filter dropdown. 5 modes:
+ *   - '' (all)
+ *   - 'any' (auto OR curator)
+ *   - 'auto' (auto only)
+ *   - 'user' (curator only)
+ *   - 'none' (neither)
+ *
+ * Mirrors SourceFilter's popover-listbox pattern for visual consistency.
+ */
+function StatusFilter({
+  value,
+  onChange,
+}: {
+  value: FlagFilter | '';
+  onChange: (v: FlagFilter | '') => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const select = (v: FlagFilter | '') => {
+    onChange(v);
+    setOpen(false);
+  };
+
+  const options: Array<{ value: FlagFilter | ''; key: string }> = [
+    { value: '', key: 'images.statusAll' },
+    { value: 'any', key: 'images.statusFlagged' },
+    { value: 'auto', key: 'images.statusAutoFlagged' },
+    { value: 'user', key: 'images.statusUserFlagged' },
+    { value: 'none', key: 'images.statusNotFlagged' },
+  ];
+  const activeLabel = options.find((o) => o.value === value)?.key ?? 'images.statusAll';
+
+  return (
+    <div class="relative inline-block" ref={wrapRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        class="relative flex items-center gap-2 pl-3 pr-8 py-2 text-sm rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)] hover:border-[color:var(--color-border-strong)] focus:border-[color:var(--color-accent)] focus:outline-none active:scale-[0.99] transition cursor-pointer w-[180px] text-left"
+        aria-label={t('images.statusFilter')}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span class="truncate flex-1 min-w-0">{t(activeLabel as never)}</span>
+        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[color:var(--color-fg-muted)]">
+          ▾
+        </span>
+      </button>
+      {open ? (
+        <div
+          class="absolute left-0 top-full mt-1 z-20 w-[220px] rounded-md border border-[color:var(--color-border-strong)] bg-[color:var(--color-bg-card)] shadow-2xl"
+          role="listbox"
+          aria-label={t('images.statusFilter')}
+        >
+          {options.map((opt) => (
+            <DropdownItem
+              key={opt.value || 'all'}
+              active={value === opt.value}
+              onClick={() => select(opt.value)}
+              label={t(opt.key as never)}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * F163.2 — flag badges. Renders ⚐ (auto) / ⚑ (curator) icons with
+ * hover-tooltip on autoFlagReason. Compact mode for list-view (smaller,
+ * inline before description); default for cards (overlay).
+ */
+function FlagBadges({
+  autoFlag,
+  autoFlagReason,
+  userFlagged,
+  compact,
+}: {
+  autoFlag: boolean;
+  autoFlagReason: string | null;
+  userFlagged: boolean;
+  compact?: boolean;
+}) {
+  if (!autoFlag && !userFlagged) return null;
+  const sizeCls = compact ? 'text-[12px]' : 'px-1.5 py-0.5 rounded text-[10px] font-mono bg-black/60 text-white';
+  return (
+    <span class={compact ? 'inline-flex items-center gap-1 flex-shrink-0' : 'inline-flex items-center gap-1'}>
+      {autoFlag ? (
+        <span
+          class={sizeCls + (compact ? ' text-[color:var(--color-warning,#f59e0b)]' : '')}
+          title={
+            autoFlagReason
+              ? t('images.autoFlagTooltip', { reason: autoFlagReason })
+              : t('images.autoFlagBadge')
+          }
+          aria-label={t('images.autoFlagBadge')}
+        >
+          ⚐
+        </span>
+      ) : null}
+      {userFlagged ? (
+        <span
+          class={sizeCls + (compact ? ' text-[color:var(--color-danger)]' : '')}
+          title={t('images.userFlagTooltip')}
+          aria-label={t('images.userFlagBadge')}
+        >
+          ⚑
+        </span>
+      ) : null}
+    </span>
   );
 }
