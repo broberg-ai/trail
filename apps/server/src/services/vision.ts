@@ -271,13 +271,38 @@ export interface DescribeResult {
 
 const QUALITY_MARKER_RE = /\[QUALITY:\s*(normal|low)\]\s*$/i;
 
-const EMBED_PROMPT = (page: number): string =>
-  `Describe this image from page ${page} of a document in 1-2 short sentences.\n` +
-  `Focus on content (diagrams, charts, labels, people, objects). Do not speculate.\n` +
-  `If the image is decorative or contains no information, reply with exactly: "decorative".\n\n` +
-  `End your response with EXACTLY ONE OF these markers on a new line:\n` +
-  `  [QUALITY: normal]   — image has identifiable content worth keeping\n` +
-  `  [QUALITY: low]      — image is too small/unclear/decorative/blank to be useful`;
+/**
+ * F163.3 Phase 0 — language-aware embedded-image prompt. Caller passes
+ * KB.language so descriptions land in the locale the curator + their
+ * end-users actually read. Sanne's KB has language='da' but pre-fix
+ * pipeline ignored it and stamped 248 English descriptions on her
+ * Zoneterapi-bog images. Fixed here.
+ *
+ * Languages currently supported (best Vision quality observed):
+ *   - 'da' Danish
+ *   - 'en' English (default fallback)
+ *   - 'de' German
+ * Add more cases as KB-language coverage expands. Falls through to
+ * English instruction for unknown locales — the model can still produce
+ * something, just won't match the requested locale.
+ */
+const EMBED_PROMPT = (page: number, language: string): string => {
+  const lang = (language ?? 'en').toLowerCase();
+  const langInstruction =
+    lang === 'da'
+      ? 'Skriv beskrivelsen på dansk.'
+      : lang === 'de'
+      ? 'Schreib die Beschreibung auf Deutsch.'
+      : 'Write the description in English.';
+  return (
+    `Describe this image from page ${page} of a document in 1-2 short sentences. ${langInstruction}\n` +
+    `Focus on content (diagrams, charts, labels, people, objects). Do not speculate.\n` +
+    `If the image is decorative or contains no information, reply with exactly: "decorative".\n\n` +
+    `End your response with EXACTLY ONE OF these markers on a new line:\n` +
+    `  [QUALITY: normal]   — image has identifiable content worth keeping\n` +
+    `  [QUALITY: low]      — image is too small/unclear/decorative/blank to be useful`
+  );
+};
 
 const AUTO_FLAG_PATTERNS: ReadonlyArray<{ pattern: RegExp; reason: string }> = [
   { pattern: /too small (and|to|for)\s+(unclear|identify|provide|make)/i, reason: 'too-small-and-unclear' },
@@ -381,7 +406,7 @@ export function applyDimensionFlag(
 
 async function describeEmbeddedViaOpenRouter(
   pngBytes: Uint8Array | Buffer,
-  context: { page: number },
+  context: { page: number; language: string },
 ): Promise<string | null> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return null;
@@ -407,7 +432,7 @@ async function describeEmbeddedViaOpenRouter(
             role: 'user',
             content: [
               { type: 'image_url', image_url: { url: dataUrl } },
-              { type: 'text', text: EMBED_PROMPT(context.page) },
+              { type: 'text', text: EMBED_PROMPT(context.page, context.language) },
             ],
           },
         ],
@@ -438,7 +463,7 @@ async function describeEmbeddedViaOpenRouter(
  */
 async function describeEmbeddedViaAnthropic(
   pngBytes: Uint8Array | Buffer,
-  context: { page: number },
+  context: { page: number; language: string },
 ): Promise<string | null> {
   const apiKey = getAnthropicKey();
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
@@ -466,7 +491,7 @@ async function describeEmbeddedViaAnthropic(
                 type: 'image',
                 source: { type: 'base64', media_type: 'image/png', data: base64 },
               },
-              { type: 'text', text: EMBED_PROMPT(context.page) },
+              { type: 'text', text: EMBED_PROMPT(context.page, context.language) },
             ],
           },
         ],
@@ -527,7 +552,7 @@ export function createVisionBackend(): DescribeImage | null {
  */
 export type DescribeImageWithMetadata = (
   pngBytes: Uint8Array | Buffer,
-  context: { page: number; width?: number; height?: number; filename?: string },
+  context: { page: number; width?: number; height?: number; filename?: string; language?: string },
 ) => Promise<DescribeResult>;
 
 export function createVisionBackendWithMetadata(): DescribeImageWithMetadata | null {
@@ -536,12 +561,13 @@ export function createVisionBackendWithMetadata(): DescribeImageWithMetadata | n
   if (!hasAnthropic && !hasOpenRouter) return null;
 
   return async (pngBytes, context) => {
+    const language = context.language ?? 'en';
     let firstError: unknown = null;
     let raw: string | null = null;
 
     if (hasAnthropic) {
       try {
-        raw = await describeEmbeddedViaAnthropic(pngBytes, { page: context.page });
+        raw = await describeEmbeddedViaAnthropic(pngBytes, { page: context.page, language });
       } catch (err) {
         firstError = err;
         if (!hasOpenRouter) throw err;
@@ -552,7 +578,7 @@ export function createVisionBackendWithMetadata(): DescribeImageWithMetadata | n
     }
     if (raw === null && hasOpenRouter && firstError !== null) {
       try {
-        raw = await describeEmbeddedViaOpenRouter(pngBytes, { page: context.page });
+        raw = await describeEmbeddedViaOpenRouter(pngBytes, { page: context.page, language });
       } catch (err) {
         if (firstError) {
           throw new Error(
@@ -562,7 +588,7 @@ export function createVisionBackendWithMetadata(): DescribeImageWithMetadata | n
         throw err;
       }
     } else if (raw === null && hasOpenRouter && !hasAnthropic) {
-      raw = await describeEmbeddedViaOpenRouter(pngBytes, { page: context.page });
+      raw = await describeEmbeddedViaOpenRouter(pngBytes, { page: context.page, language });
     }
 
     // raw is null if Anthropic returned the "decorative" sentinel —

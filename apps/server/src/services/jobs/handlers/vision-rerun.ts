@@ -27,7 +27,7 @@
  * is null and the progress modal shows "—" instead of $X.
  */
 
-import { documentImages, documents, type TrailDatabase } from '@trail/db';
+import { documentImages, documents, knowledgeBases, type TrailDatabase } from '@trail/db';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import pLimit from 'p-limit';
 import { storage } from '../../../lib/storage.js';
@@ -82,6 +82,9 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
   }
   const model = getActiveVisionModel();
 
+  // F163.3 Phase 0 — JOIN knowledge_bases so we can pass KB.language
+  // to the Vision-prompt per-image. Single SELECT (no N+1) keeps this
+  // negligible even on 1000+ image batches.
   const candidatesQuery = ctx.trail.db
     .select({
       id: documentImages.id,
@@ -91,8 +94,10 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
       page: documentImages.page,
       width: documentImages.width,
       height: documentImages.height,
+      kbLanguage: knowledgeBases.language,
     })
-    .from(documentImages);
+    .from(documentImages)
+    .innerJoin(knowledgeBases, eq(knowledgeBases.id, documentImages.knowledgeBaseId));
 
   let candidates;
   if (hasImageIds) {
@@ -180,6 +185,7 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
           width: row.width,
           height: row.height,
           filename: row.filename,
+          language: row.kbLanguage,
         });
         const visionAt = new Date().toISOString();
         if (!result.description) {
