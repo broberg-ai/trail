@@ -15,12 +15,15 @@ import { useRoute } from 'preact-iso';
 import {
   listImages,
   listSources,
+  bulkDeleteImages,
+  bulkRateImages,
   type ImageHit,
   ApiError,
 } from '../api';
 import type { Document } from '@trail/shared';
 import { t, useLocale } from '../lib/i18n';
 import { CenteredLoader } from '../components/centered-loader';
+import { Modal, ModalButton } from '../components/modal';
 import { lockBodyScroll } from '../lib/scroll-lock';
 
 const LIMIT = 36;
@@ -51,12 +54,22 @@ export function ImagesPanel() {
   // F163.1 Phase 2 — selection + view-mode state.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [view, setView] = useState<'cards' | 'list'>(() => readView());
+  // F163.1 Phase 3 — bulk-action state.
+  const [bulkBusy, setBulkBusy] = useState<null | 'flag' | 'delete'>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(VIEW_STORAGE_KEY, view);
     }
   }, [view]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(id);
+  }, [toast]);
 
   // Debounce the search query so we don't fire a request on every key.
   useEffect(() => {
@@ -138,6 +151,47 @@ export function ImagesPanel() {
     return d?.title ?? d?.filename ?? docFilter;
   }, [docFilter, sourceList]);
 
+  // Bulk-flag: thumbs-down via F164 Phase 5 endpoint. Reversible, so
+  // no confirm modal. Optimistic — clear selection immediately, show
+  // toast on success/failure.
+  const onBulkFlag = useCallback(async () => {
+    if (!kbId || bulkBusy || selected.size === 0) return;
+    const ids = Array.from(selected);
+    setBulkBusy('flag');
+    try {
+      const r = await bulkRateImages(kbId, ids, 'down');
+      setToast(t('images.bulkFlagDone', { n: r.rated }));
+      setSelected(new Set());
+    } catch (err) {
+      setToast(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setBulkBusy(null);
+    }
+  }, [kbId, bulkBusy, selected]);
+
+  // Bulk-delete: HARD-delete via F163.1 Phase 1 endpoint. Always behind
+  // confirm modal — irreversible. On success: toast + remove from
+  // current hits-array (instead of refetching, which would jolt the
+  // user back to top of page).
+  const onBulkDelete = useCallback(async () => {
+    if (!kbId || bulkBusy || selected.size === 0) return;
+    const ids = Array.from(selected);
+    setBulkBusy('delete');
+    try {
+      const r = await bulkDeleteImages(kbId, ids);
+      const idSet = new Set(ids);
+      setHits((prev) => prev.filter((h) => !idSet.has(h.id)));
+      setSelected(new Set());
+      setDeleteConfirm(false);
+      const warn = r.storageWarnings.length > 0 ? ` (${r.storageWarnings.length} blob warnings)` : '';
+      setToast(t('images.bulkDeleteDone', { n: r.deleted }) + warn);
+    } catch (err) {
+      setToast(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setBulkBusy(null);
+    }
+  }, [kbId, bulkBusy, selected]);
+
   const isEmpty = !loading && hits.length === 0 && !error;
 
   // Selection helpers — kept stable via useCallback so child rows don't
@@ -198,7 +252,16 @@ export function ImagesPanel() {
           allSelected={allSelected}
           onSelectAll={selectAllOnPage}
           onClear={clearSelection}
+          onFlag={onBulkFlag}
+          onDelete={() => setDeleteConfirm(true)}
+          busy={bulkBusy}
         />
+      ) : null}
+
+      {toast ? (
+        <div class="mb-3 px-3 py-2 rounded-md border border-[color:var(--color-accent)]/30 bg-[color:var(--color-accent)]/5 text-[color:var(--color-accent)] text-xs font-mono">
+          {toast}
+        </div>
       ) : null}
 
       {error ? (
@@ -264,6 +327,30 @@ export function ImagesPanel() {
           onClose={() => setOpenHit(null)}
         />
       ) : null}
+
+      <Modal
+        open={deleteConfirm}
+        title={t('images.bulkDeleteConfirm', { n: selected.size })}
+        onClose={() => (!bulkBusy ? setDeleteConfirm(false) : undefined)}
+        footer={
+          <>
+            <ModalButton onClick={() => setDeleteConfirm(false)} disabled={bulkBusy !== null}>
+              {t('common.cancel')}
+            </ModalButton>
+            <ModalButton
+              variant="danger"
+              onClick={onBulkDelete}
+              disabled={bulkBusy !== null}
+            >
+              {bulkBusy === 'delete' ? '…' : t('images.bulkDeleteAction')}
+            </ModalButton>
+          </>
+        }
+      >
+        <p class="text-sm text-[color:var(--color-fg-muted)] leading-relaxed">
+          {t('images.bulkDeleteWarning', { n: selected.size })}
+        </p>
+      </Modal>
     </div>
   );
 }
@@ -472,14 +559,18 @@ function SelectionBar({
   allSelected,
   onSelectAll,
   onClear,
+  onFlag,
+  onDelete,
+  busy,
 }: {
   count: number;
   allSelected: boolean;
   onSelectAll: () => void;
   onClear: () => void;
+  onFlag: () => void;
+  onDelete: () => void;
+  busy: null | 'flag' | 'delete';
 }) {
-  // Sticky positioning so the bar follows the curator down the page as
-  // they scan through 100s of images. Phase 3 wires the action buttons.
   return (
     <div class="sticky top-2 z-10 mb-3 px-3 py-2 rounded-md border border-[color:var(--color-accent)]/40 bg-[color:var(--color-accent)]/5 backdrop-blur-sm flex flex-wrap items-center gap-3 text-xs font-mono">
       <span class="text-[color:var(--color-fg)] font-medium">
@@ -497,15 +588,32 @@ function SelectionBar({
       <button
         type="button"
         onClick={onClear}
-        class="text-[color:var(--color-fg-subtle)] hover:text-[color:var(--color-fg)] transition"
+        disabled={busy !== null}
+        class="text-[color:var(--color-fg-subtle)] hover:text-[color:var(--color-fg)] disabled:opacity-50 transition"
       >
         {t('images.clearSelection')}
       </button>
-      {/* Phase 3 placeholder: bulk-action buttons land here. */}
       <div class="ml-auto flex items-center gap-3">
-        <span class="text-[color:var(--color-fg-subtle)] italic">
-          {t('images.bulkComingSoon')}
-        </span>
+        <button
+          type="button"
+          onClick={onFlag}
+          disabled={busy !== null}
+          class="inline-flex items-center gap-1.5 px-3 py-1 rounded-md border border-[color:var(--color-border)] hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--color-bg-card)] disabled:opacity-50 transition"
+          title={t('images.bulkFlagHint')}
+        >
+          <span>👎</span>
+          <span>{busy === 'flag' ? '…' : t('images.bulkFlag', { n: count })}</span>
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          disabled={busy !== null}
+          class="inline-flex items-center gap-1.5 px-3 py-1 rounded-md border border-[color:var(--color-danger)]/40 text-[color:var(--color-danger)] hover:bg-[color:var(--color-danger)]/10 disabled:opacity-50 transition"
+          title={t('images.bulkDeleteHint')}
+        >
+          <span>🗑</span>
+          <span>{busy === 'delete' ? '…' : t('images.bulkDelete', { n: count })}</span>
+        </button>
       </div>
     </div>
   );

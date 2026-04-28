@@ -657,6 +657,31 @@ export interface ImageListResponse {
   nextCursor: string | null;
 }
 
+// F163.1 — bulk endpoints
+
+export function bulkDeleteImages(
+  kbId: string,
+  imageIds: string[],
+): Promise<{ deleted: number; storageWarnings: string[] }> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/images/bulk-delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageIds }),
+  });
+}
+
+export function bulkRateImages(
+  kbId: string,
+  imageIds: string[],
+  rating: ImageRating,
+): Promise<{ rated: number }> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/images/bulk-rate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageIds, rating }),
+  });
+}
+
 export function listImages(
   kbId: string,
   opts: { q?: string; docId?: string; cursor?: string; limit?: number } = {},
