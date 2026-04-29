@@ -1,10 +1,12 @@
 # F33 Phase 1A — Trail engine container.
 #
-# Multi-stage build:
-#   1. base    — pin Bun, install pnpm, set up workspace dir
-#   2. deps    — copy package manifests, install all workspace deps
-#                with pnpm fetch + install (cached when only source changes)
-#   3. runtime — copy source, expose 8080, run engine
+# Multi-stage build using two toolchains:
+#   - deps stage:    node:20-slim — pnpm needs real node to resolve
+#                     workspace deps (bun's node-fallback doesn't satisfy
+#                     pnpm's `node --version` shell-out)
+#   - runtime stage: oven/bun:1.3 — engine is run with `bun run`, which
+#                     is faster than node for our TS workload and matches
+#                     local-dev `bun run` semantics
 #
 # Volume contract: /data is mounted by Fly. Trail reads
 #   TRAIL_DATA_DIR (default /data) and TRAIL_DB_PATH (default
@@ -12,20 +14,17 @@
 #   /data/{tenant-slug}/trail.db via fly.toml [env]. Multi-tenant
 #   per-request routing lands in Phase 1B.
 
-FROM oven/bun:1.3 AS base
+# ─── deps stage (node + pnpm) ─────────────────────────────────────────
+FROM node:20-slim AS deps
 WORKDIR /app
 
-# pnpm via corepack (stable, version-pinned via packageManager field)
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && corepack enable \
     && corepack prepare pnpm@9.0.0 --activate
 
-# ─── deps stage ───────────────────────────────────────────────────────
-FROM base AS deps
-
-# Copy only manifest files first so docker can cache the install layer
+# Copy only manifest files first so Docker can cache the install layer
 # when source files change but deps don't.
 COPY pnpm-workspace.yaml pnpm-lock.yaml* package.json ./
 COPY apps/server/package.json apps/server/
@@ -40,14 +39,20 @@ COPY packages/storage/package.json packages/storage/
 RUN pnpm install --frozen-lockfile --filter @trail/server... \
     || pnpm install --filter @trail/server...
 
-# ─── runtime stage ────────────────────────────────────────────────────
-FROM base AS runtime
+# ─── runtime stage (bun) ──────────────────────────────────────────────
+FROM oven/bun:1.3 AS runtime
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
 ENV PORT=8080
 ENV TRAIL_DATA_DIR=/data
 
-# Copy installed node_modules from deps stage
+# Copy installed node_modules from deps stage (pnpm uses symlinks
+# under node_modules/.pnpm/, COPY preserves them).
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=deps /app/packages ./packages
@@ -63,15 +68,11 @@ COPY packages/pipelines/src ./packages/pipelines/src
 COPY packages/shared/src ./packages/shared/src
 COPY packages/storage/src ./packages/storage/src
 
-# Re-link workspace symlinks (pnpm puts them under node_modules/.pnpm/);
-# top-level packages/* dirs are referenced by name, the symlinks point
-# back. No further build step — Bun runs TS directly.
-
 EXPOSE 8080
 
 # Healthcheck: the engine exposes /health (existing route).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -fsS http://127.0.0.1:8080/health || exit 1
+  CMD curl -fsS http://127.0.0.1:8080/api/health || exit 1
 
 WORKDIR /app/apps/server
 CMD ["bun", "run", "src/index.ts"]
