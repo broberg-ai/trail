@@ -1,5 +1,37 @@
 # trail
 
+## Trail Fly deployment policy
+
+**ALL Trail Fly apps live in org `broberg-ai` and region `arn` (Stockholm).**
+Never deploy a Trail-related app to a different org or region without
+explicit per-app authorization from Christian. The `arn` rule matches
+the global region policy across all WebHouse infrastructure.
+
+App naming convention:
+- `trail-admin` — single multi-tenant admin app at `app.trailmem.com`
+- `trail-engine-NNN` — engines at `engine-NNN.trailmem.com`, fronted by
+  `engine.trailmem.com` (router/proxy when fleet ≥ 2 engines; CNAME
+  to engine-001 while fleet = 1)
+- `trail-landing` — already-deployed marketing site at `trailmem.com`
+
+Architecture model (see F33 plan-doc for the full picture):
+- **One admin app** for ALL tenants, multi-tenant magic-link login.
+  Edge cases that need a separate admin live at `app2.trailmem.com`.
+- **Stateless engine fleet**, multiple tenants per engine. New engines
+  spawn dynamically when load thresholds are crossed; tenants are
+  popped/migrated between engines via the F170 orchestrator.
+- **One trail.db per tenant**, stored on the engine's volume (Phase 1)
+  or on dedicated DB-host machines (`{tenant}.db.trailmem.com`,
+  Phase 2+ when read-replicas/cross-region matter).
+- **Tenant-engine mapping** lives in admin's small `control.db`,
+  consulted by the routing layer at `engine.trailmem.com`.
+
+Deploy paths (both wired in F33):
+- `pnpm ship` — internal pipeline, direct `flyctl deploy`. For
+  fast iteration when Christian is at the keyboard.
+- `pnpm deploy` — GitHub Actions wrapper. For tagged releases and
+  CI-driven deploys.
+
 ## Peer intercom (buddy)
 
 This workspace runs alongside other cc sessions in other repos (monitored by buddy).

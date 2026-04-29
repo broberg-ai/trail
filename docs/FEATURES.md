@@ -340,6 +340,10 @@ Mirror af F149's pluggable ingest pattern, anvendt på chat-routen. Abstraherer 
 | F163.3 | [Image-detail Lightbox port (CMS-style: side-panel + EXIF + tags + pagination)](features/F163.3-image-detail-cms-style.md) | Planned | 1 | [plan](features/F163.3-image-detail-cms-style.md) |
 | F165 | [Async Vision-describe (move out of upload critical path)](features/F165-async-vision-describe.md) | Planned | 1 | [plan](features/F165-async-vision-describe.md) |
 | F165.1 | [Vision derivatives (WebP) + strict-availability fallback](features/F165.1-vision-derivatives-webp.md) | Planned | 1 | [plan](features/F165.1-vision-derivatives-webp.md) |
+| F33 | [Fly.io deploy: multi-tenant admin + stateless engine fleet (Phase 1)](features/F33-fly-deploy-multi-tenant.md) | Planned | 1 | [plan](features/F33-fly-deploy-multi-tenant.md) |
+| F168 | [Beam: tenant-level export/import between Trail engines](features/F168-beam-tenant-migration.md) | Planned | 1 | [plan](features/F168-beam-tenant-migration.md) |
+| F169 | [New-engine provisioning script (`pnpm trail engine spawn`)](features/F169-engine-provisioning-script.md) | Planned | 1 | [plan](features/F169-engine-provisioning-script.md) |
+| F170 | [Multi-engine orchestrator (router + tenant migration)](features/F170-multi-engine-orchestrator.md) | Planned | 2 | [plan](features/F170-multi-engine-orchestrator.md) |
 
 ---
 
