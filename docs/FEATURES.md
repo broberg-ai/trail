@@ -339,6 +339,7 @@ Mirror af F149's pluggable ingest pattern, anvendt på chat-routen. Abstraherer 
 | F163.2 | [Image auto-flag (Vision-prompt + regex) + Flagged filter](features/F163.2-image-auto-flag-and-filter.md) | Planned | 1 | [plan](features/F163.2-image-auto-flag-and-filter.md) |
 | F163.3 | [Image-detail Lightbox port (CMS-style: side-panel + EXIF + tags + pagination)](features/F163.3-image-detail-cms-style.md) | Planned | 1 | [plan](features/F163.3-image-detail-cms-style.md) |
 | F165 | [Async Vision-describe (move out of upload critical path)](features/F165-async-vision-describe.md) | Planned | 1 | [plan](features/F165-async-vision-describe.md) |
+| F165.1 | [Vision derivatives (WebP) + strict-availability fallback](features/F165.1-vision-derivatives-webp.md) | Planned | 1 | [plan](features/F165.1-vision-derivatives-webp.md) |
 
 ---
 
