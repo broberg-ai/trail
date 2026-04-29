@@ -1,0 +1,65 @@
+# F33 Phase 1A — Trail engine on Fly.io
+# Org: broberg-ai (per global Trail deployment policy in CLAUDE.md)
+# Region: arn (Stockholm) per global region policy
+#
+# Phase 1A: this single fly.toml is used for the first engine
+# (trail-engine-001). When a second engine spawns via F169
+# `pnpm trail engine spawn engine-002`, the same fly.toml is reused
+# with --app trail-engine-002 — no per-engine config files.
+#
+# Phase 1A is single-tenant: TRAIL_DB_PATH points at Sanne's slot
+# directly. Phase 1B refactors the engine to per-request tenant
+# resolution, at which point TRAIL_DB_PATH gets removed and
+# TRAIL_TENANT_DB_DIR=/data drives multi-tenant lookup.
+
+app = "trail-engine-001"
+primary_region = "arn"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  TRAIL_DATA_DIR = "/data"
+  # Phase 1A: hard-coded to Sanne. Phase 1B replaces with per-request
+  # tenant resolution and this line goes away.
+  TRAIL_DB_PATH = "/data/sanne-andersen/trail.db"
+  # F164 background-jobs framework concurrency — sized for shared-cpu-1x
+  # with 1 GB. Bump in Fly env if we go bigger.
+  TRAIL_MAX_CONCURRENT_JOBS = "4"
+  TRAIL_VISION_CONCURRENCY = "4"
+  # F164 Phase 3 — Anthropic primary, OpenRouter fallback.
+  # ANTHROPIC_API_KEY + OPENROUTER_API_KEY land via flyctl secrets,
+  # not in [env].
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  # Engine must always have at least one warm copy — the F164 job
+  # runner needs to tick and Sanne's chat must respond on first hit.
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 50
+    hard_limit = 100
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 1024
+
+[mounts]
+  source = "trail_engine_data"
+  destination = "/data"
+
+[checks]
+  [checks.health]
+    type = "http"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+    method = "GET"
+    path = "/health"

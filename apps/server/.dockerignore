@@ -1,0 +1,41 @@
+# Local data — engine container reads from /data volume on Fly,
+# not from the local data/ tree.
+../../data
+data
+*.db
+*.db-shm
+*.db-wal
+
+# Local dev artefacts
+node_modules
+.turbo
+dist
+.next
+build
+coverage
+*.log
+
+# Repo metadata
+.git
+.gitignore
+.github
+
+# Editor / OS
+.DS_Store
+.vscode
+.idea
+*.swp
+
+# Test artefacts
+__snapshots__
+test-results
+playwright-report
+
+# Other apps in monorepo we don't need in engine image
+../admin
+../landing
+../mcp
+../model-lab
+../onboarding
+../web-clipper
+../../adapters
