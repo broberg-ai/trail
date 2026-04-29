@@ -1,0 +1,469 @@
+<svg viewBox="0 0 1200 660" xmlns="http://www.w3.org/2000/svg"
+     role="img" aria-label="Trail: The Architecture of Compile-Time Knowledge — five phases from raw source ingestion to fast grounded querying">
+
+  <defs>
+    <pattern id="g20" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M20,0 L0,0 L0,20" fill="none" stroke="currentColor" stroke-width="0.4" stroke-opacity="0.05"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="660" fill="url(#g20)"/>
+
+  <!-- registration marks -->
+  <g stroke="currentColor" stroke-opacity="0.22" stroke-width="1" fill="none">
+    <path d="M12,28 L12,12 L28,12"/>
+    <path d="M1172,12 L1188,12 L1188,28"/>
+    <path d="M12,636 L12,652 L28,652"/>
+    <path d="M1172,652 L1188,652 L1188,636"/>
+  </g>
+
+  <!-- punch-card header strip -->
+  <g fill="none" stroke="currentColor" stroke-width="0.9" opacity="0.65">
+    <polyline points="22,64 48,22 1178,22 1178,64 22,64 22,52"/>
+  </g>
+  <g fill="currentColor" opacity="0.5">
+    <rect x="80"  y="36" width="10" height="15"/>
+    <rect x="110" y="36" width="10" height="15"/>
+    <rect x="140" y="36" width="10" height="15"/>
+    <rect x="170" y="36" width="10" height="15"/>
+    <rect x="200" y="36" width="10" height="15"/>
+    <rect x="230" y="36" width="10" height="15"/>
+    <rect x="260" y="36" width="10" height="15"/>
+    <rect x="290" y="36" width="10" height="15"/>
+    <rect x="320" y="36" width="10" height="15"/>
+    <rect x="350" y="36" width="10" height="15"/>
+    <rect x="380" y="36" width="10" height="15"/>
+    <rect x="410" y="36" width="10" height="15"/>
+    <rect x="440" y="36" width="10" height="15"/>
+  </g>
+  <text x="1160" y="51" font-family="monospace" font-size="10" fill="currentColor" text-anchor="end" opacity="0.65" letter-spacing="1">TRAIL · ARCHITECTURE OVERVIEW</text>
+
+  <!-- main title -->
+  <text x="600" y="91" font-family="monospace" font-size="13" fill="currentColor" text-anchor="middle" letter-spacing="2" font-weight="bold" opacity="0.9">TRAIL: THE ARCHITECTURE OF COMPILE-TIME KNOWLEDGE</text>
+
+  <!-- ═══════ INTER-PANEL FLOW ARROWS ═══════ -->
+  <!-- between p1→p2, p2→p3, p3→p4, p4→p5 at y=320 -->
+  <g fill="#e8a87c" opacity="0.85">
+    <polygon points="258,320 248,314 248,326"/>
+    <polygon points="490,320 480,314 480,326"/>
+    <polygon points="722,320 712,314 712,326"/>
+    <polygon points="954,320 944,314 944,326"/>
+  </g>
+  <g stroke="#e8a87c" stroke-width="1.6" opacity="0.6">
+    <line x1="245" y1="320" x2="246" y2="320"/>
+    <line x1="477" y1="320" x2="478" y2="320"/>
+    <line x1="709" y1="320" x2="710" y2="320"/>
+    <line x1="941" y1="320" x2="942" y2="320"/>
+  </g>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- PANEL 1  x=27  INGEST AND ANALYZE RAW SOURCES            -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <g transform="translate(27,100)">
+    <rect width="218" height="466" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <rect x="3" y="3" width="212" height="460" fill="none" stroke="#e8a87c" stroke-width="0.5" opacity="0.2"/>
+
+    <!-- header -->
+    <line x1="0" y1="70" x2="218" y2="70" stroke="currentColor" stroke-width="0.8" opacity="0.4"/>
+    <circle cx="20" cy="22" r="12" fill="#e8a87c" fill-opacity="0.12" stroke="#e8a87c" stroke-width="1.4"/>
+    <text x="20" y="27" font-family="monospace" font-size="12" fill="#e8a87c" text-anchor="middle" font-weight="bold">1</text>
+    <text x="39" y="18" font-family="monospace" font-size="10.5" fill="#e8a87c" letter-spacing="0.5" font-weight="bold">INGEST</text>
+    <text x="39" y="32" font-family="monospace" font-size="10.5" fill="currentColor" letter-spacing="0.5">AND ANALYZE</text>
+    <text x="39" y="46" font-family="monospace" font-size="10.5" fill="currentColor" letter-spacing="0.5">RAW SOURCES</text>
+
+    <!-- doc icons — PDF -->
+    <g transform="translate(12,82)">
+      <polygon points="0,0 26,0 36,10 36,50 0,50" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <polyline points="26,0 26,10 36,10" fill="none" stroke="currentColor" stroke-width="1"/>
+      <text x="6" y="28" font-family="monospace" font-size="9" fill="#e8a87c" font-weight="bold">PDF</text>
+      <line x1="5" y1="34" x2="30" y2="34" stroke="currentColor" stroke-opacity="0.35" stroke-width="0.8"/>
+      <line x1="5" y1="41" x2="26" y2="41" stroke="currentColor" stroke-opacity="0.35" stroke-width="0.8"/>
+      <text x="18" y="64" font-family="monospace" font-size="8" fill="currentColor" text-anchor="middle" opacity="0.6">PDFs</text>
+    </g>
+
+    <!-- doc icons — Transcripts -->
+    <g transform="translate(12,160)">
+      <polygon points="0,0 26,0 36,10 36,50 0,50" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <polyline points="26,0 26,10 36,10" fill="none" stroke="currentColor" stroke-width="1"/>
+      <line x1="5" y1="18" x2="30" y2="18" stroke="currentColor" stroke-opacity="0.35" stroke-width="0.8"/>
+      <line x1="5" y1="25" x2="27" y2="25" stroke="currentColor" stroke-opacity="0.35" stroke-width="0.8"/>
+      <line x1="5" y1="32" x2="29" y2="32" stroke="currentColor" stroke-opacity="0.35" stroke-width="0.8"/>
+      <line x1="5" y1="39" x2="25" y2="39" stroke="currentColor" stroke-opacity="0.35" stroke-width="0.8"/>
+      <line x1="5" y1="46" x2="28" y2="46" stroke="currentColor" stroke-opacity="0.35" stroke-width="0.8"/>
+      <text x="18" y="64" font-family="monospace" font-size="8" fill="currentColor" text-anchor="middle" opacity="0.6">Transcripts</text>
+    </g>
+
+    <!-- doc icons — Documents -->
+    <g transform="translate(12,238)">
+      <polygon points="0,0 26,0 36,10 36,50 0,50" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <polyline points="26,0 26,10 36,10" fill="none" stroke="currentColor" stroke-width="1"/>
+      <line x1="5" y1="18" x2="30" y2="18" stroke="currentColor" stroke-opacity="0.35" stroke-width="0.8"/>
+      <line x1="5" y1="25" x2="28" y2="25" stroke="currentColor" stroke-opacity="0.35" stroke-width="0.8"/>
+      <line x1="5" y1="32" x2="30" y2="32" stroke="currentColor" stroke-opacity="0.35" stroke-width="0.8"/>
+      <line x1="5" y1="39" x2="26" y2="39" stroke="currentColor" stroke-opacity="0.35" stroke-width="0.8"/>
+      <text x="18" y="64" font-family="monospace" font-size="8" fill="currentColor" text-anchor="middle" opacity="0.6">Documents</text>
+    </g>
+
+    <!-- arrow to parser -->
+    <line x1="50" y1="190" x2="66" y2="190" stroke="#e8a87c" stroke-width="1.4"/>
+    <polygon points="68,190 61,186 61,194" fill="#e8a87c"/>
+
+    <!-- funnel / parser -->
+    <g transform="translate(70,152)">
+      <polygon points="4,0 68,0 50,30 22,30" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <line x1="22" y1="30" x2="22" y2="52" stroke="currentColor" stroke-width="1.2"/>
+      <line x1="50" y1="30" x2="50" y2="52" stroke="currentColor" stroke-width="1.2"/>
+      <line x1="22" y1="52" x2="50" y2="52" stroke="currentColor" stroke-width="1.2"/>
+      <text x="36" y="16" font-family="monospace" font-size="9" fill="currentColor" text-anchor="middle" opacity="0.7">{ }</text>
+      <text x="36" y="27" font-family="monospace" font-size="8" fill="currentColor" text-anchor="middle" opacity="0.5">&lt;&lt;&gt;&gt;</text>
+      <text x="36" y="68" font-family="monospace" font-size="8" fill="currentColor" text-anchor="middle" opacity="0.6">PARSER</text>
+      <circle cx="36" cy="86" r="6" fill="#e8a87c" fill-opacity="0.18" stroke="#e8a87c" stroke-width="1.3"/>
+      <circle cx="36" cy="86" r="3" fill="#e8a87c"/>
+      <circle cx="36" cy="86" r="11" fill="none" stroke="#e8a87c" stroke-width="0.5" opacity="0.4"/>
+      <text x="36" y="105" font-family="monospace" font-size="8" fill="#e8a87c" text-anchor="middle">STRUCT</text>
+    </g>
+
+    <!-- caption separator -->
+    <line x1="10" y1="328" x2="208" y2="328" stroke="currentColor" stroke-width="0.6" stroke-dasharray="2,3" opacity="0.3"/>
+    <text x="14" y="344" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">PDFs, transcripts, and</text>
+    <text x="14" y="358" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">documents are fed into</text>
+    <text x="14" y="372" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">the engine to be</text>
+    <text x="14" y="386" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">structurally parsed,</text>
+    <text x="14" y="400" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">not just chunked.</text>
+  </g>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- PANEL 2  x=259  COMPILE INTO INTEGRATED NEURONS          -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <g transform="translate(259,100)">
+    <rect width="218" height="466" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <rect x="3" y="3" width="212" height="460" fill="none" stroke="#e8a87c" stroke-width="0.5" opacity="0.2"/>
+
+    <line x1="0" y1="70" x2="218" y2="70" stroke="currentColor" stroke-width="0.8" opacity="0.4"/>
+    <circle cx="20" cy="22" r="12" fill="#e8a87c" fill-opacity="0.12" stroke="#e8a87c" stroke-width="1.4"/>
+    <text x="20" y="27" font-family="monospace" font-size="12" fill="#e8a87c" text-anchor="middle" font-weight="bold">2</text>
+    <text x="39" y="18" font-family="monospace" font-size="10.5" fill="#e8a87c" letter-spacing="0.5" font-weight="bold">COMPILE INTO</text>
+    <text x="39" y="32" font-family="monospace" font-size="10.5" fill="currentColor" letter-spacing="0.5">INTEGRATED</text>
+    <text x="39" y="46" font-family="monospace" font-size="10.5" fill="currentColor" letter-spacing="0.5">"NEURONS"</text>
+
+    <!-- LLM robot -->
+    <g transform="translate(12,82)">
+      <rect x="2" y="10" width="46" height="40" fill="none" stroke="currentColor" stroke-width="1.3" rx="2"/>
+      <circle cx="16" cy="26" r="5" fill="none" stroke="currentColor" stroke-width="1.1"/>
+      <circle cx="34" cy="26" r="5" fill="none" stroke="currentColor" stroke-width="1.1"/>
+      <circle cx="16" cy="26" r="1.8" fill="currentColor"/>
+      <circle cx="34" cy="26" r="1.8" fill="currentColor"/>
+      <rect x="12" y="37" width="26" height="7" fill="none" stroke="currentColor" stroke-width="1.1"/>
+      <line x1="18" y1="37" x2="18" y2="44" stroke="currentColor" stroke-width="0.6" opacity="0.4"/>
+      <line x1="24" y1="37" x2="24" y2="44" stroke="currentColor" stroke-width="0.6" opacity="0.4"/>
+      <line x1="30" y1="37" x2="30" y2="44" stroke="currentColor" stroke-width="0.6" opacity="0.4"/>
+      <line x1="25" y1="10" x2="25" y2="2" stroke="currentColor" stroke-width="1.2"/>
+      <circle cx="25" cy="0" r="2.5" fill="currentColor"/>
+      <rect x="0" y="22" width="3" height="9" fill="none" stroke="currentColor" stroke-width="1"/>
+      <rect x="47" y="22" width="3" height="9" fill="none" stroke="currentColor" stroke-width="1"/>
+      <rect x="6" y="50" width="38" height="24" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <line x1="6" y1="62" x2="44" y2="62" stroke="currentColor" stroke-width="0.6" opacity="0.4"/>
+      <!-- book -->
+      <rect x="2" y="78" width="46" height="28" fill="none" stroke="currentColor" stroke-width="1" opacity="0.75"/>
+      <line x1="25" y1="78" x2="25" y2="106" stroke="currentColor" stroke-width="0.8" opacity="0.6"/>
+      <line x1="8"  y1="88" x2="23" y2="88" stroke="currentColor" stroke-opacity="0.3" stroke-width="0.8"/>
+      <line x1="8"  y1="95" x2="22" y2="95" stroke="currentColor" stroke-opacity="0.3" stroke-width="0.8"/>
+      <line x1="27" y1="88" x2="42" y2="88" stroke="currentColor" stroke-opacity="0.3" stroke-width="0.8"/>
+      <line x1="27" y1="95" x2="40" y2="95" stroke="currentColor" stroke-opacity="0.3" stroke-width="0.8"/>
+      <text x="25" y="120" font-family="monospace" font-size="8" fill="currentColor" text-anchor="middle" opacity="0.6">LLM</text>
+    </g>
+
+    <!-- connector lines to neuron cards -->
+    <line x1="76" y1="142" x2="92" y2="116" stroke="#e8a87c" stroke-width="0.9" stroke-dasharray="3,2" opacity="0.55"/>
+    <line x1="76" y1="164" x2="92" y2="168" stroke="#e8a87c" stroke-width="0.9" stroke-dasharray="3,2" opacity="0.55"/>
+    <line x1="76" y1="188" x2="92" y2="222" stroke="#e8a87c" stroke-width="0.9" stroke-dasharray="3,2" opacity="0.55"/>
+
+    <!-- neuron card top -->
+    <g transform="translate(93,84)">
+      <rect width="116" height="42" fill="none" stroke="#e8a87c" stroke-width="1.4"/>
+      <rect x="-2" y="-2" width="120" height="46" fill="none" stroke="#e8a87c" stroke-width="0.4" opacity="0.28"/>
+      <line x1="0" y1="13" x2="116" y2="13" stroke="#e8a87c" stroke-width="0.7" opacity="0.65"/>
+      <text x="8" y="10" font-family="monospace" font-size="7" fill="#e8a87c" letter-spacing="0.8">NEURON</text>
+      <line x1="8" y1="21" x2="104" y2="21" stroke="currentColor" stroke-opacity="0.25" stroke-width="0.8"/>
+      <line x1="8" y1="28" x2="90" y2="28" stroke="currentColor" stroke-opacity="0.25" stroke-width="0.8"/>
+      <line x1="8" y1="35" x2="96" y2="35" stroke="currentColor" stroke-opacity="0.25" stroke-width="0.8"/>
+    </g>
+    <!-- neuron card middle (hero, double halo) -->
+    <g transform="translate(93,146)">
+      <rect width="116" height="42" fill="none" stroke="#e8a87c" stroke-width="1.6"/>
+      <rect x="-3" y="-3" width="122" height="48" fill="none" stroke="#e8a87c" stroke-width="0.5" opacity="0.32"/>
+      <rect x="-6" y="-6" width="128" height="54" fill="none" stroke="#e8a87c" stroke-width="0.3" opacity="0.16"/>
+      <line x1="0" y1="13" x2="116" y2="13" stroke="#e8a87c" stroke-width="0.8" opacity="0.65"/>
+      <text x="8" y="10" font-family="monospace" font-size="7" fill="#e8a87c" letter-spacing="0.8">NEURON</text>
+      <line x1="8" y1="21" x2="104" y2="21" stroke="currentColor" stroke-opacity="0.25" stroke-width="0.8"/>
+      <line x1="8" y1="28" x2="86" y2="28" stroke="currentColor" stroke-opacity="0.25" stroke-width="0.8"/>
+      <line x1="8" y1="35" x2="94" y2="35" stroke="currentColor" stroke-opacity="0.25" stroke-width="0.8"/>
+    </g>
+    <!-- neuron card bottom -->
+    <g transform="translate(93,208)">
+      <rect width="116" height="42" fill="none" stroke="#e8a87c" stroke-width="1.4"/>
+      <rect x="-2" y="-2" width="120" height="46" fill="none" stroke="#e8a87c" stroke-width="0.4" opacity="0.28"/>
+      <line x1="0" y1="13" x2="116" y2="13" stroke="#e8a87c" stroke-width="0.7" opacity="0.65"/>
+      <text x="8" y="10" font-family="monospace" font-size="7" fill="#e8a87c" letter-spacing="0.8">NEURON</text>
+      <line x1="8" y1="21" x2="104" y2="21" stroke="currentColor" stroke-opacity="0.25" stroke-width="0.8"/>
+      <line x1="8" y1="28" x2="92" y2="28" stroke="currentColor" stroke-opacity="0.25" stroke-width="0.8"/>
+      <line x1="8" y1="35" x2="98" y2="35" stroke="currentColor" stroke-opacity="0.25" stroke-width="0.8"/>
+    </g>
+
+    <line x1="10" y1="328" x2="208" y2="328" stroke="currentColor" stroke-width="0.6" stroke-dasharray="2,3" opacity="0.3"/>
+    <text x="14" y="344" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">An LLM reads sources</text>
+    <text x="14" y="358" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">to author or update</text>
+    <text x="14" y="372" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">interlinked Markdown</text>
+    <text x="14" y="386" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">pages called Neurons.</text>
+  </g>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- PANEL 3  x=491  CURATE VIA THE HUMAN GATE                -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <g transform="translate(491,100)">
+    <rect width="218" height="466" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <rect x="3" y="3" width="212" height="460" fill="none" stroke="#e8a87c" stroke-width="0.5" opacity="0.2"/>
+
+    <line x1="0" y1="70" x2="218" y2="70" stroke="currentColor" stroke-width="0.8" opacity="0.4"/>
+    <circle cx="20" cy="22" r="12" fill="#e8a87c" fill-opacity="0.12" stroke="#e8a87c" stroke-width="1.4"/>
+    <text x="20" y="27" font-family="monospace" font-size="12" fill="#e8a87c" text-anchor="middle" font-weight="bold">3</text>
+    <text x="39" y="18" font-family="monospace" font-size="10.5" fill="#e8a87c" letter-spacing="0.5" font-weight="bold">CURATE</text>
+    <text x="39" y="32" font-family="monospace" font-size="10.5" fill="currentColor" letter-spacing="0.5">VIA THE</text>
+    <text x="39" y="46" font-family="monospace" font-size="10.5" fill="currentColor" letter-spacing="0.5">HUMAN GATE</text>
+
+    <!-- proposed update cards -->
+    <g transform="translate(10,82)">
+      <rect width="66" height="42" fill="none" stroke="currentColor" stroke-width="1.1"/>
+      <line x1="0" y1="13" x2="66" y2="13" stroke="currentColor" stroke-width="0.7" opacity="0.5"/>
+      <text x="6" y="10" font-family="monospace" font-size="6.5" fill="currentColor" opacity="0.6">PROPOSED</text>
+      <line x1="6" y1="21" x2="58" y2="21" stroke="currentColor" stroke-opacity="0.28" stroke-width="0.8"/>
+      <line x1="6" y1="28" x2="52" y2="28" stroke="currentColor" stroke-opacity="0.28" stroke-width="0.8"/>
+      <line x1="6" y1="35" x2="55" y2="35" stroke="currentColor" stroke-opacity="0.28" stroke-width="0.8"/>
+    </g>
+    <g transform="translate(10,136)">
+      <rect width="66" height="42" fill="none" stroke="currentColor" stroke-width="1.1"/>
+      <line x1="0" y1="13" x2="66" y2="13" stroke="currentColor" stroke-width="0.7" opacity="0.5"/>
+      <text x="6" y="10" font-family="monospace" font-size="6.5" fill="currentColor" opacity="0.6">PROPOSED</text>
+      <line x1="6" y1="21" x2="58" y2="21" stroke="currentColor" stroke-opacity="0.28" stroke-width="0.8"/>
+      <line x1="6" y1="28" x2="50" y2="28" stroke="currentColor" stroke-opacity="0.28" stroke-width="0.8"/>
+      <line x1="6" y1="35" x2="54" y2="35" stroke="currentColor" stroke-opacity="0.28" stroke-width="0.8"/>
+    </g>
+
+    <!-- arrows to gate -->
+    <line x1="78" y1="100" x2="90" y2="124" stroke="currentColor" stroke-width="0.9" opacity="0.55"/>
+    <line x1="78" y1="157" x2="90" y2="148" stroke="currentColor" stroke-width="0.9" opacity="0.55"/>
+    <polygon points="91,125 85,118 88,126" fill="currentColor" opacity="0.55"/>
+    <polygon points="91,147 85,141 87,149" fill="currentColor" opacity="0.55"/>
+
+    <!-- gate: reject (left) + approve (right) -->
+    <g transform="translate(90,96)">
+      <rect width="46" height="62" fill="none" stroke="currentColor" stroke-width="1.3"/>
+      <line x1="10" y1="16" x2="36" y2="46" stroke="#C23B22" stroke-width="2" opacity="0.82"/>
+      <line x1="36" y1="16" x2="10" y2="46" stroke="#C23B22" stroke-width="2" opacity="0.82"/>
+    </g>
+    <g transform="translate(138,96)">
+      <rect width="46" height="62" fill="none" stroke="currentColor" stroke-width="1.3"/>
+      <polyline points="8,37 18,50 38,22" fill="none" stroke="#4a9866" stroke-width="2.2" opacity="0.85"/>
+    </g>
+
+    <!-- curator (human silhouette) -->
+    <g transform="translate(98,170)">
+      <circle cx="16" cy="8" r="8" fill="none" stroke="currentColor" stroke-width="1.3"/>
+      <line x1="16" y1="16" x2="16" y2="40" stroke="currentColor" stroke-width="1.4"/>
+      <line x1="2"  y1="24" x2="30" y2="24" stroke="currentColor" stroke-width="1.4"/>
+      <line x1="16" y1="40" x2="6"  y2="58" stroke="currentColor" stroke-width="1.4"/>
+      <line x1="16" y1="40" x2="26" y2="58" stroke="currentColor" stroke-width="1.4"/>
+      <!-- pen -->
+      <line x1="30" y1="24" x2="40" y2="16" stroke="#e8a87c" stroke-width="1.4"/>
+      <polygon points="40,16 38,11 43,13" fill="#e8a87c"/>
+    </g>
+    <text x="116" y="240" font-family="monospace" font-size="7.5" fill="currentColor" text-anchor="middle" opacity="0.58">CURATOR</text>
+
+    <!-- arrow to wiki -->
+    <line x1="186" y1="130" x2="200" y2="130" stroke="#e8a87c" stroke-width="1.4"/>
+    <polygon points="202,130 195,126 195,134" fill="#e8a87c"/>
+
+    <!-- wiki page -->
+    <g transform="translate(162,86)">
+      <rect width="48" height="60" fill="none" stroke="currentColor" stroke-width="1.3"/>
+      <line x1="0" y1="14" x2="48" y2="14" stroke="currentColor" stroke-width="0.8"/>
+      <text x="5" y="11" font-family="monospace" font-size="6.5" fill="currentColor" opacity="0.65">WIKI</text>
+      <line x1="6" y1="22" x2="42" y2="22" stroke="currentColor" stroke-opacity="0.28" stroke-width="0.8"/>
+      <line x1="6" y1="29" x2="38" y2="29" stroke="currentColor" stroke-opacity="0.28" stroke-width="0.8"/>
+      <line x1="6" y1="36" x2="40" y2="36" stroke="currentColor" stroke-opacity="0.28" stroke-width="0.8"/>
+      <line x1="6" y1="43" x2="36" y2="43" stroke="currentColor" stroke-opacity="0.28" stroke-width="0.8"/>
+      <line x1="6" y1="50" x2="39" y2="50" stroke="currentColor" stroke-opacity="0.28" stroke-width="0.8"/>
+      <circle cx="42" cy="74" r="5" fill="#e8a87c" fill-opacity="0.18" stroke="#e8a87c" stroke-width="1.2"/>
+      <circle cx="42" cy="74" r="2.5" fill="#e8a87c"/>
+    </g>
+    <text x="186" y="174" font-family="monospace" font-size="7" fill="#e8a87c" text-anchor="middle" opacity="0.9">NEURON</text>
+
+    <line x1="10" y1="260" x2="208" y2="260" stroke="currentColor" stroke-width="0.6" stroke-dasharray="2,3" opacity="0.3"/>
+    <text x="14" y="276" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">Proposed updates enter</text>
+    <text x="14" y="290" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">a Curation Queue where</text>
+    <text x="14" y="304" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">humans approve, reject,</text>
+    <text x="14" y="318" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">or edit before the wiki</text>
+    <text x="14" y="332" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">updates.</text>
+  </g>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- PANEL 4  x=723  MAINTAIN A PERSISTENT KNOWLEDGE GRAPH    -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <g transform="translate(723,100)">
+    <rect width="218" height="466" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <rect x="3" y="3" width="212" height="460" fill="none" stroke="#e8a87c" stroke-width="0.5" opacity="0.2"/>
+
+    <line x1="0" y1="70" x2="218" y2="70" stroke="currentColor" stroke-width="0.8" opacity="0.4"/>
+    <circle cx="20" cy="22" r="12" fill="#e8a87c" fill-opacity="0.12" stroke="#e8a87c" stroke-width="1.4"/>
+    <text x="20" y="27" font-family="monospace" font-size="12" fill="#e8a87c" text-anchor="middle" font-weight="bold">4</text>
+    <text x="39" y="18" font-family="monospace" font-size="10.5" fill="currentColor" letter-spacing="0.5">MAINTAIN A</text>
+    <text x="39" y="32" font-family="monospace" font-size="10.5" fill="#e8a87c" letter-spacing="0.5" font-weight="bold">PERSISTENT</text>
+    <text x="39" y="46" font-family="monospace" font-size="10.5" fill="currentColor" letter-spacing="0.5">KNOWLEDGE GRAPH</text>
+
+    <!-- graph edges (muted) -->
+    <g stroke="currentColor" stroke-width="0.9" opacity="0.5">
+      <line x1="46" y1="120" x2="110" y2="92"/>
+      <line x1="110" y1="92" x2="176" y2="112"/>
+      <line x1="46" y1="120" x2="62" y2="186"/>
+      <line x1="110" y1="92" x2="128" y2="162"/>
+      <line x1="176" y1="112" x2="182" y2="196"/>
+      <line x1="62" y1="186" x2="128" y2="162"/>
+      <line x1="128" y1="162" x2="182" y2="196"/>
+      <line x1="62" y1="186" x2="82" y2="252"/>
+      <line x1="128" y1="162" x2="148" y2="242"/>
+      <line x1="182" y1="196" x2="148" y2="242"/>
+      <line x1="82" y1="252" x2="148" y2="242"/>
+    </g>
+    <!-- amber key edges -->
+    <g stroke="#e8a87c" stroke-width="1.5" opacity="0.72">
+      <line x1="46" y1="120" x2="128" y2="162"/>
+      <line x1="128" y1="162" x2="82" y2="252"/>
+      <line x1="176" y1="112" x2="128" y2="162"/>
+    </g>
+
+    <!-- anchor nodes (circle + cross) -->
+    <!-- n1 anchor at 46,120 -->
+    <circle cx="46" cy="120" r="14" fill="none" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="46" y1="112" x2="46" y2="128" stroke="currentColor" stroke-width="1.2" opacity="0.65"/>
+    <line x1="38" y1="120" x2="54" y2="120" stroke="currentColor" stroke-width="1.2" opacity="0.65"/>
+    <circle cx="46" cy="120" r="3" fill="currentColor"/>
+    <!-- n3 anchor at 176,112 -->
+    <circle cx="176" cy="112" r="14" fill="none" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="176" y1="104" x2="176" y2="120" stroke="currentColor" stroke-width="1.2" opacity="0.65"/>
+    <line x1="168" y1="112" x2="184" y2="112" stroke="currentColor" stroke-width="1.2" opacity="0.65"/>
+    <circle cx="176" cy="112" r="3" fill="currentColor"/>
+    <!-- n6 anchor at 182,196 -->
+    <circle cx="182" cy="196" r="14" fill="none" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="182" y1="188" x2="182" y2="204" stroke="currentColor" stroke-width="1.2" opacity="0.65"/>
+    <line x1="174" y1="196" x2="190" y2="196" stroke="currentColor" stroke-width="1.2" opacity="0.65"/>
+    <circle cx="182" cy="196" r="3" fill="currentColor"/>
+
+    <!-- regular nodes -->
+    <circle cx="110" cy="92"  r="10" fill="none" stroke="currentColor" stroke-width="1.2"/>
+    <circle cx="110" cy="92"  r="3"  fill="currentColor"/>
+    <circle cx="62"  cy="186" r="10" fill="none" stroke="currentColor" stroke-width="1.2"/>
+    <circle cx="62"  cy="186" r="3"  fill="currentColor"/>
+    <circle cx="82"  cy="252" r="10" fill="none" stroke="currentColor" stroke-width="1.2"/>
+    <circle cx="82"  cy="252" r="3"  fill="currentColor"/>
+    <circle cx="148" cy="242" r="10" fill="none" stroke="currentColor" stroke-width="1.2"/>
+    <circle cx="148" cy="242" r="3"  fill="currentColor"/>
+    <!-- center node (amber, larger) -->
+    <circle cx="128" cy="162" r="13" fill="#e8a87c" fill-opacity="0.1" stroke="#e8a87c" stroke-width="1.6"/>
+    <circle cx="128" cy="162" r="4"  fill="#e8a87c"/>
+    <circle cx="128" cy="162" r="18" fill="none" stroke="#e8a87c" stroke-width="0.4" opacity="0.35"/>
+
+    <line x1="10" y1="284" x2="208" y2="284" stroke="currentColor" stroke-width="0.6" stroke-dasharray="2,3" opacity="0.3"/>
+    <text x="14" y="300" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">Every fact is</text>
+    <text x="14" y="314" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">bidirectionally linked</text>
+    <text x="14" y="328" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">with stable anchors,</text>
+    <text x="14" y="342" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">allowing associative</text>
+    <text x="14" y="356" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">navigation and</text>
+    <text x="14" y="370" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">structural provenance.</text>
+  </g>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- PANEL 5  x=955  FAST SOURCE-GROUNDED QUERYING            -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <g transform="translate(955,100)">
+    <rect width="218" height="466" fill="none" stroke="currentColor" stroke-width="1.8"/>
+    <rect x="3" y="3" width="212" height="460" fill="none" stroke="#e8a87c" stroke-width="0.5" opacity="0.2"/>
+
+    <line x1="0" y1="70" x2="218" y2="70" stroke="currentColor" stroke-width="0.8" opacity="0.4"/>
+    <circle cx="20" cy="22" r="12" fill="#e8a87c" fill-opacity="0.12" stroke="#e8a87c" stroke-width="1.4"/>
+    <text x="20" y="27" font-family="monospace" font-size="12" fill="#e8a87c" text-anchor="middle" font-weight="bold">5</text>
+    <text x="39" y="18" font-family="monospace" font-size="10.5" fill="#e8a87c" letter-spacing="0.5" font-weight="bold">FAST,</text>
+    <text x="39" y="32" font-family="monospace" font-size="10.5" fill="currentColor" letter-spacing="0.5">SOURCE-GROUNDED</text>
+    <text x="39" y="46" font-family="monospace" font-size="10.5" fill="currentColor" letter-spacing="0.5">QUERYING</text>
+
+    <!-- compiled memory box (amber hero) -->
+    <g transform="translate(12,82)">
+      <rect width="118" height="48" fill="none" stroke="#e8a87c" stroke-width="1.6"/>
+      <rect x="-3" y="-3" width="124" height="54" fill="none" stroke="#e8a87c" stroke-width="0.5" opacity="0.32"/>
+      <rect x="-6" y="-6" width="130" height="60" fill="none" stroke="#e8a87c" stroke-width="0.3" opacity="0.16"/>
+      <line x1="0" y1="14" x2="118" y2="14" stroke="#e8a87c" stroke-width="0.7" opacity="0.65"/>
+      <text x="8" y="11" font-family="monospace" font-size="7" fill="#e8a87c" letter-spacing="0.5">COMPILED MEMORY</text>
+      <line x1="8" y1="22" x2="108" y2="22" stroke="currentColor" stroke-opacity="0.28" stroke-width="0.8"/>
+      <line x1="8" y1="29" x2="95" y2="29" stroke="currentColor" stroke-opacity="0.28" stroke-width="0.8"/>
+      <line x1="8" y1="36" x2="100" y2="36" stroke="currentColor" stroke-opacity="0.28" stroke-width="0.8"/>
+    </g>
+
+    <!-- arrow from memory to magnifier -->
+    <line x1="132" y1="104" x2="148" y2="104" stroke="#e8a87c" stroke-width="1.4"/>
+    <polygon points="150,104 143,100 143,108" fill="#e8a87c"/>
+
+    <!-- magnifying glass with lightning (amber) -->
+    <g transform="translate(152,80)">
+      <circle cx="22" cy="22" r="20" fill="none" stroke="#e8a87c" stroke-width="1.8"/>
+      <circle cx="22" cy="22" r="20" fill="#e8a87c" fill-opacity="0.05"/>
+      <circle cx="22" cy="22" r="24" fill="none" stroke="#e8a87c" stroke-width="0.4" opacity="0.3"/>
+      <line x1="36" y1="36" x2="52" y2="52" stroke="#e8a87c" stroke-width="3.2" stroke-linecap="round"/>
+      <!-- lightning bolt -->
+      <path d="M 26,10 L 16,22 L 22,22 L 18,36" fill="none" stroke="#e8a87c" stroke-width="1.8"/>
+    </g>
+
+    <!-- instant answer speech bubble -->
+    <g transform="translate(118,156)">
+      <rect x="0" y="0" width="86" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <polygon points="12,36 6,50 24,36" fill="none" stroke="currentColor" stroke-width="1.1"/>
+      <text x="9" y="14" font-family="monospace" font-size="8.5" fill="currentColor" opacity="0.82">INSTANT</text>
+      <text x="9" y="28" font-family="monospace" font-size="8.5" fill="currentColor" opacity="0.82">ANSWER</text>
+    </g>
+
+    <!-- vs RAG (muted) -->
+    <line x1="12" y1="220" x2="206" y2="220" stroke="currentColor" stroke-width="0.5" stroke-dasharray="3,4" opacity="0.28"/>
+    <text x="12" y="236" font-family="monospace" font-size="8" fill="currentColor" opacity="0.42">vs RAG: per-query rebuild</text>
+    <g transform="translate(12,244)" opacity="0.38">
+      <rect width="46" height="26" fill="none" stroke="currentColor" stroke-width="0.8" stroke-dasharray="2,2"/>
+      <text x="23" y="17" font-family="monospace" font-size="7.5" fill="currentColor" text-anchor="middle">QUERY</text>
+      <line x1="48" y1="13" x2="58" y2="13" stroke="currentColor" stroke-width="0.8"/>
+      <polygon points="60,13 53,10 53,16" fill="currentColor"/>
+      <rect x="60" width="56" height="26" fill="none" stroke="currentColor" stroke-width="0.8" stroke-dasharray="2,2"/>
+      <text x="88" y="11" font-family="monospace" font-size="7" fill="currentColor" text-anchor="middle">k-NN</text>
+      <text x="88" y="21" font-family="monospace" font-size="7" fill="currentColor" text-anchor="middle">SEARCH</text>
+      <line x1="0" y1="0" x2="118" y2="26" stroke="currentColor" stroke-width="0.8"/>
+    </g>
+
+    <line x1="10" y1="298" x2="208" y2="298" stroke="currentColor" stroke-width="0.6" stroke-dasharray="2,3" opacity="0.3"/>
+    <text x="14" y="314" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">Unlike RAG, queries</text>
+    <text x="14" y="328" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">read from already-</text>
+    <text x="14" y="342" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">compiled memory,</text>
+    <text x="14" y="356" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">providing instant</text>
+    <text x="14" y="370" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">answers with explicit</text>
+    <text x="14" y="384" font-family="monospace" font-size="9.5" fill="currentColor" opacity="0.72">citations.</text>
+  </g>
+
+  <!-- footer holes -->
+  <g fill="currentColor" opacity="0.28">
+    <rect x="75"  y="584" width="8" height="12"/>
+    <rect x="100" y="584" width="8" height="12"/>
+    <rect x="125" y="584" width="8" height="12"/>
+    <rect x="150" y="584" width="8" height="12"/>
+    <rect x="175" y="584" width="8" height="12"/>
+    <rect x="200" y="584" width="8" height="12"/>
+    <rect x="225" y="584" width="8" height="12"/>
+    <rect x="250" y="584" width="8" height="12"/>
+    <rect x="275" y="584" width="8" height="12"/>
+    <rect x="300" y="584" width="8" height="12"/>
+  </g>
+  <text x="600" y="634" font-family="monospace" font-size="10" fill="currentColor" text-anchor="middle" opacity="0.42" letter-spacing="0.5">sources compiled once · neurons answer every query · knowledge compounds over time</text>
+</svg>

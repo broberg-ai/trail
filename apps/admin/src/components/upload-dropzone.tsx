@@ -252,13 +252,13 @@ export function UploadDropzone({
       ) : null}
 
       {dragActive ? (
-        <div class="fixed inset-0 z-50 bg-[color:var(--color-bg)]/80 backdrop-blur-sm flex items-center justify-center pointer-events-none">
-          <div class="flex flex-col items-center gap-3 border-2 border-dashed border-[color:var(--color-accent)] rounded-xl px-12 py-10 bg-[color:var(--color-bg-card)]">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="text-[color:var(--color-accent)]">
+        <div class="fixed inset-0 z-50 bg-[color:var(--color-bg)]/80 backdrop-blur-sm pointer-events-none p-6 sm:p-10">
+          <div class="w-full h-full border-2 border-dashed border-[color:var(--color-accent)] rounded-2xl bg-[color:var(--color-bg-card)]/40 flex flex-col items-center justify-center gap-4">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-[color:var(--color-accent)]">
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
             </svg>
-            <div class="text-sm font-medium">Drop files to upload</div>
-            <div class="text-[11px] font-mono text-[color:var(--color-fg-subtle)]">
+            <div class="text-base font-medium">Drop files to upload</div>
+            <div class="text-xs font-mono text-[color:var(--color-fg-subtle)]">
               The whole window is a drop target
             </div>
           </div>

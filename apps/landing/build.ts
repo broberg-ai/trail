@@ -11,7 +11,33 @@
 import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync, cpSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { marked } from "marked";
-import { expandShortcodes } from "@webhouse/cms";
+
+// Local shim — @webhouse/cms upstream removed expandShortcodes after the
+// April-22 build. The only shortcode actually used in posts is {{svg:slug}};
+// snippet/INTERACTIVE/FILE/MAP shapes existed in the original helper but
+// no current post uses them. If they come back, restore from the upstream
+// helper instead of growing this shim.
+function expandShortcodes(
+  html: string,
+  opts: {
+    basePath: string;
+    uploadsDir: string;
+    svgDir: string;
+    svgCaptions: Record<string, string>;
+  },
+): string {
+  return html.replace(/\{\{svg:([a-zA-Z0-9_-]+)\}\}/g, (_match, slug: string) => {
+    const svgPath = join(opts.uploadsDir, opts.svgDir, `${slug}.svg`);
+    if (!existsSync(svgPath)) {
+      console.warn(`[shortcodes] missing svg: ${svgPath}`);
+      return `<!-- missing svg: ${slug} -->`;
+    }
+    const svgRaw = readFileSync(svgPath, "utf-8").replace(/^<\?xml.*?\?>\s*/, "");
+    const caption = opts.svgCaptions[slug];
+    const captionEl = caption ? `<figcaption>${caption}</figcaption>` : "";
+    return `<figure class="cms-svg cms-svg--${slug}">${svgRaw}${captionEl}</figure>`;
+  });
+}
 
 const BASE_PATH = process.env.BASE_PATH ?? "";
 const OUT_DIR = process.env.BUILD_OUT_DIR ?? "dist";

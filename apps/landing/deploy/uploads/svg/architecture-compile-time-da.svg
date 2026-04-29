@@ -1,0 +1,654 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 1200 660">
+  <!-- Generator: Adobe Illustrator 30.3.0, SVG Export Plug-In . SVG Version: 2.1.3 Build 182)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: url(#g20);
+      }
+
+      .st1, .st2, .st3, .st4, .st5, .st6, .st7, .st8, .st9, .st10, .st11, .st12, .st13, .st14, .st15, .st16, .st17, .st18, .st19, .st20, .st21, .st22, .st23, .st24, .st25, .st26, .st27, .st28, .st29, .st30, .st31, .st32, .st33, .st34, .st35, .st36, .st37, .st38, .st39, .st40, .st41, .st42 {
+        fill: none;
+      }
+
+      .st43, .st44, .st45, .st2, .st46, .st3, .st4, .st47, .st48, .st49, .st5, .st9, .st10, .st11, .st16, .st50, .st18, .st20, .st23, .st51, .st29, .st30, .st52, .st31, .st32, .st53, .st54, .st33, .st55, .st56, .st35, .st36, .st37, .st57, .st58, .st59, .st38, .st39, .st60, .st61, .st62, .st63, .st64, .st65 {
+        isolation: isolate;
+      }
+
+      .st43, .st47, .st48, .st49, .st50, .st51, .st52, .st53, .st54, .st55, .st56, .st57, .st58, .st59, .st61, .st62, .st64, .st65 {
+        font-family: CourierNewPSMT, 'Courier New';
+      }
+
+      .st43, .st60 {
+        font-size: 10.5px;
+        letter-spacing: 0em;
+      }
+
+      .st44 {
+        font-size: 12px;
+      }
+
+      .st44, .st45, .st60, .st63 {
+        font-family: CourierNewPS-BoldMT, 'Courier New';
+        font-weight: 700;
+      }
+
+      .st44, .st47, .st48, .st49, .st50, .st66, .st67, .st68, .st69, .st70, .st71, .st60, .st63 {
+        fill: #e8a87c;
+      }
+
+      .st45 {
+        font-size: 13px;
+        letter-spacing: .2em;
+      }
+
+      .st45, .st50 {
+        opacity: .9;
+      }
+
+      .st2, .st3, .st4, .st6, .st7, .st8, .st10, .st12, .st13, .st14, .st15, .st17, .st19, .st20, .st21, .st22, .st24, .st30, .st32, .st33, .st34, .st38, .st40, .st42 {
+        stroke: #000;
+      }
+
+      .st2, .st13, .st67 {
+        stroke-width: 1.2px;
+      }
+
+      .st2, .st55, .st72, .st36, .st37, .st64 {
+        opacity: .6;
+      }
+
+      .st46, .st29, .st33 {
+        opacity: .6;
+      }
+
+      .st3, .st4, .st16 {
+        opacity: .4;
+      }
+
+      .st3, .st12, .st17, .st19, .st20, .st21, .st22, .st24, .st37 {
+        stroke-width: .8px;
+      }
+
+      .st4, .st32 {
+        stroke-width: .6px;
+      }
+
+      .st47 {
+        letter-spacing: 0em;
+      }
+
+      .st47, .st48, .st50, .st52 {
+        font-size: 7px;
+      }
+
+      .st48 {
+        letter-spacing: .1em;
+      }
+
+      .st49, .st57, .st58, .st59 {
+        font-size: 8px;
+      }
+
+      .st5 {
+        opacity: .3;
+      }
+
+      .st5, .st9, .st11, .st16, .st18, .st23, .st25, .st26, .st27, .st28, .st29, .st67, .st68, .st36, .st37, .st70, .st71, .st39, .st41 {
+        stroke: #e8a87c;
+      }
+
+      .st5, .st9, .st39, .st42 {
+        stroke-width: .4px;
+      }
+
+      .st6, .st27 {
+        stroke-width: 1.8px;
+      }
+
+      .st7, .st68 {
+        stroke-width: 1.3px;
+      }
+
+      .st8, .st26, .st71 {
+        stroke-width: 1.4px;
+      }
+
+      .st9, .st32 {
+        opacity: .3;
+      }
+
+      .st10, .st73, .st58 {
+        opacity: .5;
+      }
+
+      .st10, .st36 {
+        stroke-width: .7px;
+      }
+
+      .st11 {
+        opacity: .3;
+      }
+
+      .st11, .st16, .st23, .st38 {
+        stroke-width: .5px;
+      }
+
+      .st14, .st29, .st33 {
+        stroke-width: .9px;
+      }
+
+      .st15 {
+        stroke-width: 1.1px;
+      }
+
+      .st17 {
+        stroke-dasharray: 2 2;
+      }
+
+      .st18 {
+        opacity: .2;
+        stroke-width: .3px;
+      }
+
+      .st19 {
+        stroke-opacity: .3;
+      }
+
+      .st20, .st59, .st65 {
+        opacity: .6;
+      }
+
+      .st21 {
+        stroke-opacity: .3;
+      }
+
+      .st22 {
+        stroke-opacity: .3;
+      }
+
+      .st23 {
+        opacity: .2;
+      }
+
+      .st24 {
+        stroke-opacity: .2;
+      }
+
+      .st51 {
+        opacity: .7;
+      }
+
+      .st51, .st63 {
+        font-size: 9px;
+      }
+
+      .st25, .st70 {
+        stroke-width: 1.6px;
+      }
+
+      .st28 {
+        stroke-width: 1.5px;
+      }
+
+      .st29 {
+        stroke-dasharray: 3 2;
+      }
+
+      .st30 {
+        opacity: .8;
+      }
+
+      .st66 {
+        fill-opacity: 0;
+      }
+
+      .st31 {
+        stroke: #c23b22;
+        stroke-width: 2px;
+      }
+
+      .st31, .st53 {
+        opacity: .8;
+      }
+
+      .st32 {
+        stroke-dasharray: 2 3;
+      }
+
+      .st53 {
+        font-size: 8.5px;
+      }
+
+      .st54 {
+        letter-spacing: 0em;
+      }
+
+      .st54, .st55 {
+        font-size: 10px;
+      }
+
+      .st54, .st57 {
+        opacity: .4;
+      }
+
+      .st55 {
+        letter-spacing: 0em;
+      }
+
+      .st56 {
+        font-size: 9.5px;
+      }
+
+      .st56, .st74 {
+        opacity: .7;
+      }
+
+      .st34 {
+        stroke-opacity: .2;
+      }
+
+      .st75, .st35 {
+        opacity: .9;
+      }
+
+      .st76 {
+        opacity: .4;
+      }
+
+      .st77, .st38, .st39 {
+        opacity: .3;
+      }
+
+      .st67, .st68 {
+        fill-opacity: .2;
+      }
+
+      .st35 {
+        stroke: #4a9866;
+        stroke-width: 2.2px;
+      }
+
+      .st38 {
+        stroke-dasharray: 3 4;
+      }
+
+      .st70 {
+        fill-opacity: .1;
+      }
+
+      .st71 {
+        fill-opacity: .1;
+      }
+
+      .st61 {
+        opacity: .6;
+      }
+
+      .st61, .st62 {
+        font-size: 7.5px;
+      }
+
+      .st41 {
+        stroke-linecap: round;
+        stroke-width: 3.2px;
+      }
+
+      .st42 {
+        opacity: 0;
+      }
+
+      .st64, .st65 {
+        font-size: 6.5px;
+      }
+    </style>
+    <pattern id="g20" x="0" y="0" width="20" height="20" patternTransform="translate(0 -16194) scale(1 -1)" patternUnits="userSpaceOnUse" viewBox="0 0 20 20">
+      <g>
+        <rect class="st1" width="20" height="20"/>
+        <polyline class="st42" points="20 20 0 20 0 0"/>
+      </g>
+    </pattern>
+  </defs>
+  <rect class="st0" width="1200" height="660"/>
+  <g>
+    <path class="st34" d="M12,28V12h16"/>
+    <path class="st34" d="M1172,12h16v16"/>
+    <path class="st34" d="M12,636v16h16"/>
+    <path class="st34" d="M1172,652h16v-16"/>
+  </g>
+  <g class="st72">
+    <polyline class="st14" points="22 64 48 22 1178 22 1178 64 22 64 22 52"/>
+  </g>
+  <g class="st73">
+    <rect x="80" y="36" width="10" height="15"/>
+    <rect x="110" y="36" width="10" height="15"/>
+    <rect x="140" y="36" width="10" height="15"/>
+    <rect x="170" y="36" width="10" height="15"/>
+    <rect x="200" y="36" width="10" height="15"/>
+    <rect x="230" y="36" width="10" height="15"/>
+    <rect x="260" y="36" width="10" height="15"/>
+    <rect x="290" y="36" width="10" height="15"/>
+    <rect x="320" y="36" width="10" height="15"/>
+    <rect x="350" y="36" width="10" height="15"/>
+    <rect x="380" y="36" width="10" height="15"/>
+    <rect x="410" y="36" width="10" height="15"/>
+    <rect x="440" y="36" width="10" height="15"/>
+  </g>
+  <text class="st55" transform="translate(971 51)"><tspan x="0" y="0">TRAIL · ARKITEKTUR OVERSIGT</tspan></text>
+  <text class="st45" transform="translate(394.2 91)"><tspan x="0" y="0">TRAIL: ARKITEKTUREN BAG COMPILE-TIME VIDEN</tspan></text>
+  <g class="st75">
+    <polygon class="st69" points="258 320 248 314 248 326 258 320"/>
+    <polygon class="st69" points="490 320 480 314 480 326 490 320"/>
+    <polygon class="st69" points="722 320 712 314 712 326 722 320"/>
+    <polygon class="st69" points="954 320 944 314 944 326 954 320"/>
+  </g>
+  <g>
+    <rect class="st6" x="27" y="100" width="218" height="466"/>
+    <rect class="st23" x="30" y="103" width="212" height="460"/>
+    <line class="st3" x1="27" y1="170" x2="245" y2="170"/>
+    <circle class="st71" cx="47" cy="122" r="12"/>
+    <text class="st44" transform="translate(43.4 127)"><tspan x="0" y="0">1</tspan></text>
+    <text class="st60" transform="translate(66 118)"><tspan x="0" y="0">INDLÆS</tspan></text>
+    <text class="st43" transform="translate(66 132)"><tspan x="0" y="0">OG ANALYSÉR</tspan></text>
+    <text class="st43" transform="translate(66 146)"><tspan x="0" y="0">RÅKILDER</tspan></text>
+    <g>
+      <polygon class="st13" points="39 182 65 182 75 192 75 232 39 232 39 182"/>
+      <polyline class="st40" points="65 182 65 192 75 192"/>
+      <text class="st63" transform="translate(45 210)"><tspan x="0" y="0">PDF</tspan></text>
+      <line class="st19" x1="44" y1="216" x2="69" y2="216"/>
+      <line class="st19" x1="44" y1="223" x2="65" y2="223"/>
+      <text class="st59" transform="translate(47.4 246)"><tspan x="0" y="0">PDFs</tspan></text>
+    </g>
+    <g>
+      <polygon class="st13" points="39 260 65 260 75 270 75 310 39 310 39 260"/>
+      <polyline class="st40" points="65 260 65 270 75 270"/>
+      <line class="st19" x1="44" y1="278" x2="69" y2="278"/>
+      <line class="st19" x1="44" y1="285" x2="66" y2="285"/>
+      <line class="st19" x1="44" y1="292" x2="68" y2="292"/>
+      <line class="st19" x1="44" y1="299" x2="64" y2="299"/>
+      <line class="st19" x1="44" y1="306" x2="67" y2="306"/>
+      <text class="st59" transform="translate(25.8 324)"><tspan x="0" y="0">Transskripter</tspan></text>
+    </g>
+    <g>
+      <polygon class="st13" points="39 338 65 338 75 348 75 388 39 388 39 338"/>
+      <polyline class="st40" points="65 338 65 348 75 348"/>
+      <line class="st19" x1="44" y1="356" x2="69" y2="356"/>
+      <line class="st19" x1="44" y1="363" x2="67" y2="363"/>
+      <line class="st19" x1="44" y1="370" x2="69" y2="370"/>
+      <line class="st19" x1="44" y1="377" x2="65" y2="377"/>
+      <text class="st59" transform="translate(33 402)"><tspan x="0" y="0">Dokumenter</tspan></text>
+    </g>
+    <line class="st26" x1="77" y1="290" x2="93" y2="290"/>
+    <polygon class="st69" points="95 290 88 286 88 294 95 290"/>
+    <g>
+      <polygon class="st13" points="101 252 165 252 147 282 119 282 101 252"/>
+      <line class="st13" x1="119" y1="282" x2="119" y2="304"/>
+      <line class="st13" x1="147" y1="282" x2="147" y2="304"/>
+      <line class="st13" x1="119" y1="304" x2="147" y2="304"/>
+      <text class="st51" transform="translate(124.9 268)"><tspan x="0" y="0">{ }</tspan></text>
+      <text class="st58" transform="translate(123.4 279)"><tspan x="0" y="0">&lt;&lt;&gt;&gt;</tspan></text>
+      <text class="st59" transform="translate(118.6 320)"><tspan x="0" y="0">PARSER</tspan></text>
+      <circle class="st68" cx="133" cy="338" r="6"/>
+      <circle class="st69" cx="133" cy="338" r="3"/>
+      <circle class="st16" cx="133" cy="338" r="11"/>
+      <text class="st49" transform="translate(113.8 357)"><tspan x="0" y="0">STRUKTUR</tspan></text>
+    </g>
+    <line class="st32" x1="37" y1="428" x2="235" y2="428"/>
+    <text class="st56" transform="translate(41 444)"><tspan x="0" y="0">PDFs, transskripter og</tspan></text>
+    <text class="st56" transform="translate(41 458)"><tspan x="0" y="0">dokumenter indlæses i</tspan></text>
+    <text class="st56" transform="translate(41 472)"><tspan x="0" y="0">motoren til strukturel</tspan></text>
+    <text class="st56" transform="translate(41 486)"><tspan x="0" y="0">parsing — ikke bare</tspan></text>
+    <text class="st56" transform="translate(41 500)"><tspan x="0" y="0">chunking.</tspan></text>
+  </g>
+  <g>
+    <rect class="st6" x="259" y="100" width="218" height="466"/>
+    <rect class="st23" x="262" y="103" width="212" height="460"/>
+    <line class="st3" x1="259" y1="170" x2="477" y2="170"/>
+    <circle class="st71" cx="279" cy="122" r="12"/>
+    <text class="st44" transform="translate(275.4 127)"><tspan x="0" y="0">2</tspan></text>
+    <text class="st60" transform="translate(298 118)"><tspan x="0" y="0">KOMPILÉR TIL</tspan></text>
+    <text class="st43" transform="translate(298 132)"><tspan x="0" y="0">INTEGREREDE</tspan></text>
+    <text class="st43" transform="translate(298 146)"><tspan x="0" y="0">&quot;NEURONER&quot;</tspan></text>
+    <g>
+      <rect class="st7" x="273" y="192" width="46" height="40" rx="2" ry="2"/>
+      <circle class="st15" cx="287" cy="208" r="5"/>
+      <circle class="st15" cx="305" cy="208" r="5"/>
+      <circle cx="287" cy="208" r="1.8"/>
+      <circle cx="305" cy="208" r="1.8"/>
+      <rect class="st15" x="283" y="219" width="26" height="7"/>
+      <line class="st4" x1="289" y1="219" x2="289" y2="226"/>
+      <line class="st4" x1="295" y1="219" x2="295" y2="226"/>
+      <line class="st4" x1="301" y1="219" x2="301" y2="226"/>
+      <line class="st13" x1="296" y1="192" x2="296" y2="184"/>
+      <circle cx="296" cy="182" r="2.5"/>
+      <rect class="st40" x="271" y="204" width="3" height="9"/>
+      <rect class="st40" x="318" y="204" width="3" height="9"/>
+      <rect class="st13" x="277" y="232" width="38" height="24"/>
+      <line class="st4" x1="277" y1="244" x2="315" y2="244"/>
+      <rect class="st30" x="273" y="260" width="46" height="28"/>
+      <line class="st20" x1="296" y1="260" x2="296" y2="288"/>
+      <line class="st21" x1="279" y1="270" x2="294" y2="270"/>
+      <line class="st21" x1="279" y1="277" x2="293" y2="277"/>
+      <line class="st21" x1="298" y1="270" x2="313" y2="270"/>
+      <line class="st21" x1="298" y1="277" x2="311" y2="277"/>
+      <text class="st59" transform="translate(288.8 302)"><tspan x="0" y="0">LLM</tspan></text>
+    </g>
+    <line class="st29" x1="335" y1="242" x2="351" y2="216"/>
+    <line class="st29" x1="335" y1="264" x2="351" y2="268"/>
+    <line class="st29" x1="335" y1="288" x2="351" y2="322"/>
+    <g>
+      <rect class="st26" x="352" y="184" width="116" height="42"/>
+      <rect class="st39" x="350" y="182" width="120" height="46"/>
+      <line class="st36" x1="352" y1="197" x2="468" y2="197"/>
+      <text class="st48" transform="translate(360 194)"><tspan x="0" y="0">NEURON</tspan></text>
+      <line class="st24" x1="360" y1="205" x2="456" y2="205"/>
+      <line class="st24" x1="360" y1="212" x2="442" y2="212"/>
+      <line class="st24" x1="360" y1="219" x2="448" y2="219"/>
+    </g>
+    <g>
+      <rect class="st25" x="352" y="246" width="116" height="42"/>
+      <rect class="st11" x="349" y="243" width="122" height="48"/>
+      <rect class="st18" x="346" y="240" width="128" height="54"/>
+      <line class="st37" x1="352" y1="259" x2="468" y2="259"/>
+      <text class="st48" transform="translate(360 256)"><tspan x="0" y="0">NEURON</tspan></text>
+      <line class="st24" x1="360" y1="267" x2="456" y2="267"/>
+      <line class="st24" x1="360" y1="274" x2="438" y2="274"/>
+      <line class="st24" x1="360" y1="281" x2="446" y2="281"/>
+    </g>
+    <g>
+      <rect class="st26" x="352" y="308" width="116" height="42"/>
+      <rect class="st39" x="350" y="306" width="120" height="46"/>
+      <line class="st36" x1="352" y1="321" x2="468" y2="321"/>
+      <text class="st48" transform="translate(360 318)"><tspan x="0" y="0">NEURON</tspan></text>
+      <line class="st24" x1="360" y1="329" x2="456" y2="329"/>
+      <line class="st24" x1="360" y1="336" x2="444" y2="336"/>
+      <line class="st24" x1="360" y1="343" x2="450" y2="343"/>
+    </g>
+    <line class="st32" x1="269" y1="428" x2="467" y2="428"/>
+    <text class="st56" transform="translate(273 444)"><tspan x="0" y="0">En LLM læser kilderne</tspan></text>
+    <text class="st56" transform="translate(273 458)"><tspan x="0" y="0">og opretter eller</tspan></text>
+    <text class="st56" transform="translate(273 472)"><tspan x="0" y="0">opdaterer sammenkædede</tspan></text>
+    <text class="st56" transform="translate(273 486)"><tspan x="0" y="0">Markdown-sider kaldet</tspan></text>
+    <text class="st56" transform="translate(273 500)"><tspan x="0" y="0">Neuroner.</tspan></text>
+  </g>
+  <rect class="st6" x="491" y="100" width="218" height="466"/>
+  <rect class="st23" x="494" y="103" width="212" height="460"/>
+  <line class="st3" x1="491" y1="170" x2="709" y2="170"/>
+  <circle class="st71" cx="511" cy="122" r="12"/>
+  <text class="st44" transform="translate(507.4 127)"><tspan x="0" y="0">3</tspan></text>
+  <text class="st60" transform="translate(530 118)"><tspan x="0" y="0">KURATER</tspan></text>
+  <text class="st43" transform="translate(530 132)"><tspan x="0" y="0">VIA</tspan></text>
+  <text class="st43" transform="translate(530 146)"><tspan x="0" y="0">MENNESKEPORTEN</tspan></text>
+  <rect class="st15" x="501" y="182" width="66" height="42"/>
+  <line class="st10" x1="501" y1="195" x2="567" y2="195"/>
+  <text class="st65" transform="translate(507 192)"><tspan x="0" y="0">FORESLÅET</tspan></text>
+  <line class="st22" x1="507" y1="203" x2="559" y2="203"/>
+  <line class="st22" x1="507" y1="210" x2="553" y2="210"/>
+  <line class="st22" x1="507" y1="217" x2="556" y2="217"/>
+  <rect class="st15" x="501" y="236" width="66" height="42"/>
+  <line class="st10" x1="501" y1="249" x2="567" y2="249"/>
+  <text class="st65" transform="translate(507 246)"><tspan x="0" y="0">FORESLÅET</tspan></text>
+  <line class="st22" x1="507" y1="257" x2="559" y2="257"/>
+  <line class="st22" x1="507" y1="264" x2="551" y2="264"/>
+  <line class="st22" x1="507" y1="271" x2="555" y2="271"/>
+  <line class="st33" x1="567.5" y1="199.1" x2="579.5" y2="223.1"/>
+  <line class="st33" x1="567" y1="257" x2="579" y2="248"/>
+  <polygon class="st46" points="580.1 249.6 585.1 242.8 577.5 246 580.1 249.6"/>
+  <rect class="st7" x="581" y="196" width="46" height="62"/>
+  <line class="st31" x1="591" y1="212" x2="617" y2="242"/>
+  <line class="st31" x1="617" y1="212" x2="591" y2="242"/>
+  <rect class="st7" x="629" y="196" width="46" height="62"/>
+  <polyline class="st35" points="637 233 647 246 667 218"/>
+  <circle class="st7" cx="605" cy="278" r="8"/>
+  <line class="st8" x1="605" y1="286" x2="605" y2="310"/>
+  <line class="st8" x1="591" y1="294" x2="619" y2="294"/>
+  <line class="st8" x1="605" y1="310" x2="595" y2="328"/>
+  <line class="st8" x1="605" y1="310" x2="615" y2="328"/>
+  <line class="st26" x1="619" y1="294" x2="629" y2="286"/>
+  <polygon class="st69" points="629 286 627 281 632 283 629 286"/>
+  <text class="st61" transform="translate(591.2 340)"><tspan x="0" y="0">KURATOR</tspan></text>
+  <line class="st26" x1="677" y1="230" x2="691" y2="230"/>
+  <polygon class="st69" points="693 230 686 226 686 234 693 230"/>
+  <rect class="st7" x="653" y="182" width="48" height="60"/>
+  <line class="st12" x1="653" y1="200" x2="701" y2="200"/>
+  <text class="st64" transform="translate(658 193)"><tspan x="0" y="0">NEURON</tspan></text>
+  <line class="st22" x1="659" y1="208" x2="695" y2="208"/>
+  <line class="st22" x1="659" y1="215" x2="691" y2="215"/>
+  <line class="st22" x1="659" y1="222" x2="693" y2="222"/>
+  <line class="st22" x1="659" y1="229" x2="689" y2="229"/>
+  <line class="st22" x1="659" y1="236" x2="692" y2="236"/>
+  <circle class="st67" cx="695" cy="260" r="5"/>
+  <circle class="st69" cx="695" cy="260" r="2.5"/>
+  <text class="st50" transform="translate(664.4 274)"><tspan x="0" y="0">NEURON</tspan></text>
+  <line class="st32" x1="501" y1="360" x2="699" y2="360"/>
+  <text class="st56" transform="translate(505 376)"><tspan x="0" y="0">Foreslåede opdateringer</tspan></text>
+  <text class="st56" transform="translate(505 390)"><tspan x="0" y="0">går ind i en kurations-</tspan></text>
+  <text class="st56" transform="translate(505 404)"><tspan x="0" y="0">kø, hvor mennesker</tspan></text>
+  <text class="st56" transform="translate(505 418)"><tspan x="0" y="0">godkender, afviser eller</tspan></text>
+  <text class="st56" transform="translate(505 432)"><tspan x="0" y="0">redigerer wikien.</tspan></text>
+  <g>
+    <rect class="st6" x="723" y="100" width="218" height="466"/>
+    <rect class="st23" x="726" y="103" width="212" height="460"/>
+    <line class="st3" x1="723" y1="170" x2="941" y2="170"/>
+    <circle class="st71" cx="743" cy="122" r="12"/>
+    <text class="st44" transform="translate(739.4 127)"><tspan x="0" y="0">4</tspan></text>
+    <text class="st43" transform="translate(762 118)"><tspan x="0" y="0">VEDLIGEHOLD EN</tspan></text>
+    <text class="st60" transform="translate(762 132)"><tspan x="0" y="0">PERSISTENT</tspan></text>
+    <text class="st43" transform="translate(762 146)"><tspan x="0" y="0">VIDENSGRAF</tspan></text>
+    <g class="st73">
+      <line class="st14" x1="769" y1="220" x2="833" y2="192"/>
+      <line class="st14" x1="833" y1="192" x2="899" y2="212"/>
+      <line class="st14" x1="769" y1="220" x2="785" y2="286"/>
+      <line class="st14" x1="833" y1="192" x2="851" y2="262"/>
+      <line class="st14" x1="899" y1="212" x2="905" y2="296"/>
+      <line class="st14" x1="785" y1="286" x2="851" y2="262"/>
+      <line class="st14" x1="851" y1="262" x2="905" y2="296"/>
+      <line class="st14" x1="785" y1="286" x2="805" y2="352"/>
+      <line class="st14" x1="851" y1="262" x2="871" y2="342"/>
+      <line class="st14" x1="905" y1="296" x2="871" y2="342"/>
+      <line class="st14" x1="805" y1="352" x2="871" y2="342"/>
+    </g>
+    <g class="st74">
+      <line class="st28" x1="769" y1="220" x2="851" y2="262"/>
+      <line class="st28" x1="851" y1="262" x2="805" y2="352"/>
+      <line class="st28" x1="899" y1="212" x2="851" y2="262"/>
+    </g>
+    <circle class="st8" cx="769" cy="220" r="14"/>
+    <line class="st2" x1="769" y1="212" x2="769" y2="228"/>
+    <line class="st2" x1="761" y1="220" x2="777" y2="220"/>
+    <circle cx="769" cy="220" r="3"/>
+    <circle class="st8" cx="899" cy="212" r="14"/>
+    <line class="st2" x1="899" y1="204" x2="899" y2="220"/>
+    <line class="st2" x1="891" y1="212" x2="907" y2="212"/>
+    <circle cx="899" cy="212" r="3"/>
+    <circle class="st8" cx="905" cy="296" r="14"/>
+    <line class="st2" x1="905" y1="288" x2="905" y2="304"/>
+    <line class="st2" x1="897" y1="296" x2="913" y2="296"/>
+    <circle cx="905" cy="296" r="3"/>
+    <circle class="st13" cx="833" cy="192" r="10"/>
+    <circle cx="833" cy="192" r="3"/>
+    <circle class="st13" cx="785" cy="286" r="10"/>
+    <circle cx="785" cy="286" r="3"/>
+    <circle class="st13" cx="805" cy="352" r="10"/>
+    <circle cx="805" cy="352" r="3"/>
+    <circle class="st13" cx="871" cy="342" r="10"/>
+    <circle cx="871" cy="342" r="3"/>
+    <circle class="st70" cx="851" cy="262" r="13"/>
+    <circle class="st69" cx="851" cy="262" r="4"/>
+    <circle class="st5" cx="851" cy="262" r="18"/>
+    <line class="st32" x1="733" y1="384" x2="931" y2="384"/>
+    <text class="st56" transform="translate(737 400)"><tspan x="0" y="0">Hvert faktum er tovejs-</tspan></text>
+    <text class="st56" transform="translate(737 414)"><tspan x="0" y="0">koblet med stabile ankre,</tspan></text>
+    <text class="st56" transform="translate(737 428)"><tspan x="0" y="0">der muliggør associativ</tspan></text>
+    <text class="st56" transform="translate(737 442)"><tspan x="0" y="0">navigation og strukturel</tspan></text>
+    <text class="st56" transform="translate(737 456)"><tspan x="0" y="0">oprindelse.</tspan></text>
+  </g>
+  <g>
+    <rect class="st6" x="955" y="100" width="218" height="466"/>
+    <rect class="st23" x="958" y="103" width="212" height="460"/>
+    <line class="st3" x1="955" y1="170" x2="1173" y2="170"/>
+    <circle class="st71" cx="975" cy="122" r="12"/>
+    <text class="st44" transform="translate(971.4 127)"><tspan x="0" y="0">5</tspan></text>
+    <text class="st60" transform="translate(994 118)"><tspan x="0" y="0">HURTIG,</tspan></text>
+    <text class="st43" transform="translate(994 132)"><tspan x="0" y="0">KILDEFORANKRET</tspan></text>
+    <text class="st43" transform="translate(994 146)"><tspan x="0" y="0">FORESPØRGSEL</tspan></text>
+    <g>
+      <rect class="st25" x="967" y="182" width="118" height="48"/>
+      <rect class="st11" x="964" y="179" width="124" height="54"/>
+      <rect class="st18" x="961" y="176" width="130" height="60"/>
+      <line class="st36" x1="967" y1="196" x2="1085" y2="196"/>
+      <text class="st47" transform="translate(975 193)"><tspan x="0" y="0">KOMPILERET HUSK.</tspan></text>
+      <line class="st22" x1="975" y1="204" x2="1075" y2="204"/>
+      <line class="st22" x1="975" y1="211" x2="1062" y2="211"/>
+      <line class="st22" x1="975" y1="218" x2="1067" y2="218"/>
+    </g>
+    <line class="st26" x1="1087" y1="204" x2="1103" y2="204"/>
+    <polygon class="st69" points="1105 204 1098 200 1098 208 1105 204"/>
+    <g>
+      <circle class="st27" cx="1129" cy="202" r="20"/>
+      <circle class="st66" cx="1129" cy="202" r="20"/>
+      <circle class="st9" cx="1129" cy="202" r="24"/>
+      <line class="st41" x1="1143" y1="216" x2="1159" y2="232"/>
+      <path class="st27" d="M1133,190l-10,12h6l-4,14"/>
+    </g>
+    <g>
+      <rect class="st13" x="1073" y="256" width="86" height="36" rx="3" ry="3"/>
+      <polygon class="st15" points="1085 292 1079 306 1097 292 1085 292"/>
+      <text class="st53" transform="translate(1082 270)"><tspan x="0" y="0">ØJEBLIKKELIG</tspan></text>
+      <text class="st53" transform="translate(1082 284)"><tspan x="0" y="0">BESVARELSE</tspan></text>
+    </g>
+    <line class="st38" x1="967" y1="320" x2="1161" y2="320"/>
+    <text class="st57" transform="translate(967 336)"><tspan x="0" y="0">vs RAG: genbygning pr. forespørgsel</tspan></text>
+    <g class="st76">
+      <rect class="st17" x="967" y="344" width="46" height="26"/>
+      <text class="st62" transform="translate(978.7 361)"><tspan x="0" y="0">QUERY</tspan></text>
+      <line class="st12" x1="1015" y1="357" x2="1025" y2="357"/>
+      <polygon points="1027 357 1020 354 1020 360 1027 357"/>
+      <rect class="st17" x="1027" y="344" width="56" height="26"/>
+      <text class="st52" transform="translate(1046.6 355)"><tspan x="0" y="0">k-NN</tspan></text>
+      <text class="st52" transform="translate(1040.3 365)"><tspan x="0" y="0">SØGNING</tspan></text>
+      <line class="st12" x1="967" y1="344" x2="1085" y2="370"/>
+    </g>
+    <line class="st32" x1="965" y1="398" x2="1163" y2="398"/>
+    <text class="st56" transform="translate(969 414)"><tspan x="0" y="0">I modsætning til RAG</tspan></text>
+    <text class="st56" transform="translate(969 428)"><tspan x="0" y="0">læser forespørgsler fra</tspan></text>
+    <text class="st56" transform="translate(969 442)"><tspan x="0" y="0">allerede-kompileret</tspan></text>
+    <text class="st56" transform="translate(969 456)"><tspan x="0" y="0">hukommelse og giver</tspan></text>
+    <text class="st56" transform="translate(969 470)"><tspan x="0" y="0">øjeblikkelige svar med</tspan></text>
+    <text class="st56" transform="translate(969 484)"><tspan x="0" y="0">eksplicitte citationer.</tspan></text>
+  </g>
+  <g class="st77">
+    <rect x="75" y="584" width="8" height="12"/>
+    <rect x="100" y="584" width="8" height="12"/>
+    <rect x="125" y="584" width="8" height="12"/>
+    <rect x="150" y="584" width="8" height="12"/>
+    <rect x="175" y="584" width="8" height="12"/>
+    <rect x="200" y="584" width="8" height="12"/>
+    <rect x="225" y="584" width="8" height="12"/>
+    <rect x="250" y="584" width="8" height="12"/>
+    <rect x="275" y="584" width="8" height="12"/>
+    <rect x="300" y="584" width="8" height="12"/>
+  </g>
+  <text class="st54" transform="translate(314 634)"><tspan x="0" y="0">kilder kompileres én gang · neuroner besvarer alle forespørgsler · viden vokser over tid</tspan></text>
+  <polygon class="st46" points="577.5 224.1 583.5 230.1 581.5 222.1 577.5 224.1"/>
+</svg>

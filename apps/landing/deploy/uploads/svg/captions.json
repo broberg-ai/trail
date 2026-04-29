@@ -1,4 +1,6 @@
 {
+  "how-trail-works-en": "Four steps, one Trail. A source becomes a candidate; the curator decides what becomes a Neuron; the Neuron answers queries long after the chat that produced it is gone.",
+  "how-trail-works-da": "Fire trin, én Trail. En kilde bliver til en kandidat; kuratoren beslutter hvad der bliver til en Neuron; Neuronen svarer på spørgsmål længe efter chatten der producerede den er glemt.",
   "memex-desk": "A schematic reading of Bush's proposed desk: slanting translucent screens, keyboard, levers, and microfilm reels stored in the base.",
   "tree-vs-graph": "The library classifies; the mind associates. Bush's central critique of 20th-century information systems.",
   "trail": "The Trail is not a search result. It is a piece of thinking, captured and made permanent.",
@@ -20,5 +22,9 @@
   "sampling-split": "Each nightly sample is biased toward recent edits (where contradictions actually live) but reserves room for random long-tail picks so old Neurons never stop being checked.",
   "dreaming-cycle": "A scheduled pass that sleeps for most of the day and does one bounded hour of integration work. The analogy to slow-wave consolidation is not metaphorical — it is the same pattern.",
   "scale-tiers": "Four representative corpus sizes on a log axis. Each tier stacks its workload state — ingest, lint, queue — above the corpus circle, with amber marks where a workload's behaviour has changed from the previous tier. Infrastructure sits at the top as a growing schematic Machine.",
-  "decision-matrix": "The same tiers as a decision matrix. Amber cells mark the tier where each workload's strategy changes; charcoal cells mean the previous tier's setting still applies. Ingest is the only column that never changes until the very last tier."
+  "decision-matrix": "The same tiers as a decision matrix. Amber cells mark the tier where each workload's strategy changes; charcoal cells mean the previous tier's setting still applies. Ingest is the only column that never changes until the very last tier.",
+  "architecture-compile-time-en": "Five columns, one architecture. Raw sources enter the ingest funnel; an LLM compiles them into linked Neurons; a human curator gates every update; the persistent knowledge graph grows; fast querying reads already-compiled memory instead of rebuilding from chunks.",
+  "architecture-compile-time-da": "Fem kolonner, én arkitektur. Råkilder indlæses i funnelen; en LLM kompilerer dem til sammenkædede Neuroner; en menneskelig kurator godkender hver opdatering; den persistente vidensgraf vokser; hurtige forespørgsler læser allerede-kompileret hukommelse i stedet for at genbygge fra chunks.",
+  "compile-not-search-en": "RAG searches and forgets. Trail compiles and remembers. Two-panel comparison with performance table: RAG pays retrieval cost on every query and discards the result; Trail pays compile cost once at ingest, then reads Neurons cheaply and cumulatively forever.",
+  "compile-not-search-da": "RAG søger og glemmer. Trail kompilerer og husker. To-panel sammenligning med ydeevnetabel: RAG betaler hentningsomkostning ved hver forespørgsel og kasserer resultatet; Trail betaler kompileringsomkostning én gang ved indlæsning og læser derefter Neuroner billigt og akkumulerende for evigt."
 }

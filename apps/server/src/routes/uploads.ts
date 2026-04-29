@@ -7,10 +7,12 @@ import { processPdf, processDocx, processPptx, processXlsx, dispatch, pickPipeli
 import { storage, sourcePath } from '../lib/storage.js';
 import { chunkText, storeChunks } from '../services/chunker.js';
 import { triggerIngest } from '../services/ingest.js';
-import { createVisionBackend, describeImageAsSource, getActiveVisionModel } from '../services/vision.js';
+import { describeImageAsSource, getActiveVisionModel } from '../services/vision.js';
 import { transcribeAudio } from '../services/transcription.js';
 import { resolveKbId } from '@trail/core';
 import { persistImagesFromExtraction } from '../services/document-images.js';
+import { getJobRunner } from '../services/jobs/runner.js';
+import type { VisionRerunPayload } from '../services/jobs/handlers/vision-rerun.js';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 // Silent hangs in pdfjs-dist on malformed PDFs are the single worst failure
@@ -18,7 +20,12 @@ const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 // extraction step so a wedged PDF produces a normal 'failed' row the
 // curator can retry or archive. Env overridable if someone legit has a
 // 500-page PDF.
-const PDF_TIMEOUT_MS = Number(process.env.TRAIL_PDF_TIMEOUT_MS ?? 120_000);
+// Bumped 120→240s as F165 band-aid: image-heavy PDFs (e.g. botanical books)
+// blew the 120s cap because Vision-describe ran inline + sequentially per
+// body-image. F165 moves Vision out of this path; until it lands, 240s
+// covers the next ~300-image PDF. After F165, the pdfjs-only work this
+// timeout actually guards is <10s for any reasonable doc.
+const PDF_TIMEOUT_MS = Number(process.env.TRAIL_PDF_TIMEOUT_MS ?? 240_000);
 const DOCX_TIMEOUT_MS = Number(process.env.TRAIL_DOCX_TIMEOUT_MS ?? 60_000);
 const PPTX_TIMEOUT_MS = Number(process.env.TRAIL_PPTX_TIMEOUT_MS ?? 90_000);
 const XLSX_TIMEOUT_MS = Number(process.env.TRAIL_XLSX_TIMEOUT_MS ?? 60_000);
@@ -268,8 +275,11 @@ export async function processFileAsync(
     .where(eq(documents.id, docId))
     .run();
 
-  // PDF needs storage + describe; image-pipeline needs describeImageAsSource;
-  // other formats ignore those fields.
+  // F165 — describeImage is intentionally NOT passed: PDF body-images run
+  // through the async vision-rerun job after extract completes (see below).
+  // describeImageAsSource stays — the image-pipeline (.png/.jpg as the
+  // entire source) needs it inline because the description IS the doc's
+  // content; without it the source has no markdown body.
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
   const timeoutMs = ext === 'pdf'
     ? PDF_TIMEOUT_MS
@@ -290,7 +300,7 @@ export async function processFileAsync(
       storage,
       imagePrefix: `${tenantId}/${kbId}/${docId}/images`,
       imageUrlPrefix: `/api/v1/documents/${docId}/images`,
-      describeImage: createVisionBackend() ?? undefined,
+      describeImage: undefined,
       describeImageAsSource,
       transcribeAudio,
     }),
@@ -383,6 +393,34 @@ export async function processFileAsync(
   }
 
   triggerIngest({ trail, docId, kbId, tenantId, userId });
+
+  // F165 — async Vision-describe. We extracted images without running
+  // Vision inline; queue a background job to fill in descriptions. The
+  // F164 vision-rerun handler runs with pLimit(4), reports SSE progress,
+  // and is idempotent on `vision_description IS NULL` so a crashed/aborted
+  // run can be re-submitted safely. Only fires for pipelines that produced
+  // body-images (PDF today; pptx/docx if/when they extract images).
+  if (Array.isArray(result.images) && result.images.length > 0) {
+    try {
+      const runner = getJobRunner();
+      const jobId = await runner.submit<VisionRerunPayload>({
+        kind: 'vision-rerun',
+        tenantId,
+        knowledgeBaseId: kbId,
+        userId,
+        payload: { documentIds: [docId], filter: 'null-only' },
+      });
+      console.log(
+        `[F165] queued vision-rerun job=${jobId} doc=${docId} images=${result.images.length}`,
+      );
+    } catch (err) {
+      // Non-fatal: doc is already 'ready', curator can trigger Vision
+      // manually from the gallery / per-row Re-scan button.
+      console.warn(
+        `[F165] auto-submit vision-rerun failed for ${docId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
 }
 
 // ── Legacy shims (back-compat for recover-pending-sources.ts) ─────────
