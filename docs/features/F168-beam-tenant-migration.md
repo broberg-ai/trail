@@ -1,18 +1,27 @@
-# F168 — Beam: tenant-level export/import between Trail engines
+# F168 — Beam: tenant-level KB copy between Trail engines
 
 **Status:** Planned · **Phase:** 1 · **Owner:** trail-server · **Drives:** none
 
 ## TL;DR
 
-"Beam me up, Scotty." Export a complete tenant — trail.db file +
-all upload blobs — from one Trail engine and import it onto another.
-Used (a) to seed Sanne's Fly engine from Christian's local
+"Beam me up, Scotty." **Copy** (not move) a complete KB — trail.db
+file + all upload blobs — from one Trail engine to another. Local
+data is never touched; re-beams push updates to remote later. Used
+(a) to seed Sanne's Fly engine from Christian's local
 `127.0.0.1:58031` workbench tonight, and (b) to migrate tenants
 between engines as the F170 orchestrator rebalances the fleet.
 
 The CMS already uses "Beam" for the same shape of operation. F168
 keeps the name and metaphor for consistency across the WebHouse
 ecosystem.
+
+**Tonight's reality** (based on Sanne's actual corpus): 91 documents,
+325 image rows, **~325 MB** on disk. That fits in a single tar
+archive shipped over Fly's SSH/SFTP channel in <60 s. The plan-doc's
+original HTTP/Hono streaming architecture is overkill for the first-
+customer onboard; we use SSH+SFTP for tonight, keep the HTTP endpoint
+on the roadmap for F170 inter-engine migration where a tenant might
+be 10 GB and engine-to-engine without a human in the loop.
 
 ## Motivation
 
