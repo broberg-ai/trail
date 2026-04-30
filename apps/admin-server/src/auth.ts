@@ -111,20 +111,20 @@ authRoutes.get('/verify', async (c) => {
     userAgent: c.req.header('User-Agent') ?? null,
   });
 
-  // First-time onboarding: stamp user.onboarded=true, redirect to /onboarding/welcome.
-  // Otherwise redirect to /.
+  // First-time login: stamp user.onboarded=true. Phase 1B.3+ will add
+  // /onboarding/welcome page (F172 wizard). Until then redirect to / —
+  // the SPA's first-run experience handles welcome.
   const user = await db.query.controlUsers.findFirst({
     where: eq(schema.controlUsers.id, link.userId),
   });
-  let redirectTo = '/';
   if (user && !user.onboarded) {
     await db
       .update(schema.controlUsers)
       .set({ onboarded: true })
       .where(eq(schema.controlUsers.id, link.userId))
       .run();
-    redirectTo = '/onboarding/welcome';
   }
+  const redirectTo = '/';
 
   setCookie(c, COOKIE_NAME, sessionId, {
     httpOnly: true,
