@@ -345,6 +345,7 @@ Mirror af F149's pluggable ingest pattern, anvendt på chat-routen. Abstraherer 
 | F169 | [New-engine provisioning script (`pnpm trail engine spawn`)](features/F169-engine-provisioning-script.md) | Planned | 1 | [plan](features/F169-engine-provisioning-script.md) |
 | F170 | [Multi-engine orchestrator (router + tenant migration)](features/F170-multi-engine-orchestrator.md) | Planned | 2 | [plan](features/F170-multi-engine-orchestrator.md) |
 | F173 | [Tigris-backed blob storage (S3 driver for `@trail/storage`)](features/F173-tigris-blob-storage.md) | Planned | 1 | [plan](features/F173-tigris-blob-storage.md) |
+| F172 | [Self-service onboarding (sign-up + first trail)](features/F172-self-service-onboarding.md) | Planned | 2 | [plan](features/F172-self-service-onboarding.md) |
 
 ---
 
