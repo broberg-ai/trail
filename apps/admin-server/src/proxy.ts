@@ -125,17 +125,21 @@ export async function proxyToEngine(c: Context, next: Next): Promise<Response | 
 
   const upstream = await fetch(url.toString(), init);
 
-  // Forward response — preserve status + headers + body stream.
-  // Strip hop-by-hop headers + cookies set by engine (engine doesn't
-  // set cookies meaningfully; if it does we ignore — admin owns auth).
+  // Forward response — buffer the full body so we don't have to forward
+  // the upstream's transfer-encoding. (Streaming through with stripped
+  // transfer-encoding caused the SPA's response.json() to throw on what
+  // the browser interpreted as truncated chunks; SPA catch → redirect
+  // to /api/auth/google → infinite login loop.)
+  const buf = await upstream.arrayBuffer();
   const respHeaders = new Headers();
   upstream.headers.forEach((v, k) => {
     const lk = k.toLowerCase();
-    if (lk === 'set-cookie' || lk === 'connection' || lk === 'transfer-encoding') return;
+    if (lk === 'set-cookie' || lk === 'connection' || lk === 'transfer-encoding' || lk === 'content-length' || lk === 'content-encoding') return;
     respHeaders.set(k, v);
   });
+  respHeaders.set('Content-Length', String(buf.byteLength));
 
-  return new Response(upstream.body, {
+  return new Response(buf, {
     status: upstream.status,
     statusText: upstream.statusText,
     headers: respHeaders,

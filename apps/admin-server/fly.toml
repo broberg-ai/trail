@@ -15,9 +15,12 @@ primary_region = "arn"
   force_https = true
   auto_stop_machines = "stop"
   auto_start_machines = true
-  # Admin can hibernate when nobody's logged in. Magic-link arrival
-  # wakes it. min=0 because admin traffic is sparse compared to engine.
-  min_machines_running = 0
+  # Admin must always have ≥1 warm machine. Auto-stop+cold-start was
+  # observed to drop sessions mid-flight (in-flight INSERTs into
+  # control.db's WAL hadn't synced yet) and cause OAuth state cookies
+  # to drift between start/callback machine instances. Tiny cost
+  # increase (~$2-5/mo) eliminates the entire class of bugs.
+  min_machines_running = 1
   processes = ["app"]
 
   [http_service.concurrency]
