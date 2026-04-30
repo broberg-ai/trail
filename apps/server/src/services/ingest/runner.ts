@@ -72,8 +72,29 @@ export async function runWithFallback(
       continue;
     }
 
+    // Wrap candidateApi to count successful `write` calls for this
+    // step. If the model "succeeds" (chain doesn't throw) but writes
+    // zero Neurons, advance to the next step instead of marking the
+    // doc ready-with-empty (the "extracted limbo" Christian saw on
+    // prod when Gemini Flash burned 13 turns without writing). Only
+    // covers in-process backends (openrouter, future Anthropic-direct);
+    // claude-cli routes writes through MCP stdio so this counter stays
+    // 0 for it — guard below skips the check for claude-cli.
+    let writes = 0;
+    const wrappedApi = baseInput.candidateApi
+      ? {
+          ...baseInput.candidateApi,
+          write: async (args: Parameters<NonNullable<typeof baseInput.candidateApi>['write']>[0]) => {
+            const r = await baseInput.candidateApi!.write(args);
+            if (args.command === 'create') writes += 1;
+            return r;
+          },
+        }
+      : undefined;
+
     const input: IngestBackendInput = {
       ...baseInput,
+      candidateApi: wrappedApi,
       model: step.model,
       translationModel: step.translationModel,
     };
@@ -82,6 +103,15 @@ export async function runWithFallback(
     try {
       const result = await backend.run(input);
       const stepDuration = Date.now() - stepStart;
+      // F149 — empty-result-as-failure. Tool-using models can finish
+      // a turn-budget without ever calling write; that's a legit
+      // failure mode of the chain step, not "success with 0 work".
+      // Throw → catch-block records the failure and advances chain.
+      if (step.backend !== 'claude-cli' && writes === 0) {
+        throw new Error(
+          `${step.backend}/${step.model} produced 0 Neurons (tool-budget exhausted without writes) — advancing chain`,
+        );
+      }
       attempts.push({
         backend: step.backend,
         model: step.model,

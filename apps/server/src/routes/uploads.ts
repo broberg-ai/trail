@@ -60,6 +60,23 @@ const ALLOWED_EXTENSIONS = new Set([
 ]);
 const TEXT_EXTENSIONS = new Set(['md', 'txt', 'html', 'htm', 'csv']);
 
+// Legacy Office formats live in ALLOWED_EXTENSIONS (so the upload itself
+// is accepted) but have no extractor pipeline. Suggest the modern variant
+// in the row's errorMessage so the curator knows the next step is "save
+// as .docx and re-upload", not "wait for the queue to process this".
+const FORMAT_UPGRADES: Record<string, string> = {
+  doc: 'docx',
+  ppt: 'pptx',
+  xls: 'xlsx',
+};
+function unsupportedFormatMessage(ext: string): string {
+  const upgrade = FORMAT_UPGRADES[ext];
+  if (upgrade) {
+    return `Legacy ".${ext}" format is not supported by the extractor. Save the file as ".${upgrade}" and re-upload.`;
+  }
+  return `File format ".${ext}" has no extractor. Convert to PDF, DOCX, PPTX, or XLSX and re-upload.`;
+}
+
 export const uploadRoutes = new Hono();
 
 uploadRoutes.use('*', requireAuth);
@@ -163,7 +180,15 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
   console.log(`[upload] storage-written ${lap()}`);
 
   const isText = TEXT_EXTENSIONS.has(ext);
-  const initialStatus = isText ? 'ready' : 'pending';
+  // No registered pipeline + non-text → row would otherwise sit in
+  // status='pending' forever (recover-pending-sources skips it). Mark
+  // it 'failed' immediately with a clear errorMessage so the curator
+  // sees what to do instead of a misleading "Marking the cairns…"
+  // progress indicator. The bytes are still stored (line above) for
+  // audit / future "convert legacy formats" sweep.
+  const hasExtractor = isText || pickPipeline(file.name) !== null;
+  const initialStatus = !hasExtractor ? 'failed' : isText ? 'ready' : 'pending';
+  const initialError = !hasExtractor ? unsupportedFormatMessage(ext) : null;
 
   await trail.db
     .insert(documents)
@@ -178,6 +203,7 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
       fileType: ext,
       fileSize: file.size,
       status: initialStatus,
+      errorMessage: initialError,
       tags: uploadTags?.join(', ') ?? null,
       metadata: connector ? JSON.stringify({ connector, sourceUrl }) : null,
       // F162 — dedup hash. Set even on force-uploaded duplicates so the
