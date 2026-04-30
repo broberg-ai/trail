@@ -23,10 +23,7 @@ packages/storage
 packages/sdk
 packages/core
 
-# Static media inside dist that's expensive to ship per deploy.
-# 7.8 MB of .opus ambient sounds + 460 KB thinking blocks dominate
-# Fly upload time on slow ISPs. The SPA still loads — these paths
-# 404 in browser, the trail-sound feature falls back gracefully.
-# F173 (Tigris) will move them to CDN; until then prod-admin runs silent.
-apps/admin/dist/ambient
-apps/admin/dist/thinking
+# NOTE: apps/admin/dist/ambient (7.8 MB .opus sounds) + dist/thinking
+# (460 KB) are now INCLUDED in the deploy context. Christian wants
+# trail-sound feature on prod. F173 (Tigris) is the long-term answer
+# for static media; until then we eat the 8 MB context cost per deploy.

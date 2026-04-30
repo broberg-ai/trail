@@ -1,14 +1,23 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { logger } from 'hono/logger';
 import { serveStatic } from 'hono/bun';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { db } from './db.js';
+import { db, schema } from './db.js';
 import { runMigrations } from './migrations.js';
 import { authRoutes } from './auth.js';
 import { oauthRoutes } from './oauth.js';
 import { proxyToEngine } from './proxy.js';
+
+async function logoutHandler(c: Context): Promise<Response> {
+  const sessionId = (c.req.header('Cookie') ?? '').match(/(?:^|; )trail-session=([^;]+)/)?.[1];
+  if (sessionId) {
+    await db.delete(schema.sessions).where(eq(schema.sessions.id, sessionId)).run();
+  }
+  c.header('Set-Cookie', 'trail-session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax');
+  return c.redirect('/login', 302);
+}
 
 /**
  * F33 Phase 1B — trail-admin server.
@@ -55,6 +64,11 @@ app.route('/api/auth', authRoutes);
 // at /auth so verify works at both paths — POST /api/auth/magic-link
 // stays the API, GET /auth/verify is the human-facing magic-link target.
 app.route('/auth', authRoutes);
+
+// /logout — human-friendly URL: deletes session + clears cookie + 302
+// to /login. SPA's logout button can simply navigate to /logout, no
+// fetch+redirect dance needed.
+app.get('/logout', logoutHandler);
 
 // OAuth — GET /api/auth/{github,google} starts the dance, /callback
 // finishes. Falls through to the legacy redirect below if the env
@@ -148,6 +162,8 @@ if (hasSpa) {
   app.use('/assets/*', serveStatic({ root: SPA_DIR }));
   app.use('/favicon.svg', serveStatic({ root: SPA_DIR }));
   app.use('/uploads/*', serveStatic({ root: SPA_DIR }));
+  app.use('/ambient/*', serveStatic({ root: SPA_DIR }));
+  app.use('/thinking/*', serveStatic({ root: SPA_DIR }));
 
   // SPA fallback — any non-API path returns index.html so client-side
   // routing (preact-iso) can take over. UNAUTHENTICATED users get
