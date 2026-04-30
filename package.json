@@ -13,6 +13,7 @@
     "db:generate": "turbo run db:generate --filter=@trail/db",
     "db:migrate": "turbo run db:migrate --filter=@trail/db",
     "ship:engine": "flyctl deploy --config apps/server/fly.toml --dockerfile apps/server/Dockerfile .",
+    "ship:admin": "flyctl deploy --config apps/admin-server/fly.toml --dockerfile apps/admin-server/Dockerfile .",
     "ship:landing": "cd apps/landing && BUILD_OUT_DIR=deploy npx tsx build.ts && flyctl deploy --config fly.toml .",
     "ship": "pnpm ship:engine"
   },
