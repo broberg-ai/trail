@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { db } from './db.js';
 import { runMigrations } from './migrations.js';
 import { authRoutes } from './auth.js';
+import { oauthRoutes } from './oauth.js';
 import { proxyToEngine } from './proxy.js';
 
 /**
@@ -55,12 +56,15 @@ app.route('/api/auth', authRoutes);
 // stays the API, GET /auth/verify is the human-facing magic-link target.
 app.route('/auth', authRoutes);
 
-// Legacy auth routes the existing apps/admin SPA still references
-// (it was wired against engine's OAuth in dev). Redirect both to /login
-// so the SPA's "not authenticated → here is the login page" flow lands
-// on the magic-link form. Future F35 will replace these stubs with real
-// Google/GitHub OAuth handlers when Christian provisions the OAuth apps.
-app.get('/api/auth/google', (c) => c.redirect('/login', 302));
+// OAuth — GET /api/auth/{github,google} starts the dance, /callback
+// finishes. Falls through to the legacy redirect below if the env
+// secrets aren't configured (returns 503 with a clear "OAuth not
+// configured" message rather than a confusing 404).
+app.route('/api/auth', oauthRoutes);
+
+// Legacy stub: SPA's dev-only path (apps/admin/src/app.tsx redirects
+// here in import.meta.env.DEV mode). On prod admin we don't run that
+// path, but redirect to /login as a safety net.
 app.get('/api/auth/dev-login', (c) => c.redirect('/login', 302));
 
 // Standalone /login HTML page — pure magic-link UI, no SPA bundle.
@@ -85,10 +89,15 @@ app.get('/login', (c) =>
 </style></head>
 <body>
 <h1>Trail</h1>
-<p class="sub">Sign in with a magic-link to your email.</p>
+<p class="sub">Sign in</p>
+<div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;">
+  <a href="/api/auth/google" style="flex:1;padding:0.7rem 1rem;background:#fff;color:#222;border:1px solid #ccc;border-radius:4px;text-decoration:none;text-align:center;font-weight:500;">Continue with Google</a>
+  <a href="/api/auth/github" style="flex:1;padding:0.7rem 1rem;background:#222;color:#fff;border-radius:4px;text-decoration:none;text-align:center;font-weight:500;">Continue with GitHub</a>
+</div>
+<p class="sub" style="font-size:0.85rem;text-align:center;margin:1rem 0;">— or —</p>
 <form id="f">
   <input id="email" type="email" placeholder="you@example.com" required autocomplete="email" autofocus />
-  <div class="row"><button type="submit">Send link</button></div>
+  <div class="row"><button type="submit">Send magic-link</button></div>
 </form>
 <p id="msg"></p>
 <script>
