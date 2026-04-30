@@ -35,24 +35,60 @@ until customer #2 lands or Sanne's load demands a dedicated engine.
 
 ### 1. Routing layer at `engine.trailmem.com`
 
-Two viable architectures, decision deferred to implementation:
+**Decision: Hono micro-service on Fly.** New app `trail-router` in
+`broberg-ai/arn`. Same Bun + Hono stack as engines + admin. Source at
+`apps/router/`.
 
-**Option A — Cloudflare Worker** (preferred)
-- Worker bound to `engine.trailmem.com/*`
-- On every request, parse the Bearer token, hash, query
-  `https://app.trailmem.com/api/internal/resolve-route?key_hash=…`
-- Cache `(key_hash → engine_url)` for 60 s in Worker KV
-- Rewrite request URL to the resolved engine and forward
-- Edge-fast, infinite scale, fits Cloudflare's free-tier easily
+Why Fly micro-service over Cloudflare Worker for our case:
 
-**Option B — Hono micro-service on Fly**
-- New Fly app `trail-router` at `engine.trailmem.com`
-- Same logic as Option A but server-side
-- Pros: same stack everywhere, easier local-dev parity
-- Cons: another machine to maintain; not at the edge
+| Factor | Fly Hono micro-service ✓ | Cloudflare Worker |
+|---|---|---|
+| Stack consistency | Same Bun + Hono everywhere | New: Wrangler, Worker runtime, KV API |
+| Local dev parity | `bun --watch`, no new tooling | Wrangler dev server (separate) |
+| Latency Fly→Fly (our actual path) | ~3-5 ms (flycast mesh) | ~30-50 ms (CF edge ↔ Fly arn extra hop) |
+| Vendor surface | None added (already on Fly) | Adds CF to critical request-path |
+| Observability | Same `fly logs`, same dashboards | CF dashboards + separate logs |
+| Cold-start | 200-500 ms (or 0 if min_machines=1) | Sub-ms (V8 isolates) |
+| Cost @ 1M req/mo | ~$2-5/mo (shared-cpu-1x w/ auto-stop) | ~$0.50/mo |
+| Scaling cap | `fly scale count N` (manual but easy) | Infinite |
 
-Decision: Option A. Cloudflare Worker. Deploy via Wrangler CLI;
-source lives in `apps/router/`.
+Cloudflare Worker's strongest argument — **edge latency for global
+traffic** — does not activate for us:
+- All engines pinned to `arn` per CLAUDE.md global region policy.
+- Sanne's website is on Fly arn, customers are EU.
+- An EU user hitting `engine.trailmem.com` already terminates in arn;
+  Worker would add a CF→Fly hop on top.
+
+Worker becomes the right call IF any of these land:
+1. **Multi-region engines** (engine-eu-arn + engine-us-iad + …) — not
+   on roadmap; CLAUDE.md pins arn.
+2. **>50M req/mo** — six orders of magnitude above current scale.
+3. **External DDoS profile** that needs CF's enterprise protection
+   beyond what Fly already provides.
+
+If any of those activate, the swap is mechanical: same routing logic,
+different deploy target, `Storage`-style abstraction means handlers
+don't change.
+
+**Implementation sketch (Fly Hono):**
+```typescript
+// apps/router/src/index.ts — ~80 lines
+const app = new Hono();
+const cache = new Map<string, { tenant: string; engine: string; expires: number }>();
+
+app.all('*', async (c) => {
+  const auth = c.req.header('Authorization');
+  const keyHash = sha256(extractBearer(auth));
+  const route = cache.get(keyHash) ?? await fetchFromAdmin(keyHash);
+  if (!route) return c.text('unauthorized', 401);
+  cache.set(keyHash, { ...route, expires: Date.now() + 60_000 });
+  // Forward to engine via Fly internal mesh
+  const target = `${route.engine}.flycast${c.req.path}`;
+  return fetch(target, { method: c.req.method, headers: c.req.raw.headers, body: c.req.raw.body });
+});
+```
+
+Deploy via `pnpm ship:router` (mirrors `pnpm ship:engine`).
 
 ### 2. Tenant migration command
 
@@ -78,7 +114,8 @@ Flow:
    - Verify checksums via /internal/beam/manifest
 4. Flip routing:
    - UPDATE tenant_engines SET engine_id=destination, engine_url=…, draining_since=NULL
-   - Bust router cache (POST internal cache-bust to Cloudflare Worker)
+   - Bust router cache (POST /internal/cache-bust on trail-router, or
+     wait up to 60 s for in-memory cache TTL)
    - Public traffic now reaches destination
 5. Cleanup source:
    - Source engine moves /data/{slug}/ → /data/_archive/{slug}-{ts}/
@@ -177,30 +214,36 @@ CREATE TABLE engine_health_snapshots (
 ```
               Public traffic
                     ↓
-         engine.trailmem.com (Cloudflare)
+         engine.trailmem.com (Fly anycast → arn)
                     ↓
         ┌───────────┴───────────┐
-        │  Cloudflare Worker    │
+        │  trail-router (Fly)   │
+        │  Bun + Hono           │
         │  - parse Bearer       │
-        │  - lookup → engine_id │   ←── HTTPS lookup ───┐
-        │  - forward request    │                       │
-        └─────┬───────────┬─────┘                       │
-              │           │                             │
-              ↓           ↓                             │
-   ┌─────────────┐   ┌─────────────┐                    │
-   │ engine-001  │   │ engine-002  │   ┌────────────────┴─────────────┐
+        │  - lookup → engine_id │   ←── flycast lookup ──┐
+        │  - forward via flycast│                        │
+        │  - in-mem cache 60s   │                        │
+        └─────┬───────────┬─────┘                        │
+              │           │                              │
+              ↓           ↓                              │
+   ┌─────────────┐   ┌─────────────┐                     │
+   │ engine-001  │   │ engine-002  │   ┌─────────────────┴────────────┐
    │ tenants:    │   │ tenants:    │   │  app.trailmem.com (admin)    │
    │  sanne      │   │  customer-2 │   │  /api/internal/resolve-route │
    │  customer-3 │   │  customer-4 │   │  /admin/fleet                │
    └─────────────┘   └─────────────┘   └──────────────────────────────┘
 ```
 
+All four boxes — router, admin, engines — are Fly apps in
+`broberg-ai/arn`. Internal hops use Fly's `*.flycast` mesh (sub-1ms,
+private).
+
 ### Key invariants
 
-- **Single source of truth for routing.** Cloudflare Worker is
-  cache-only; control.db's `tenant_engines` is canonical. Worker
-  cache TTL is 60 s — propagation lag for routing changes is
-  bounded.
+- **Single source of truth for routing.** trail-router holds an
+  in-memory `Map<keyHash, route>` cache; control.db's `tenant_engines`
+  is canonical. Cache TTL is 60 s — propagation lag for routing
+  changes is bounded.
 - **Migrations are atomic at flip-time.** The `UPDATE
   tenant_engines` is the cutover; everything before is
   drain-then-copy, everything after is cleanup. If post-flip cleanup
@@ -215,8 +258,8 @@ CREATE TABLE engine_health_snapshots (
 - **F33** — admin + control.db + tenant_engines.
 - **F168** — Beam primitive that powers migration.
 - **F169** — engine spawning (`engines` table).
-- **Cloudflare Worker subscription** — already on Christian's
-  account for DNS Manager.
+- **No new third-party deps.** trail-router is just another Fly app
+  in the `broberg-ai/arn` org, same Bun + Hono stack as engines.
 
 ## Rollout
 
@@ -228,9 +271,11 @@ CREATE TABLE engine_health_snapshots (
 - F33's engine code reads tenant→engine routing from control.db;
   Phase 1 has 1 row, but the code path is the real one.
 
-### Phase 2A — Worker + manual migration (lands when customer #2 onboards or Sanne demands dedicated engine)
+### Phase 2A — trail-router + manual migration (lands when customer #2 onboards or Sanne demands dedicated engine)
 
-1. `apps/router/` — Cloudflare Worker source.
+1. `apps/router/` — Bun + Hono micro-service. Dockerfile + fly.toml
+   mirror engine's. App `trail-router` in `broberg-ai/arn`.
+   `engine.trailmem.com` CNAME flips from engine-001 to trail-router.
 2. Migration 0030 — schema additions.
 3. `pnpm trail tenant migrate` CLI.
 4. Admin Fleet view (read-only first).
@@ -253,10 +298,10 @@ Out of F170's scope.
 
 ## Open questions
 
-- **Worker vs. micro-service** — leaning Worker. Reconsider if
-  Cloudflare's free-tier req limits become tight (~100k req/day) or
-  if local-dev parity becomes painful (Wrangler dev server is OK
-  but not as fast as `bun --watch`).
+- **Cloudflare Worker as future option.** Decided against for Phase 2
+  (see "Routing layer" section above) but kept as the swap-in if
+  multi-region engines, >50M req/mo, or external DDoS profile lands.
+  The routing logic is identical; the deploy target changes.
 - **Migration drain window** — can we get below 5 s? Phase 2 doesn't
   optimize for this; Phase 3 might via shadow-write streaming.
 - **What happens if the source engine dies mid-migration?** The
@@ -278,11 +323,12 @@ Out of F170's scope.
    tenant-A --to engine-002`. Assert: drain flag set, beam runs,
    destination has the data, tenant_engines updated, source data
    moved to _archive, migration_log row written with status=completed.
-3. **Worker resolution test** — POST a fake request to a local
-   Wrangler dev server with a Bearer key, assert the Worker
-   forwarded to the right engine_url after lookup.
-4. **Cache-bust** — change tenant_engines for a tenant, send
-   cache-bust to Worker, next request goes to new engine within 1 s.
+3. **Router resolution test** — boot trail-router locally, POST a
+   request with a Bearer key, assert it forwards to the correct
+   engine_url after lookup against a stubbed admin-resolve endpoint.
+4. **Cache-bust** — change tenant_engines for a tenant, POST
+   /internal/cache-bust to trail-router, next request goes to new
+   engine within 1 s.
 5. **Health snapshot polling** — admin reads `/internal/health-detail`
    from each engine, inserts into `engine_health_snapshots`, Fleet
    view renders without N+1 queries.
