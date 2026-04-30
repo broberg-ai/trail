@@ -1,0 +1,32 @@
+# Per-Dockerfile excludes for trail-admin. Combined with repo-root
+# .dockerignore (BuildKit reads both — additive).
+#
+# admin-server only imports @trail/shared. It does NOT need engine
+# source, drizzle migrations, pipelines, etc. Excluding aggressively
+# trims context from 7 MB → ~1 MB.
+
+# Engine source — admin proxies to engine via HTTP, doesn't compile its code
+apps/server
+
+# admin SPA: we only need dist/ (built by ship script). Skip everything else.
+apps/admin/src
+apps/admin/public
+apps/admin/index.html
+apps/admin/vite.config.ts
+apps/admin/tsconfig.json
+apps/admin/package.json
+
+# Trail packages admin-server doesn't import
+packages/db
+packages/pipelines
+packages/storage
+packages/sdk
+packages/core
+
+# Static media inside dist that's expensive to ship per deploy.
+# 7.8 MB of .opus ambient sounds + 460 KB thinking blocks dominate
+# Fly upload time on slow ISPs. The SPA still loads — these paths
+# 404 in browser, the trail-sound feature falls back gracefully.
+# F173 (Tigris) will move them to CDN; until then prod-admin runs silent.
+apps/admin/dist/ambient
+apps/admin/dist/thinking

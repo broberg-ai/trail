@@ -27,6 +27,10 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    // No sourcemaps in prod build — they were ~12 MB and dominated Fly's
+    // deploy context (60% of total upload time on slow ISPs). Re-enable
+    // for one build via `VITE_SOURCEMAP=1 pnpm build` if a prod issue
+    // needs debugging; sentry-style upload is a future feature.
+    sourcemap: process.env.VITE_SOURCEMAP === '1',
   },
 });

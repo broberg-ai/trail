@@ -55,6 +55,62 @@ app.route('/api/auth', authRoutes);
 // stays the API, GET /auth/verify is the human-facing magic-link target.
 app.route('/auth', authRoutes);
 
+// Legacy auth routes the existing apps/admin SPA still references
+// (it was wired against engine's OAuth in dev). Redirect both to /login
+// so the SPA's "not authenticated → here is the login page" flow lands
+// on the magic-link form. Future F35 will replace these stubs with real
+// Google/GitHub OAuth handlers when Christian provisions the OAuth apps.
+app.get('/api/auth/google', (c) => c.redirect('/login', 302));
+app.get('/api/auth/dev-login', (c) => c.redirect('/login', 302));
+
+// Standalone /login HTML page — pure magic-link UI, no SPA bundle.
+// Reachable from the legacy redirects above OR direct URL after session
+// expiry. After magic-link verify, /auth/verify redirects back to /
+// where the SPA picks up the new session.
+app.get('/login', (c) =>
+  c.html(`<!doctype html>
+<html lang="en"><head><title>Sign in to Trail</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; max-width: 420px; margin: 4rem auto; padding: 1rem; color: #222; background: #faf9f5; min-height: 80vh; }
+  @media (prefers-color-scheme: dark) { body { color: #eee; background: #17140f; } input { background: #2a261d; color: #eee; border-color: #443c2a; } }
+  h1 { font-weight: 600; margin: 0 0 0.5rem; }
+  .sub { color: #888; margin: 0 0 2rem; }
+  input { width: 100%; padding: 0.7rem 0.85rem; font: inherit; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+  button { padding: 0.7rem 1rem; font: inherit; background: #d97706; color: #fff; border: 0; border-radius: 4px; cursor: pointer; font-weight: 500; }
+  button:hover { background: #b45309; }
+  .row { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+  .ok { color: #047857; margin-top: 1rem; }
+  .err { color: #dc2626; margin-top: 1rem; }
+</style></head>
+<body>
+<h1>Trail</h1>
+<p class="sub">Sign in with a magic-link to your email.</p>
+<form id="f">
+  <input id="email" type="email" placeholder="you@example.com" required autocomplete="email" autofocus />
+  <div class="row"><button type="submit">Send link</button></div>
+</form>
+<p id="msg"></p>
+<script>
+document.getElementById('f').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('email').value;
+  const msg = document.getElementById('msg');
+  msg.className = ''; msg.textContent = 'Sending…';
+  try {
+    const r = await fetch('/api/auth/magic-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (r.ok) { msg.className = 'ok'; msg.textContent = 'Check your inbox for a link from trail@webhouse.dk.'; }
+    else { msg.className = 'err'; msg.textContent = (await r.json()).error ?? 'Failed'; }
+  } catch (err) { msg.className = 'err'; msg.textContent = String(err); }
+});
+</script>
+</body></html>`),
+);
+
 // Reverse-proxy /api/v1/* to the user's engine. Resolves session cookie
 // → tenant → engine URL → injects Bearer key. Engine doesn't speak
 // cookies, only Bearer.

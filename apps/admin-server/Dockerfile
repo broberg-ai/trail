@@ -2,6 +2,9 @@
 # Same multi-stage pattern as apps/server/Dockerfile (node:20-slim deps,
 # oven/bun:1.3 runtime). See that file for rationale.
 
+# Need BuildKit syntax to use --mount=type=cache below.
+# syntax=docker/dockerfile:1.7
+
 # ─── deps stage ───────────────────────────────────────────────────────
 FROM node:20-slim AS deps
 WORKDIR /app
@@ -16,8 +19,12 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml* package.json ./
 COPY apps/admin-server/package.json apps/admin-server/
 COPY packages/shared/package.json packages/shared/
 
-RUN pnpm install --frozen-lockfile --filter @trail/admin-server... \
-    || pnpm install --filter @trail/admin-server...
+# BuildKit cache-mount keeps pnpm's content-addressable store between
+# builds. First build downloads, subsequent builds re-link instantly.
+# Cuts pnpm install from ~3-5 min to ~10-30 s on warm cache.
+RUN --mount=type=cache,id=pnpm-store-admin,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --filter @trail/admin-server... \
+      || pnpm install --filter @trail/admin-server...
 
 # ─── runtime stage ────────────────────────────────────────────────────
 FROM oven/bun:1.3 AS runtime

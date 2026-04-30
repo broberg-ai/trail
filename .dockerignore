@@ -1,0 +1,57 @@
+# Repo-root .dockerignore — applies to all `flyctl deploy --dockerfile ...`
+# from this directory (admin, engine, landing). Per-app Dockerfiles can
+# layer additional excludes via apps/<app>/Dockerfile.dockerignore.
+
+# ─── Universal excludes ──────────────────────────────────────────────
+
+# Local libSQL data + uploads — never bundle local DB files into images
+data
+**/data
+*.db
+*.db-shm
+*.db-wal
+
+# Source-maps blow up context size by 10× (apps/admin/dist .map = 12 MB)
+*.map
+
+# All node_modules — Fly's remote builder runs install fresh
+node_modules
+**/node_modules
+.pnpm-store
+
+# Build artefacts (each app's Dockerfile COPYs only what it needs from dist/)
+.turbo
+coverage
+*.log
+*.tsbuildinfo
+
+# Repo metadata
+.git
+.gitignore
+.github
+
+# Editor / OS
+.DS_Store
+.vscode
+.idea
+*.swp
+
+# Test artefacts
+__snapshots__
+test-results
+playwright-report
+
+# Non-deployable apps that the engine + admin Dockerfiles never touch
+apps/landing
+apps/mcp
+apps/model-lab
+apps/onboarding
+apps/web-clipper
+adapters
+
+# Drizzle keys we don't ship
+**/drizzle.config.*
+
+# Local dev secrets
+.env
+.env.*
