@@ -36,6 +36,7 @@ COPY --from=deps /app/apps/admin-server/node_modules ./apps/admin-server/node_mo
 COPY --from=deps /app/packages ./packages
 
 COPY apps/admin-server/src ./apps/admin-server/src
+COPY apps/admin-server/scripts ./apps/admin-server/scripts
 COPY apps/admin-server/tsconfig.json ./apps/admin-server/
 COPY apps/admin-server/package.json ./apps/admin-server/
 COPY packages/shared/src ./packages/shared/src
