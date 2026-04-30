@@ -18,19 +18,30 @@ const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 export interface SendMagicLinkInput {
   email: string;
   token: string;
-  intent: 'login' | 'welcome';
+  intent: 'login' | 'welcome' | 'invite';
   userName?: string;
+  inviterName?: string;
+  tenantName?: string;
 }
 
 export async function sendMagicLink(input: SendMagicLinkInput): Promise<void> {
   const link = `${MAGIC_LINK_BASE_URL}/auth/verify?token=${encodeURIComponent(input.token)}`;
-  const subject =
-    input.intent === 'welcome' ? 'Welcome to Trail — your link to log in' : 'Your Trail login link';
   const greeting = input.userName ? `Hi ${input.userName},` : 'Hi,';
-  const intro =
-    input.intent === 'welcome'
-      ? 'Your Trail is set up. Click the link below to log in for the first time.'
-      : 'Click the link below to log in to Trail.';
+  let subject: string;
+  let intro: string;
+  switch (input.intent) {
+    case 'invite':
+      subject = `${input.inviterName ?? 'A teammate'} invited you to Trail`;
+      intro = `${input.inviterName ?? 'A teammate'} has invited you to ${input.tenantName ? `the "${input.tenantName}" Trail` : 'Trail'}. Click the link below to set up your account.`;
+      break;
+    case 'welcome':
+      subject = 'Welcome to Trail — your link to log in';
+      intro = 'Your Trail is set up. Click the link below to log in for the first time.';
+      break;
+    default:
+      subject = 'Your Trail login link';
+      intro = 'Click the link below to log in to Trail.';
+  }
 
   const text = `${greeting}
 

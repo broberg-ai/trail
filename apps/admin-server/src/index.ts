@@ -8,6 +8,7 @@ import { db, schema } from './db.js';
 import { runMigrations } from './migrations.js';
 import { authRoutes } from './auth.js';
 import { oauthRoutes } from './oauth.js';
+import { inviteRoutes } from './invite.js';
 import { proxyToEngine } from './proxy.js';
 
 async function logoutHandler(c: Context): Promise<Response> {
@@ -69,6 +70,81 @@ app.route('/auth', authRoutes);
 // to /login. SPA's logout button can simply navigate to /logout, no
 // fetch+redirect dance needed.
 app.get('/logout', logoutHandler);
+
+// Invite — operator UI for adding teammates. POST endpoint mounted at
+// /api/control/invite + HTML form at /invite. Both auth-gated.
+app.route('/api/control', inviteRoutes);
+
+app.get('/invite', (c) => {
+  const sessionId = (c.req.header('Cookie') ?? '').match(/(?:^|; )trail-session=([^;]+)/)?.[1];
+  if (!sessionId) return c.redirect('/login', 302);
+  return c.html(`<!doctype html>
+<html lang="en"><head><title>Invite to Trail</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; max-width: 480px; margin: 4rem auto; padding: 1rem; color: #222; background: #faf9f5; min-height: 80vh; }
+  @media (prefers-color-scheme: dark) { body { color: #eee; background: #17140f; } input, select { background: #2a261d; color: #eee; border-color: #443c2a; } }
+  h1 { font-weight: 600; margin: 0 0 0.5rem; }
+  .sub { color: #888; margin: 0 0 2rem; }
+  label { display: block; font-size: 0.85rem; color: #888; margin-top: 1rem; margin-bottom: 0.25rem; }
+  input, select { width: 100%; padding: 0.65rem 0.85rem; font: inherit; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+  button { padding: 0.7rem 1rem; font: inherit; background: #d97706; color: #fff; border: 0; border-radius: 4px; cursor: pointer; font-weight: 500; margin-top: 1.25rem; }
+  button:hover { background: #b45309; }
+  .nav { color: #888; font-size: 0.85rem; margin-bottom: 1.5rem; }
+  .nav a { color: #888; text-decoration: underline; }
+  .ok { color: #047857; margin-top: 1rem; padding: 0.65rem 0.85rem; background: rgba(4,120,87,0.1); border-radius: 4px; }
+  .err { color: #dc2626; margin-top: 1rem; padding: 0.65rem 0.85rem; background: rgba(220,38,38,0.1); border-radius: 4px; }
+</style></head>
+<body>
+<p class="nav"><a href="/">← Back to admin</a></p>
+<h1>Invite to Trail</h1>
+<p class="sub">Send a magic-link invite to a teammate. They'll be added to your tenant.</p>
+<form id="f">
+  <label for="email">Email</label>
+  <input id="email" type="email" placeholder="teammate@example.com" required autocomplete="email" autofocus />
+  <label for="name">Display name (optional)</label>
+  <input id="name" type="text" placeholder="Jane Doe" autocomplete="name" />
+  <label for="role">Role</label>
+  <select id="role">
+    <option value="admin">Admin</option>
+    <option value="owner">Owner</option>
+    <option value="member">Member</option>
+  </select>
+  <button type="submit">Send invite</button>
+</form>
+<div id="msg"></div>
+<script>
+document.getElementById('f').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('email').value;
+  const name = document.getElementById('name').value;
+  const role = document.getElementById('role').value;
+  const msg = document.getElementById('msg');
+  msg.className = ''; msg.textContent = 'Sending…';
+  try {
+    const r = await fetch('/api/control/invite', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, name, role }),
+    });
+    const body = await r.json();
+    if (r.ok) {
+      msg.className = 'ok';
+      msg.textContent = body.action === 'created'
+        ? \`✓ Created user and sent invite to \${body.email}.\`
+        : \`✓ Re-sent invite link to \${body.email} (already a member).\`;
+      document.getElementById('email').value = '';
+      document.getElementById('name').value = '';
+    } else {
+      msg.className = 'err';
+      msg.textContent = body.error ?? 'Failed';
+    }
+  } catch (err) { msg.className = 'err'; msg.textContent = String(err); }
+});
+</script>
+</body></html>`);
+});
 
 // OAuth — GET /api/auth/{github,google} starts the dance, /callback
 // finishes. Falls through to the legacy redirect below if the env

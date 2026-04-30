@@ -195,12 +195,15 @@ oauthRoutes.get('/:provider/callback', async (c) => {
     authorization: `Bearer ${tokenJson.access_token}`,
   });
 
+  console.log(`[oauth] ${provider.name} → email=${email} name=${name ?? '(no name)'}`);
+
   // Resolve user. Phase 1B: user MUST already exist (seeded via SQL).
   // F172 will replace this branch with onboarding-redirect.
   const user = await db.query.controlUsers.findFirst({
     where: eq(schema.controlUsers.email, email),
   });
   if (!user) {
+    console.warn(`[oauth] ${provider.name} login refused — email ${email} not in control_users`);
     // Friendly redirect to /login with reason — F172 will replace with
     // /onboarding/welcome that lets the user create an org+tenant.
     return c.redirect(`/login?error=email_not_registered&email=${encodeURIComponent(email)}`, 302);
