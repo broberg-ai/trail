@@ -41,6 +41,12 @@ COPY apps/admin-server/tsconfig.json ./apps/admin-server/
 COPY apps/admin-server/package.json ./apps/admin-server/
 COPY packages/shared/src ./packages/shared/src
 
+# Pre-built SPA — `pnpm --filter @trail/admin build` is run by the
+# pnpm ship:admin script before flyctl deploy, so apps/admin/dist
+# exists in the build context. No need to install admin's deps inside
+# the image.
+COPY apps/admin/dist ./apps/admin/dist
+
 EXPOSE 8081
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

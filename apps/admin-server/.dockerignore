@@ -16,7 +16,9 @@ coverage
 .DS_Store
 .vscode
 
-../admin
+../admin/src
+../admin/node_modules
+../admin/public
 ../landing
 ../mcp
 ../model-lab

@@ -1,9 +1,13 @@
 import { Hono } from 'hono';
 import { logger } from 'hono/logger';
+import { serveStatic } from 'hono/bun';
 import { sql } from 'drizzle-orm';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { db } from './db.js';
 import { runMigrations } from './migrations.js';
 import { authRoutes } from './auth.js';
+import { proxyToEngine } from './proxy.js';
 
 /**
  * F33 Phase 1B — trail-admin server.
@@ -50,6 +54,34 @@ app.route('/api/auth', authRoutes);
 // at /auth so verify works at both paths — POST /api/auth/magic-link
 // stays the API, GET /auth/verify is the human-facing magic-link target.
 app.route('/auth', authRoutes);
+
+// Reverse-proxy /api/v1/* to the user's engine. Resolves session cookie
+// → tenant → engine URL → injects Bearer key. Engine doesn't speak
+// cookies, only Bearer.
+app.use('/api/v1/*', proxyToEngine);
+
+// SPA static-serve. apps/admin/dist is built by `pnpm --filter @trail/admin build`
+// and copied into the runtime image at /app/apps/admin/dist.
+const SPA_DIR = process.env.TRAIL_ADMIN_SPA_DIR ?? '/app/apps/admin/dist';
+const spaIndexPath = join(SPA_DIR, 'index.html');
+const hasSpa = existsSync(spaIndexPath);
+if (hasSpa) {
+  console.log(`[admin-server] SPA found at ${SPA_DIR} — serving static files`);
+  app.use('/assets/*', serveStatic({ root: SPA_DIR }));
+  app.use('/favicon.svg', serveStatic({ root: SPA_DIR }));
+  app.use('/uploads/*', serveStatic({ root: SPA_DIR }));
+
+  // SPA fallback — any non-API path returns index.html so client-side
+  // routing (preact-iso) can take over.
+  const indexHtml = readFileSync(spaIndexPath, 'utf-8');
+  app.get('*', (c) => {
+    if (c.req.path.startsWith('/api/') || c.req.path.startsWith('/auth/')) {
+      return c.text('not found', 404);
+    }
+    return c.html(indexHtml);
+  });
+} else {
+  console.log(`[admin-server] no SPA at ${SPA_DIR} — serving inline login fallback`);
 
 // Phase 1B.2 minimal landing — replaced by SPA static-serve in 1B.3.
 // Auth-aware: shows login form OR signed-in view depending on /api/auth/me.
@@ -140,6 +172,7 @@ async function logout() {
 </script>
 </body></html>`),
 );
+}
 
 console.log(`[admin-server] listening on :${PORT}`);
 export default { port: PORT, fetch: app.fetch };
