@@ -28,6 +28,7 @@ import { fxRoutes } from './routes/fx.js';
 import { chatSettingsRoutes } from './routes/chat-settings.js';
 import { creditsRoutes } from './routes/credits.js';
 import { jobRoutes } from './routes/jobs.js';
+import { beamRoutes } from './routes/beam.js';
 
 /**
  * Hono context variables visible to every handler.
@@ -124,6 +125,9 @@ export function createApp(trail: TrailDatabase): Hono<AppBindings> {
   });
 
   app.route('/api', healthRoutes);
+  // F168 Beam — engine-side import endpoint. NO requireAuth: uses its own
+  // BEAM_TOKEN Bearer check (different from F111.2 tenant Bearer keys).
+  app.route('/api', beamRoutes);
   app.route('/api/auth', authRoutes);
   app.route('/api/v1', kbRoutes);
   app.route('/api/v1', documentRoutes);

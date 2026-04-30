@@ -68,9 +68,14 @@ COPY packages/pipelines/src ./packages/pipelines/src
 COPY packages/shared/src ./packages/shared/src
 COPY packages/storage/src ./packages/storage/src
 
+# F168 — Beam: install engine-side import helper. Invoked by the local
+# beam.ts CLI via `fly ssh console -C "/usr/local/bin/beam-import.sh ..."`.
+COPY apps/server/scripts/beam-import.sh /usr/local/bin/beam-import.sh
+RUN chmod +x /usr/local/bin/beam-import.sh
+
 EXPOSE 8080
 
-# Healthcheck: the engine exposes /health (existing route).
+# Healthcheck: the engine exposes /api/health (mounted via app.route('/api', healthRoutes)).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -fsS http://127.0.0.1:8080/api/health || exit 1
 
