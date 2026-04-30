@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { setCookie } from 'hono/cookie';
+import { setCookie, getCookie } from 'hono/cookie';
 import { eq } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import { db, schema } from './db.js';
@@ -143,9 +143,15 @@ oauthRoutes.get('/:provider/callback', async (c) => {
   const state = c.req.query('state');
   if (!code || !state) return c.text('missing code or state', 400);
 
-  // Verify state matches the value we stashed in the cookie
-  const stateCookie = c.req.header('Cookie')?.split('; ').find((p) => p.startsWith(`${STATE_COOKIE}=`))?.split('=')[1];
+  // Verify state matches the value we stashed in the cookie. Use Hono's
+  // getCookie which handles URL-decoding of cookie values consistently
+  // with how setCookie wrote them — manual `Cookie:` header parsing
+  // misses Hono's percent-encoding of `:` inside values.
+  const stateCookie = getCookie(c, STATE_COOKIE);
   if (!stateCookie || stateCookie !== `${provider.name}:${state}`) {
+    console.warn(
+      `[oauth] state mismatch — provider=${provider.name} cookie=${stateCookie} expected=${provider.name}:${state}`,
+    );
     return c.text('invalid state — possible CSRF', 400);
   }
 
