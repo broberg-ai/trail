@@ -24,15 +24,23 @@ her beamed trail.db".
   admin+engine bundled together) was correct for solo-dev local use
   but does not match a SaaS deployment model.
 - Christian's mind-map (TRAIL.md) clarifies the right model:
-  - `www.trailmem.com` — landing/marketing/onboarding (already shipped)
-  - `app.trailmem.com` — ONE shared admin codebase for all tenants
+  - `www.trailmem.com` — **pure marketing**, already shipped. Has two
+    CTAs ("Initialize trail" + "Sign in") that LINK to
+    `app.trailmem.com`. No tenant-creation logic in the landing site
+    itself; it is a static site (managed via webhouse.app/admin → GitHub
+    Pages) and stays that way.
+  - `app.trailmem.com` — ONE shared admin codebase for all tenants.
+    **Owns sign-up + onboarding + first-trail-creation** (the flow that
+    used to be ambiguously placed in www on the original sketch). Also
+    owns ongoing curator workflows once a tenant is in.
   - `engine.trailmem.com` — proxy/router → stateless engine fleet
   - `{tenant}.db.trailmem.com` (Phase 2+) — addressable per-tenant
     storage
 
   Phase 1 of this plan implements the parts marked above as Phase 1.
-  Phase 2 work (`{tenant}.db.trailmem.com` separate hosts, self-service
-  onboarding) is explicitly deferred — see F170, F172.
+  Phase 2 work (`{tenant}.db.trailmem.com` separate hosts) and the
+  self-service onboarding flow on app.trailmem.com (F172) are explicitly
+  deferred — see F170, F172.
 
 ## Scope (in)
 
@@ -199,15 +207,23 @@ Phase 1 admin doesn't need to be feature-complete. Required:
   `engine-001.trailmem.com/api/v1/knowledge-bases/.../documents` etc.
 - API key management UI: list / create / revoke keys for the active tenant
 
-What's deferred to Phase 2 (F172):
-- Self-service org sign-up
-- "Initialize trail — the first trail" onboarding flow
+The two CTAs from `www.trailmem.com` ("Initialize trail" + "Sign in")
+both land here. In Phase 1B they hit the same magic-link entry point;
+F172 layers the actual sign-up flow on top so a brand-new email gets
+a fresh org + first tenant.db provisioned before the magic-link arrives.
+
+What's deferred to F172 (Phase 2 — self-service onboarding):
+- Self-service org sign-up flow ("Initialize trail" CTA from landing →
+  email entry → check-email screen → magic-link → "Welcome, name your
+  first Trail" onboarding wizard → tenant + control_tenant + first KB
+  provisioned automatically)
 - Org-level user invites
 - Billing/quotas
 
-For tonight's Sanne ship: I + Christian hand-create the org,
+For tonight's Sanne ship: Christian + I hand-create the org,
 control_tenant, and Bearer key via SQL on `control.db`. UI for that
-follows. Keep moving.
+follows in Phase 1B (existing F111.2 admin panel — already coded,
+just not deployed). Self-service onboarding for next customer is F172.
 
 ### 7. Two deploy paths
 
