@@ -90,6 +90,19 @@ app.get('/login', (c) =>
 <body>
 <h1>Trail</h1>
 <p class="sub">Sign in</p>
+<div id="banner" style="display:none;padding:0.7rem 0.85rem;background:#fef3c7;border:1px solid #f59e0b;border-radius:4px;color:#78350f;margin-bottom:1.25rem;font-size:0.9rem;"></div>
+<script>
+(function(){
+  const params = new URLSearchParams(location.search);
+  const err = params.get('error');
+  const email = params.get('email');
+  if (err === 'email_not_registered') {
+    const b = document.getElementById('banner');
+    b.style.display = 'block';
+    b.innerHTML = 'Din OAuth-email <code>' + (email ?? '?') + '</code> er ikke registreret som bruger på denne Trail. Bed administratoren om at tilføje dig (eller log ind med en anden konto).';
+  }
+})();
+</script>
 <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;">
   <a href="/api/auth/google" style="flex:1;padding:0.7rem 1rem;background:#fff;color:#222;border:1px solid #ccc;border-radius:4px;text-decoration:none;text-align:center;font-weight:500;">Continue with Google</a>
   <a href="/api/auth/github" style="flex:1;padding:0.7rem 1rem;background:#222;color:#fff;border-radius:4px;text-decoration:none;text-align:center;font-weight:500;">Continue with GitHub</a>
@@ -137,11 +150,25 @@ if (hasSpa) {
   app.use('/uploads/*', serveStatic({ root: SPA_DIR }));
 
   // SPA fallback — any non-API path returns index.html so client-side
-  // routing (preact-iso) can take over.
+  // routing (preact-iso) can take over. UNAUTHENTICATED users get
+  // redirected to /login first so they actually see the OAuth + magic-link
+  // options instead of the SPA's auto-redirect-to-Google flow (the SPA
+  // hits /api/v1/me on mount, gets 401, redirects to /api/auth/google —
+  // that's why incognito previously bounced straight to Google login
+  // before users could pick a provider).
   const indexHtml = readFileSync(spaIndexPath, 'utf-8');
   app.get('*', (c) => {
     if (c.req.path.startsWith('/api/') || c.req.path.startsWith('/auth/')) {
       return c.text('not found', 404);
+    }
+    // Cheap cookie sniff — full session validation happens later for
+    // /api/v1/* via proxy. Here we just want "any session-shaped cookie
+    // present" → let SPA boot. Browser flushes cookies on logout so
+    // this stays correct.
+    const cookieHeader = c.req.header('Cookie') ?? '';
+    const hasSession = /(?:^|; )trail-session=/.test(cookieHeader);
+    if (!hasSession) {
+      return c.redirect('/login', 302);
     }
     return c.html(indexHtml);
   });
