@@ -119,4 +119,4 @@ If we land F149's cost-optimization phases (prompt caching + Batch API + per-ten
 
 ---
 
-_Note saved 2026-05-02 by trail-research session. Source PDF lives in `~/Downloads/`._
+_Note saved 2026-05-02 by trail-research session. Source PDF in [docs/research/](../research/) — same filename as the article title._
