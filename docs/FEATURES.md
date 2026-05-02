@@ -355,6 +355,7 @@ Inspireret af Shuyi Wang's "Should You Actually Try Karpathy's LLM Wiki?" (2026-
 | F176 | [Per-KB Lint Schedule + Settings UI (1-90 days, weekly default)](features/F176-per-kb-lint-schedule.md) | Planned | 1 | [plan](features/F176-per-kb-lint-schedule.md) |
 | F177 | [Pre-deploy build-context audit (`pnpm verify:dockerignore`)](features/F177-pre-deploy-build-context-audit.md) | Planned | 1 | [plan](features/F177-pre-deploy-build-context-audit.md) |
 | F178 | [Landing build automation + auto-deploy (`pnpm landing:ship`)](features/F178-landing-build-automation-auto-deploy.md) | Planned | 1 | [plan](features/F178-landing-build-automation-auto-deploy.md) |
+| F179 | [Provider-direct ingest path for bulk jobs (caching + Batch API)](features/F179-provider-direct-bulk-ingest.md) | Planned | 1/2 | [plan](features/F179-provider-direct-bulk-ingest.md) |
 
 ---
 
