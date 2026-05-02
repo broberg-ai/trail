@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../middleware/auth.js';
-import glossary from '../data/glossary.json' with { type: 'json' };
+import glossary from '../assets/glossary.json' with { type: 'json' };
 
 /**
  * Central Trail glossary — hand-curated bilingual definitions of every

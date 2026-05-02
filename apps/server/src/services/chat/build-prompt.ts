@@ -4,7 +4,7 @@
  *
  * `buildSystemPrompt` is the system-role text the chat-LLM sees first.
  * Three audiences (curator / tool / public) map to three persona-template
- * markdown files in `apps/server/src/data/personas/`. Each template
+ * markdown files in `apps/server/src/assets/personas/`. Each template
  * contains a `{{TRAIL_CONTEXT}}` placeholder that gets replaced with
  * the per-call wiki-context block (or removed entirely when the call
  * has no retrieved context to share).
@@ -54,7 +54,7 @@ export interface SystemPromptInput {
 }
 
 const THIS_DIR = dirname(fileURLToPath(import.meta.url));
-const PERSONA_DIR = resolve(THIS_DIR, '../../data/personas');
+const PERSONA_DIR = resolve(THIS_DIR, '../../assets/personas');
 
 function loadTemplate(audience: Audience): string {
   const file = `chat-${audience}.md`;

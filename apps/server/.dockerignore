@@ -1,7 +1,6 @@
 # Local data — engine container reads from /data volume on Fly,
-# not from the local data/ tree. Anchored to repo-root `data/` so the
-# bare `data` form doesn't catch `apps/server/src/data/` which ships
-# the glossary.json + persona assets the engine reads at runtime.
+# not from the local data/ tree. Anchored to repo-root `data/`.
+# Source-bundled assets live under `apps/server/src/assets/` (see F177).
 /data
 *.db
 *.db-shm

@@ -9,7 +9,7 @@
  * 2. Clean up glossaries that landed with the WRONG seed content. The
  *    first F102 ship (commit 8770194) mis-seeded the Neuron with the
  *    trail-APP terminology (Trail, Neuron, Curator, …) drawn from
- *    data/glossary.json. That's app vocabulary — it lives in the
+ *    assets/glossary.json. That's app vocabulary — it lives in the
  *    global /glossary admin panel. Per-KB glossaries are meant for
  *    DOMAIN-specific fagtermer the compile-pipeline harvests from
  *    Sources. This bootstrap detects the polluted content via a
