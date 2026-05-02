@@ -74,7 +74,7 @@ beamRoutes.post('/internal/beam/import', async (c) => {
     if (value) {
       bytes += value.byteLength;
       if (!ws.write(value)) {
-        await new Promise((resolve) => ws.once('drain', resolve));
+        await new Promise<void>((resolve) => ws.once('drain', () => resolve()));
       }
     }
   }
