@@ -253,6 +253,168 @@ ALTER TABLE knowledge_bases ADD COLUMN ingest_fallback_chain TEXT;
 **Shared types (nye):**
 - `@trail/shared` eksporterer `IngestModelId`, `IngestBackendId`, `ChainStep`
 
+## Cost optimization — prompt caching + Batch API
+
+> Tilføjet 2026-05-02 efter Kristopher Dunham's "Stop Retrieving, Start Compiling" Medium-artikel (april 2026). Hans pointe: økonomien for LLM-Wiki-pattern'et er kvalitativt anderledes end da Karpathy postede sin gist, fordi to provider-features har gjort batch-ingest langt billigere — hvis man bygger pipeline'en til at bruge dem. F149's `OpenRouterBackend` skal gøre det fra dag 1, ikke som efterfølgende optimization.
+
+Det her er ikke et bolt-on. Det er kerne-økonomien der gør F156 credits-prisingen fornuftig på Pro+ tier. Uden cost-optimering brænder en typisk batch-ingest af 20 sources 3-5× flere credits end den behøver, hvilket presser margen på Hobby + Starter under critical mass.
+
+### Hvad LLM-Wiki-ingest faktisk koster
+
+En enkelt source der ingestes i Trail's compile-pipeline:
+
+1. Læser raw-source (typisk 5k-50k input tokens for et PDF/article)
+2. Læser `_schema.md` (F140) — typisk 2-5k input tokens
+3. Læser `index.md` aggregat over eksisterende KB (typisk 5-20k input tokens for medium KB)
+4. Læser de 10-15 eksisterende Neurons der vil blive opdateret af denne source (typisk 30-90k input tokens)
+5. Generates updated content for de 10-15 affected Neurons (typisk 15-30k output tokens)
+
+Total per source: **~60-150k input + 15-30k output tokens**. På Sonnet ~$0.30-0.60 per source. På Flash ~$0.005-0.012. Det er F149's baseline.
+
+Dunham's pointe er at trin 2-4 — schema, index, og de eksisterende Neurons — er **stable across batch**. Hvis vi ingestes 20 sources i en batch, læser vi præcis samme schema + index 20 gange. Det er den slags repetition Anthropic's prompt caching belønner.
+
+### Lag 1 — Prompt caching i `OpenRouterBackend`
+
+Anthropic prompt caching (via OpenRouter): cached tokens er ~10 % af standard input rate (5-min-cache TTL, 1-time on the cheapest tier). Implementeret via `cache_control` markere i request-body.
+
+For ingest-pipeline:
+
+```typescript
+// packages/core/src/ingest/openrouter-backend.ts
+const messages = [
+  {
+    role: "system",
+    content: [
+      // Cache the schema — stable across all sources in batch
+      { type: "text", text: schemaContent, cache_control: { type: "ephemeral" } },
+      // Cache the index — stable across all sources in batch
+      { type: "text", text: indexContent, cache_control: { type: "ephemeral" } },
+    ],
+  },
+  {
+    role: "user",
+    content: [
+      // Cache the affected-Neurons context — stable for this source's affected set
+      { type: "text", text: affectedNeuronsBlob, cache_control: { type: "ephemeral" } },
+      // The source itself is the only non-cached input
+      { type: "text", text: sourceContent },
+    ],
+  },
+];
+```
+
+**Effekt på batch-ingest af 20 sources:**
+
+| Komponent | Uden caching | Med caching |
+|---|---|---|
+| Schema (3k tokens × 20) | 60k tokens × $1/1M = $0.06 | 3k første + 57k @ 10% = $0.0087 |
+| Index (10k × 20) | 200k tokens × $1/1M = $0.20 | 10k første + 190k @ 10% = $0.029 |
+| Affected Neurons (60k × 20) — *delvis cache, kun fælles core neurons* | 1.2M × $1/1M = $1.20 | ~30 % cached → $0.84 |
+| Source body (20k × 20) — *unikt per source* | 400k × $1/1M = $0.40 | $0.40 |
+| Output (22k × 20) | 440k × $5/1M = $2.20 | $2.20 |
+| **Total (Sonnet baseline)** | **$4.06** | **$3.48** (15 % saving) |
+| **Total (Flash, samme pattern)** | **$0.10** | **$0.085** |
+
+Hvor caching virkelig betaler sig er når **schema + index dominerer** (lille KB med dense Neuron-graph) — der kan effektive savings være 30-40 %. På store KBs hvor source body er den dominerende cost, er savings smaller (10-15 %). Begge tilfælde: pure win, ingen ulempe.
+
+### Lag 2 — Batch API til scheduled / non-urgent ingest
+
+Anthropic Batch API: 50 % rabat på ikke-real-time requests. Response inden 24 timer (men typisk få minutter til timer). Geneksisterende endpoint via OpenRouter, samme messages-shape.
+
+Trail har to ingest-stier:
+1. **Real-time ingest** — bruger uploader fil i UI, forventer status-update inden for sekunder. SKAL bruge real-time API.
+2. **Scheduled / queue-driven ingest** — F143's `ingest_jobs`-tabel processeres af baggrunds-runner. Ingen forventning om sub-minute completion. Kan bruge Batch API.
+
+For batch-eligible jobs (F143 `priority='low'` eller `scheduled_at IS NOT NULL`):
+
+```typescript
+// packages/core/src/ingest/openrouter-backend.ts
+async function enqueueBatch(jobs: IngestJob[]): Promise<BatchHandle> {
+  const requests = jobs.map(job => ({
+    custom_id: job.id,
+    method: "POST",
+    url: "/v1/messages",
+    body: buildIngestRequest(job),
+  }));
+
+  const batch = await anthropic.beta.messages.batches.create({ requests });
+  await trail.db.update(ingestJobs)
+    .set({ batch_id: batch.id, status: 'batched' })
+    .where(inArray(ingestJobs.id, jobs.map(j => j.id)))
+    .run();
+
+  return batch;
+}
+```
+
+Combinerede effekt på en typisk Sanne-onboarding-batch (50 sources):
+
+| Optimering | Cost (Sonnet) | Cost (Flash) | Wall-clock |
+|---|---|---|---|
+| Baseline (real-time, no cache) | $30 | $0.50 | 50 × 30s = 25 min |
+| + Prompt caching | $25 (-17 %) | $0.42 (-16 %) | 25 min |
+| + Batch API | $12.50 (-58 %) | $0.21 (-58 %) | up to 24h, typisk ~30-90 min |
+| + Both | **$10.50 (-65 %)** | **$0.18 (-64 %)** | up to 24h |
+
+For Sanne's 25-års klinisk materiale (estimat 200-500 sources) er forskellen mellem real-time-no-cache vs batch+cache: **$120-300 → $42-105**. Det er forskellen mellem en Pro-tenant-credits-pakke og enterprise-tier-konsultation.
+
+### Per-source batch-eligibility decision-logic
+
+```typescript
+// packages/core/src/ingest/cost-strategy.ts
+type CostStrategy = 'real-time' | 'batch';
+
+export function chooseCostStrategy(job: IngestJob): CostStrategy {
+  // F143 explicit batch flag — set by curator UI ("Ingest in background")
+  if (job.priority === 'low' || job.scheduledAt) return 'batch';
+
+  // Bulk-ingest detected via job.batchToken — multi-source upload from
+  // curator UI sets a shared token; runs all in batch automatically
+  if (job.batchToken) return 'batch';
+
+  // Real-time path for solo curator interactive use:
+  // foreground upload, F39 cc-session-ingest, chat-save-as-Neuron
+  return 'real-time';
+}
+```
+
+Curator-UI tilføjer en simpel "Ingest in background" toggle ved upload — toggle ON aktiverer batch + caching, toggle OFF kører real-time. Default OFF for solo (Christian, hobby) for at bevare den interaktive feeling. Default ON for Sanne's bulk-onboarding (sat per-tenant via `tenants.default_ingest_strategy`).
+
+### F156 credits-konsekvens
+
+`tenant_credits.balance` debitering bruger faktisk OpenRouter `usage.cost` (cf. F156). Med caching er `usage.cost` allerede den lavere værdi (Anthropic + OpenRouter rapporterer caching-rabatten direkte). Med Batch API er `usage.cost` halvdelen automatisk.
+
+**Net for tenant:** brug af "Ingest in background"-toggle reducerer credit-burn med ~65 %. Marketing-pitch: *"Pro tier batch-ingest is roughly 1/3 of the cost of real-time."*
+
+### Schema-tilføjelse (migration 0014 udvidet)
+
+`ingest_jobs`-tabellen får to nye kolonner:
+
+```sql
+ALTER TABLE ingest_jobs ADD COLUMN cost_strategy TEXT
+  CHECK (cost_strategy IN ('real-time', 'batch'))
+  DEFAULT 'real-time';
+ALTER TABLE ingest_jobs ADD COLUMN batch_id TEXT;  -- Anthropic batch handle
+ALTER TABLE ingest_jobs ADD COLUMN cache_hit_ratio REAL;  -- 0.0-1.0, observed
+```
+
+`tenants` får default-strategy:
+
+```sql
+ALTER TABLE tenants ADD COLUMN default_ingest_strategy TEXT
+  CHECK (default_ingest_strategy IN ('real-time', 'batch'))
+  DEFAULT 'real-time';
+```
+
+### Verify-script
+
+`apps/server/scripts/verify-cost-optimization.ts`:
+- Ingest 5 test-sources i ÉN batch via `OpenRouterBackend` med caching enabled
+- Assertér at request 2-5's response indeholder `usage.cache_read_input_tokens > 0`
+- Run en batch-version af samme 5 sources via Batch API → verificér batch_id, poll til complete, sammenlign cost_cents til real-time = ~50 % savings
+
+---
+
 ## Rollout
 
 **To-fase deploy.**
