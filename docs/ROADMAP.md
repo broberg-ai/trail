@@ -353,4 +353,5 @@ Public-facing trailmem.com surfaces (all Phase 1-shippable):
 - **FEATURES.md** is the index — every F-number, plan-doc link, status.
 - **This file** groups features by phase + priority; it's what to read to plan a sprint.
 - **docs/features/F{nn}-*.md** is the plan doc for each feature. Detailed design, impact analysis, implementation steps.
+- **[F100-F133 thematic index](./F100-F133-themes-2026-05-02.md)** — read-only kategorisering af Karpathy-parity-batchen + F147 i 9 temaer med ship-rækkefølger og cross-refs. Hjælper med at vælge næste 3-5 features at uddybe efter F97/F148/F156.
 - Run `/feature "<idea>"` to add a new feature — duplicate-checks, numbering, plan scaffold, index updates, commit.
