@@ -317,6 +317,56 @@ POST /internal/beam/import
    that streams the same tar.gz to the calling engine. Used by
    F170's `pnpm trail tenant migrate` command.
 
+### Phase 3 — pull mode (engine → local dev sync)
+
+**Why**: Sanne's prod-engine accumulates Neurons compiled from
+sources Christian uploaded via `app.trailmem.com`. When Christian
+wants to switch back to local-dev mode (Max-plan claude-cli for
+heavy ingest), his local trail.db is behind. He can't bare-copy
+the prod DB because local is multi-tenant single-file
+(`/data/trail.db` shared by ALL his KBs across all his tenants),
+while prod is per-tenant (`/data/{slug}/trail.db` isolated).
+
+**CLI**: `pnpm trail beam pull --app trail-engine-001 --tenant-slug sanne-andersen --kb-id 6aa52746-... [--dry-run] [--skip-uploads]`
+
+**Steps**:
+1. `flyctl ssh sftp` pulls `/data/{slug}/trail.db` to
+   `/tmp/beam-pull-{slug}-{ts}/trail.db` (read-only staging copy).
+2. Open staging DB read-only + local DB read-write.
+3. For each MERGE-eligible table (filtered by `knowledge_base_id`
+   matching the target KB-id, since KB-ids are stable across
+   beam-push), SELECT prod rows + INSERT-OR-REPLACE into local.
+   Tables: `documents`, `chunks`, `document_images`,
+   `wiki_backlinks`, `document_references`, `broken_links`,
+   `vision_quality_ratings`, `wiki_events`, `activity_log`.
+4. Tenant-id rewrite: prod `t-{slug}` → local owner-tenant
+   (default `t-christian`; configurable via `--target-tenant`).
+5. User-id rewrite: any user-id that doesn't exist locally falls
+   back to `service-ingest` (the INGEST_USER_ID seed). Curator-
+   authored events keep their `actor_kind` for audit.
+6. Skipped tables (operational/local-only — never sync):
+   `queue_candidates` (curator-pending state),
+   `sessions` + `api_keys` (per-environment auth),
+   `ingest_jobs` (operational), `chat_sessions`/`chat_turns`
+   (chat is per-environment), `tenant_credits` (separate
+   billing per env).
+7. `rsync` (or sftp-recursive) `/data/{slug}/uploads/` →
+   `~/Apps/broberg/trail/data/uploads/{tenant-id-local}/{kb-id}/`.
+   Skipped when `--skip-uploads` (text-only sync for fast iteration).
+8. FTS5 rebuild on the affected KB. Not full-DB rebuild — use
+   `INSERT INTO documents_fts(documents_fts, rowid, ...)` per row.
+9. Print summary: rows inserted, rows updated, uploads transferred.
+
+**Idempotent**: re-running pull with no prod changes produces zero
+inserts/updates (INSERT OR REPLACE on identical content is a no-op
+at the rowid+content level; cheap to re-run frequently).
+
+**Implementation note**: keeps `apps/server/scripts/beam.ts`
+unchanged (push-direction stays a one-shot script per Phase 1).
+Pull-mode lives in a new `beam-pull.ts` so the two flows can
+evolve independently. A unified `beam.ts` with `push|pull` sub-
+commands is a Phase 4 cleanup if both paths stabilise.
+
 ## Open questions
 
 - **Beam streaming vs filesystem-staging.** Streaming would be lower
