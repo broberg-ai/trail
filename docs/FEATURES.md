@@ -353,6 +353,7 @@ Inspireret af Shuyi Wang's "Should You Actually Try Karpathy's LLM Wiki?" (2026-
 | F174 | [Action-Zone Governance Policy (green/yellow/red)](features/F174-action-zone-governance.md) | Planned | 2 | [plan](features/F174-action-zone-governance.md) |
 | F175 | [Schema-level provenance enforcement (sources-required)](features/F175-schema-provenance-enforcement.md) | Planned | 2 | [plan](features/F175-schema-provenance-enforcement.md) |
 | F176 | [Per-KB Lint Schedule + Settings UI (1-90 days, weekly default)](features/F176-per-kb-lint-schedule.md) | Planned | 1 | [plan](features/F176-per-kb-lint-schedule.md) |
+| F177 | [Pre-deploy build-context audit (`pnpm verify:dockerignore`)](features/F177-pre-deploy-build-context-audit.md) | Planned | 1 | [plan](features/F177-pre-deploy-build-context-audit.md) |
 
 ---
 
