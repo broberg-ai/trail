@@ -1,6 +1,6 @@
 # F177 — Pre-deploy build-context audit (`pnpm verify:dockerignore`)
 
-> Statisk validator der parser hver Dockerfile + `.dockerignore` (root + per-app) og fail-closer hvis nogen `COPY`-source-path falder under en eksklusions-pattern. Kører som `pnpm verify:dockerignore` lokalt + GitHub Actions pre-merge gate. Inspireret af 2026-05-02 v9-incident hvor `**/data` (unanchored) fangede `apps/server/src/data/glossary.json` → engine crash-loop. F177 ville have fanget det automatisk pre-merge. Tier: infrastructure / dev-experience. Effort: Small ½-1 dag. Status: Planned.
+> Statisk validator der parser hver Dockerfile + `.dockerignore` (root + per-app) og fanger TRE bug-classes: (1) unanchored dockerignore-globs der ekskluderer kode-assets, (2) stale COPY-refs hvor source-path er slettet, (3) Dockerfile COPY-fra-build-output uden tilsvarende build-step eller `ship:<app>` wrapper. Kører som `pnpm verify:dockerignore` lokalt + GitHub Actions pre-merge gate. Inspireret af 2026-05-02 v9-incident (dockerignore-`**/data`) + 2026-05-03 admin stale-dist-incident (F97/F101/F22/F176 admin-UI aldrig live på `app.trailmem.com`). F177 ville have fanget begge automatisk pre-merge. Tier: infrastructure / dev-experience. Effort: Small ¾-1¼ dag. Status: Planned.
 
 ## Problem
 
@@ -26,6 +26,22 @@ Fix `44c23eb` ankrede patternet til `/data` (root-only). Arbejder nu, men en hel
 - nogen tilføjer en ny `.dockerignore` entry uden at tjekke unanchored-effekt
 - nogen tilføjer en ny `apps/*/src/data/`-asset uden at vide patternet eksisterer
 - nogen refactorer en sti og glemmer `.dockerignore`-konsekvensen
+
+### Den anden motiverende incident (2026-05-03 admin stale-dist)
+
+Engineering-session opdagede at F97 /activity panel + F101 type-pill + F22 anchor-renderer + F176 Settings cadence-UI **aldrig havde været live på `app.trailmem.com`** efter dagens engine-side-deploys. Christian gik manuelt til `app.trailmem.com/activity` og fandt en tom side. Root cause:
+
+- **`apps/admin-server/Dockerfile`** linje 51-55 forventer `apps/admin/dist/` er pre-built før `flyctl deploy`.
+- Engineering kørte `flyctl deploy -a trail-admin --config apps/admin-server/fly.toml --remote-only` direkte (uden at køre admin-build først).
+- Build-output var stale fra et tidligere deploy.
+- Image bygges → stale `dist/` copies ind → admin SPA viser pre-F97-features.
+- Server-side endpoints var fine (engine-Dockerfile copier source direkte uden pre-build), så API'en virkede — men SPA'en der konsumerede den havde ingen UI til at vise det.
+
+Fix: kør `pnpm ship:admin` (defineret i root `package.json`) i stedet for direkte `flyctl deploy`. `ship:admin` bundler `pnpm --filter @trail/admin build && flyctl deploy ...` — det er allerede det korrekte deploy-flow, det blev bare ignoreret.
+
+`ship:engine`, `ship:admin`, `ship:landing` ALLE eksisterer i root `package.json` (Christian's pattern fra F33). De er den blessede deploy-vej. Problemet er ikke at konventionen mangler — det er at intet fanger når nogen omgår den ved at kalde `flyctl deploy` direkte.
+
+**Same class af bugs**: deterministisk, statisk-detekterbart, fanges først ved manuel inspektion på live. F177 udvides nu med en check-regel der specifikt fanger "Dockerfile COPY refererer build-output, men deploy-flow har ingen build-step".
 
 ### Hvorfor det ikke fanges af eksisterende værktøjer
 
@@ -297,6 +313,90 @@ function suggestFix(pattern: DockerignorePattern, affectedFile: string): string 
 }
 ```
 
+### 4b. Stale pre-built artifact detection (added 2026-05-03)
+
+Detection-rule that fires for the second motivating incident — Dockerfile COPYs from a build-output path, but no in-Dockerfile build step or matching `ship:<app>` wrapper script exists:
+
+```typescript
+const BUILD_OUTPUT_DIR_NAMES = new Set([
+  'dist', 'build', '.next', 'out', 'public/build', '.svelte-kit',
+]);
+
+interface PreBuiltArtifactWarning {
+  dockerfile: string;
+  copyDirective: DockerCopyDirective;
+  buildOutputPath: string;          // e.g. "apps/admin/dist"
+  packageJsonPath: string | null;   // e.g. "apps/admin/package.json"
+  hasBuildScript: boolean;
+  hasInDockerfileBuild: boolean;
+  shipScript: string | null;        // e.g. "ship:admin" if found in root package.json
+  severity: 'error' | 'warn';
+}
+
+async function checkPreBuiltArtifacts(
+  dockerfilePath: string,
+  directives: DockerCopyDirective[],
+  rootPackageJson: PackageJson,
+): Promise<PreBuiltArtifactWarning[]> {
+  const warnings: PreBuiltArtifactWarning[] = [];
+  const dockerfileContent = readFileSync(dockerfilePath, 'utf-8');
+  const hasInDockerfileBuild = /^(RUN\s+(pnpm|npm|yarn)\s+(run\s+)?build|RUN\s+pnpm\s+--filter\s+\S+\s+build)/m.test(dockerfileContent);
+
+  for (const directive of directives) {
+    const segments = directive.source.split('/');
+    const buildOutSegmentIdx = segments.findIndex(s => BUILD_OUTPUT_DIR_NAMES.has(s));
+    if (buildOutSegmentIdx === -1) continue;
+
+    // Walk up from segment-before-buildOutDir to find package.json
+    const sourceRoot = segments.slice(0, buildOutSegmentIdx).join('/');
+    const pkgPath = findNearestPackageJson(sourceRoot);
+    const pkg = pkgPath ? JSON.parse(readFileSync(pkgPath, 'utf-8')) : null;
+    const hasBuildScript = pkg?.scripts?.build !== undefined;
+
+    // Look for matching ship:<app> wrapper in root package.json
+    const appName = pkg?.name?.replace(/^@trail\//, '') ?? sourceRoot.split('/').pop() ?? '';
+    const shipScriptName = `ship:${appName}`;
+    const shipScript = rootPackageJson.scripts?.[shipScriptName] ?? null;
+    const shipScriptBuildsBeforeDeploy = shipScript?.includes('build') && shipScript?.includes('flyctl deploy');
+
+    if (!hasInDockerfileBuild && hasBuildScript && !shipScriptBuildsBeforeDeploy) {
+      warnings.push({
+        dockerfile: dockerfilePath,
+        copyDirective: directive,
+        buildOutputPath: segments.slice(0, buildOutSegmentIdx + 1).join('/'),
+        packageJsonPath: pkgPath,
+        hasBuildScript: true,
+        hasInDockerfileBuild: false,
+        shipScript: shipScript ? shipScriptName : null,
+        severity: 'error',
+      });
+    }
+  }
+  return warnings;
+}
+```
+
+**Rationale per check-component**:
+
+- **`BUILD_OUTPUT_DIR_NAMES` heuristic**: catches the canonical bundler/SSG output directories. Not exhaustive — extending it for new tools (e.g. Astro's `dist/`, Remix's `public/build/`) is a one-line change.
+- **Walk-up to `package.json`**: a Dockerfile that COPYs `apps/admin/dist/` should map to `apps/admin/package.json`. We then check if THAT package has a `build` script (i.e. dist/ is genuinely a build artifact, not a vendored asset).
+- **In-Dockerfile build check**: a Dockerfile that runs `RUN pnpm build` itself doesn't need an external wrapper — it's self-contained.
+- **`ship:<app>` wrapper check**: looks at root `package.json` for an entry like `"ship:admin": "pnpm --filter @trail/admin build && flyctl deploy ..."`. If the wrapper bundles build+deploy, we infer the deploy-flow is correct as long as it's the path actually used.
+
+**Output example**:
+
+```
+✗ apps/admin-server/Dockerfile  (1 stale-build-artifact warning)
+
+  ⚠️  COPY apps/admin/dist /app/apps/admin/dist
+       requires pre-built apps/admin/dist (no in-Dockerfile build step found)
+       package: apps/admin/package.json (has 'build' script)
+       wrapper: pnpm ship:admin (root package.json)
+       fix: deploy via `pnpm ship:admin` — direct `flyctl deploy` ships stale dist/
+```
+
+**Limitation**: F177 cannot detect at static-analysis-time whether the operator actually USED `pnpm ship:admin` vs `flyctl deploy` directly — that's runtime data. What F177 CAN do is verify that the wrapper EXISTS, and surface it as the canonical deploy-vej. If a future engine refactor introduces `apps/server/dist/`-COPY without adding a corresponding `ship:engine` build-step or in-Dockerfile build, F177 catches that pre-merge.
+
 ### 5. Output formatting
 
 Use ANSI colors when running in TTY, plain text in CI:
@@ -530,6 +630,7 @@ Ingen for runtime. Ny CI-merge-gate kan blokere PRs hvis der er issues; det er e
 - Phase 1 CLI + fixtures: 0.5 dag
 - Phase 2 CI integration: 0.25 dag
 - Phase 3 docs + buddy-link: 0.25 dag
+- Phase 4 stale pre-built artifact detection: 0.25 dag (added 2026-05-03)
 
 Inkluderer typecheck, unit-tests, fixture-baseret integration-test, manual CI-gate-verification.
 
