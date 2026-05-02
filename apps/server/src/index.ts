@@ -19,6 +19,7 @@ import { backfillLinkCheck, startLinkChecker } from './services/link-checker.js'
 import { startLintScheduler } from './services/lint-scheduler.js';
 import { startQueueBackfill } from './services/queue-backfill.js';
 import { startActionRecommender, backfillRecommendations } from './services/action-recommender.js';
+import { startActivityLogger } from './services/activity-logger.js';
 import { initJobRunner } from './services/jobs/runner.js';
 import { noopHandler } from './services/jobs/handlers/noop.js';
 import { visionRerunHandler } from './services/jobs/handlers/vision-rerun.js';
@@ -127,6 +128,11 @@ const stopQueueBackfill = startQueueBackfill(trail);
 // accept route uses it for per-candidate dispatch.
 const stopActionRecommender = startActionRecommender(trail);
 
+// F97 — activity-log subscriber. Translates broadcaster events into
+// activity_log rows (auth/upload/lint gaps filled by direct
+// logActivity() calls in routes/services).
+const stopActivityLogger = startActivityLogger(trail);
+
 // One-shot backfill for existing pending candidates that landed
 // before the recommender was wired up. Runs 60s after boot so it
 // doesn't compete with queue-backfill's translation work. Serial, so
@@ -178,6 +184,8 @@ const shutdown = async () => {
   stopContradictionLint();
   stopLintScheduler();
   stopQueueBackfill();
+  stopActionRecommender();
+  stopActivityLogger();
   server.stop();
   await trail.close();
   process.exit(0);

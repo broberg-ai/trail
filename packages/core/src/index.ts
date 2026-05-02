@@ -80,3 +80,12 @@ export type {
   WriteArgs,
   WriteResult,
 } from './ingest/candidate-api.js';
+
+// F97 — Activity Log helper.
+export { logActivity } from './activity.js';
+export type {
+  ActivityKind,
+  ActivitySubjectType,
+  ActivityActorKind,
+  LogActivityInput,
+} from './activity.js';

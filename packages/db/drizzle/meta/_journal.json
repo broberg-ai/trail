@@ -204,6 +204,13 @@
       "when": 1779400000000,
       "tag": "0028_image_auto_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1779500000000,
+      "tag": "0029_activity_log",
+      "breakpoints": true
     }
   ]
 }

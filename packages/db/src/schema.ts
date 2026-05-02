@@ -794,3 +794,45 @@ export const brokenLinks = sqliteTable(
     index('idx_broken_links_kb_status').on(table.knowledgeBaseId, table.status),
   ],
 );
+
+// ── F97 — Activity Log (audit timeline) ────────────────────────────────────────
+//
+// Append-only record of meaningful actions on a Trail engine: auth,
+// kb lifecycle, source uploads, ingest jobs, candidate decisions,
+// neuron edits, lint runs, connector recommendations. The broadcaster
+// (F87 SSE bus) feeds most rows via activity-logger subscriber;
+// 6 explicit call-sites fill broadcaster gaps (auth.ts login/logout,
+// knowledge-bases.ts kb.create/update, uploads.ts source.uploaded,
+// lint-scheduler.ts schedule/complete).
+//
+// No UPDATE/DELETE paths in code — append-only by convention. Tenant
+// cascade-delete handles cleanup.
+//
+// `kind` is open text (not enum) to keep migrations cheap when new
+// event types ship; see ActivityKind union in @trail/core/activity.ts
+// for the typed catalog. Adding a kind = no schema change.
+export const activityLog = sqliteTable(
+  'activity_log',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    knowledgeBaseId: text('knowledge_base_id').references(() => knowledgeBases.id, { onDelete: 'cascade' }),
+    actorId: text('actor_id').references(() => users.id),
+    actorKind: text('actor_kind', { enum: ['user', 'llm', 'system', 'pipeline'] }).notNull(),
+    kind: text('kind').notNull(),
+    subjectType: text('subject_type', {
+      enum: ['document', 'candidate', 'knowledge_base', 'user', 'session', 'none'],
+    }).notNull(),
+    subjectId: text('subject_id'),
+    summary: text('summary').notNull(),
+    metadata: text('metadata'),
+    createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index('idx_activity_tenant_time').on(table.tenantId, table.createdAt),
+    index('idx_activity_kb_time').on(table.knowledgeBaseId, table.createdAt),
+    index('idx_activity_actor').on(table.tenantId, table.actorId, table.createdAt),
+    index('idx_activity_subject').on(table.tenantId, table.subjectType, table.subjectId),
+    index('idx_activity_kind').on(table.tenantId, table.kind, table.createdAt),
+  ],
+);
