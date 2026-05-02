@@ -108,7 +108,7 @@ The remaining Phase 1 scope, ordered by leverage and dependency.
 
 | # | Feature | Depends On | Effort | Status |
 |---|---------|------------|--------|--------|
-| F33 | [Fly.io deploy: multi-tenant admin + stateless engine fleet (Phase 1)](./features/F33-fly-deploy-multi-tenant.md) | F111.2, F160, F162, F164 | Large | ⏭ Planned |
+| F33 | ~~Fly.io deploy~~ — **Done 2026-04-30** (Phase 1A engine `trail-engine-001` + Phase 1B admin `trail-admin` both live in `broberg-ai/arn`. OAuth GitHub+Google, magic-link, invite-flow, reverse-proxy w/ Bearer key→tenant lookup, ambient sounds, /logout, F168 Beam used to seed Sanne. App at `app.trailmem.com`, engine at `engine.trailmem.com`.) | F111.2, F160, F162, F164 | Large |
 | F35 | Google OAuth Production Credentials | F33 | Small | ⏭ Planned |
 | F62 | demo.trailmem.com — public reference site | F17, F18 | Medium | ⏭ Planned |
 | F37 | Sanne Customer Onboarding | F17, F18, F33, F35 | Medium | ⏭ Planned |
@@ -307,7 +307,7 @@ Regulated industries, on-prem, compliance, advanced architecture.
 
 ✅ F148   Link Integrity (3-layer defence shipped 2026-04-24 + admin panel via F150 2026-04-26)
 ⏭ F34    Landing deploy (trailmem.com — DNS + Fly.io; page already built)
-⏭ F33    Fly.io deploy — multi-tenant admin + stateless engine fleet (arn)
+✅ F33    Fly.io deploy — multi-tenant admin + stateless engine fleet (live in broberg-ai/arn since 2026-04-30)
 ⏭ F35    OAuth production credentials (for F33's first real login)
 ⏭ F62    demo.trailmem.com — polished public reference site ← forcing function for component polish
 ⏭ F37    Sanne live
