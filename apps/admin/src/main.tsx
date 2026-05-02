@@ -22,10 +22,14 @@ import { ActivityPanel } from './panels/activity';
 import { ImagesPanel } from './panels/images';
 import { NotFound } from './panels/not-found';
 import { initTheme } from './theme';
+import { ensureAnchorMarkedExtensions } from './lib/markdown';
 import './index.css';
 
 // Apply persisted theme before first paint so we never flash the wrong palette.
 initTheme();
+// F22 — install claim-anchor-aware marked renderer once before any panel
+// calls marked.parse. Idempotent.
+ensureAnchorMarkedExtensions();
 
 function Main() {
   return (

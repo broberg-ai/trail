@@ -30,6 +30,7 @@ import {
 import { formatSeqId } from '@trail/shared';
 import { createCandidate } from '../queue/candidates.js';
 import { slugify } from '../slug.js';
+import { prepareCompiledMarkdown } from '../compile/claim-anchors.js';
 
 export interface CandidateQueueContext {
   trail: TrailDatabase;
@@ -488,8 +489,12 @@ export async function write(
   if (args.command === 'create') {
     if (!args.title) return { ok: false, error: 'title-required' };
     const filename = (slugify(args.title) || 'untitled') + '.md';
-    const fullContent = args.content ?? `# ${args.title}\n`;
     const path = dirPath.endsWith('/') ? dirPath : dirPath + '/';
+    // F22 + F101 — inject stable claim-anchors and ensure `type:`
+    // frontmatter derived from the document path. Idempotent on
+    // re-runs; safe on content that already has either marker.
+    const rawContent = args.content ?? `# ${args.title}\n`;
+    const fullContent = prepareCompiledMarkdown(rawContent, `${path}${filename}`);
 
     const { approval } = await createCandidate(
       ctx.trail,

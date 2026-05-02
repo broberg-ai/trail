@@ -89,3 +89,12 @@ export type {
   ActivityActorKind,
   LogActivityInput,
 } from './activity.js';
+
+// F22 + F101 — claim-anchors + type-frontmatter post-LLM compile transforms.
+export {
+  generateClaimAnchor,
+  injectClaimAnchors,
+  extractClaimAnchors,
+  ensureTypeFrontmatter,
+  prepareCompiledMarkdown,
+} from './compile/claim-anchors.js';
