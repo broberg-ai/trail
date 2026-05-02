@@ -108,10 +108,8 @@ The remaining Phase 1 scope, ordered by leverage and dependency.
 
 | # | Feature | Depends On | Effort | Status |
 |---|---------|------------|--------|--------|
-| F33 | ~~Fly.io deploy~~ — **Done 2026-04-30** (Phase 1A engine `trail-engine-001` + Phase 1B admin `trail-admin` both live in `broberg-ai/arn`. OAuth GitHub+Google, magic-link, invite-flow, reverse-proxy w/ Bearer key→tenant lookup, ambient sounds, /logout, F168 Beam used to seed Sanne. App at `app.trailmem.com`, engine at `engine.trailmem.com`.) | F111.2, F160, F162, F164 | Large |
-| F35 | Google OAuth Production Credentials | F33 | Small | ⏭ Planned |
+| F33 | ~~Fly.io deploy~~ — **Done 2026-04-30** (Phase 1A engine `trail-engine-001` + Phase 1B admin `trail-admin` both live in `broberg-ai/arn`. OAuth GitHub+Google, magic-link, invite-flow, reverse-proxy w/ Bearer key→tenant lookup, ambient sounds, /logout, F168 Beam used to seed Sanne. App at `app.trailmem.com`, engine at `engine.trailmem.com`. Subsumes the OAuth-prod-credentials + Sanne-onboarding operational sub-tasks previously tracked as separate F-numbers.) | F111.2, F160, F162, F164 | Large |
 | F62 | demo.trailmem.com — public reference site | F17, F18 | Medium | ⏭ Planned |
-| F37 | Sanne Customer Onboarding | F17, F18, F33, F35 | Medium | ⏭ Planned |
 
 ### Quality + UX — ship with Phase 1
 
@@ -307,10 +305,8 @@ Regulated industries, on-prem, compliance, advanced architecture.
 
 ✅ F148   Link Integrity (3-layer defence shipped 2026-04-24 + admin panel via F150 2026-04-26)
 ⏭ F34    Landing deploy (trailmem.com — DNS + Fly.io; page already built)
-✅ F33    Fly.io deploy — multi-tenant admin + stateless engine fleet (live in broberg-ai/arn since 2026-04-30)
-⏭ F35    OAuth production credentials (for F33's first real login)
+✅ F33    Fly.io deploy — multi-tenant admin + stateless engine fleet (live in broberg-ai/arn since 2026-04-30, OAuth + Sanne onboarding subsumed)
 ⏭ F62    demo.trailmem.com — polished public reference site ← forcing function for component polish
-⏭ F37    Sanne live
 
 F28 Pipeline interface ─┬─► F24 DOCX
                         ├─► F25 Image/SVG
@@ -329,15 +325,14 @@ Public-facing trailmem.com surfaces (all Phase 1-shippable):
   F36   docs.trailmem.com (Trail brain of trail's own docs — depends on F40.2)
 ```
 
-**Phase-1 shippable definition:** F17 ✓ + F18 (complete) + F40.1 + F33 + F35 + F62 + F37 = Sanne on a live single-tenant engine, with `trailmem.com` (landing), `demo.trailmem.com` (polished showcase), and `sanne.trail.broberg.ai` (Sanne's instance) all live. F40.2 unlocks SaaS; F36 unlocks the docs-brain.
+**Phase-1 shippable definition:** F17 ✓ + F18 ✓ + F40.1 ✓ + F33 ✓ + F62 = Sanne on the live multi-tenant engine, with `trailmem.com` (landing), `demo.trailmem.com` (polished showcase), and her instance accessible via `app.trailmem.com`. F36 unlocks the docs-brain.
 
 ---
 
 ## Decisions still owed
 
-1. **F37 — Sanne deploy topology** — single-tenant on her own subdomain (`sanne.trail.broberg.ai`) vs. dedicated tenant on `app.trailmem.com` once F40.2 lands. Recommend single-tenant Fly.io app while F40.2 is still being designed, then migrate into the SaaS once multi-tenancy is real.
-2. **Brand naming** — user-facing label for a knowledge-base/wiki container. F38's plan doc assumes **Trail** / **Neuron**. Flagged as still open on user's side; lock in before F38 copy ships.
-3. **F62 demo content** — which clinical domain (if any) to include. Sanne's material with consent, or an anonymised public-licensed alternative.
+1. **Brand naming** — user-facing label for a knowledge-base/wiki container. F38's plan doc assumes **Trail** / **Neuron**. Flagged as still open on user's side; lock in before F38 copy ships.
+2. **F62 demo content** — which clinical domain (if any) to include. Sanne's material with consent, or an anonymised public-licensed alternative.
 
 ## Decisions resolved
 
