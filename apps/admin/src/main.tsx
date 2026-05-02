@@ -18,6 +18,7 @@ import { CostPanel } from './panels/cost';
 import { QualityComparePanel } from './panels/quality-compare';
 import { LinkReportPanel } from './panels/link-report';
 import { JobsPanel } from './panels/jobs';
+import { ActivityPanel } from './panels/activity';
 import { ImagesPanel } from './panels/images';
 import { NotFound } from './panels/not-found';
 import { initTheme } from './theme';
@@ -48,6 +49,7 @@ function Main() {
           <Route path="/settings" component={SettingsAccountPanel} />
           <Route path="/glossary" component={GlossaryPanel} />
           <Route path="/jobs" component={JobsPanel} />
+          <Route path="/activity" component={ActivityPanel} />
           <Route path="/play" component={PlayPanel} />
           <Route default component={NotFound} />
         </Router>

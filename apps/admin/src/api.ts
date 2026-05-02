@@ -1269,3 +1269,44 @@ export function createApiKey(name: string): Promise<ApiKeyCreated> {
 export function revokeApiKey(id: string): Promise<{ ok: true }> {
   return api(`/api/v1/api-keys/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
+
+// ── F97 Activity Log ───────────────────────────────────────────────
+
+export interface ActivityRow {
+  id: string;
+  tenantId: string;
+  knowledgeBaseId: string | null;
+  actorId: string | null;
+  actorKind: 'user' | 'llm' | 'system' | 'pipeline';
+  kind: string;
+  subjectType: 'document' | 'candidate' | 'knowledge_base' | 'user' | 'session' | 'none';
+  subjectId: string | null;
+  summary: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface ActivityListResponse {
+  items: ActivityRow[];
+  nextCursor: string | null;
+}
+
+export interface ActivityFilter {
+  kbId?: string;
+  kind?: string;
+  actorId?: string;
+  subjectType?: ActivityRow['subjectType'];
+  subjectId?: string;
+  since?: string;
+  limit?: number;
+  cursor?: string;
+}
+
+export function listActivity(f: ActivityFilter = {}): Promise<ActivityListResponse> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(f)) {
+    if (v !== undefined && v !== null && v !== '') qs.append(k, String(v));
+  }
+  const tail = qs.toString() ? `?${qs}` : '';
+  return api(`/api/v1/activity${tail}`);
+}

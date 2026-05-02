@@ -142,6 +142,15 @@ export function App({ children }: { children: ComponentChildren }) {
               ) : null}
               {me ? (
                 <a
+                  href="/activity"
+                  class="text-[color:var(--color-fg-muted)] hover:text-[color:var(--color-fg)] transition"
+                  title={t('nav.activityHint')}
+                >
+                  {t('nav.activity')}
+                </a>
+              ) : null}
+              {me ? (
+                <a
                   href="/settings"
                   class="text-[color:var(--color-fg-muted)] hover:text-[color:var(--color-fg)] transition"
                   title={t('nav.accountSettings')}

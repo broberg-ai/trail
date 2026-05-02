@@ -16,6 +16,8 @@
     "glossary": "Glossary",
     "jobs": "Jobs",
     "jobsHint": "Background job history",
+    "activity": "Activity",
+    "activityHint": "Audit timeline — who did what when",
     "signOut": "Sign out",
     "theme": {
       "toggle": "Toggle theme",

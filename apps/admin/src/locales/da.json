@@ -16,6 +16,8 @@
     "glossary": "Ordforklaring",
     "jobs": "Jobs",
     "jobsHint": "Baggrunds-job-historik",
+    "activity": "Aktivitet",
+    "activityHint": "Audit-tidslinje — hvem gjorde hvad hvornår",
     "signOut": "Log ud",
     "theme": {
       "toggle": "Skift tema",
