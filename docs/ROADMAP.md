@@ -86,6 +86,7 @@ Everything needed to run an end-to-end ingest → wiki → chat flow for a singl
 | F145 | Per-KB seq IDs (`<kbPrefix>_00000219` canonical handle) | 2026-04-21 |
 | F111 | Trail Web Clipper (Browser Extension) — **local/dev** · Chrome Web Store submission pending | 2026-04-22 |
 | F111.1 | Per-user Bearer API Keys (`trail_` prefix, SHA-256 hash, revoke endpoint) | 2026-04-22 |
+| F97 | Activity Log (audit timeline) — `activity_log` table + 5 indexes, `logActivity()` helper, broadcaster subscriber + 7 explicit call-sites (auth, kb, source, lint manual+scheduled), read API w/ cursor pagination, `/activity` admin panel w/ Trail-styled dropdown + Load-more | 2026-05-02 |
 
 **End-to-end verified:** Markdown source → 6-8 cross-referenced wiki pages in ~60-100s. 8-page Danish PDF (NADA acupuncture) → 6 images extracted → vision-described → 7 wiki pages in ~155s.
 
@@ -96,7 +97,6 @@ Everything needed to run an end-to-end ingest → wiki → chat flow for a singl
 | # | Feature | Owner | Target |
 |---|---------|-------|--------|
 | F34 | Landing Site Deploy (`trail.broberg.ai`) — built, awaiting DNS + Fly.io | trail | 2026-04 |
-| F97 | [Activity Log](./features/F97-activity-log.md) — central append-only audit trail (auth, kb, source, ingest, candidate, neuron, lint events) + `/activity` admin panel. Plan-doc fully written, schema + helper + subscriber + 6 explicit call-sites + read API + filterable timeline UI. Promoted to next ship-target: F33 multi-tenant makes "who did what" non-cosmetic for support/compliance, and F16 event-sourcing means data backbone is already there. Effort: Medium 3-5 days. | trail | 2026-05 |
 
 ---
 

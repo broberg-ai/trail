@@ -104,7 +104,7 @@ Status reflects the engine (this repo). Landing-site and CMS-adapter work lives 
 | F94 | [Ambient Audio System](#f94-ambient-audio) | Done | 1 | [features/F94-ambient-audio.md](features/F94-ambient-audio.md) |
 | F95 | [Ingestion Connectors (Attribution + Filter)](#f95-connectors) | Done | 1 | — |
 | F96 | [LLM Action Recommender](#f96-action-recommender) | Done | 1 | — |
-| F97 | [Activity Log (Audit Timeline)](#f97-activity-log) | Planned | 2 | [features/F97-activity-log.md](features/F97-activity-log.md) |
+| F97 | [Activity Log (Audit Timeline)](features/F97-activity-log.md) | Done | 1 | [features/F97-activity-log.md](features/F97-activity-log.md) |
 | F98 | [Orphan-lint Connector-Awareness](#f98-orphan-connector-awareness) | Done | 1 | [features/F98-orphan-connector-awareness.md](features/F98-orphan-connector-awareness.md) |
 | F99 | [Obsidian-style Neuron Graph](features/F99-neuron-graph.md) | Done | 1 | [features/F99-neuron-graph.md](features/F99-neuron-graph.md) |
 
