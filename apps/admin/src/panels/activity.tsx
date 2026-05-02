@@ -213,21 +213,27 @@ export function ActivityPanel() {
         </ul>
       )}
 
-      {/* Load more — visible whenever the server reported a nextCursor.
-          Filter by group is applied client-side so showing the button
-          based on nextCursor (a server-side signal that more rows exist
-          for the current kind/timeframe filter) is correct even when
-          the visible group narrows the rendered list. */}
-      {nextCursor && (
+      {/* Load more vs end-of-list. Two distinct states so the user
+          knows whether the list is paginated-but-truncated or
+          actually exhausted. Without the end-marker, a user who
+          scrolls down and finds no Load more button can mistake
+          completion for a broken panel. */}
+      {filtered.length > 0 && (
         <div class="mt-4 flex justify-center">
-          <button
-            type="button"
-            disabled={loadingMore}
-            onClick={() => void loadMore()}
-            class="px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)] hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--color-bg-elevated)] disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            {loadingMore ? 'Loading…' : `Load more (next ${PAGE_SIZE})`}
-          </button>
+          {nextCursor ? (
+            <button
+              type="button"
+              disabled={loadingMore}
+              onClick={() => void loadMore()}
+              class="px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)] hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--color-bg-elevated)] disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              {loadingMore ? 'Loading…' : `Load more (next ${PAGE_SIZE})`}
+            </button>
+          ) : (
+            <span class="text-[11px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)]">
+              · end of activity log ·
+            </span>
+          )}
         </div>
       )}
     </div>
