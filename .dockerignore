@@ -4,9 +4,12 @@
 
 # ─── Universal excludes ──────────────────────────────────────────────
 
-# Local libSQL data + uploads — never bundle local DB files into images
-data
-**/data
+# Local libSQL data + uploads — never bundle local DB files into images.
+# Anchored to the top-level `data/` (where trail.db + uploads live);
+# the bare `data` form would also exclude `apps/server/src/data/` which
+# ships the glossary.json + persona-prompt assets — engine crashes on
+# boot if those go missing.
+/data
 *.db
 *.db-shm
 *.db-wal
