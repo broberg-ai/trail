@@ -14,6 +14,47 @@ App naming convention:
   to engine-001 while fleet = 1)
 - `trail-landing` — already-deployed marketing site at `trailmem.com`
 
+## HARD RULE: trail-landing content goes to webhouse.app, NOT localhost:3010
+
+**ALL articles, pages, and other content edits for the `trail-landing`
+site MUST be authored via the production CMS at `https://webhouse.app/admin`
+(org `broberg-ai`, site `trail-landing`) — NEVER via the local
+`http://localhost:3010` admin.**
+
+Why this rule exists:
+- `trail-landing` is a GitHub Pages site deployed from this repo's
+  `apps/landing/` directory. The cms-admin running on Christian's
+  Mac (`localhost:3010`) and the cms-admin running on `webhouse.app`
+  are **two separate installations** with **two separate filesystem
+  content stores** — local writes do NOT sync to webhouse.app, and
+  vice versa.
+- Sessions historically wrote articles via `localhost:3010` because
+  that's the dev admin closest to hand. The articles then sat
+  invisibly in the laptop's filesystem, never reaching the live
+  `trailmem.com` site or the `webhouse.app` admin where the rest of
+  the team can see them.
+- The 2026-05-02 fix snapshotted the laptop's content up to
+  webhouse.app once; the rule below prevents the drift from
+  re-opening.
+
+What you must do:
+1. **Authoring path**: log into `https://webhouse.app/admin`, switch
+   to org `broberg-ai`, site `trail-landing`, write the post in the
+   Posts collection. The webhouse.app admin's deploy step commits
+   back to this repo, GitHub Pages picks it up.
+2. **If asked to write content from inside this cc session**: use
+   the `webhouse.app` admin REST API or call the cms-core peer
+   session via `mcp__buddy__ask_peer({ to: "cms-core", … })` to
+   route the write through the production admin. Do NOT shell out
+   to `localhost:3010`.
+3. **Code edits to `apps/landing/` itself** (templates, blocks,
+   styling, build scripts) stay in this repo and ship via PR — the
+   rule is about *content*, not *code*.
+
+If you find yourself reaching for `curl http://localhost:3010/...`
+or `cd apps/landing/content && …` to author a post, stop — you're
+about to repeat the bug this rule exists to prevent.
+
 Architecture model (see F33 plan-doc for the full picture):
 - **One admin app** for ALL tenants, multi-tenant magic-link login.
   Edge cases that need a separate admin live at `app2.trailmem.com`.
