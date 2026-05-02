@@ -1,0 +1,35 @@
+{
+  "id": "6d136e4e-0a45-4626-ad20-fc922e057d8c",
+  "userId": "fb4eda6a-bc5c-4dec-8cb6-c77c9fb74cd9",
+  "title": "Hvor mange værktøjer har du adgang til?",
+  "messages": [
+    {
+      "id": "6cf31c87-f0dc-4bd6-bf71-db87a28c7f48",
+      "role": "user",
+      "content": "Hvor mange værktøjer har du adgang til?",
+      "timestamp": "2026-04-27T14:41:07.287Z"
+    },
+    {
+      "id": "761d1a0f-93cd-45e7-a359-f56b0f902836",
+      "role": "assistant",
+      "content": "",
+      "timestamp": "2026-04-27T14:41:07.287Z",
+      "toolCalls": []
+    },
+    {
+      "id": "aa91fc6e-587b-47d8-976c-c68644b2f493",
+      "role": "user",
+      "content": "Hvor mange værktøjer har du adgang til?",
+      "timestamp": "2026-04-27T14:41:07.287Z"
+    },
+    {
+      "id": "ee396706-2ba5-45d5-ac56-938066d3c52f",
+      "role": "assistant",
+      "content": "",
+      "timestamp": "2026-04-27T14:41:07.287Z",
+      "toolCalls": []
+    }
+  ],
+  "createdAt": "2026-04-27T14:41:07.309Z",
+  "updatedAt": "2026-04-27T14:41:07.309Z"
+}

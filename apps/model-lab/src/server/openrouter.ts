@@ -234,6 +234,12 @@ const PRICING: Record<string, { input: number; output: number }> = {
   'qwen/qwen3-8b': { input: 0.05, output: 0.40 },
   'qwen/qwen3.6-plus': { input: 0.325, output: 1.95 },
   'z-ai/glm-5.1': { input: 1.05, output: 3.50 },
+  'moonshotai/kimi-k2': { input: 0.57, output: 2.30 },
+  'deepseek/deepseek-v4-flash': { input: 0.14, output: 0.28 },
+  'deepseek/deepseek-v3.2': { input: 0.252, output: 0.378 },
+  'meta-llama/llama-4-maverick': { input: 0.15, output: 0.60 },
+  'qwen/qwen3-235b-a22b-2507': { input: 0.07, output: 0.10 },
+  'google/gemini-2.0-flash-lite-001': { input: 0.07, output: 0.30 },
   'anthropic/claude-sonnet-4-6': { input: 3.0, output: 15.0 },
   'anthropic/claude-haiku-4-5-20251001': { input: 0.80, output: 4.0 },
 };
