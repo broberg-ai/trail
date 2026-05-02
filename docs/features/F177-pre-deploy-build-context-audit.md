@@ -319,7 +319,15 @@ Detection-rule that fires for the second motivating incident — Dockerfile COPY
 
 ```typescript
 const BUILD_OUTPUT_DIR_NAMES = new Set([
+  // Conventional bundler/SSG output dirs
   'dist', 'build', '.next', 'out', 'public/build', '.svelte-kit',
+  // Trail-specific landing-site convention via BUILD_OUT_DIR=deploy
+  // (apps/landing/build.ts → apps/landing/deploy/, copied by
+  // apps/landing/Dockerfile L9). Added 2026-05-03 after manual-audit
+  // caught that the hardcoded list missed this case — landing's
+  // ship:landing wrapper is correct, but F177's static check would
+  // have given false-clear on it without 'deploy' in this set.
+  'deploy',
 ]);
 
 interface PreBuiltArtifactWarning {
@@ -378,7 +386,7 @@ async function checkPreBuiltArtifacts(
 
 **Rationale per check-component**:
 
-- **`BUILD_OUTPUT_DIR_NAMES` heuristic**: catches the canonical bundler/SSG output directories. Not exhaustive — extending it for new tools (e.g. Astro's `dist/`, Remix's `public/build/`) is a one-line change.
+- **`BUILD_OUTPUT_DIR_NAMES` heuristic**: catches the canonical bundler/SSG output directories. Not exhaustive — extending it for new tools (e.g. Astro's `dist/`, Remix's `public/build/`) is a one-line change. Trail-specific names like `deploy/` (landing-site SSG output) are explicitly listed; if a future app uses a non-conventional dir name set via `BUILD_OUT_DIR=<custom>` env-var in its `ship:<app>` script, a v2 enhancement could parse the script to detect that binding dynamically rather than relying on a hardcoded list. For now: hardcoded is enough — adding new dir-names is one line, and the failure-mode (false-clear instead of false-flag) is acceptable for a static-analysis pre-merge gate.
 - **Walk-up to `package.json`**: a Dockerfile that COPYs `apps/admin/dist/` should map to `apps/admin/package.json`. We then check if THAT package has a `build` script (i.e. dist/ is genuinely a build artifact, not a vendored asset).
 - **In-Dockerfile build check**: a Dockerfile that runs `RUN pnpm build` itself doesn't need an external wrapper — it's self-contained.
 - **`ship:<app>` wrapper check**: looks at root `package.json` for an entry like `"ship:admin": "pnpm --filter @trail/admin build && flyctl deploy ..."`. If the wrapper bundles build+deploy, we infer the deploy-flow is correct as long as it's the path actually used.
