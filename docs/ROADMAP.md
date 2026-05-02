@@ -122,9 +122,9 @@ The remaining Phase 1 scope, ordered by leverage and dependency.
 | F22 | Stable `{#claim-xx}` Anchors | F07 | Small |
 | F23 | ~~Wiki-Link Parser (`[[]]`, `[[kb:]]`, `[[ext:]]`)~~ — **Done 2026-04-24** (shared `@trail/shared/wiki-links` package, intra + cross-kb resolved, ext placeholder) | F07 | Small |
 | F30 | ~~Chat Citations Render~~ — **Done 2026-04-24** (chat API returns `renderedAnswer` with server-side tenant-scoped cross-KB resolution) | F12, F23 | Small |
-| F148 | Link Integrity (ingen 404 i hjernen — 3 lag: prompt + URL-fold + link-checker) | F06, F32, F140 | Medium |
+| F148 | ~~Link Integrity~~ — **Done 2026-04-24** (3-layer defence: prompt-rules teaching slugify, URL-resolution fallback w/ DA↔EN fold, link-checker service + `broken_links` table + `/link-check` routes; admin panel via F150) | F06, F32, F140 | Medium |
 | F149 | Pluggable Ingest Backends (Claude CLI + OpenRouter, live fallback chain, per-tenant billing, per-KB model) | F06, F111.2, F137, F140, F143, F148 | Large |
-| F150 | Admin Link-Report Panel (UI for F148 broken_links + accept/dismiss/reopen + SSE live-update) | F148, F87, F17, F18 | Small |
+| F150 | ~~Admin Link-Report Panel~~ — **Done 2026-04-26** (UI for F148 `broken_links` + accept/dismiss/reopen + SSE live-update on `link_check_*` events) | F148, F87, F17, F18 | Small |
 | F151 | Cost & Quality Dashboard (cost-tab + side-by-side ingest-compare for F149 data) | F149, F143, F148 | Medium |
 | F152 | Runtime Model Switcher UI (per-KB model-dropdown, chain-preview, F151 recommendation-badge) | F149, F151, F18 | Small |
 | F153 | Continuous online backup of `trail.db` to Cloudflare R2 (VACUUM INTO + gzip + R2 multipart upload, `backup-scheduler` service, admin panel, stopped-server restore CLI) | — | Small |
@@ -305,7 +305,7 @@ Regulated industries, on-prem, compliance, advanced architecture.
 ✅ F144   Chat history persistence (sessions + turns, sidebar)
 ✅ F145   Per-KB seq IDs (cross-session canonical handles)
 
-⏭ F148   Link Integrity (3 lag — 0 × 404 i en brain, pre-launch blocker)
+✅ F148   Link Integrity (3-layer defence shipped 2026-04-24 + admin panel via F150 2026-04-26)
 ⏭ F34    Landing deploy (trailmem.com — DNS + Fly.io; page already built)
 ⏭ F33    Fly.io deploy — multi-tenant admin + stateless engine fleet (arn)
 ⏭ F35    OAuth production credentials (for F33's first real login)
