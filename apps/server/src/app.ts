@@ -29,6 +29,7 @@ import { chatSettingsRoutes } from './routes/chat-settings.js';
 import { creditsRoutes } from './routes/credits.js';
 import { jobRoutes } from './routes/jobs.js';
 import { beamRoutes } from './routes/beam.js';
+import { activityRoutes } from './routes/activity.js';
 
 /**
  * Hono context variables visible to every handler.
@@ -159,6 +160,8 @@ export function createApp(trail: TrailDatabase): Hono<AppBindings> {
   app.route('/api/v1', creditsRoutes);
   // F164 — generic background-jobs API (submit, list, get, abort, SSE stream).
   app.route('/api/v1', jobRoutes);
+  // F97 — activity log read API (paginated audit timeline).
+  app.route('/api/v1', activityRoutes);
 
   return app;
 }

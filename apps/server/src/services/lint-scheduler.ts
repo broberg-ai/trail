@@ -40,7 +40,7 @@
 import { documents, knowledgeBases, type TrailDatabase } from '@trail/db';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import pLimit from 'p-limit';
-import { runLint, type LintReport } from '@trail/core';
+import { runLint, logActivity, type LintReport } from '@trail/core';
 import { broadcaster } from './broadcast.js';
 import {
   makeContradictionChecker,
@@ -131,9 +131,26 @@ async function runFullPass(trail: TrailDatabase): Promise<void> {
     console.log(`[lint-scheduler] starting pass across ${kbs.length} KB(s)`);
 
     for (const kb of kbs) {
+      const kbStart = Date.now();
+      let kbFindings = 0;
+      // F97 — record scheduler start per KB. Per-pass actor is the
+      // scheduler itself ('system'). Open-ended event; the matching
+      // lint.completed fires below regardless of contradiction-skip.
+      await logActivity(trail, {
+        tenantId: kb.tenantId,
+        knowledgeBaseId: kb.id,
+        actorKind: 'system',
+        kind: 'lint.scheduled',
+        subjectType: 'knowledge_base',
+        subjectId: kb.id,
+        summary: `Lint pass started for "${kb.name}"`,
+        metadata: { skipContradictions: SKIP_CONTRADICTIONS },
+      });
+
       // Orphans + stale — cheap, always runs
       const report = await runOrphansStale(trail, kb);
       totalFindings += report.totalEmitted;
+      kbFindings += report.totalEmitted;
 
       // F148 — link-checker sweep. No LLM, cheap SQL + in-memory fold.
       // Runs regardless of SKIP_CONTRADICTIONS because link integrity is
@@ -155,8 +172,27 @@ async function runFullPass(trail: TrailDatabase): Promise<void> {
 
       // Contradictions — expensive, optional
       if (!SKIP_CONTRADICTIONS) {
-        contradictionsScanned += await runContradictions(trail, kb);
+        const scanned = await runContradictions(trail, kb);
+        contradictionsScanned += scanned;
       }
+
+      // F97 — record per-KB completion. Captures findings + duration
+      // so curator can spot KBs that consistently produce no findings
+      // (lint-budget waste) or take outsize wall-time (perf alert).
+      await logActivity(trail, {
+        tenantId: kb.tenantId,
+        knowledgeBaseId: kb.id,
+        actorKind: 'system',
+        kind: 'lint.completed',
+        subjectType: 'knowledge_base',
+        subjectId: kb.id,
+        summary: `Lint pass completed for "${kb.name}" (${kbFindings} findings)`,
+        metadata: {
+          findings: kbFindings,
+          elapsedMs: Date.now() - kbStart,
+          skipContradictions: SKIP_CONTRADICTIONS,
+        },
+      });
     }
 
     // F141 — rebuild the access-rollup aggregate once per pass. Cheap

@@ -9,7 +9,7 @@ import { chunkText, storeChunks } from '../services/chunker.js';
 import { triggerIngest } from '../services/ingest.js';
 import { describeImageAsSource, getActiveVisionModel } from '../services/vision.js';
 import { transcribeAudio } from '../services/transcription.js';
-import { resolveKbId } from '@trail/core';
+import { resolveKbId, logActivity } from '@trail/core';
 import { persistImagesFromExtraction } from '../services/document-images.js';
 import { getJobRunner } from '../services/jobs/runner.js';
 import type { VisionRerunPayload } from '../services/jobs/handlers/vision-rerun.js';
@@ -265,6 +265,27 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
     .from(documents)
     .where(eq(documents.id, docId))
     .get();
+
+  // F97 — record the source-arrival event before triggering ingest.
+  // The broadcaster will emit ingest_started when the pipeline picks
+  // the row up; this row captures the human-or-API moment where the
+  // file arrived, with the connector that delivered it.
+  await logActivity(trail, {
+    tenantId: tenant.id,
+    knowledgeBaseId: kbId,
+    actorId: user.id,
+    actorKind: 'user',
+    kind: 'source.uploaded',
+    subjectType: 'document',
+    subjectId: docId,
+    summary: `Uploaded ${file.name}`,
+    metadata: {
+      fileType: ext,
+      fileSize: file.size,
+      connector: connector ?? 'upload',
+      initialStatus,
+    },
+  });
 
   // Auto-trigger wiki ingest for text sources that are ready to compile.
   if (isText) {

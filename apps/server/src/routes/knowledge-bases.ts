@@ -3,7 +3,7 @@ import { documents, knowledgeBases, wikiBacklinks, type TrailDatabase } from '@t
 import { CreateKBSchema, UpdateKBSchema } from '@trail/shared';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth, getUser, getTenant, getTrail } from '../middleware/auth.js';
-import { uniqueSlug, createCandidate, resolveKbId } from '@trail/core';
+import { uniqueSlug, createCandidate, resolveKbId, logActivity } from '@trail/core';
 import { broadcaster } from '../services/broadcast.js';
 import { listKbTags } from '../services/tag-aggregate.js';
 import { buildSeedGlossary } from '../services/glossary-seed.js';
@@ -196,6 +196,19 @@ kbRoutes.post('/knowledge-bases', async (c) => {
       slug: kb.slug,
       name: kb.name,
     });
+    // F97 — explicit log so we capture the curator who created the
+    // Trail. Subscriber skips kb_created; this is the canonical source.
+    await logActivity(trail, {
+      tenantId: tenant.id,
+      knowledgeBaseId: kb.id,
+      actorId: user.id,
+      actorKind: 'user',
+      kind: 'kb.created',
+      subjectType: 'knowledge_base',
+      subjectId: kb.id,
+      summary: `Trail "${kb.name}" created`,
+      metadata: { slug: kb.slug, language: kb.language },
+    });
   }
   return c.json(kb, 201);
 });
@@ -246,6 +259,25 @@ kbRoutes.patch('/knowledge-bases/:id', async (c) => {
     .from(knowledgeBases)
     .where(eq(knowledgeBases.id, kbId))
     .get();
+
+  // F97 — record what changed. Capture only the keys curator touched
+  // (excluding updatedAt which is mechanical) so the timeline shows
+  // "renamed Trail to X" or "switched language to da" rather than a
+  // dump of every field.
+  const user = getUser(c);
+  const changedKeys = Object.keys(updates).filter((k) => k !== 'updatedAt');
+  await logActivity(trail, {
+    tenantId: tenant.id,
+    knowledgeBaseId: kbId,
+    actorId: user.id,
+    actorKind: 'user',
+    kind: 'kb.updated',
+    subjectType: 'knowledge_base',
+    subjectId: kbId,
+    summary: `Trail "${kb?.name ?? kbId}" updated (${changedKeys.join(', ')})`,
+    metadata: { changed: changedKeys },
+  });
+
   return c.json(kb);
 });
 

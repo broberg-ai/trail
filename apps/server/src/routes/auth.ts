@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { users, sessions, tenants, type TrailDatabase } from '@trail/db';
+import { logActivity } from '@trail/core';
 import { and, eq, gt } from 'drizzle-orm';
 import { slugify } from '@trail/core';
 import type { AppBindings } from '../app.js';
@@ -103,8 +104,10 @@ authRoutes.get('/google/callback', async (c) => {
     .get();
 
   let userId: string;
+  let userTenantId: string;
   if (existingUser) {
     userId = existingUser.id;
+    userTenantId = existingUser.tenantId;
     await trail.db
       .update(users)
       .set({
@@ -118,6 +121,7 @@ authRoutes.get('/google/callback', async (c) => {
     // First signup for this email → auto-create tenant + owner user.
     // Phase 1 is single-tenant; this keeps the schema honest without needing invites yet.
     const tenantId = crypto.randomUUID();
+    userTenantId = tenantId;
     const baseSlug = slugify(googleUser.name || googleUser.email.split('@')[0] || 'tenant') || 'tenant';
     const tenantSlug = await nextAvailableSlug(trail, baseSlug);
 
@@ -160,6 +164,22 @@ authRoutes.get('/google/callback', async (c) => {
   // oauth_state cookie was already cleared at the top of the handler
   // alongside the state-match check.
 
+  // F97 — audit login. New-vs-returning marker carried in metadata so
+  // the timeline can render "first login" differently from a re-auth.
+  await logActivity(trail, {
+    tenantId: userTenantId,
+    actorId: userId,
+    actorKind: 'user',
+    kind: 'auth.login',
+    subjectType: 'session',
+    subjectId: sessionId,
+    summary: `Login via Google: ${googleUser.email}`,
+    metadata: {
+      provider: 'google',
+      newUser: !existingUser,
+    },
+  });
+
   return c.redirect(`${APP_URL}/wikis`);
 });
 
@@ -171,7 +191,36 @@ authRoutes.post('/logout', async (c) => {
   const trail = getTrail(c);
   const sessionId = getCookie(c, 'session');
   if (sessionId) {
+    // F97 — audit logout. Resolve the user before deleting the session
+    // so we can stamp actor on the activity row.
+    const sessionRow = await trail.db
+      .select({ userId: sessions.userId })
+      .from(sessions)
+      .where(eq(sessions.id, sessionId))
+      .get();
+    let actorId: string | null = null;
+    let tenantId: string | null = null;
+    if (sessionRow) {
+      const userRow = await trail.db
+        .select({ id: users.id, tenantId: users.tenantId })
+        .from(users)
+        .where(eq(users.id, sessionRow.userId))
+        .get();
+      actorId = userRow?.id ?? null;
+      tenantId = userRow?.tenantId ?? null;
+    }
     await trail.db.delete(sessions).where(eq(sessions.id, sessionId)).run();
+    if (tenantId) {
+      await logActivity(trail, {
+        tenantId,
+        actorId,
+        actorKind: 'user',
+        kind: 'auth.logout',
+        subjectType: 'session',
+        subjectId: sessionId,
+        summary: 'Logout',
+      });
+    }
   }
   deleteCookie(c, 'session');
   return c.json({ ok: true });

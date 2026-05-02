@@ -130,16 +130,11 @@ async function logFromBroadcast(trail: TrailDatabase, event: BroadcastEvent): Pr
       return;
 
     case 'kb_created':
-      await logActivity(trail, {
-        tenantId: event.tenantId,
-        knowledgeBaseId: event.kbId,
-        actorKind: 'system',
-        kind: 'kb.created',
-        subjectType: 'knowledge_base',
-        subjectId: event.kbId,
-        summary: `Trail "${event.name}" created`,
-        metadata: { slug: event.slug },
-      });
+      // Handled by explicit logActivity() in routes/knowledge-bases.ts
+      // POST handler — that path knows the actor user, this subscriber
+      // only sees the broadcaster payload. Skipping here avoids a
+      // dual-write where the explicit row has actor='user' and the
+      // implicit one has actor='system'.
       return;
 
     case 'hello':
