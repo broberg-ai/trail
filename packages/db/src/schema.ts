@@ -89,12 +89,19 @@ export const knowledgeBases = sqliteTable(
     // audience has no per-KB override — admin tone is shared.
     chatPersonaTool: text('chat_persona_tool'),
     chatPersonaPublic: text('chat_persona_public'),
+    // F176 — per-KB lint cadence in days. NULL = fall back to global
+    // TRAIL_LINT_SCHEDULE_DAYS (default 7). Range 1..90 enforced by
+    // CHECK in migration 0031. Combined with F97 activity_log lookups
+    // for `lastPassAt`, the scheduler survives engine restarts and
+    // catches up after downtime.
+    lintScheduleDays: integer('lint_schedule_days'),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
     updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
   },
   (table) => [
     uniqueIndex('idx_kb_tenant_slug').on(table.tenantId, table.slug),
     uniqueIndex('idx_kb_tenant_name').on(table.tenantId, table.name),
+    index('idx_knowledge_bases_lint_schedule').on(table.tenantId, table.lintScheduleDays),
   ],
 );
 

@@ -37,7 +37,7 @@
  *     drawn from most-recently-updated Neurons. Remainder is uniform random
  *     over the rest of the KB so long-tail Neurons still get revisited.)
  */
-import { documents, knowledgeBases, type TrailDatabase } from '@trail/db';
+import { activityLog, documents, knowledgeBases, type TrailDatabase } from '@trail/db';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import pLimit from 'p-limit';
 import { runLint, logActivity, type LintReport } from '@trail/core';
@@ -54,9 +54,27 @@ import { pruneRetention } from './backup/retention.js';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const SCHEDULE_HOURS = Number(process.env.TRAIL_LINT_SCHEDULE_HOURS ?? 24);
+// F176 — cadence is now per-KB days (NULL falls back to global).
+// `TRAIL_LINT_SCHEDULE_HOURS` retained for backward compat (and
+// the `=0` disable knob); when set it wins over _DAYS for the
+// global default. Default flipped from 24h → 7d (most KBs don't
+// drift fast enough to need daily passes; the change cuts Haiku
+// burn ~7× on idle tenants).
+const SCHEDULE_DAYS_DEFAULT = Number(process.env.TRAIL_LINT_SCHEDULE_DAYS ?? 7);
+const LEGACY_HOURS_RAW = process.env.TRAIL_LINT_SCHEDULE_HOURS;
+const SCHEDULE_HOURS = LEGACY_HOURS_RAW !== undefined ? Number(LEGACY_HOURS_RAW) : SCHEDULE_DAYS_DEFAULT * 24;
+const EFFECTIVE_DEFAULT_DAYS = LEGACY_HOURS_RAW !== undefined
+  ? Number(LEGACY_HOURS_RAW) / 24
+  : SCHEDULE_DAYS_DEFAULT;
+// Tick-frequency: how often the scheduler-loop EVALUATES each KB's
+// nextDueAt. Every hour is plenty — cadences are days.
+const TICK_INTERVAL_MS = 60 * 60 * 1000;
+// Boot-delay was 4h to avoid noise on dev-restarts. With per-KB
+// nextDueAt now sourced from activity_log (F97), a fresh boot
+// won't re-fire a KB that just lint'ed — so the safety-margin is
+// no longer needed. 5 min is enough for the engine to settle.
 const INITIAL_DELAY_MS =
-  Number(process.env.TRAIL_LINT_INITIAL_DELAY_SECONDS ?? 14_400) * 1000;
+  Number(process.env.TRAIL_LINT_INITIAL_DELAY_SECONDS ?? 300) * 1000;
 const SKIP_CONTRADICTIONS = process.env.TRAIL_LINT_SKIP_CONTRADICTIONS === '1';
 const SAMPLE_SIZE = Number(process.env.TRAIL_CONTRADICTION_SAMPLE_SIZE ?? 500);
 const RECENT_FRACTION = clamp01(
@@ -80,31 +98,37 @@ type ScannedKB = {
   id: string;
   tenantId: string;
   name: string;
+  lintScheduleDays: number | null;
+  createdAt: string;
 };
 
 export function startLintScheduler(trail: TrailDatabase): () => void {
-  if (SCHEDULE_HOURS <= 0) {
-    console.log('  lint-scheduler: disabled (TRAIL_LINT_SCHEDULE_HOURS=0)');
+  if (SCHEDULE_HOURS <= 0 || EFFECTIVE_DEFAULT_DAYS <= 0) {
+    console.log('  lint-scheduler: disabled (TRAIL_LINT_SCHEDULE_DAYS=0)');
     return () => {};
   }
 
-  const intervalMs = SCHEDULE_HOURS * 3600 * 1000;
   let stopped = false;
 
+  // F176 — tick at fixed cadence (hourly), but only run a KB whose
+  // own `nextDueAt` (lastPassAt + cadenceDays) has passed. Engine
+  // restart no longer resets the timer because lastPassAt is sourced
+  // from activity_log, not memory.
   const first = setTimeout(() => {
     if (stopped) return;
-    void runFullPass(trail);
+    void runTick(trail);
   }, INITIAL_DELAY_MS);
 
   const interval = setInterval(() => {
     if (stopped) return;
-    void runFullPass(trail);
-  }, intervalMs);
+    void runTick(trail);
+  }, TICK_INTERVAL_MS);
 
   console.log(
-    `  lint-scheduler: every ${SCHEDULE_HOURS}h (first run in ${Math.round(
-      INITIAL_DELAY_MS / 1000,
-    )}s, skip_contradictions=${SKIP_CONTRADICTIONS})`,
+    `  lint-scheduler: tick every ${TICK_INTERVAL_MS / 60_000}min, ` +
+      `default cadence ${EFFECTIVE_DEFAULT_DAYS}d, ` +
+      `first tick in ${Math.round(INITIAL_DELAY_MS / 1000)}s, ` +
+      `skip_contradictions=${SKIP_CONTRADICTIONS}`,
   );
 
   return () => {
@@ -114,91 +138,53 @@ export function startLintScheduler(trail: TrailDatabase): () => void {
   };
 }
 
-async function runFullPass(trail: TrailDatabase): Promise<void> {
-  const t0 = Date.now();
-  let totalFindings = 0;
-  let kbCount = 0;
-  let contradictionsScanned = 0;
-
+/**
+ * F176 — single tick of the per-KB scheduler.
+ *
+ * Runs every `TICK_INTERVAL_MS`. For each KB:
+ *   1. Compute cadenceDays = kb.lintScheduleDays ?? EFFECTIVE_DEFAULT_DAYS
+ *   2. Query activity_log for the most recent `lint.completed` with
+ *      metadata.trigger='scheduled' (manual passes don't reset the
+ *      cadence — curator can run `lint now` without postponing the
+ *      automatic schedule).
+ *   3. nextDueAt = lastScheduledPassAt + cadenceDays. If never run,
+ *      use kb.createdAt as the anchor.
+ *   4. If now >= nextDueAt: run a pass for this KB.
+ *
+ * Pure SQL on the gating path — only KBs that are actually overdue
+ * touch the LLM-bound parts.
+ */
+async function runTick(trail: TrailDatabase): Promise<void> {
   try {
     const kbs = await listKBs(trail);
-    kbCount = kbs.length;
-    if (kbs.length === 0) {
-      console.log('[lint-scheduler] no KBs to scan');
-      return;
-    }
+    if (kbs.length === 0) return;
 
-    console.log(`[lint-scheduler] starting pass across ${kbs.length} KB(s)`);
-
+    const now = Date.now();
+    const overdue: ScannedKB[] = [];
     for (const kb of kbs) {
-      const kbStart = Date.now();
-      let kbFindings = 0;
-      // F97 — record scheduler start per KB. Per-pass actor is the
-      // scheduler itself ('system'). Open-ended event; the matching
-      // lint.completed fires below regardless of contradiction-skip.
-      await logActivity(trail, {
-        tenantId: kb.tenantId,
-        knowledgeBaseId: kb.id,
-        actorKind: 'system',
-        kind: 'lint.scheduled',
-        subjectType: 'knowledge_base',
-        subjectId: kb.id,
-        summary: `Lint pass started for "${kb.name}"`,
-        metadata: { skipContradictions: SKIP_CONTRADICTIONS },
-      });
+      const cadenceDays = kb.lintScheduleDays ?? EFFECTIVE_DEFAULT_DAYS;
+      const lastPass = await lastScheduledPassFor(trail, kb.id);
+      const anchor = lastPass ?? kb.createdAt;
+      const nextDueAt = parseIso(anchor) + cadenceDays * 24 * 3600 * 1000;
+      if (now >= nextDueAt) overdue.push(kb);
+    }
+    if (overdue.length === 0) return;
 
-      // Orphans + stale — cheap, always runs
-      const report = await runOrphansStale(trail, kb);
-      totalFindings += report.totalEmitted;
-      kbFindings += report.totalEmitted;
+    console.log(
+      `[lint-scheduler] tick: ${overdue.length}/${kbs.length} KB(s) overdue`,
+    );
 
-      // F148 — link-checker sweep. No LLM, cheap SQL + in-memory fold.
-      // Runs regardless of SKIP_CONTRADICTIONS because link integrity is
-      // the hard-rule "zero 404" guarantee, independent of the
-      // contradiction-detection LLM budget.
-      try {
-        const linkSummary = await runFullLinkCheck(trail, kb.tenantId, kb.id);
-        if (linkSummary.openRecorded > 0) {
-          console.log(
-            `[lint-scheduler] KB "${kb.name}" — link-check: ${linkSummary.openRecorded} broken / ${linkSummary.resolved} resolved across ${linkSummary.docsScanned} Neuron(s)`,
-          );
-        }
-      } catch (err) {
-        console.error(
-          `[lint-scheduler] link-check failed for KB "${kb.name}":`,
-          err instanceof Error ? err.message : err,
-        );
-      }
-
-      // Contradictions — expensive, optional
-      if (!SKIP_CONTRADICTIONS) {
-        const scanned = await runContradictions(trail, kb);
-        contradictionsScanned += scanned;
-      }
-
-      // F97 — record per-KB completion. Captures findings + duration
-      // so curator can spot KBs that consistently produce no findings
-      // (lint-budget waste) or take outsize wall-time (perf alert).
-      await logActivity(trail, {
-        tenantId: kb.tenantId,
-        knowledgeBaseId: kb.id,
-        actorKind: 'system',
-        kind: 'lint.completed',
-        subjectType: 'knowledge_base',
-        subjectId: kb.id,
-        summary: `Lint pass completed for "${kb.name}" (${kbFindings} findings)`,
-        metadata: {
-          findings: kbFindings,
-          elapsedMs: Date.now() - kbStart,
-          skipContradictions: SKIP_CONTRADICTIONS,
-        },
-      });
+    let totalFindings = 0;
+    let contradictionsScanned = 0;
+    for (const kb of overdue) {
+      const r = await runLintPassForKb(trail, kb, 'scheduled');
+      totalFindings += r.findings;
+      contradictionsScanned += r.contradictionsScanned;
     }
 
-    // F141 — rebuild the access-rollup aggregate once per pass. Cheap
-    // SQL-only work (no LLM), runs after the expensive passes so the
-    // rollup reflects all reads captured up to this moment. Prune old
-    // raw rows afterwards so document_access doesn't grow unbounded.
+    // F141 + F153 maintenance — only fire once per tick AFTER per-KB
+    // work, and only if at least one KB ran (avoids access-rollup
+    // churn on a quiet tick where nothing was overdue).
     try {
       const rollup = await rebuildAccessRollup(trail);
       if (rollup.documentsRolledUp > 0) {
@@ -213,20 +199,144 @@ async function runFullPass(trail: TrailDatabase): Promise<void> {
     } catch (err) {
       console.error('[lint-scheduler] access-rollup failed:', err instanceof Error ? err.message : err);
     }
-
-    // F153 — DB snapshot + R2 upload + retention prune. Piggy-backs on
-    // the lint-scheduler cadence (default 24h) so we don't proliferate
-    // schedulers across the engine. Failures here DO NOT fail the whole
-    // lint pass — the next pass tries again.
     await runBackupStep(trail);
 
-    const elapsed = Math.round((Date.now() - t0) / 1000);
     console.log(
-      `[lint-scheduler] pass complete: ${kbCount} KB(s), ${totalFindings} new findings, ${contradictionsScanned} Neurons scanned for contradictions, ${elapsed}s`,
+      `[lint-scheduler] tick complete: ${overdue.length} KB(s), ${totalFindings} new findings, ${contradictionsScanned} Neurons scanned for contradictions`,
     );
   } catch (err) {
-    console.error('[lint-scheduler] pass failed:', err);
+    console.error('[lint-scheduler] tick failed:', err);
   }
+}
+
+function parseIso(s: string): number {
+  // Drizzle stores timestamps as ISO strings. SQLite's `datetime('now')`
+  // emits `YYYY-MM-DD HH:MM:SS` (no T, no Z). Both shapes parse fine
+  // when normalised to ISO 8601.
+  const normalised = s.includes('T') ? s : s.replace(' ', 'T') + 'Z';
+  const t = Date.parse(normalised);
+  return Number.isFinite(t) ? t : 0;
+}
+
+/**
+ * F176 — find the timestamp of this KB's most recent scheduled
+ * lint.completed event in activity_log. Returns null if none ever
+ * fired (new KB, or no scheduled run yet).
+ */
+async function lastScheduledPassFor(
+  trail: TrailDatabase,
+  kbId: string,
+): Promise<string | null> {
+  const row = await trail.db
+    .select({ createdAt: activityLog.createdAt, metadata: activityLog.metadata })
+    .from(activityLog)
+    .where(
+      and(
+        eq(activityLog.knowledgeBaseId, kbId),
+        eq(activityLog.kind, 'lint.completed'),
+      ),
+    )
+    .orderBy(desc(activityLog.createdAt))
+    .all();
+  // Filter for trigger='scheduled' in JS — metadata is a JSON string,
+  // and a partial-trigger index would force every lint.completed write
+  // to redundantly include `trigger` as a top-level column. Most KBs
+  // have <100 lint.completed rows total, so the JS filter is cheap.
+  for (const r of row) {
+    if (!r.metadata) continue;
+    try {
+      const meta = JSON.parse(r.metadata) as { trigger?: string };
+      if (meta.trigger === 'scheduled' || meta.trigger === undefined) {
+        // Pre-F176 lint.completed rows have no trigger; treat them as
+        // scheduled (the only path that wrote them was the scheduler).
+        return r.createdAt;
+      }
+    } catch {
+      // ignore malformed metadata — they're not valid scheduled stamps
+    }
+  }
+  return null;
+}
+
+/**
+ * F176 — single per-KB lint pass. Called by the per-KB scheduler tick
+ * for KBs whose nextDueAt has elapsed, and by the legacy `runFullPass`
+ * shim during transitions. Returns aggregate counters so the caller
+ * can roll them up across multiple KBs in one tick.
+ */
+async function runLintPassForKb(
+  trail: TrailDatabase,
+  kb: ScannedKB,
+  trigger: 'scheduled' | 'manual',
+): Promise<{ findings: number; contradictionsScanned: number; elapsedMs: number }> {
+  const kbStart = Date.now();
+  let findings = 0;
+  let contradictionsScanned = 0;
+
+  await logActivity(trail, {
+    tenantId: kb.tenantId,
+    knowledgeBaseId: kb.id,
+    actorKind: 'system',
+    kind: 'lint.scheduled',
+    subjectType: 'knowledge_base',
+    subjectId: kb.id,
+    summary: `Lint pass started for "${kb.name}"`,
+    metadata: { skipContradictions: SKIP_CONTRADICTIONS, trigger },
+  });
+
+  try {
+    const report = await runOrphansStale(trail, kb);
+    findings += report.totalEmitted;
+  } catch (err) {
+    console.error(
+      `[lint-scheduler] orphans-stale failed for KB "${kb.name}":`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  try {
+    const linkSummary = await runFullLinkCheck(trail, kb.tenantId, kb.id);
+    if (linkSummary.openRecorded > 0) {
+      console.log(
+        `[lint-scheduler] KB "${kb.name}" — link-check: ${linkSummary.openRecorded} broken / ${linkSummary.resolved} resolved across ${linkSummary.docsScanned} Neuron(s)`,
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[lint-scheduler] link-check failed for KB "${kb.name}":`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  if (!SKIP_CONTRADICTIONS) {
+    try {
+      contradictionsScanned += await runContradictions(trail, kb);
+    } catch (err) {
+      console.error(
+        `[lint-scheduler] contradictions failed for KB "${kb.name}":`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
+  const elapsedMs = Date.now() - kbStart;
+  await logActivity(trail, {
+    tenantId: kb.tenantId,
+    knowledgeBaseId: kb.id,
+    actorKind: 'system',
+    kind: 'lint.completed',
+    subjectType: 'knowledge_base',
+    subjectId: kb.id,
+    summary: `Lint pass completed for "${kb.name}" (${findings} findings)`,
+    metadata: {
+      findings,
+      elapsedMs,
+      skipContradictions: SKIP_CONTRADICTIONS,
+      trigger,
+    },
+  });
+
+  return { findings, contradictionsScanned, elapsedMs };
 }
 
 async function listKBs(trail: TrailDatabase): Promise<ScannedKB[]> {
@@ -235,6 +345,8 @@ async function listKBs(trail: TrailDatabase): Promise<ScannedKB[]> {
       id: knowledgeBases.id,
       tenantId: knowledgeBases.tenantId,
       name: knowledgeBases.name,
+      lintScheduleDays: knowledgeBases.lintScheduleDays,
+      createdAt: knowledgeBases.createdAt,
     })
     .from(knowledgeBases)
     .all();
