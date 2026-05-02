@@ -562,6 +562,20 @@
       "descriptionPlaceholder": "En eller to sætninger om hvad denne Trail indeholder.",
       "languageLabel": "Sprog",
       "languageHint": "Sproget som LLM-genereret indhold på denne Trail bruger — både Neuron-kompilering fra Kilder OG F96 action-recommender-begrundelser. Admin-UI'et kører stadig på det sprog du har valgt i sprog-skifteren øverst; kun indholdet følger denne indstilling.",
+      "lintSchedule": {
+        "title": "Lint-tidsplan",
+        "subtitle": "Hvor ofte schedulerern scanner denne Trail for orphans, gamle Neuroner, brudte links og selvmodsigelser. Manuelle lint-pass (knappen på Trail-siden) nulstiller ikke kadencen.",
+        "cadenceLabel": "Kadence",
+        "useDefault": "Brug global default",
+        "daily": "Dagligt",
+        "days": "dage",
+        "recommended": "anbefalet",
+        "hint": "De fleste Trails ændrer sig ikke hurtigt nok til at retfærdiggøre daglige scans; ugentligt er sweet-spot'et. Tætte kadencer brænder LLM-credits hvis kontradiktions-scan er på.",
+        "lastPass": "Sidste pass",
+        "nextDue": "Næste",
+        "lastFindings": "Findings",
+        "never": "har aldrig kørt"
+      },
       "personas": {
         "title": "Chat-personas (eksterne integrationer)",
         "subtitle": "Når denne Trail bliver spurgt via Bearer-token-chat (fx en indlejret widget eller en site-LLM-orchestrator), bliver disse tekststykker tilføjet base-templaten. Lad stå tomt for at bruge default.",

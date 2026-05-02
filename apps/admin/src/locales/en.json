@@ -562,6 +562,20 @@
       "descriptionPlaceholder": "One or two sentences about what this Trail contains.",
       "languageLabel": "Language",
       "languageHint": "Language used for LLM-generated content on this Trail — Neuron compilation from Sources AND F96 action-recommender reasoning. The admin chrome stays in whatever language you picked in the top-right switcher; only the content follows this setting.",
+      "lintSchedule": {
+        "title": "Lint schedule",
+        "subtitle": "How often the scheduler scans this Trail for orphans, stale Neurons, broken links, and contradictions. Manual lint passes (the button on the Trail page) don't reset the cadence.",
+        "cadenceLabel": "Cadence",
+        "useDefault": "Use global default",
+        "daily": "Daily",
+        "days": "days",
+        "recommended": "recommended",
+        "hint": "Most Trails don't drift fast enough to need daily passes; weekly is the sweet spot. Tight cadences burn LLM credits if contradictions are enabled.",
+        "lastPass": "Last pass",
+        "nextDue": "Next due",
+        "lastFindings": "Findings",
+        "never": "never run"
+      },
       "personas": {
         "title": "Chat personas (external integrations)",
         "subtitle": "When this Trail is queried via Bearer-token chat (e.g. an embedded widget or a site-LLM orchestrator), these snippets are appended to the base persona-template. Leave empty to use the defaults.",

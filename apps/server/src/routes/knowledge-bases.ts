@@ -251,6 +251,11 @@ kbRoutes.patch('/knowledge-bases/:id', async (c) => {
         ? body.chatPersonaPublic
         : null;
   }
+  // F176 — per-KB lint cadence override. null clears (use global
+  // default); a number 1..90 sets a custom cadence.
+  if (body.lintScheduleDays !== undefined) {
+    updates.lintScheduleDays = body.lintScheduleDays;
+  }
 
   await trail.db.update(knowledgeBases).set(updates).where(eq(knowledgeBases.id, kbId)).run();
 

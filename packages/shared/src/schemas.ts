@@ -40,6 +40,8 @@ export const KnowledgeBaseSchema = z.object({
   // persona". curator audience never reads these.
   chatPersonaTool: z.string().nullable().optional(),
   chatPersonaPublic: z.string().nullable().optional(),
+  // F176 — per-KB lint cadence (days). null = use global default.
+  lintScheduleDays: z.number().int().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -63,6 +65,11 @@ export const UpdateKBSchema = z.object({
   // size sane (a 4KB persona will already crowd the context budget).
   chatPersonaTool: z.string().max(4000).nullable().optional(),
   chatPersonaPublic: z.string().max(4000).nullable().optional(),
+  // F176 — per-KB lint cadence in days. null clears the override
+  // (KB falls back to the global TRAIL_LINT_SCHEDULE_DAYS default).
+  // omit to leave unchanged. CHECK constraint at the DB layer
+  // enforces 1..90; this Zod range mirrors that for early rejection.
+  lintScheduleDays: z.number().int().min(1).max(90).nullable().optional(),
 });
 
 // ── Sources & Wiki Pages ──────────────────────────────────────────────────────

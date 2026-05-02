@@ -1,11 +1,21 @@
 import { Hono, type Context } from 'hono';
 import { and, desc, eq } from 'drizzle-orm';
-import { brokenLinks, documents } from '@trail/db';
+import { activityLog, brokenLinks, documents, knowledgeBases } from '@trail/db';
 import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
 import { runLint, resolveKbId, submitCuratorEdit, VersionConflictError, logActivity, type Actor } from '@trail/core';
 import { INGEST_USER_ID } from '../bootstrap/ingest-user.js';
 import { broadcaster } from '../services/broadcast.js';
 import { rescanDocLinks, runFullLinkCheck } from '../services/link-checker.js';
+
+// F176 — fallback when KB has no per-KB cadence override. Mirrors the
+// scheduler's resolution; reading env at request-time is fine because
+// the value rarely changes (and curators get the live value if it does).
+function effectiveDefaultDays(): number {
+  const days = process.env.TRAIL_LINT_SCHEDULE_DAYS;
+  const hours = process.env.TRAIL_LINT_SCHEDULE_HOURS;
+  if (hours !== undefined) return Number(hours) / 24;
+  return Number(days ?? 7);
+}
 
 /**
  * F32.1 — on-demand lint.
@@ -137,6 +147,100 @@ lintRoutes.post('/knowledge-bases/:kbId/lint', async (c) => {
   });
 
   return c.json(report);
+});
+
+/**
+ * F176 — lint cadence status for a KB. Pulls last/next/findings from
+ * activity_log. Frontend Settings tab uses it to render the
+ * status-card alongside the cadence-dropdown.
+ *
+ * Filtering on metadata is JS-side because metadata is a JSON string
+ * and we don't have a generated column for trigger. Reasonable since
+ * each KB has at most a few hundred lint.completed rows total.
+ */
+lintRoutes.get('/knowledge-bases/:kbId/lint/status', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
+  if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
+
+  const kb = await trail.db
+    .select({
+      id: knowledgeBases.id,
+      lintScheduleDays: knowledgeBases.lintScheduleDays,
+      createdAt: knowledgeBases.createdAt,
+    })
+    .from(knowledgeBases)
+    .where(and(eq(knowledgeBases.id, kbId), eq(knowledgeBases.tenantId, tenant.id)))
+    .get();
+  if (!kb) return c.json({ error: 'Knowledge base not found' }, 404);
+
+  const cadenceDays = kb.lintScheduleDays ?? effectiveDefaultDays();
+  const isExplicit = kb.lintScheduleDays !== null;
+
+  // Most-recent lint.completed event for this KB.
+  const recent = await trail.db
+    .select()
+    .from(activityLog)
+    .where(
+      and(
+        eq(activityLog.tenantId, tenant.id),
+        eq(activityLog.knowledgeBaseId, kbId),
+        eq(activityLog.kind, 'lint.completed'),
+      ),
+    )
+    .orderBy(desc(activityLog.createdAt))
+    .limit(20)
+    .all();
+
+  let lastScheduledAt: string | null = null;
+  let lastManualAt: string | null = null;
+  let lastFindings: number | null = null;
+  let lastElapsedMs: number | null = null;
+  for (const r of recent) {
+    let trigger: 'scheduled' | 'manual' | undefined;
+    let findings: number | null = null;
+    let elapsedMs: number | null = null;
+    if (r.metadata) {
+      try {
+        const m = JSON.parse(r.metadata) as { trigger?: 'scheduled' | 'manual'; findings?: number; elapsedMs?: number };
+        trigger = m.trigger;
+        findings = typeof m.findings === 'number' ? m.findings : null;
+        elapsedMs = typeof m.elapsedMs === 'number' ? m.elapsedMs : null;
+      } catch {
+        // ignore malformed
+      }
+    }
+    if (lastScheduledAt === null && (trigger === 'scheduled' || trigger === undefined)) {
+      lastScheduledAt = r.createdAt;
+      if (lastFindings === null) lastFindings = findings;
+      if (lastElapsedMs === null) lastElapsedMs = elapsedMs;
+    }
+    if (lastManualAt === null && trigger === 'manual') {
+      lastManualAt = r.createdAt;
+    }
+    if (lastScheduledAt && lastManualAt) break;
+  }
+
+  const anchor = lastScheduledAt ?? kb.createdAt;
+  const anchorTs = (() => {
+    const s = anchor;
+    const norm = s.includes('T') ? s : s.replace(' ', 'T') + 'Z';
+    const t = Date.parse(norm);
+    return Number.isFinite(t) ? t : Date.now();
+  })();
+  const nextDueAt = new Date(anchorTs + cadenceDays * 24 * 3600 * 1000).toISOString();
+
+  return c.json({
+    cadenceDays,
+    isExplicit,
+    defaultDays: effectiveDefaultDays(),
+    lastScheduledAt,
+    lastManualAt,
+    nextDueAt,
+    lastFindings,
+    lastElapsedMs,
+  });
 });
 
 // ── F148 — Link Integrity routes ─────────────────────────────────────────────

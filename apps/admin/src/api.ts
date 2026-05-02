@@ -108,6 +108,9 @@ export function updateKnowledgeBase(
     chatPersonaTool?: string | null;
     /** F160 — null clears back to default; omit to leave unchanged. */
     chatPersonaPublic?: string | null;
+    /** F176 — per-KB lint cadence (days). null clears the override
+     *  so the KB falls back to global TRAIL_LINT_SCHEDULE_DAYS. */
+    lintScheduleDays?: number | null;
   },
 ): Promise<KnowledgeBase> {
   return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}`, {
@@ -1268,6 +1271,31 @@ export function createApiKey(name: string): Promise<ApiKeyCreated> {
 
 export function revokeApiKey(id: string): Promise<{ ok: true }> {
   return api(`/api/v1/api-keys/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+// ── F176 Lint cadence ──────────────────────────────────────────────
+
+export interface LintStatus {
+  /** Effective cadence (per-KB override OR global fallback). */
+  cadenceDays: number;
+  /** True when the KB has its own lint_schedule_days set. */
+  isExplicit: boolean;
+  /** Global default reflecting current TRAIL_LINT_SCHEDULE_DAYS. */
+  defaultDays: number;
+  /** ISO timestamp of the most-recent lint.completed with trigger='scheduled'. */
+  lastScheduledAt: string | null;
+  /** Most-recent manual lint click. */
+  lastManualAt: string | null;
+  /** When the next scheduled pass is due. */
+  nextDueAt: string;
+  /** Findings from the last scheduled pass. */
+  lastFindings: number | null;
+  /** Wall-clock duration of the last scheduled pass. */
+  lastElapsedMs: number | null;
+}
+
+export function getLintStatus(kbId: string): Promise<LintStatus> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/lint/status`);
 }
 
 // ── F97 Activity Log ───────────────────────────────────────────────

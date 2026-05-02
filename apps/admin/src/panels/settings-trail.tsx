@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 import type { KnowledgeBase } from '@trail/shared';
-import { listKnowledgeBases, updateKnowledgeBase, ApiError } from '../api';
+import { listKnowledgeBases, updateKnowledgeBase, getLintStatus, type LintStatus, ApiError } from '../api';
 import { matchKb } from '../lib/kb-cache';
 import { t, useLocale } from '../lib/i18n';
 import { CenteredLoader } from '../components/centered-loader';
@@ -34,6 +34,11 @@ export function SettingsTrailPanel() {
   // Empty string in the UI maps to null on save (= "clear back to default").
   const [chatPersonaTool, setChatPersonaTool] = useState('');
   const [chatPersonaPublic, setChatPersonaPublic] = useState('');
+  // F176 — per-KB lint cadence in days. null = use global default.
+  // The UI dropdown represents null as 'default' (a sentinel), so the
+  // form-state stays expressive without a separate "is overridden" flag.
+  const [lintScheduleDays, setLintScheduleDays] = useState<number | null>(null);
+  const [lintStatus, setLintStatus] = useState<LintStatus | null>(null);
 
   useEffect(() => {
     listKnowledgeBases()
@@ -49,6 +54,12 @@ export function SettingsTrailPanel() {
           setLintPolicy(match.lintPolicy ?? 'trusting');
           setChatPersonaTool(match.chatPersonaTool ?? '');
           setChatPersonaPublic(match.chatPersonaPublic ?? '');
+          setLintScheduleDays(match.lintScheduleDays ?? null);
+          // Fetch the lint-status card asynchronously — failure is
+          // non-fatal (the card just stays loading; settings still work).
+          getLintStatus(match.id)
+            .then((s) => setLintStatus(s))
+            .catch(() => setLintStatus(null));
         }
       })
       .catch((err: ApiError) => setError(err.message));
@@ -70,7 +81,8 @@ export function SettingsTrailPanel() {
       (kb.language ?? 'da') !== language ||
       (kb.lintPolicy ?? 'trusting') !== lintPolicy ||
       (kb.chatPersonaTool ?? '') !== chatPersonaTool ||
-      (kb.chatPersonaPublic ?? '') !== chatPersonaPublic);
+      (kb.chatPersonaPublic ?? '') !== chatPersonaPublic ||
+      (kb.lintScheduleDays ?? null) !== lintScheduleDays);
 
   const onSave = async () => {
     if (!kb || busy || !dirty || !nameValid) return;
@@ -85,6 +97,8 @@ export function SettingsTrailPanel() {
         // template". Server PATCH treats null + empty equivalently.
         chatPersonaTool: chatPersonaTool.trim() === '' ? null : chatPersonaTool,
         chatPersonaPublic: chatPersonaPublic.trim() === '' ? null : chatPersonaPublic,
+        // F176 — null clears the override (use global default).
+        lintScheduleDays,
       });
       setKb(updated);
       setToast({ kind: 'success', text: t('settings.savedToast') });
@@ -234,6 +248,74 @@ export function SettingsTrailPanel() {
 
         <section class="pt-2 border-t border-[color:var(--color-border)]">
           <div class="mb-3">
+            <h2 class="text-sm font-medium">{t('settings.trail.lintSchedule.title')}</h2>
+            <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-md">
+              {t('settings.trail.lintSchedule.subtitle')}
+            </p>
+          </div>
+
+          <label class="block mb-2">
+            <span class="text-sm font-medium">{t('settings.trail.lintSchedule.cadenceLabel')}</span>
+          </label>
+          <select
+            value={lintScheduleDays === null ? '' : String(lintScheduleDays)}
+            onChange={(e) => {
+              const v = (e.target as HTMLSelectElement).value;
+              setLintScheduleDays(v === '' ? null : Number(v));
+            }}
+            class="px-3 py-1.5 text-sm rounded-md border border-[color:var(--color-border)] bg-transparent focus:outline-none focus:border-[color:var(--color-accent)] transition"
+          >
+            <option value="">
+              {t('settings.trail.lintSchedule.useDefault')}
+              {lintStatus ? ` (${lintStatus.defaultDays}d)` : ''}
+            </option>
+            <option value="1">{t('settings.trail.lintSchedule.daily')}</option>
+            <option value="3">3 {t('settings.trail.lintSchedule.days')}</option>
+            <option value="7">
+              7 {t('settings.trail.lintSchedule.days')} — {t('settings.trail.lintSchedule.recommended')}
+            </option>
+            <option value="14">14 {t('settings.trail.lintSchedule.days')}</option>
+            <option value="30">30 {t('settings.trail.lintSchedule.days')}</option>
+            <option value="60">60 {t('settings.trail.lintSchedule.days')}</option>
+            <option value="90">90 {t('settings.trail.lintSchedule.days')}</option>
+          </select>
+          <p class="mt-1.5 text-[11px] text-[color:var(--color-fg-subtle)] max-w-md">
+            {t('settings.trail.lintSchedule.hint')}
+          </p>
+
+          {/* Status card — last/next/findings, sourced from activity_log */}
+          {lintStatus ? (
+            <div class="mt-4 grid grid-cols-3 gap-3 max-w-2xl text-[12px]">
+              <div class="rounded-md border border-[color:var(--color-border)] p-3">
+                <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-1">
+                  {t('settings.trail.lintSchedule.lastPass')}
+                </div>
+                <div class="font-mono">
+                  {lintStatus.lastScheduledAt
+                    ? formatRelativeFromNow(lintStatus.lastScheduledAt)
+                    : t('settings.trail.lintSchedule.never')}
+                </div>
+              </div>
+              <div class="rounded-md border border-[color:var(--color-border)] p-3">
+                <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-1">
+                  {t('settings.trail.lintSchedule.nextDue')}
+                </div>
+                <div class="font-mono">{formatNextDue(lintStatus.nextDueAt)}</div>
+              </div>
+              <div class="rounded-md border border-[color:var(--color-border)] p-3">
+                <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-1">
+                  {t('settings.trail.lintSchedule.lastFindings')}
+                </div>
+                <div class="font-mono">
+                  {lintStatus.lastFindings === null ? '—' : lintStatus.lastFindings}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </section>
+
+        <section class="pt-2 border-t border-[color:var(--color-border)]">
+          <div class="mb-3">
             <h2 class="text-sm font-medium">{t('settings.trail.personas.title')}</h2>
             <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-md">
               {t('settings.trail.personas.subtitle')}
@@ -303,4 +385,56 @@ export function SettingsTrailPanel() {
       ) : null}
     </div>
   );
+}
+
+/**
+ * Compact relative-time formatter for past events — "5h ago", "2d ago".
+ * Used for lastPass which is always in the past once it has fired.
+ */
+function formatRelativeFromNow(iso: string): string {
+  const ms = parseToMs(iso);
+  if (ms === null) return iso;
+  return relativeAgo(ms);
+}
+
+/**
+ * Specialised formatter for the "Next due" cell. nextDueAt sits in the
+ * past when the KB is overdue (scheduler tick will pick it up at the
+ * next interval), in the future when waiting. "5d ago" reads like a
+ * past event the user missed; "Forfalden 5d" makes it clear that an
+ * action is pending. "Soon" handles the just-tipped-overdue minute.
+ */
+function formatNextDue(iso: string): string {
+  const ms = parseToMs(iso);
+  if (ms === null) return iso;
+  const deltaSec = Math.round((ms - Date.now()) / 1000);
+  if (deltaSec >= 0) {
+    if (deltaSec < 60) return 'soon';
+    return `in ${magnitude(deltaSec)}`;
+  }
+  // overdue
+  const abs = -deltaSec;
+  if (abs < 60) return 'now';
+  return `overdue ${magnitude(abs)}`;
+}
+
+function parseToMs(iso: string): number | null {
+  const norm = iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z';
+  const t = Date.parse(norm);
+  return Number.isFinite(t) ? t : null;
+}
+
+function relativeAgo(ms: number): string {
+  const deltaSec = Math.round((ms - Date.now()) / 1000);
+  const abs = Math.abs(deltaSec);
+  const suffix = deltaSec < 0 ? ' ago' : '';
+  const prefix = deltaSec >= 0 ? 'in ' : '';
+  return `${prefix}${magnitude(abs)}${suffix}`;
+}
+
+function magnitude(absSec: number): string {
+  if (absSec < 60) return `${absSec}s`;
+  if (absSec < 3600) return `${Math.round(absSec / 60)}m`;
+  if (absSec < 86_400) return `${Math.round(absSec / 3600)}h`;
+  return `${Math.round(absSec / 86_400)}d`;
 }
