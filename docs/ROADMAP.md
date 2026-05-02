@@ -96,7 +96,6 @@ Everything needed to run an end-to-end ingest → wiki → chat flow for a singl
 
 | # | Feature | Owner | Target |
 |---|---------|-------|--------|
-| F34 | Landing Site Deploy (`trail.broberg.ai`) — built, awaiting DNS + Fly.io | trail | 2026-04 |
 
 ---
 
@@ -304,7 +303,7 @@ Regulated industries, on-prem, compliance, advanced architecture.
 ✅ F145   Per-KB seq IDs (cross-session canonical handles)
 
 ✅ F148   Link Integrity (3-layer defence shipped 2026-04-24 + admin panel via F150 2026-04-26)
-⏭ F34    Landing deploy (trailmem.com — DNS + Fly.io; page already built)
+✅ F34    Landing deploy (trailmem.com live; content backlog handled by other sessions)
 ✅ F33    Fly.io deploy — multi-tenant admin + stateless engine fleet (live in broberg-ai/arn since 2026-04-30, OAuth + Sanne onboarding subsumed)
 ⏭ F62    demo.trailmem.com — polished public reference site ← forcing function for component polish
 

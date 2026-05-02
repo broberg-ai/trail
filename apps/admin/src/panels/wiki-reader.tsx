@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 import { marked } from 'marked';
 import type { Document } from '@trail/shared';
-import { formatSeqId } from '@trail/shared';
+import { formatSeqId, deriveType } from '@trail/shared';
 import { useKb } from '../lib/kb-cache';
 import { CopyId } from '../components/copy-id';
 import {
@@ -244,6 +244,22 @@ function ReaderView() {
               <span class="text-[11px] font-mono text-[color:var(--color-fg-subtle)]">
                 v{d.version}
               </span>
+              {/* F101 — semantic type derived from path. Identity-level
+                  metadata so it sits next to version + seqId. Note-type
+                  is the catch-all and adds no signal; suppress to keep
+                  the row uncluttered. */}
+              {(() => {
+                const ntype = deriveType(d.path ?? '');
+                if (ntype === 'note') return null;
+                return (
+                  <span
+                    class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-[color:var(--color-bg-elevated)] border border-[color:var(--color-border)] text-[color:var(--color-fg-muted)]"
+                    title={`Type: ${ntype} (path-derived)`}
+                  >
+                    {ntype}
+                  </span>
+                );
+              })()}
               {d.updatedAt || d.createdAt ? (
                 <span
                   class="text-[11px] font-mono text-[color:var(--color-fg-subtle)]"
