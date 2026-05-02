@@ -1,4 +1,5 @@
 import type { DescribeImage } from '@trail/pipelines';
+import { shouldFallback } from './vision-derivative.js';
 
 // Read keys at call-time, not module-load-time, so a key added after
 // boot (or rotated) gets picked up without restart. Also makes the
@@ -571,8 +572,16 @@ export function createVisionBackendWithMetadata(): DescribeImageWithMetadata | n
       } catch (err) {
         firstError = err;
         if (!hasOpenRouter) throw err;
+        // F165.1 — strict fallback. 4xx (incl. 413 image-too-large)
+        // is a bug or input-shape issue, not an availability problem.
+        // Silently routing to OpenRouter would mask "OpenRouter usage
+        // up 100% this week" alerts that are really input-drift.
+        // Only 5xx / timeout / connection-reset trigger fallback.
+        if (!shouldFallback(err)) {
+          throw err;
+        }
         console.warn(
-          `[vision] anthropic failed, falling back to openrouter: ${err instanceof Error ? err.message : String(err)}`,
+          `[vision] anthropic failed (availability), falling back to openrouter: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }

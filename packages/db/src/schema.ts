@@ -251,6 +251,12 @@ export const documentImages = sqliteTable(
     // (vision_quality_ratings); the UI surfaces the union of both.
     autoFlagSignal: integer('auto_flag_signal').notNull().default(0),
     autoFlagReason: text('auto_flag_reason'),
+    // F165.1 — WebP derivative used for Vision when the original is
+    // too large for Anthropic's 5MB Messages-API limit. Original stays
+    // untouched in storage (Brand Intelligence Base = lossless). NULL
+    // when no derivative is needed (small originals) or not yet
+    // generated. Set by ensureDerivative() in vision-derivative.ts.
+    visionDerivativePath: text('vision_derivative_path'),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
     updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
   },

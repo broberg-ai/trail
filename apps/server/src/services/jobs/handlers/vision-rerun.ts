@@ -32,6 +32,7 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import pLimit from 'p-limit';
 import { storage } from '../../../lib/storage.js';
 import { applyDimensionFlag, createVisionBackendWithMetadata, getActiveVisionModel } from '../../vision.js';
+import { ensureDerivative } from '../../vision-derivative.js';
 import type { JobContext, JobHandler } from '../types.js';
 
 export interface VisionRerunPayload {
@@ -94,6 +95,8 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
       page: documentImages.page,
       width: documentImages.width,
       height: documentImages.height,
+      sizeBytes: documentImages.sizeBytes,
+      visionDerivativePath: documentImages.visionDerivativePath,
       kbLanguage: knowledgeBases.language,
     })
     .from(documentImages)
@@ -175,12 +178,29 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
     limit(async () => {
       if (ctx.signal.aborted) return;
       try {
-        const bytes = await storage.get(row.storagePath);
-        if (!bytes) {
+        // F165.1 — derive WebP if original > 5MB or > 4MP. The
+        // derivative path is persisted on the row so a subsequent
+        // re-vision pass uses the cached file. ensureDerivative
+        // throws if the original is missing — caller treats as
+        // failed, same as the previous storage.get-was-null branch.
+        const derivative = await ensureDerivative(
+          row.storagePath,
+          row.width,
+          row.height,
+          row.sizeBytes,
+        ).catch(() => null);
+        if (!derivative) {
           failed += 1;
           return;
         }
-        const result = await backend(new Uint8Array(bytes), {
+        if (derivative.isDerivative && derivative.derivativePath !== row.visionDerivativePath) {
+          await ctx.trail.db
+            .update(documentImages)
+            .set({ visionDerivativePath: derivative.derivativePath })
+            .where(eq(documentImages.id, row.id))
+            .run();
+        }
+        const result = await backend(derivative.bytes, {
           page: row.page ?? 0,
           width: row.width,
           height: row.height,
