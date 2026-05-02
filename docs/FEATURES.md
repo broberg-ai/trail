@@ -103,7 +103,7 @@ Status reflects the engine (this repo). Landing-site and CMS-adapter work lives 
 | F91 | [Neuron Editor (Markdown Split-View)](#f91-neuron-editor) | Done | 1 | [features/F91-neuron-editor.md](features/F91-neuron-editor.md) |
 | F92 | [Tags on Neurons (Filter + Facet + Auto-Suggest)](#f92-tags-on-neurons) | Done | 2 | [features/F92-tags-on-neurons.md](features/F92-tags-on-neurons.md) |
 | F93 | ~~Button Sound Feedback~~ — superseded, kept for reference | Dropped | — | [features/F93-button-sound-feedback.md](features/F93-button-sound-feedback.md) |
-| F94 | [Ambient Audio System](#f94-ambient-audio) | Planned | 1 | [features/F94-ambient-audio.md](features/F94-ambient-audio.md) |
+| F94 | [Ambient Audio System](#f94-ambient-audio) | Done | 1 | [features/F94-ambient-audio.md](features/F94-ambient-audio.md) |
 | F95 | [Ingestion Connectors (Attribution + Filter)](#f95-connectors) | Done | 1 | — |
 | F96 | [LLM Action Recommender](#f96-action-recommender) | Done | 1 | — |
 | F97 | [Activity Log (Audit Timeline)](#f97-activity-log) | Planned | 2 | [features/F97-activity-log.md](features/F97-activity-log.md) |
