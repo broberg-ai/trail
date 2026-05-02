@@ -43,35 +43,67 @@ const KIND_GROUPS: ReadonlyArray<{ label: string; kinds: string[] }> = [
 
 const POLL_INTERVAL_MS = 30_000;
 
+const PAGE_SIZE = 50;
+
 export function ActivityPanel() {
   useLocale();
   const [rows, setRows] = useState<ActivityRow[] | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timeframe, setTimeframe] = useState<TimeframeId>('7d');
   const [kindFilter, setKindFilter] = useState<string>('');
   const [groupFilter, setGroupFilter] = useState<string>('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  const fetchRows = async () => {
+  // Fresh fetch — used when filters change AND for the polling tick.
+  // Replaces the entire list with the first page (any rows past page 1
+  // were appended via "Load more" — the polling tick deliberately
+  // collapses back to page 1 because what the curator wants from a
+  // refresh is "what's new at the top", not "preserve my deep scroll
+  // through old history").
+  const fetchFirstPage = async () => {
     try {
       const since = TIMEFRAMES.find((t) => t.id === timeframe)?.sinceFn();
       const r = await listActivity({
         since,
         kind: kindFilter || undefined,
-        limit: 100,
+        limit: PAGE_SIZE,
       });
       setRows(r.items);
+      setNextCursor(r.nextCursor);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
   };
 
+  const loadMore = async () => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const since = TIMEFRAMES.find((t) => t.id === timeframe)?.sinceFn();
+      const r = await listActivity({
+        since,
+        kind: kindFilter || undefined,
+        limit: PAGE_SIZE,
+        cursor: nextCursor,
+      });
+      setRows((prev) => (prev ? [...prev, ...r.items] : r.items));
+      setNextCursor(r.nextCursor);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   useEffect(() => {
-    void fetchRows();
+    void fetchFirstPage();
   }, [timeframe, kindFilter]);
 
   useEffect(() => {
-    const id = setInterval(() => void fetchRows(), POLL_INTERVAL_MS);
+    const id = setInterval(() => void fetchFirstPage(), POLL_INTERVAL_MS);
     return () => clearInterval(id);
   }, [timeframe, kindFilter]);
 
@@ -108,7 +140,7 @@ export function ActivityPanel() {
         <button
           type="button"
           class="text-[11px] font-mono text-[color:var(--color-fg-muted)] hover:text-[color:var(--color-fg)]"
-          onClick={() => void fetchRows()}
+          onClick={() => void fetchFirstPage()}
         >
           ↻ refresh
         </button>
@@ -179,6 +211,24 @@ export function ActivityPanel() {
             );
           })}
         </ul>
+      )}
+
+      {/* Load more — visible whenever the server reported a nextCursor.
+          Filter by group is applied client-side so showing the button
+          based on nextCursor (a server-side signal that more rows exist
+          for the current kind/timeframe filter) is correct even when
+          the visible group narrows the rendered list. */}
+      {nextCursor && (
+        <div class="mt-4 flex justify-center">
+          <button
+            type="button"
+            disabled={loadingMore}
+            onClick={() => void loadMore()}
+            class="px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)] hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--color-bg-elevated)] disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            {loadingMore ? 'Loading…' : `Load more (next ${PAGE_SIZE})`}
+          </button>
+        </div>
       )}
     </div>
   );
