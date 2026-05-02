@@ -1,6 +1,6 @@
 # Trail — Feature Index
 
-**Last updated:** 2026-04-21
+**Last updated:** 2026-05-02
 
 ---
 
@@ -35,28 +35,28 @@ Status reflects the engine (this repo). Landing-site and CMS-adapter work lives 
 | F14 | [Multi-Provider LLM Adapter](#f14-llm-adapter) | Done | 1 | — |
 | F15 | [Bidirectional `document_references`](#f15-bidirectional-refs) | Done | 1 | — |
 | F16 | [Wiki Events (Replay-Able Event Stream)](#f16-wiki-events) | Done | 1 | — |
-| F17 | [Curation Queue — HTTP Endpoints](#f17-curation-queue-api) | Planned | 1 | [features/F17-curation-queue-api.md](features/F17-curation-queue-api.md) |
-| F18 | [Curator UI Shell (Vite + Preact + shadcn)](#f18-curator-ui) | Planned | 1 | [features/F18-curator-ui.md](features/F18-curator-ui.md) |
-| F19 | [Auto-Approval Policy Engine](#f19-auto-approval-policy) | Planned | 1 | [plan](features/F19-auto-approval-policy.md) |
+| F17 | [Curation Queue — HTTP Endpoints](#f17-curation-queue-api) | Done | 1 | [features/F17-curation-queue-api.md](features/F17-curation-queue-api.md) |
+| F18 | [Curator UI Shell (Vite + Preact + shadcn)](#f18-curator-ui) | Done | 1 | [features/F18-curator-ui.md](features/F18-curator-ui.md) |
+| F19 | [Auto-Approval Policy Engine](#f19-auto-approval-policy) | Done | 1 | [plan](features/F19-auto-approval-policy.md) |
 | F20 | [Curator Diff UI (Before/After)](#f20-diff-ui) | Done | 1 | [plan](features/F20-curator-diff-ui.md) |
 | F21 | [Ingest Backpressure](#f21-ingest-backpressure) | Done | 1 | [plan](features/F21-ingest-backpressure.md) |
 | F22 | [Stable `{#claim-xx}` Anchors](#f22-claim-anchors) | Planned | 1 | [plan](features/F22-stable-claim-anchors.md) |
 | F23 | [Wiki-Link Parser (`[[]]`, `[[kb:]]`, `[[ext:]]`)](#f23-wiki-link-parser) | Done | 1 | [plan](features/F23-wiki-link-parser.md) |
-| F24 | [DOCX Pipeline](#f24-docx-pipeline) | Planned | 1 | [plan](features/F24-docx-pipeline.md) |
+| F24 | [DOCX Pipeline](#f24-docx-pipeline) | Done | 1 | [plan](features/F24-docx-pipeline.md) |
 | F25 | [Image Source Pipeline (Standalone Images + SVG Passthrough)](#f25-image-pipeline) | Done | 1 | [plan](features/F25-image-source-pipeline.md) |
-| F26 | [HTML / Web Clipper Ingest](#f26-web-clipper) | Planned | 1 | [plan](features/F26-html-web-clipper-ingest.md) |
+| ~~F26~~ | ~~[HTML / Web Clipper Ingest](#f26-web-clipper)~~ — superseded by F111 | Superseded | 1 | [plan](features/F26-html-web-clipper-ingest.md) |
 | F27 | [Pluggable Vision Adapter](#f27-vision-adapter) | Planned | 1 | [plan](features/F27-pluggable-vision-adapter.md) |
 | F28 | [Pluggable Pipeline Interface](#f28-pipeline-interface) | Done | 1 | [features/F28-pipeline-interface.md](features/F28-pipeline-interface.md) |
 | F29 | [`<trail-chat>` Embeddable Widget (Lit)](#f29-trail-chat-widget) | Planned | 1 | [features/F29-trail-chat-widget.md](features/F29-trail-chat-widget.md) |
 | F30 | [Chat Citations Render (`[[wiki-links]]` → `<a>`)](#f30-chat-citations) | Done | 1 | [plan](features/F30-chat-citations-render.md) |
 | F31 | [Reader Feedback Button → Queue](#f31-reader-feedback) | Planned | 1 | [plan](features/F31-reader-feedback.md) |
-| F32 | [Lint Pass (Orphans / Gaps / Contradictions)](#f32-lint-pass) | Planned | 1 | [plan](features/F32-lint-pass.md) |
+| F32 | [Lint Pass (Orphans / Gaps / Contradictions)](#f32-lint-pass) | Done | 1 | [plan](features/F32-lint-pass.md) |
 | F34 | [Landing Site Deploy (`trailmem.com` + `trail.broberg.ai`)](#f34-landing-deploy) | In progress | 1 | [features/F34-landing-deploy.md](features/F34-landing-deploy.md) |
 | F35 | [Google OAuth Production Credentials](#f35-oauth-production) | Planned | 1 | — |
 | F36 | [`docs.trailmem.com` as a Trail Brain](#f36-dogfooding-wiki) | Planned | 1 | [features/F36-dogfooding-wiki.md](features/F36-dogfooding-wiki.md) |
 | F37 | [Sanne Customer Onboarding (Customer #1)](#f37-sanne-onboarding) | Planned | 1 | — |
 | F38 | [Cross-Trail Search + Chat (Frontpage)](#f38-cross-trail-search) | Planned | 2 | [features/F38-cross-trail-search.md](features/F38-cross-trail-search.md) |
-| F39 | [Claude Code Session → Trail Ingest](#f39-cc-session-ingest) | Planned | 1 | [features/F39-cc-session-ingest.md](features/F39-cc-session-ingest.md) |
+| F39 | [Claude Code Session → Trail Ingest](#f39-cc-session-ingest) | Done | 1 | [features/F39-cc-session-ingest.md](features/F39-cc-session-ingest.md) |
 | F40 | [Multi-Tenancy on `app.trailmem.com` (libSQL embedded per-tenant)](#f40-multi-tenancy) | Planned | 1/2 | [features/F40-multi-tenancy.md](features/F40-multi-tenancy.md) |
 | F41 | [Tenant Provisioning + Signup Flow](#f41-tenant-provisioning) | Idea | 2 | — |
 | F42 | [Pluggable Storage (Tigris default + R2 alternative)](#f42-r2-storage) | Planned | 2 | [features/F42-pluggable-storage.md](features/F42-pluggable-storage.md) |
@@ -101,14 +101,14 @@ Status reflects the engine (this repo). Landing-site and CMS-adapter work lives 
 | F89 | [Chat Tools — MCP-Backed Introspection](#f89-chat-tools) | Done | 1 | [features/F89-chat-tools.md](features/F89-chat-tools.md) |
 | F90 | [Dynamic Curator Actions + Per-Trail Lint Policy](#f90-curator-actions) | Done | 1 | — |
 | F91 | [Neuron Editor (Markdown Split-View)](#f91-neuron-editor) | Done | 1 | [features/F91-neuron-editor.md](features/F91-neuron-editor.md) |
-| F92 | [Tags on Neurons (Filter + Facet + Auto-Suggest)](#f92-tags-on-neurons) | Planned | 2 | [features/F92-tags-on-neurons.md](features/F92-tags-on-neurons.md) |
+| F92 | [Tags on Neurons (Filter + Facet + Auto-Suggest)](#f92-tags-on-neurons) | Done | 2 | [features/F92-tags-on-neurons.md](features/F92-tags-on-neurons.md) |
 | F93 | ~~Button Sound Feedback~~ — superseded, kept for reference | Dropped | — | [features/F93-button-sound-feedback.md](features/F93-button-sound-feedback.md) |
 | F94 | [Ambient Audio System](#f94-ambient-audio) | Planned | 1 | [features/F94-ambient-audio.md](features/F94-ambient-audio.md) |
 | F95 | [Ingestion Connectors (Attribution + Filter)](#f95-connectors) | Done | 1 | — |
 | F96 | [LLM Action Recommender](#f96-action-recommender) | Done | 1 | — |
 | F97 | [Activity Log (Audit Timeline)](#f97-activity-log) | Planned | 2 | [features/F97-activity-log.md](features/F97-activity-log.md) |
 | F98 | [Orphan-lint Connector-Awareness](#f98-orphan-connector-awareness) | Done | 1 | [features/F98-orphan-connector-awareness.md](features/F98-orphan-connector-awareness.md) |
-| F99 | [Obsidian-style Neuron Graph](features/F99-neuron-graph.md) | Planned | 1 | [features/F99-neuron-graph.md](features/F99-neuron-graph.md) |
+| F99 | [Obsidian-style Neuron Graph](features/F99-neuron-graph.md) | Done | 1 | [features/F99-neuron-graph.md](features/F99-neuron-graph.md) |
 
 ### F100-F133 — Karpathy-parity + commercialization batch
 
@@ -120,7 +120,7 @@ Ship'er Trail til "markedets bedste Karpathy-LLM-Wiki-killer" via ~34 features f
 |---|---------|--------|-------|------|
 | F100 | [Obsidian Vault Export](features/F100-obsidian-vault-export.md) | Planned | 2 | [plan](features/F100-obsidian-vault-export.md) |
 | F101 | [`type:` Frontmatter Field](features/F101-type-frontmatter.md) | Planned | 2 | [plan](features/F101-type-frontmatter.md) |
-| F102 | [Auto-maintained Glossary Neuron](features/F102-auto-maintained-glossary.md) | Planned | 2 | [plan](features/F102-auto-maintained-glossary.md) |
+| F102 | [Auto-maintained Glossary Neuron](features/F102-auto-maintained-glossary.md) | Done | 2 | [plan](features/F102-auto-maintained-glossary.md) |
 | F103 | [9-step Ingest Workflow Formalization](features/F103-9-step-ingest-workflow.md) | Planned | 2 | [plan](features/F103-9-step-ingest-workflow.md) |
 | F104 | [Per-KB Prompt Profiles](features/F104-per-kb-prompt-profiles.md) | Planned | 2 | [plan](features/F104-per-kb-prompt-profiles.md) |
 | F105 | [Proactive Save Suggestions in Chat](features/F105-proactive-save-suggestion.md) | Planned | 2 | [plan](features/F105-proactive-save-suggestion.md) |
@@ -139,7 +139,7 @@ Ship'er Trail til "markedets bedste Karpathy-LLM-Wiki-killer" via ~34 features f
 
 | # | Feature | Status | Phase | Plan |
 |---|---------|--------|-------|------|
-| F111 | [Trail Web Clipper (Browser Extension)](features/F111-trail-web-clipper.md) | Planned | 2 | [plan](features/F111-trail-web-clipper.md) |
+| F111 | [Trail Web Clipper (Browser Extension)](features/F111-trail-web-clipper.md) | Done (local/dev) | 2 | [plan](features/F111-trail-web-clipper.md) |
 | F111.2 | [Admin API-key panel + multi-origin CORS](features/F111.2-admin-api-keys-cors.md) | Planned | 1 | [plan](features/F111.2-admin-api-keys-cors.md) |
 | F112 | [User Notes / "Your Take" Field (Luhmann friction)](features/F112-user-notes-your-take.md) | Planned | 2 | [plan](features/F112-user-notes-your-take.md) |
 | F113 | [Auto-fix in Lint](features/F113-auto-fix-lint.md) | Planned | 2 | [plan](features/F113-auto-fix-lint.md) |
