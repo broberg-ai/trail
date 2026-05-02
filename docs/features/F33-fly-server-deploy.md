@@ -1,5 +1,9 @@
 # F33 — Fly.io `arn` Deploy for `apps/server`
 
+> **SUPERSEDED 2026-05-02** — denne plan blev erstattet af [F33-fly-deploy-multi-tenant.md](./F33-fly-deploy-multi-tenant.md) da scope udvidedes fra single-app deploy til multi-tenant admin (`app.trailmem.com`) + stateless engine-fleet (`engine.trailmem.com`) med én `trail.db` pr. tenant. Bevaret i git for historik. Kanoniske F33-rækker i FEATURES.md / ROADMAP.md peger nu udelukkende på den nye plan-doc.
+
+---
+
 > Move the engine from "runs on Christian's Mac" to "runs on Fly.io Stockholm". Single-tenant Phase 1 deploy with volume-backed SQLite.
 
 ## Problem

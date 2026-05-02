@@ -51,7 +51,6 @@ Status reflects the engine (this repo). Landing-site and CMS-adapter work lives 
 | F30 | [Chat Citations Render (`[[wiki-links]]` → `<a>`)](#f30-chat-citations) | Done | 1 | [plan](features/F30-chat-citations-render.md) |
 | F31 | [Reader Feedback Button → Queue](#f31-reader-feedback) | Planned | 1 | [plan](features/F31-reader-feedback.md) |
 | F32 | [Lint Pass (Orphans / Gaps / Contradictions)](#f32-lint-pass) | Planned | 1 | [plan](features/F32-lint-pass.md) |
-| F33 | [Fly.io Arn Deploy for `apps/server`](#f33-fly-server-deploy) | Planned | 1 | [features/F33-fly-server-deploy.md](features/F33-fly-server-deploy.md) |
 | F34 | [Landing Site Deploy (`trailmem.com` + `trail.broberg.ai`)](#f34-landing-deploy) | In progress | 1 | [features/F34-landing-deploy.md](features/F34-landing-deploy.md) |
 | F35 | [Google OAuth Production Credentials](#f35-oauth-production) | Planned | 1 | — |
 | F36 | [`docs.trailmem.com` as a Trail Brain](#f36-dogfooding-wiki) | Planned | 1 | [features/F36-dogfooding-wiki.md](features/F36-dogfooding-wiki.md) |
@@ -451,8 +450,8 @@ Convert `[[wiki-link]]` citations in chat responses into clickable anchor tags p
 ### F32 — Lint Pass
 Periodic background job. Surfaces orphaned pages, missing cross-refs, contradictions across sources, pages that haven't been touched in N months. Emits `gap_suggestion` / `cross_ref_suggestion` / `contradiction_alert` candidates into the queue.
 
-### F33 — Fly.io Server Deploy
-Fly.io arn (Stockholm) deploy config for `apps/server` under `infra/fly/`. Volumes for SQLite + uploads. Secrets via `fly secrets set`.
+### F33 — Fly.io deploy: multi-tenant admin + stateless engine fleet (Phase 1)
+Trail flyttes fra `127.0.0.1:58031` til Fly.io i org `broberg-ai`/region `arn`. Én multi-tenant admin (`app.trailmem.com`) med egen `control.db` + stateless engine-fleet (`engine.trailmem.com`, Phase 1 CNAME til engine-001) med én `trail.db` pr. tenant på engine-volume. Bearer-key carries tenant scope (per F111.2). Forward-kompatibel med F170 multi-engine orkestrator. Plan-doc: [features/F33-fly-deploy-multi-tenant.md](features/F33-fly-deploy-multi-tenant.md). (Den oprindelige single-app-plan ligger superseded i [features/F33-fly-server-deploy.md](features/F33-fly-server-deploy.md) for historik.)
 
 ### F34 — Landing Deploy
 Deploy the `@webhouse/cms examples/static/trail` site to three hostnames that all serve the same content: `trailmem.com`, `www.trailmem.com`, `trail.broberg.ai`. CNAME both zones on Cloudflare to the Fly.io static target. Content evolves over time from pure landing to concept + tech + data + posts as we approach the `app.trailmem.com` SaaS launch (F41).
