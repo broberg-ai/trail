@@ -1,6 +1,6 @@
 # Trail — Roadmap
 
-**Last updated:** 2026-04-22
+**Last updated:** 2026-05-02
 **Source of truth for feature numbering:** [FEATURES.md](./FEATURES.md)
 
 ---
@@ -65,7 +65,6 @@ Everything needed to run an end-to-end ingest → wiki → chat flow for a singl
 | F39 | Claude Code Session → Trail Ingest | 2026-04 |
 | F95 | Connectors (ingestion attribution) | 2026-04 |
 | F96 | Action Recommender | 2026-04 |
-| F97 | Activity Log | 2026-04 |
 | F98 | Orphan-lint Connector-Awareness | 2026-04 |
 | F102 | Auto-maintained Glossary Neuron | 2026-04 |
 | F135 | Slug-based KB URLs (accept slug or UUID) | 2026-04 |
@@ -97,6 +96,7 @@ Everything needed to run an end-to-end ingest → wiki → chat flow for a singl
 | # | Feature | Owner | Target |
 |---|---------|-------|--------|
 | F34 | Landing Site Deploy (`trail.broberg.ai`) — built, awaiting DNS + Fly.io | trail | 2026-04 |
+| F97 | [Activity Log](./features/F97-activity-log.md) — central append-only audit trail (auth, kb, source, ingest, candidate, neuron, lint events) + `/activity` admin panel. Plan-doc fully written, schema + helper + subscriber + 6 explicit call-sites + read API + filterable timeline UI. Promoted to next ship-target: F33 multi-tenant makes "who did what" non-cosmetic for support/compliance, and F16 event-sourcing means data backbone is already there. Effort: Medium 3-5 days. | trail | 2026-05 |
 
 ---
 
