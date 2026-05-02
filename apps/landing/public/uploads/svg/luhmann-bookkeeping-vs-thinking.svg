@@ -1,0 +1,46 @@
+<svg viewBox="0 0 920 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Luhmann's time split: 80% bookkeeping the LLM can take over, 20% thinking that stays with the human">
+  <!-- Title -->
+  <text x="460" y="42" font-family="monospace" font-size="14" fill="currentColor" text-anchor="middle" opacity="0.6" letter-spacing="1.5">WHERE LUHMANN'S TIME ACTUALLY WENT</text>
+
+  <!-- LEFT block: 80% bookkeeping -->
+  <rect x="100" y="90" width="440" height="220" fill="none" stroke="currentColor" stroke-width="1.2"/>
+  <text x="320" y="120" font-family="monospace" font-size="13" fill="currentColor" text-anchor="middle" font-weight="bold" letter-spacing="0.8">80% — BOOKKEEPING</text>
+  <text x="320" y="140" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.55">what Luhmann did by hand for 30 years</text>
+
+  <g font-family="monospace" font-size="12" fill="currentColor" opacity="0.8">
+    <text x="130" y="170">· hand-write card numbers</text>
+    <text x="130" y="190">· build cross-references</text>
+    <text x="130" y="210">· update hub cards</text>
+    <text x="130" y="230">· maintain keyword indexes</text>
+    <text x="130" y="250">· decide where each card belongs</text>
+    <text x="130" y="270">· walk back through old cards to add links</text>
+  </g>
+
+  <text x="320" y="295" font-family="monospace" font-size="11" fill="#e8a87c" text-anchor="middle" font-style="italic">→ this is what the LLM takes over</text>
+
+  <!-- Arrow between blocks -->
+  <g stroke="currentColor" stroke-width="1.4" fill="none" opacity="0.4">
+    <line x1="555" y1="200" x2="585" y2="200"/>
+    <polyline points="578,194 585,200 578,206"/>
+  </g>
+
+  <!-- RIGHT block: 20% thinking -->
+  <rect x="600" y="90" width="220" height="220" fill="none" stroke="#e8a87c" stroke-width="1.6"/>
+  <text x="710" y="120" font-family="monospace" font-size="13" fill="#e8a87c" text-anchor="middle" font-weight="bold" letter-spacing="0.8">20% — THINKING</text>
+  <text x="710" y="140" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.55">the part that can't be outsourced</text>
+
+  <g font-family="monospace" font-size="12" fill="currentColor" opacity="0.85">
+    <text x="615" y="175">· what to read</text>
+    <text x="615" y="195">· what to keep</text>
+    <text x="615" y="215">· which side to believe</text>
+    <text x="615" y="235">· whether an idea</text>
+    <text x="624" y="251">deserves a card</text>
+    <text x="615" y="275">· value judgments</text>
+  </g>
+
+  <text x="710" y="295" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.55" font-style="italic">stays with you</text>
+
+  <!-- Caption -->
+  <text x="460" y="370" font-family="monospace" font-size="12" fill="currentColor" text-anchor="middle" opacity="0.55" letter-spacing="0.4">Luhmann was a grinder because he had no choice. The 1950s could not automate any of the left column.</text>
+  <text x="460" y="390" font-family="monospace" font-size="12" fill="currentColor" text-anchor="middle" opacity="0.55" letter-spacing="0.4">Anyone willing to do the right column can now run his method. That is the shift.</text>
+</svg>

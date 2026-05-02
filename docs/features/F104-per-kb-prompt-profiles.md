@@ -1,6 +1,15 @@
 # F104 — Per-KB Prompt Profiles
 
-> Hver KB vælger en **ingest-profil** (Researcher / Technical-Writer / Book-Reader / Business-Ops / Custom) der bestemmer hvilke Neuron-typer der produceres + hvordan compile-prompten struktureres. Trail går fra "én prompt passer alle" til "pattern matcher dit domæne". Tier: alle (default Researcher), custom er Business+. Effort: Medium (1 day). Status: Planned.
+> Hver KB vælger en **ingest-profil** (Researcher / Technical-Writer / Book-Reader / Business-Ops / Code-Reference / Custom) der bestemmer hvilke Neuron-typer der produceres + hvordan compile-prompten struktureres. Trail går fra "én prompt passer alle" til "pattern matcher dit domæne". Tier: alle (default Researcher), custom er Business+. Effort: Medium (1 day). Status: Planned.
+
+**`Code-Reference` profile** (added 2026-05-02 from Mark Chen's "I Used Claude Code to Build a Personal Knowledge Base" Medium article, April 2026): for KB'er der primært holder kode-snippets, query-patterns, DAX-measures, pandas-transformations, shell-scripts. Karakteristika:
+- **Working code is first-class** — hver Neuron der dokumenterer et pattern SKAL inkludere `## Examples`-sektion med eksekverbar kode (håndhæves via F140 `_schema.md required_sections`).
+- **Compile-prompten** instruerer LLM'en til at **udtrække patterns**, ikke beskrive dem abstrakt. Mark's pointe: *"This isn't abstract documentation — it's a reference I can copy from."*
+- **Neuron-types der dominerer**: `concept` (et pattern eller teknik), `comparison` (anti-patterns vs idiomatic), `query` (en specifik how-to-besvarelse). Færre `synthesis`-Neurons fordi domænet er praktisk, ikke teoretisk.
+- **Ingest-prompt-tilføjelse**: "When the source contains code, preserve syntax exactly. Identify reusable patterns and extract them as standalone Neurons under `/neurons/concepts/`. Tag each extraction with the language (sql, python, dax, bash, etc.) so admin-UI's syntax-highlighting picks the right grammar."
+- **Reader-UI-konsekvens** (out of F104 scope, men relevant): Neuron-reader skal have copy-button på code-blocks for at honorere "reference I can copy from"-promiset.
+
+Use case: Mark's BI-Reporting-wiki (SQL/Python/DAX), Trail's egen dogfood-trail for Trail-kodepatterns, en developer-team-wiki for shared utilities, en data-engineer-team-wiki for query-recipes.
 
 ## Problem
 
