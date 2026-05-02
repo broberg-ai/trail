@@ -9,7 +9,7 @@
  * land later via the existing GET /api/v1/stream — kept out of v1 to
  * ship the first useful surface fast.
  */
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { listActivity, type ActivityRow } from '../api';
 import { useLocale } from '../lib/i18n';
 import { CenteredLoader } from '../components/centered-loader';
@@ -132,16 +132,7 @@ export function ActivityPanel() {
             </button>
           ))}
         </div>
-        <select
-          value={groupFilter}
-          onChange={(e) => setGroupFilter((e.target as HTMLSelectElement).value)}
-          class="bg-[color:var(--color-bg)] border border-[color:var(--color-border)] rounded px-2 py-1 text-[12px]"
-        >
-          <option value="">All groups</option>
-          {KIND_GROUPS.map((g) => (
-            <option key={g.label} value={g.label}>{g.label}</option>
-          ))}
-        </select>
+        <GroupFilter value={groupFilter} onChange={setGroupFilter} />
         <input
           type="text"
           placeholder="Filter by kind (e.g. ingest.completed)"
@@ -190,6 +181,115 @@ export function ActivityPanel() {
         </ul>
       )}
     </div>
+  );
+}
+
+function GroupFilter({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  // Trail-styled popover dropdown — same pattern as panels/images.tsx
+  // SourceFilter. Replaces native <select> which surfaces the macOS
+  // combobox chrome (broken with Bauhaus palette + dark mode).
+  // Click-outside + Escape close.
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const select = (v: string) => {
+    onChange(v);
+    setOpen(false);
+  };
+
+  const label = value || 'All groups';
+
+  return (
+    <div class="relative inline-block" ref={wrapRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        class="relative flex items-center gap-2 pl-3 pr-8 py-1 text-[12px] rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)] hover:border-[color:var(--color-border-strong)] focus:border-[color:var(--color-accent)] focus:outline-none transition cursor-pointer w-[140px] text-left"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span class="truncate flex-1 min-w-0">{label}</span>
+        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[color:var(--color-fg-muted)]">
+          ▾
+        </span>
+      </button>
+      {open ? (
+        <div
+          class="absolute left-0 top-full mt-1 z-20 w-[180px] rounded-md border border-[color:var(--color-border-strong)] bg-[color:var(--color-bg-card)] shadow-2xl"
+          role="listbox"
+        >
+          <DropdownItem active={value === ''} onClick={() => select('')} label="All groups" />
+          <div class="border-t border-[color:var(--color-border)] my-1" />
+          {KIND_GROUPS.map((g) => (
+            <DropdownItem
+              key={g.label}
+              active={value === g.label}
+              onClick={() => select(g.label)}
+              label={g.label}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function DropdownItem({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={active}
+      onClick={onClick}
+      class={
+        'w-full text-left px-3 py-2 text-[12px] transition flex items-center gap-2 ' +
+        (active
+          ? 'bg-[color:var(--color-accent)]/10 text-[color:var(--color-fg)]'
+          : 'text-[color:var(--color-fg-muted)] hover:bg-[color:var(--color-bg)]/60 hover:text-[color:var(--color-fg)]')
+      }
+    >
+      <span
+        class={
+          'inline-block w-3 flex-shrink-0 text-[color:var(--color-accent)] ' +
+          (active ? 'opacity-100' : 'opacity-0')
+        }
+      >
+        ✓
+      </span>
+      <span class="truncate flex-1 min-w-0">{label}</span>
+    </button>
   );
 }
 

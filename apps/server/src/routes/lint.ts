@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono';
 import { and, desc, eq } from 'drizzle-orm';
 import { brokenLinks, documents } from '@trail/db';
 import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
-import { runLint, resolveKbId, submitCuratorEdit, VersionConflictError, type Actor } from '@trail/core';
+import { runLint, resolveKbId, submitCuratorEdit, VersionConflictError, logActivity, type Actor } from '@trail/core';
 import { INGEST_USER_ID } from '../bootstrap/ingest-user.js';
 import { broadcaster } from '../services/broadcast.js';
 import { rescanDocLinks, runFullLinkCheck } from '../services/link-checker.js';
@@ -37,6 +37,7 @@ function lintActor(c: Context): Actor {
 lintRoutes.post('/knowledge-bases/:kbId/lint', async (c) => {
   const trail = getTrail(c);
   const tenant = getTenant(c);
+  const user = getUser(c);
   const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
   if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
 
@@ -44,6 +45,22 @@ lintRoutes.post('/knowledge-bases/:kbId/lint', async (c) => {
     staleDays?: number;
     hubPages?: string[];
   };
+
+  const lintStart = Date.now();
+  // F97 — log manual lint start (the scheduled pass logs separately
+  // from services/lint-scheduler.ts). actorKind=user because the
+  // curator pressed the button; the scheduled pass uses 'system'.
+  await logActivity(trail, {
+    tenantId: tenant.id,
+    knowledgeBaseId: kbId,
+    actorId: user.id,
+    actorKind: 'user',
+    kind: 'lint.scheduled',
+    subjectType: 'knowledge_base',
+    subjectId: kbId,
+    summary: 'Lint pass triggered manually',
+    metadata: { trigger: 'manual', staleDays: body.staleDays, hubPages: body.hubPages },
+  });
 
   const report = await runLint(
     trail,
@@ -99,6 +116,25 @@ lintRoutes.post('/knowledge-bases/:kbId/lint', async (c) => {
       }
     },
   );
+
+  // F97 — completion row with finding count + duration. "0 findings"
+  // is a valid result (the toast Christian saw said "nothing to lint")
+  // — the row exists so the curator can see the pass actually ran.
+  await logActivity(trail, {
+    tenantId: tenant.id,
+    knowledgeBaseId: kbId,
+    actorId: user.id,
+    actorKind: 'user',
+    kind: 'lint.completed',
+    subjectType: 'knowledge_base',
+    subjectId: kbId,
+    summary: `Lint pass completed manually (${report.totalEmitted} finding${report.totalEmitted === 1 ? '' : 's'})`,
+    metadata: {
+      trigger: 'manual',
+      findings: report.totalEmitted,
+      elapsedMs: Date.now() - lintStart,
+    },
+  });
 
   return c.json(report);
 });
