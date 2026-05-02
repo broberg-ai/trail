@@ -399,3 +399,82 @@ None.
 
 - Day 1: Widget feedback modal + 👎 button + CSS + server endpoint
 - Day 2: Admin queue card rendering + integration testing + polish
+
+---
+
+## Reader Entry Page compilation pipeline (added 2026-05-02)
+
+Inspireret af Shuyi Wang's "Should You Actually Try Karpathy's LLM Wiki?" (2026-04-16) som demonstrerer en separat `Reader Entry`-sektion i hans wiki-index. Det er **kompilerede entry-point-FAQ-pages** dedikeret til at adressere typiske læser-forvirringer — distinkt fra både concept-, entity-, synthesis-, og query-Neurons. Eksempler fra hans index:
+
+- `can-you-trust-ai-with-real-work` — "do I have to fact-check the AI?"
+- `why-ai-keeps-needing-reteaching` — "why do I keep explaining the same thing?"
+- `tool-chaos-and-note-sprawl` — "I have too many tools and notes"
+- `is-this-new-tool-worth-migrating-to` — "should I switch?"
+- `can-non-programmers-build-their-own-ai-helper` — "can I do this without coding skill?"
+
+Disse er IKKE chat-saved svar (F105) eller LLM-genereret synthesis (F109). De er **kuratér-formulerede entry-spørgsmål** hvor LLM'en compiler indhold fra Neurons-graphen efter et template-format der svarer som om det var skrevet til en konkret læser-persona.
+
+### Hvordan F31 leverer fundamentet
+
+Reader-feedback-candidates akkumuleres via 👎 button og indeholder:
+- `meta.question` — den oprindelige bruger-spørgsmål
+- `meta.category` — wrong-info / missing-info / irrelevant / other
+- `meta.answer` — hvad LLM'en svarede (utilstrækkeligt)
+
+Over tid (uger/måneder) viser **mønstre** sig: 5-10 reader-feedback-candidates med kategori `missing-info` der alle drejer sig om "kan man stole på AI med reelt arbejde" → der er en gap i wiki'en der fortjener en Reader Entry-page.
+
+### Phase 2 udvidelse — auto-cluster + suggest
+
+Efter F31 er live, tilføj en post-processing-job (mirror af F102 glossary-backfill og F32 lint-scheduler):
+
+```typescript
+// apps/server/src/services/reader-entry-clusterer.ts
+//
+// Kører weekly. Henter alle pending + dismissed reader_feedback-candidates
+// fra sidste 30 dage. Embedding-cluster (eller LLM-cluster) på
+// meta.question. For hvert cluster med >= 3 questions:
+//   - Foreslå en Reader Entry-Neuron i /neurons/reader-entry/<slug>.md
+//   - Kandidat-actions: [Compose Reader Entry now, Dismiss cluster, Snooze 1 week]
+//   - Body indeholder: cluster-summary + de 3+ originale spørgsmål + foreslået template
+```
+
+### Reader Entry-Neuron schema
+
+```yaml
+---
+title: Can you trust AI with real work?
+type: reader-entry           # ny path-mapping i F101: /neurons/reader-entry/ → 'reader-entry'
+sources: [<query-neuron-1>, <concept-neuron-2>]   # F175 provenance
+audience: public             # gates F131 visibility
+prompted_by_questions: 7      # cluster-size der trigger'ed pagen
+template_version: v1
+---
+```
+
+### Skift af F101's type-list (sker som del af F101 implementation)
+
+F101's `deriveType()` udvides:
+- `/neurons/reader-entry/` → `reader-entry`
+- Type-union får `'reader-entry'` som 10. valid type.
+
+### F31 ↔ F57 ↔ F105 koordinering
+
+F31 captures reader-feedback. F57 (Gap Suggestions) detekterer low-confidence-queries der ikke kunne besvares. F105 (Proactive Save) foreslår at gemme gode chat-svar. Reader Entry pipelinen ligger ovenpå alle tre:
+
+1. F31 reader-feedback samler eksplicitte "dette svar var dårligt"-signals.
+2. F57 gap-suggestions samler implicitte "jeg kunne ikke besvare det"-signals.
+3. F105 proactive-save samler "dette svar var GODT, gem det som query-Neuron"-signals.
+
+Når 3+ relaterede F31-feedbacks + 3+ relaterede F57-gaps clusterer på samme tema → tilbyd Reader Entry-page-skabelse. Curator klikker "Compose now" → LLM compiler entry-page fra eksisterende Neurons + de logged feedback-questions som "spørgsmål denne side svarer på".
+
+### Effort tilføjelse til F31
+
+Phase 2 reader-entry-pipeline: **+2-3 dage** (separat fra F31 phase 1's 1-2 dage). Total F31 effort hvis begge faser shippes sammen: **3-5 dage**.
+
+Phase 2 forudsætter:
+- F31 phase 1 ✅
+- F57 (gap-suggestions) — minimum stub-impl der genererer findings-rows
+- F101 type-list udvidet med `reader-entry`
+- F175 provenance enforcement (Reader Entry-Neurons SKAL cite query-/concept-Neurons de bygger på)
+- F131 public-visibility (Reader Entry-pages er public-default — det er DERES formål: at møde læsere på deres entry)
+- Embedding eller LLM-cluster i `services/reader-entry-clusterer.ts`

@@ -52,9 +52,7 @@ Status reflects the engine (this repo). Landing-site and CMS-adapter work lives 
 | F31 | [Reader Feedback Button → Queue](#f31-reader-feedback) | Planned | 1 | [plan](features/F31-reader-feedback.md) |
 | F32 | [Lint Pass (Orphans / Gaps / Contradictions)](#f32-lint-pass) | Done | 1 | [plan](features/F32-lint-pass.md) |
 | F34 | [Landing Site Deploy (`trailmem.com` + `trail.broberg.ai`)](#f34-landing-deploy) | In progress | 1 | [features/F34-landing-deploy.md](features/F34-landing-deploy.md) |
-| F35 | [Google OAuth Production Credentials](#f35-oauth-production) | Planned | 1 | — |
 | F36 | [`docs.trailmem.com` as a Trail Brain](#f36-dogfooding-wiki) | Planned | 1 | [features/F36-dogfooding-wiki.md](features/F36-dogfooding-wiki.md) |
-| F37 | [Sanne Customer Onboarding (Customer #1)](#f37-sanne-onboarding) | Planned | 1 | — |
 | F38 | [Cross-Trail Search + Chat (Frontpage)](#f38-cross-trail-search) | Planned | 2 | [features/F38-cross-trail-search.md](features/F38-cross-trail-search.md) |
 | F39 | [Claude Code Session → Trail Ingest](#f39-cc-session-ingest) | Done | 1 | [features/F39-cc-session-ingest.md](features/F39-cc-session-ingest.md) |
 | F40 | [Multi-Tenancy on `app.trailmem.com` (libSQL embedded per-tenant)](#f40-multi-tenancy) | Planned | 1/2 | [features/F40-multi-tenancy.md](features/F40-multi-tenancy.md) |
@@ -346,6 +344,15 @@ Mirror af F149's pluggable ingest pattern, anvendt på chat-routen. Abstraherer 
 | F173 | [Tigris-backed blob storage (S3 driver for `@trail/storage`)](features/F173-tigris-blob-storage.md) | Planned | 1 | [plan](features/F173-tigris-blob-storage.md) |
 | F172 | [Self-service onboarding (sign-up + first trail)](features/F172-self-service-onboarding.md) | Planned | 2 | [plan](features/F172-self-service-onboarding.md) |
 
+### F174-F175 — Karpathy/Wang governance + provenance (2026-05-02 batch)
+
+Inspireret af Shuyi Wang's "Should You Actually Try Karpathy's LLM Wiki?" (2026-04-16). To net-nye features der formaliserer hvad Trail's eksisterende F19/F140/F148 allerede halvt har implementeret: explicit action-zone-taksonomi for hvad LLM må gøre alene, og strict enforcement af source-provenance ved candidate-write-time. Komplementer F19 (confidence) + F106 (Solo-mode) + F140 (_schema.md) — ingen erstatning. Plus C+D enrichments lavet i samme commit: F101 type-list får `query` (rename fra `analysis`) + F31 plan-doc får Reader Entry-pages compilation pipeline.
+
+| # | Feature | Status | Phase | Plan |
+|---|---------|--------|-------|------|
+| F174 | [Action-Zone Governance Policy (green/yellow/red)](features/F174-action-zone-governance.md) | Planned | 2 | [plan](features/F174-action-zone-governance.md) |
+| F175 | [Schema-level provenance enforcement (sources-required)](features/F175-schema-provenance-enforcement.md) | Planned | 2 | [plan](features/F175-schema-provenance-enforcement.md) |
+
 ---
 
 **Se også:** [`NON-GOALS.md`](./NON-GOALS.md) — kuratert register over bevidst fravalg pr. F-plan (parked / declined / promoted / covered-by).
@@ -456,14 +463,8 @@ Trail flyttes fra `127.0.0.1:58031` til Fly.io i org `broberg-ai`/region `arn`. 
 ### F34 — Landing Deploy
 Deploy the `@webhouse/cms examples/static/trail` site to three hostnames that all serve the same content: `trailmem.com`, `www.trailmem.com`, `trail.broberg.ai`. CNAME both zones on Cloudflare to the Fly.io static target. Content evolves over time from pure landing to concept + tech + data + posts as we approach the `app.trailmem.com` SaaS launch (F41).
 
-### F35 — OAuth Production Credentials
-Google OAuth production client + consent screen. Domain-verified `app.trailmem.com` (SaaS) and `trail.broberg.ai` (engine). Separate from dev credentials.
-
 ### F36 — `docs.trailmem.com` as a Trail Brain
 The Trail documentation site is itself a Trail brain. GitHub Action watches `broberg-ai/trail/docs/**`, ingests every push into a dedicated `trailwiki` tenant on `app.trailmem.com`, compiles via standard markdown pipeline (F09), renders at `docs.trailmem.com` via a read-only Trail frontend. Dogfooding the product while producing the docs.
-
-### F37 — Sanne Onboarding
-Customer #1 — Sanne Andersen (healing/zoneterapi, Aalborg). Migrate 25 years of clinical material into a single Sanne-owned Trail. Onboarding script, support, and feedback channel. Initially single-tenant on Fly.io; migrates to a tenant on `app.trailmem.com` when F40 lands.
 
 ### F38 — Cross-Trail Search + Chat (Frontpage)
 `app.trailmem.com`'s frontpage lets a signed-in user search and chat across every Trail they own. Results tagged by source Trail, bounded retrieval (top-M Trails × top-K pages) for scalability. Drill into a specific Trail and the same UI becomes scoped to just that Trail. Finalises user-facing naming: **Trail** = the user's knowledge base, **Neuron** = a compiled wiki page inside it.

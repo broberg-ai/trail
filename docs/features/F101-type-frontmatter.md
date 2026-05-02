@@ -1,6 +1,6 @@
 # F101 — `type:` Frontmatter Field
 
-> Hver Neuron får `type: source | concept | entity | synthesis | comparison | analysis | glossary | session` i sin YAML-frontmatter. Det matcher Balu's repo-skema, gør Obsidian Dataview-plugin brugbart på eksport, og forbereder Trail på at eksponere typen i admin-UI-filtre. Tier: alle (core-feature). Effort: Small (2-4 hours). Status: Planned.
+> Hver Neuron får `type: source | concept | entity | synthesis | comparison | query | glossary | session` i sin YAML-frontmatter. Det matcher Balu's repo-skema + Shuyi Wang's "queries/" konvention fra hans Hermes `llm-wiki`-implementering, gør Obsidian Dataview-plugin brugbart på eksport, og forbereder Trail på at eksponere typen i admin-UI-filtre. Tier: alle (core-feature). Effort: Small (2-4 hours). Status: Planned.
 
 ## Problem
 
@@ -23,7 +23,7 @@ Vores Neurons har i dag `title, tags, sources, date` i frontmatter men **ikke ty
 | `/neurons/entities/` | `entity` |
 | `/neurons/synthesis/` | `synthesis` |
 | `/neurons/comparisons/` | `comparison` |
-| `/neurons/queries/` | `analysis` |
+| `/neurons/queries/` | `query` |
 | `/neurons/sessions/` | `session` |
 | `/neurons/glossary.md` | `glossary` |
 | øvrige | `note` |
@@ -47,7 +47,7 @@ export type NeuronType =
   | 'entity'
   | 'synthesis'
   | 'comparison'
-  | 'analysis'
+  | 'query'
   | 'glossary'
   | 'session'
   | 'note';
@@ -58,7 +58,7 @@ export function deriveType(path: string): NeuronType {
   if (path.startsWith('/neurons/entities/')) return 'entity';
   if (path.startsWith('/neurons/synthesis/')) return 'synthesis';
   if (path.startsWith('/neurons/comparisons/')) return 'comparison';
-  if (path.startsWith('/neurons/queries/')) return 'analysis';
+  if (path.startsWith('/neurons/queries/')) return 'query';
   if (path.startsWith('/neurons/sessions/')) return 'session';
   if (path === '/neurons/glossary.md') return 'glossary';
   return 'note';
@@ -165,9 +165,21 @@ None — all decisions made.
 
 - **F100** (Obsidian Vault Export) — uses `type:` for Dataview compatibility
 - **F102** (Auto-maintained Glossary) — glossary Neuron gets `type: glossary`
+- **F105** (Proactive Save Suggestions in Chat) — when curator approves "save chat answer as Neuron", path defaults to `/neurons/queries/<slug>.md` and gets `type: query` automatically. This is the "compounding effect" Shuyi Wang highlights — every chat answer worth keeping becomes a query-Neuron that the next session can build on. Karpathy's gist + Wang's article both treat `queries/` as a first-class directory; the rename from `analysis` → `query` aligns Trail's terminology with the established convention.
 - **F109** (Synthesis Neuron Type) — synthesis Neurons get `type: synthesis`
 - **F110** (Comparison Neuron Type) — comparison Neurons get `type: comparison`
 - **F130** (llms.txt generation) — uses type for structuring output
+
+## Note on `query`-type semantics (added 2026-05-02)
+
+`query`-type Neurons live under `/neurons/queries/` and represent **compiled answers from cross-document chat-syntheses, backfilled into the wiki**. Distinct from:
+
+- `synthesis` (F109) — proactive thematic tying-together by ingest pipeline
+- `comparison` (F110) — explicit side-by-side of competing approaches
+- `concept` — distilled concept page from one-or-more sources
+- `session` — verbatim chat session log (no compile)
+
+A `query`-Neuron's body answers a specific user question (the chat prompt), with citations. Its frontmatter MUST satisfy F175 provenance enforcement — `sources:` lists every Neuron the answer drew from, NOT raw `claude -p` chain-of-thought. This is what makes the "compounding effect" work: query-Neurons are themselves citable from later queries, building a graph of knowledge-derivation, not flat chat-history.
 
 ## Effort Estimate
 
