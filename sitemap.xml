@@ -11,6 +11,11 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://www.trailmem.com/tags/agent-memory/</loc>
+    <lastmod>2026-05-03</lastmod>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://www.trailmem.com/tags/architecture/</loc>
     <lastmod>2026-05-03</lastmod>
     <priority>0.5</priority>
@@ -27,6 +32,11 @@
   </url>
   <url>
     <loc>https://www.trailmem.com/tags/compile-time/</loc>
+    <lastmod>2026-05-03</lastmod>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://www.trailmem.com/tags/convergence/</loc>
     <lastmod>2026-05-03</lastmod>
     <priority>0.5</priority>
   </url>
@@ -252,6 +262,11 @@
   </url>
   <url>
     <loc>https://www.trailmem.com/trails/research/scaling-trail-from-200-to-100000-neurons/</loc>
+    <lastmod>2026-05-03</lastmod>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://www.trailmem.com/trails/research/three-architectures-of-agent-memory/</loc>
     <lastmod>2026-05-03</lastmod>
     <priority>0.5</priority>
   </url>

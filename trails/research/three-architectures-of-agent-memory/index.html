@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>#rag — trail</title>
-  <meta name="description" content="Content tagged rag.">
-  <meta property="og:title" content="#rag">
-  <meta property="og:description" content="Content tagged rag.">
+  <title>Three architectures of agent memory — and why Trail picked Compile — trail</title>
+  <meta name="description" content="Karpathy, Tan, and Liu all start from the same diagnosis — your agent is a retriever, not a thinker. They reach three different architectures: retrieve (RAG), compile (LLM Wiki), and act (Fat Skills / GBrain). Trail picked Compile, deliberately. This is what we accept and what we believe is converging.">
+  <meta property="og:title" content="Three architectures of agent memory — and why Trail picked Compile">
+  <meta property="og:description" content="Karpathy, Tan, and Liu all start from the same diagnosis — your agent is a retriever, not a thinker. They reach three different architectures: retrieve (RAG), compile (LLM Wiki), and act (Fat Skills / GBrain). Trail picked Compile, deliberately. This is what we accept and what we believe is converging.">
   <meta property="og:type" content="website">
   <link rel="icon" type="image/svg+xml" href="/uploads/favicon.svg">
   <link rel="apple-touch-icon" href="/uploads/memx-logo.svg">
@@ -666,12 +666,12 @@ body[data-menu-open="true"] { overflow: hidden; }
 
   <!-- webhouse.app enrichment -->
   <meta name="generator" content="webhouse.app" />
-  <link rel="canonical" href="https://www.trailmem.com/tags/rag/" />
-  <meta property="og:url" content="https://www.trailmem.com/tags/rag/" />
+  <link rel="canonical" href="https://www.trailmem.com/trails/research/three-architectures-of-agent-memory/" />
+  <meta property="og:url" content="https://www.trailmem.com/trails/research/three-architectures-of-agent-memory/" />
   <meta property="og:site_name" content="trail-landing" />
   <meta name="twitter:card" content="summary" />
-  <meta name="twitter:title" content="#rag — trail" />
-  <meta name="twitter:description" content="Content tagged rag." />
+  <meta name="twitter:title" content="Three architectures of agent memory — and why Trail picked Compile" />
+  <meta name="twitter:description" content="Karpathy, Tan, and Liu all start from the same diagnosis — your agent is a retriever, not a thinker. They reach three different architectures: retrieve (RAG), compile (LLM Wiki), and act (Fat Skills / GBrain). Trail picked Compile, deliberately. This is what we accept and what we believe is converging." />
   <link rel="manifest" href="/manifest.json" />
 </head>
 <body>
@@ -808,35 +808,49 @@ body[data-menu-open="true"] { overflow: hidden; }
     }
   </script>
   <article class="article container"><header class="article-header">
-    <div class="article-eyebrow">Tag</div>
-    <h1>#rag</h1>
-    <p class="article-lead">5 items tagged <code>rag</code>.</p>
-  </header><div class="post-grid"><a class="post-card" href="/trails/research/three-architectures-of-agent-memory/">
-    <div class="post-card-eyebrow">Research</div>
-    <h3>Three architectures of agent memory — and why Trail picked Compile</h3>
-    <p>Karpathy, Tan, and Liu all start from the same diagnosis — your agent is a retriever, not a thinker. They reach three different architectures: retrieve (RAG), compile (LLM Wiki), and act (Fat Skills / GBrain). Trail picked Compile, deliberately. This is what we accept and what we believe is converging.</p>
-    <div class="post-card-meta">Research · May 3, 2026 · 9 min read</div>
-  </a><a class="post-card" href="/trails/how-trail-works/compile-time-knowledge-vs-rag/">
-    <div class="post-card-eyebrow">How Trail Works</div>
-    <h3>Compile-Time Knowledge: A Technical Argument Against RAG</h3>
-    <p>RAG is a search engine wearing a language model as a hat. Trail compiles knowledge the way a brain consolidates memory — and the architectural difference shows up in latency, accuracy, provenance, and cost.</p>
-    <div class="post-card-meta">How Trail Works · April 15, 2026 · 14 min read</div>
-  </a><a class="post-card" href="/trails/how-trail-works/how-a-brain-actually-remembers/">
-    <div class="post-card-eyebrow">How Trail Works</div>
-    <h3>How a Brain Actually Remembers: Why Trail Compiles Knowledge Instead of Searching For It</h3>
-    <p>RAG treats knowledge like a filing cabinet. Brains do something fundamentally different — and so does trail. The architecture matters more than the model.</p>
-    <div class="post-card-meta">How Trail Works · April 15, 2026 · 12 min read</div>
-  </a><a class="post-card" href="/trails/how-trail-works/knowledge-that-compounds/">
-    <div class="post-card-eyebrow">How Trail Works</div>
-    <h3>Why Your Knowledge Base Should Compile, Not Search</h3>
-    <p>Most AI knowledge systems are sophisticated search engines that forget between queries. The organizations winning are building something different — and the architectural choice has direct consequences for cost, accuracy, and defensibility.</p>
-    <div class="post-card-meta">How Trail Works · April 15, 2026 · 9 min read</div>
-  </a><a class="post-card" href="/trails/research/trail-and-notebooklm/">
-    <div class="post-card-eyebrow">Research</div>
-    <h3>Trail and NotebookLM: Same Ethos, Different Artifact</h3>
-    <p>NotebookLM proved source-grounded ingest-time tools can ship to millions. Trail shares that ethos and diverges on one question: what the system leaves behind.</p>
-    <div class="post-card-meta">Research · April 15, 2026 · 6 min read</div>
-  </a></div></article>
+      <div class="article-eyebrow">Research</div>
+      <h1>Three architectures of agent memory — and why Trail picked Compile</h1>
+      <p class="article-lead">Karpathy, Tan, and Liu all start from the same diagnosis — your agent is a retriever, not a thinker. They reach three different architectures: retrieve (RAG), compile (LLM Wiki), and act (Fat Skills / GBrain). Trail picked Compile, deliberately. This is what we accept and what we believe is converging.</p>
+      <div class="article-meta">Research · trail by broberg.ai · May 3, 2026</div>
+      
+    </header><div class="prose"><h2>The shared diagnosis everyone keeps re-deriving</h2>
+<p>When Andrej Karpathy posted his &quot;LLM Wiki&quot; gist in April 2026, it hit five thousand stars in days. When Garry Tan open-sourced GBrain a few weeks later, the same crowd was reading both. The two systems take opposite engineering directions, but they start from an identical complaint: an agent that holds a million tokens in context still re-reads its source material from scratch every session, never compounds, never learns, never connects yesterday&#39;s insight to today&#39;s question. Karpathy put it sharply — RAG rereads the same books for every exam, never actually learning the material. The Luxembourg-based finance practitioner Yanli Liu, surveying the field for AI Advances in late April, summarised the diagnosis the most cleanly: <em>it&#39;s a retriever, not a thinker</em>.</p>
+<p>This is the consensus, and it has been the consensus for at least two years. What is interesting is what people are doing about it.</p>
+<p>Liu, observing the field after both Karpathy and Tan had shipped their respective patterns, identified three distinct architectural responses. RAG is the retrieve-pattern, mature and ubiquitous. The LLM Wiki is the compile-pattern, a public artefact in April but in fact much older — Niklas Luhmann was running a paper-based instance of it from 1952 to 1998. GBrain is the act-pattern, an autonomous-skill harness built around twenty-four cron jobs and seventeen thousand interlinked pages. The three responses are not in competition. They are solving different versions of the same problem, and the question of which one to use turns out to depend on a question most teams skip: <em>what is your agent&#39;s job?</em></p>
+<p>Trail picked one of these three. We picked it deliberately. This essay is the explanation of which, and why, and what we know we are giving up.</p>
+<h2>Three patterns, three trade-offs</h2>
+<p><!-- missing svg: three-architectures-comparison --></p>
+<p>The retrieve-pattern is the path of least resistance and the path most production teams take. You embed your documents into vectors, store them in Pinecone or Chroma or pgvector, and when a query arrives you find the nearest chunks, inject them into the prompt, and let the model generate. The architecture is mature. The frameworks have standardised around it. You can ship a working internal-knowledge assistant in a long weekend.</p>
+<p>What you cannot do with retrieve is build expertise that compounds. Liu walks through three failure modes — chunking, re-derivation, passivity — and the first two are structural rather than fixable with better tooling. When a thirty-page technical specification gets split into five-hundred-token fragments, the chunk that mentions a compliance requirement and the chunk that explains why the requirement exists land in different vectors. The retriever finds one and misses the other. Your agent gives a technically correct but dangerously incomplete answer. This is not a chunk-size tuning problem. It is what retrieval <em>is</em>.</p>
+<p>The compile-pattern attacks this directly by moving the synthesis work from query-time to write-time. You read a new source through a language model that has already loaded the existing wiki. The model writes summary pages, updates affected entity profiles, files cross-references, flags contradictions, and lands the result back as durable markdown. Future queries do not retrieve raw chunks; they read against the compiled product. Liu&#39;s vivid framing for what happens at ingest is that a single new document touches ten to fifteen wiki pages — every one of them slightly richer than it was yesterday. This is the architecture Karpathy described and the one we built Trail around.</p>
+<p>The act-pattern goes further still. Garry Tan&#39;s GBrain treats knowledge not as a thing to be queried but as a thing to be acted upon. Twenty-one cron jobs run in the background — scrape Hacker News every six hours, enrich newly mentioned entities daily, draft a digest every Monday morning. Each job is a &quot;fat skill,&quot; a markdown file declaring its triggers, its tools, its write-targets, and whether it is allowed to mutate the brain. The intelligence lives in the skills, not in the harness. The agent is awake while you sleep.</p>
+<p>What separates the three is not which one is <em>correct</em> — they are all correct for the problems they were designed to solve — but which problem you have. Retrieve handles two hundred thousand documents that change daily; it does not handle compounding expertise. Compile handles a thousand sources of deep domain material; it does not handle a million Confluence pages, and it does not act on what it knows. Act handles autonomous workflows for a single power user; it requires months of engineering investment and a level of system understanding that most knowledge workers do not have.</p>
+<h2>Why Trail picked Compile</h2>
+<p>The argument for compile, for our specific tenants and our specific positioning, runs as follows.</p>
+<p>The problems Trail addresses are not search problems. They are accumulation problems. An acupuncturist with twenty-five years of clinical material wants the system to be smarter about her practice on her hundredth question than it was on her first. A solo founder building a knowledge base of customer interviews wants the trail of Neurons to compound into something denser than the sum of the calls. A research consultancy ingesting two hundred regulatory filings wants the third filing to update what was learned from the first two, not replace it.</p>
+<p>In all three cases the ceiling is set by the depth of cross-reference, not by the breadth of the corpus. Most of these tenants will never have ten thousand source documents, let alone two hundred thousand. They will have a few hundred to a few thousand, each one carefully chosen, and they will return to the same KB for years. This is the regime where the compile-pattern wins decisively. It is also the regime where retrieve-only RAG quietly under-performs: it scales effortlessly, but the agent never gets smarter. The hundredth query is no better than the first, because nothing was ever consolidated.</p>
+<p>Our trade-off, accepted explicitly, is that we are not trying to be the right tool for the half-million-page Confluence migration. That is a retrieve problem. If you have it, run RAG. We are trying to be the right tool for the two-hundred-source domain corpus where every source matters and every connection between them is valuable. There is a real frontier somewhere around five thousand Neurons per knowledge base where pure markdown navigation begins to creak; we believe we can push that ceiling considerably with FTS5 today and a vector retrieval layer when the data demands it. Liu makes the same point — at one hundred thousand sources, the LLM Wiki pattern is unusable without adding a retrieval layer on top, which then starts to look like RAG again. We agree. The convergence is real, and Trail&#39;s design assumes it.</p>
+<p>Our other trade-off, also accepted explicitly, is that the compile-pattern is passive. The system knows things. It does not, today, <em>do</em> things. It will not silently flag that a new clinical paper contradicts a standing protocol. It will not draft a Monday digest of last week&#39;s ingested material on its own. We have a planned feature for this — internally we call it Trail Routines, user-authored cron-fired workflows that read against the KB and emit candidates back into the curation queue — but it is a planned feature, not a shipped one. We are deferring it because we believe the foundation has to be rock-solid for one paying tenant before the action layer becomes useful rather than dangerous.</p>
+<h2>What stays the same when scale changes</h2>
+<p><!-- missing svg: trail-as-compile-layer --></p>
+<p>The version of this argument that goes wrong is the tribal one. <em>Compile is the right architecture, retrieve is dead, act is the future.</em> That is not what we believe. Liu&#39;s closing thesis, which we agree with, is that the three patterns are converging. A production-grade knowledge layer in 2026 will eventually combine all three. Retrieval at the bottom for handling scale that the corpus eventually reaches. Compile in the middle for the synthesis that retrieval cannot produce. Action at the top for the workflows that operate on the compiled material. Trail&#39;s design assumes this convergence and is deliberately built as the middle layer.</p>
+<p>What this means in practice is that Trail does not try to be the agent platform. We try to be the persistent compiled memory the agent platform reads from. Our KBs are exposed to MCP clients as a first-class read interface — point any agent at the Neuron trail, and the trail becomes that agent&#39;s institutional memory. A future GBrain-style harness running on top of Trail would invoke our compiled Neurons rather than re-deriving the same understanding on every query. The compile cost has already been paid, once, at ingest. The agent reads against that work for its remaining lifetime.</p>
+<p>The same is true at the retrieval boundary. As individual KBs grow large enough to start straining markdown-and-FTS5 navigation, we will add a vector layer that backs the same Neurons. Retrieval becomes a performance optimisation under the existing compile model rather than a replacement for it. The agent still reads compiled Neurons; the retrieval layer just helps narrow the candidate set first.</p>
+<p>This is the bet. The three architectures look like rivals in 2026 because they were proposed in isolation — Karpathy&#39;s gist, Tan&#39;s repo, the established RAG ecosystem — and the discourse around them has framed the choice as a zero-sum one. We think the dichotomy is temporary. The same way databases evolved from &quot;pick SQL or NoSQL&quot; into hybrid stores that handle both, agent memory will evolve from &quot;pick retrieve, compile, or act&quot; into a layered stack where each layer does one thing well. Trail&#39;s choice is to be the durable, governed, schema-bound layer in the middle that the others read against and write back to.</p>
+<h2>The decision framework, restated</h2>
+<p>The question Liu asks at the end of her piece is the right one for any team thinking about this. <em>What is your agent&#39;s job?</em> If the job is finding answers in a large corpus that changes daily, run RAG and pair it with a reranker; you will cover most of what enterprise knowledge assistants are asked to do. If the job is operating autonomously on workflows that recur, budget months for engineering and build the skill layer carefully; the payoff is an agent that does, not just responds. If the job is in between — building expertise that should compound over time, where the value is in the connections between sources rather than in any single document — that is the regime where the compile-pattern earns its keep, and that is where Trail lives.</p>
+<p>The teams that get this wrong tend to default to RAG because it is easiest to ship and then notice, six months in, that their agent never got smarter. That is not a tooling problem. It is a category mismatch. Retrieve-shaped problems are fine; compile-shaped problems are different. Naming the difference up front is the cheapest piece of architecture work you can do.</p>
+<p>We picked Compile. We picked it for a class of users we know how to serve. We accept the ceilings, and we have a plan for them. We do not believe Compile wins everywhere, and we do not believe RAG is dead. We believe each architecture is the right answer to a different question, and we believe knowing which question your agent is actually trying to answer matters more than which architecture is currently fashionable.</p>
+<p>Start with the job. The architecture follows.</p>
+<hr>
+<h3>Further reading</h3>
+<ul>
+<li>Yanli Liu, <em>RAG, LLM Wiki, or GBrain? How Your Agent Remembers Changes Everything</em>, AI Advances on Medium, April 2026 — the three-architecture survey this piece draws on.</li>
+<li>Andrej Karpathy, <em>LLM Wiki</em> GitHub gist, April 2026 — the original compile-pattern manifesto.</li>
+<li>Garry Tan, <em>GBrain</em> repository on GitHub — the Fat Skills reference implementation.</li>
+<li>For Trail&#39;s specific lineage from Vannevar Bush to Niklas Luhmann to today, see <a href="/trails/research/niklas-luhmann-zettelkasten-llm-wiki/">Niklas Luhmann&#39;s Zettelkasten Has Been Waiting Seventy Years for the LLM</a>.</li>
+</ul>
+</div><div class="post-footer"><div class="post-tags"><a class="post-tag" href="/tags/rag/">#rag</a><a class="post-tag" href="/tags/llm-wiki/">#llm-wiki</a><a class="post-tag" href="/tags/knowledge-architecture/">#knowledge-architecture</a><a class="post-tag" href="/tags/agent-memory/">#agent-memory</a><a class="post-tag" href="/tags/compile-time/">#compile-time</a><a class="post-tag" href="/tags/convergence/">#convergence</a></div><a class="post-more" href="/trails/research/">← MORE FROM RESEARCH</a></div></article>
   <footer class="footer">
     <div class="footer-inner">
       <div class="footer-brand">
@@ -1005,6 +1019,6 @@ body[data-menu-open="true"] { overflow: hidden; }
 })();
 </script>
 
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebPage","name":"#rag — trail","url":"https://www.trailmem.com/tags/rag/","description":"Content tagged rag.","inLanguage":"en","isPartOf":{"@type":"WebSite","name":"trail-landing","url":"https://www.trailmem.com/"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebPage","name":"Three architectures of agent memory — and why Trail picked Compile","url":"https://www.trailmem.com/trails/research/three-architectures-of-agent-memory/","description":"Karpathy, Tan, and Liu all start from the same diagnosis — your agent is a retriever, not a thinker. They reach three different architectures: retrieve (RAG), compile (LLM Wiki), and act (Fat Skills / GBrain). Trail picked Compile, deliberately. This is what we accept and what we believe is converging.","inLanguage":"en","isPartOf":{"@type":"WebSite","name":"trail-landing","url":"https://www.trailmem.com/"}}</script>
 </body>
 </html>
