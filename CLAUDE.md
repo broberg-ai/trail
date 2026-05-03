@@ -43,10 +43,13 @@ What you must do:
    Posts collection. The webhouse.app admin's deploy step commits
    back to this repo, GitHub Pages picks it up.
 2. **If asked to write content from inside this cc session**: use
-   the `webhouse.app` admin REST API or call the cms-core peer
-   session via `mcp__buddy__ask_peer({ to: "cms-core", … })` to
-   route the write through the production admin. Do NOT shell out
-   to `localhost:3010`.
+   the `webhouse.app` admin REST API. Full guide:
+   **https://docs.webhouse.app/docs/producing-articles-via-api**
+   (covers token creation, JSON shape, status semantics, multilingual
+   `translationGroup`, and what happens after the POST). Or call the
+   cms-core peer session via `mcp__buddy__ask_peer({ to: "cms-core",
+   … })` if you want cms-core to author the post on your behalf. Do
+   NOT shell out to `localhost:3010`.
 3. **Code edits to `apps/landing/` itself** (templates, blocks,
    styling, build scripts) stay in this repo and ship via PR — the
    rule is about *content*, not *code*.
