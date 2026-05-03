@@ -278,7 +278,7 @@ Scheduled WAL-safe online snapshots of the master Trail SQLite DB, compressed an
 
 | # | Feature | Status | Phase | Plan |
 |---|---------|--------|-------|------|
-| F153 | [Continuous DB backup to R2](features/F153-continuous-db-backup-to-r2.md) | Planned | 1 | [plan](features/F153-continuous-db-backup-to-r2.md) |
+| F153 | [Continuous DB backup to R2](features/F153-continuous-db-backup-to-r2.md) | Done | 1 | [plan](features/F153-continuous-db-backup-to-r2.md) |
 
 ### F154 — Trail Control Plane (remote management & deployment center)
 

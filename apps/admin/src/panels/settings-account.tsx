@@ -5,8 +5,10 @@ import {
   listApiKeys,
   createApiKey,
   revokeApiKey,
+  getBackupHealth,
   type ApiKeyRow,
   type ApiKeyCreated,
+  type BackupHealth,
 } from '../api';
 import { t, useLocale } from '../lib/i18n';
 import { ambientEnabled, ambientVolume } from '../lib/ambient-store';
@@ -149,6 +151,8 @@ export function SettingsAccountPanel() {
         </section>
 
         <ApiKeysSection />
+
+        <BackupHealthSection />
 
         <section class="pt-4 border-t border-[color:var(--color-border)]">
           <button
@@ -436,4 +440,98 @@ function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/**
+ * F153 Phase 4 — Read-only backup health card.
+ *
+ * Operator-level backup is a SaaS-wide concern, not per-tenant — see
+ * the 2026-04-24 Phase 4 drop ruling in F153's plan-doc. This card
+ * shows tenants "the backup pipeline is alive" without exposing
+ * trigger controls (those stay owner-gated under /admin/backups).
+ *
+ * Hidden when the backup pipeline isn't configured, so dev environments
+ * without R2 credentials don't show a permanently-yellow card.
+ */
+function BackupHealthSection() {
+  const [health, setHealth] = useState<BackupHealth | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  useEffect(() => {
+    getBackupHealth()
+      .then(setHealth)
+      .catch(() => setLoadFailed(true));
+  }, []);
+
+  if (loadFailed || !health || !health.configured) return null;
+
+  const stateColor =
+    health.healthy === true
+      ? 'var(--color-success)'
+      : health.healthy === false
+        ? 'var(--color-danger)'
+        : 'var(--color-fg-subtle)';
+  const stateLabel =
+    health.healthy === true
+      ? t('settings.account.backupHealth.healthy')
+      : health.healthy === false
+        ? t('settings.account.backupHealth.stale')
+        : t('settings.account.backupHealth.unknown');
+
+  return (
+    <section class="pt-4 border-t border-[color:var(--color-border)]">
+      <h2 class="text-sm font-medium mb-1">{t('settings.account.backupHealth.title')}</h2>
+      <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-md mb-3">
+        {t('settings.account.backupHealth.subtitle')}
+      </p>
+      <div class="grid grid-cols-3 gap-3 max-w-2xl text-[12px]">
+        <div class="rounded-md border border-[color:var(--color-border)] p-3">
+          <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-1">
+            {t('settings.account.backupHealth.state')}
+          </div>
+          <div class="font-mono flex items-center gap-2">
+            <span
+              aria-hidden
+              style={{
+                display: 'inline-block',
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: stateColor,
+              }}
+            />
+            <span style={{ color: stateColor }}>{stateLabel}</span>
+          </div>
+        </div>
+        <div class="rounded-md border border-[color:var(--color-border)] p-3">
+          <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-1">
+            {t('settings.account.backupHealth.lastSuccess')}
+          </div>
+          <div class="font-mono">
+            {health.lastSuccess
+              ? formatRelativeShort(health.lastSuccess)
+              : t('settings.account.backupHealth.never')}
+          </div>
+        </div>
+        <div class="rounded-md border border-[color:var(--color-border)] p-3">
+          <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-1">
+            {t('settings.account.backupHealth.last30Days')}
+          </div>
+          <div class="font-mono">{health.last30Days}</div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function formatRelativeShort(iso: string): string {
+  const ms = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(ms)) return iso;
+  const m = Math.round(ms / 60_000);
+  if (m < 1) return t('settings.account.backupHealth.justNow');
+  if (m < 60) return `${m} min`;
+  const h = Math.round(m / 60);
+  if (h < 48) return `${h} t`;
+  const d = Math.round(h / 24);
+  return `${d} d`;
 }

@@ -1375,3 +1375,18 @@ export function updateIngestSettings(
     body: JSON.stringify(body),
   });
 }
+
+// ── F153 Phase 4 — Read-only backup health ─────────────────────────
+
+export interface BackupHealth {
+  configured: boolean;
+  providerType: string;
+  lastSuccess: string | null;
+  last30Days: number;
+  /** null = not configured; bool reflects "fresh enough". */
+  healthy: boolean | null;
+}
+
+export function getBackupHealth(): Promise<BackupHealth> {
+  return api('/api/v1/backups/health');
+}

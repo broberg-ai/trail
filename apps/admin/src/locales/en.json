@@ -632,6 +632,18 @@
         "colLastUsed": "Last used",
         "colCreated": "Created",
         "neverUsed": "Never"
+      },
+      "backupHealth": {
+        "title": "Backup system",
+        "subtitle": "Operator-level continuous backup of the whole Trail database to R2. Read-only — only the operator role can trigger backups.",
+        "state": "Status",
+        "lastSuccess": "Last backup",
+        "last30Days": "Last 30 days",
+        "healthy": "OK",
+        "stale": "Stale",
+        "unknown": "Unknown",
+        "never": "never run",
+        "justNow": "just now"
       }
     }
   },
