@@ -519,6 +519,12 @@
     "conflict": "Kan ikke udføres — elementet er ændret siden du åbnede det.",
     "unknown": "Ukendt fejl: {message}"
   },
+  "wikiReader": {
+    "claimAnchors": {
+      "show": "Vis claim-anchors",
+      "hide": "Skjul claim-anchors"
+    }
+  },
   "neuronEditor": {
     "editButton": "Rediger",
     "openEditor": "Åbn editor",
