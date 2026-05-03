@@ -10,6 +10,7 @@ import { AmbientToggle } from './components/ambient-toggle';
 import { ThinkingSubscriber } from './components/thinking-subscriber';
 import { JobsBadge } from './components/jobs-badge';
 import { JobProgressModalRoot } from './components/job-progress-modal';
+import { ResumableUploadsBanner } from './components/resumable-uploads-banner';
 import { ambientRoute } from './lib/ambient-store';
 import { routeFromPath } from './lib/route-to-ambient';
 import { useKb } from './lib/kb-cache';
@@ -167,6 +168,7 @@ export function App({ children }: { children: ComponentChildren }) {
           {kbId ? <TrailNav kbId={kbId} /> : null}
         </div>
       </header>
+      {me ? <ResumableUploadsBanner /> : null}
       <main class="relative z-10 flex-1">{me ? children : null}</main>
       <AmbientProvider />
       {me ? <ThinkingSubscriber /> : null}

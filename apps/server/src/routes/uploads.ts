@@ -785,6 +785,7 @@ uploadRoutes.get('/uploads/:uploadId', async (c) => {
     contentHash: session.contentHash,
     receivedBytes: session.receivedBytes,
     status: session.status,
+    chunkSize: CHUNK_SIZE,
     expiresAt: session.expiresAt,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
-import { uploadSource, ApiError } from '../api';
+import { ApiError } from '../api';
 import type { Document } from '@trail/shared';
 import { Modal, ModalButton } from './modal';
 import { t } from '../lib/i18n';
+import { uploadChunked } from '../lib/upload-client';
 
 /**
  * F162 — when upload-route returns 409 + code='duplicate_source', this
@@ -42,7 +43,13 @@ export function UploadDropzone({
 }) {
   const [dragActive, setDragActive] = useState(false);
   const [queue, setQueue] = useState<
-    Array<{ id: string; name: string; state: 'pending' | 'uploading' | 'done' | 'error' | 'skipped'; message?: string }>
+    Array<{
+      id: string;
+      name: string;
+      state: 'pending' | 'uploading' | 'done' | 'error' | 'skipped';
+      message?: string;
+      progress?: number;
+    }>
   >([]);
   const [conflict, setConflict] = useState<DuplicateConflict | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -66,10 +73,19 @@ export function UploadDropzone({
       ]);
 
       for (const { id, file } of entries) {
-        setQueue((prev) => prev.map((q) => (q.id === id ? { ...q, state: 'uploading' } : q)));
+        setQueue((prev) =>
+          prev.map((q) => (q.id === id ? { ...q, state: 'uploading', progress: 0 } : q)),
+        );
         try {
-          const doc = await uploadSource(kbId, file);
-          setQueue((prev) => prev.map((q) => (q.id === id ? { ...q, state: 'done' } : q)));
+          const doc = await uploadChunked(kbId, file, {
+            onProgress: ({ receivedBytes, totalBytes }) => {
+              const pct = totalBytes > 0 ? Math.floor((receivedBytes / totalBytes) * 100) : 0;
+              setQueue((prev) => prev.map((q) => (q.id === id ? { ...q, progress: pct } : q)));
+            },
+          });
+          setQueue((prev) =>
+            prev.map((q) => (q.id === id ? { ...q, state: 'done', progress: 100 } : q)),
+          );
           onUploaded(doc);
         } catch (err) {
           // F162 — duplicate detection. Server returns 409 with structured
@@ -121,9 +137,18 @@ export function UploadDropzone({
             }
             // action === 'force' — retry once with ?force=true.
             try {
-              const doc = await uploadSource(kbId, file, { force: true });
+              const doc = await uploadChunked(kbId, file, {
+                force: true,
+                onProgress: ({ receivedBytes, totalBytes }) => {
+                  const pct =
+                    totalBytes > 0 ? Math.floor((receivedBytes / totalBytes) * 100) : 0;
+                  setQueue((prev) =>
+                    prev.map((q) => (q.id === id ? { ...q, progress: pct } : q)),
+                  );
+                },
+              });
               setQueue((prev) =>
-                prev.map((q) => (q.id === id ? { ...q, state: 'done' } : q)),
+                prev.map((q) => (q.id === id ? { ...q, state: 'done', progress: 100 } : q)),
               );
               onUploaded(doc);
             } catch (retryErr) {
@@ -225,27 +250,37 @@ export function UploadDropzone({
       </div>
 
       {queue.length ? (
-        <ul class="mt-3 space-y-1 text-[11px] font-mono">
+        <ul class="mt-3 space-y-1.5 text-[11px] font-mono">
           {queue.map((q) => (
-            <li key={q.id} class="flex items-center justify-between gap-3">
-              <span class="truncate text-[color:var(--color-fg-muted)]">{q.name}</span>
-              <span
-                class={
-                  q.state === 'done'
-                    ? 'text-[color:var(--color-success)]'
-                    : q.state === 'error'
-                    ? 'text-[color:var(--color-danger)]'
-                    : q.state === 'skipped'
-                    ? 'text-[color:var(--color-fg-muted)]'
-                    : 'text-[color:var(--color-fg-subtle)]'
-                }
-              >
-                {q.state === 'pending' && '…queued'}
-                {q.state === 'uploading' && 'uploading…'}
-                {q.state === 'done' && '✓ done'}
-                {q.state === 'error' && `✗ ${q.message ?? 'failed'}`}
-                {q.state === 'skipped' && `⊘ ${q.message ?? 'skipped'}`}
-              </span>
+            <li key={q.id} class="space-y-0.5">
+              <div class="flex items-center justify-between gap-3">
+                <span class="truncate text-[color:var(--color-fg-muted)]">{q.name}</span>
+                <span
+                  class={
+                    q.state === 'done'
+                      ? 'text-[color:var(--color-success)]'
+                      : q.state === 'error'
+                      ? 'text-[color:var(--color-danger)]'
+                      : q.state === 'skipped'
+                      ? 'text-[color:var(--color-fg-muted)]'
+                      : 'text-[color:var(--color-fg-subtle)]'
+                  }
+                >
+                  {q.state === 'pending' && '…queued'}
+                  {q.state === 'uploading' && `${q.progress ?? 0}%`}
+                  {q.state === 'done' && '✓ done'}
+                  {q.state === 'error' && `✗ ${q.message ?? 'failed'}`}
+                  {q.state === 'skipped' && `⊘ ${q.message ?? 'skipped'}`}
+                </span>
+              </div>
+              {q.state === 'uploading' ? (
+                <div class="h-1 rounded-full bg-[color:var(--color-bg-card)] overflow-hidden">
+                  <div
+                    class="h-full bg-[color:var(--color-accent)] transition-[width] duration-150"
+                    style={{ width: `${q.progress ?? 0}%` }}
+                  />
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>
