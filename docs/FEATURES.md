@@ -357,6 +357,7 @@ Inspireret af Shuyi Wang's "Should You Actually Try Karpathy's LLM Wiki?" (2026-
 | F178 | [Landing build automation + auto-deploy (`pnpm landing:ship`)](features/F178-landing-build-automation-auto-deploy.md) | Done | 1 | [plan](features/F178-landing-build-automation-auto-deploy.md) |
 | F179 | [Provider-direct ingest path for bulk jobs (caching + Batch API)](features/F179-provider-direct-bulk-ingest.md) | Planned | 1/2 | [plan](features/F179-provider-direct-bulk-ingest.md) |
 | F180 | [Resumable chunked uploads (durable-once-clicked)](features/F180-resumable-chunked-uploads.md) | Planned | 1 | [plan](features/F180-resumable-chunked-uploads.md) |
+| F181 | [Trail Routines: user-defined scheduled KB workflows](features/F181-trail-routines.md) | Planned (post-Sanne) | 1+2 | [plan](features/F181-trail-routines.md) |
 
 ---
 
