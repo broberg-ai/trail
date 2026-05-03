@@ -20,6 +20,7 @@ import { startLintScheduler } from './services/lint-scheduler.js';
 import { startQueueBackfill } from './services/queue-backfill.js';
 import { startActionRecommender, backfillRecommendations } from './services/action-recommender.js';
 import { startActivityLogger } from './services/activity-logger.js';
+import { startUploadSessionGc } from './services/upload-session-gc.js';
 import { initJobRunner } from './services/jobs/runner.js';
 import { noopHandler } from './services/jobs/handlers/noop.js';
 import { visionRerunHandler } from './services/jobs/handlers/vision-rerun.js';
@@ -133,6 +134,11 @@ const stopActionRecommender = startActionRecommender(trail);
 // logActivity() calls in routes/services).
 const stopActivityLogger = startActivityLogger(trail);
 
+// F180 — upload-session GC. Hourly tick: expire stale uploading
+// sessions (cleans temp file + cascades documents row), reap
+// expired/aborted rows older than 7d.
+const stopUploadSessionGc = startUploadSessionGc(trail);
+
 // One-shot backfill for existing pending candidates that landed
 // before the recommender was wired up. Runs 60s after boot so it
 // doesn't compete with queue-backfill's translation work. Serial, so
@@ -186,6 +192,7 @@ const shutdown = async () => {
   stopQueueBackfill();
   stopActionRecommender();
   stopActivityLogger();
+  stopUploadSessionGc();
   server.stop();
   await trail.close();
   process.exit(0);

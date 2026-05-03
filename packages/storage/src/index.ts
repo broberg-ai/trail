@@ -21,6 +21,22 @@ export interface Storage {
 
   /** List all paths under a prefix. */
   list(prefix: string): Promise<string[]>;
+
+  /**
+   * F180 — Append a chunk at the given byte offset to a staging file.
+   * Creates the file (and any parent dirs) if missing. Idempotent on
+   * overlapping ranges: re-writing the same offset overwrites the same
+   * bytes — no append-and-grow semantics.
+   */
+  appendChunk(tempPath: string, offset: number, bytes: Uint8Array): Promise<void>;
+
+  /**
+   * F180 — Atomically promote a staging file to its final path.
+   * Same-FS rename when possible; falls back to copy+unlink on
+   * cross-device. Caller is responsible for verifying byte-count and
+   * sha256 BEFORE calling finalize.
+   */
+  finalize(tempPath: string, finalPath: string): Promise<void>;
 }
 
 export { LocalStorage } from './local.js';

@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
-import { documents, type TrailDatabase } from '@trail/db';
+import { documents, uploadSessions, type TrailDatabase } from '@trail/db';
 import { and, eq, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
+import { createReadStream, existsSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { requireAuth, getUser, getTenant, getTrail } from '../middleware/auth.js';
 import { processPdf, processDocx, processPptx, processXlsx, dispatch, pickPipeline } from '@trail/pipelines';
 import { storage, sourcePath } from '../lib/storage.js';
@@ -294,6 +296,543 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
 
   console.log(`[upload] response-ready 201 ${lap()}`);
   return c.json(doc, 201);
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// F180 — Resumable chunked uploads
+// ─────────────────────────────────────────────────────────────────────
+//
+// Three-step protocol that replaces the single-shot POST above:
+//   1. POST /knowledge-bases/:kbId/documents/upload/init  → uploadId
+//   2. PATCH /uploads/:uploadId/chunk                     (loop)
+//   3. POST /uploads/:uploadId/finalize                   → Document
+// Plus GET /uploads/:uploadId for resume + DELETE /uploads/:uploadId
+// for cancel. The single-shot endpoint stays as a deprecated fallback
+// for clients that don't yet ship the chunked client.
+//
+// Server-side state lives in `upload_sessions` + a per-uploadId temp
+// file under `_tmp/`. A 24h expires_at is set at /init; the GC service
+// (apps/server/src/services/upload-session-gc.ts) reaps expired rows
+// + temp files hourly.
+
+const CHUNK_SIZE = 1 * 1024 * 1024; // 1 MB — see plan-doc "Open questions"
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+// Per-uploadId in-process mutex so two concurrent PATCH chunk calls
+// for the same uploadId don't interleave their pwrite() at the same
+// offset. Realistic clients send sequentially, but the protocol must
+// be robust against accidental parallel calls.
+const chunkMutexes = new Map<string, Promise<void>>();
+
+async function withChunkMutex<T>(uploadId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = chunkMutexes.get(uploadId) ?? Promise.resolve();
+  let release!: () => void;
+  const next = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  chunkMutexes.set(uploadId, prev.then(() => next));
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (chunkMutexes.get(uploadId) === prev.then(() => next)) {
+      chunkMutexes.delete(uploadId);
+    }
+  }
+}
+
+function tempPathFor(uploadId: string): string {
+  return `_tmp/${uploadId}.partial`;
+}
+
+function tempFsPath(uploadId: string): string {
+  // Resolve through storage's root for hash-on-disk verification + GC.
+  // We don't read this file via storage.get() because partial reads
+  // are O(file-size) over the whole buffer; createReadStream is fine.
+  // Mirrors LocalStorage.resolve() but kept here so we don't widen the
+  // public Storage interface for this one debug/verify case.
+  const root = process.env.TRAIL_UPLOADS_DIR ?? join(process.env.TRAIL_DATA_DIR ?? '.data', 'uploads');
+  return join(root, tempPathFor(uploadId));
+}
+
+function parseContentRange(header: string | undefined): { start: number; end: number; total: number } | null {
+  if (!header) return null;
+  const match = header.match(/^bytes\s+(\d+)-(\d+)\/(\d+)$/i);
+  if (!match) return null;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  const total = Number(match[3]);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(total)) return null;
+  if (start < 0 || end < start || end >= total) return null;
+  return { start, end, total };
+}
+
+async function sha256OfFile(fsPath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = createHash('sha256');
+    const stream = createReadStream(fsPath);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('error', reject);
+  });
+}
+
+// POST /api/v1/knowledge-bases/:kbId/documents/upload/init
+uploadRoutes.post('/knowledge-bases/:kbId/documents/upload/init', async (c) => {
+  const trail = getTrail(c);
+  const user = getUser(c);
+  const tenant = getTenant(c);
+  const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
+  if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
+
+  let body: {
+    filename?: string;
+    contentLength?: number;
+    contentHash?: string;
+    path?: string;
+    metadata?: { connector?: string; sourceUrl?: string; tags?: string[] };
+  };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+  const { filename, contentLength, contentHash } = body;
+  const path = body.path ?? '/';
+
+  if (!filename || typeof filename !== 'string') return c.json({ error: 'filename required' }, 400);
+  if (typeof contentLength !== 'number' || contentLength <= 0) {
+    return c.json({ error: 'contentLength must be a positive number' }, 400);
+  }
+  if (contentLength > MAX_FILE_SIZE) return c.json({ error: 'File too large (max 100MB)' }, 413);
+  if (!contentHash || typeof contentHash !== 'string' || !/^[a-f0-9]{64}$/i.test(contentHash)) {
+    return c.json({ error: 'contentHash must be a 64-char hex sha256 string' }, 400);
+  }
+
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  if (!ALLOWED_EXTENSIONS.has(ext)) {
+    return c.json({ error: `File type .${ext} not allowed` }, 400);
+  }
+
+  // Pre-flight dedup — skip the whole transfer for content we already have.
+  const force = c.req.query('force') === 'true';
+  if (!force) {
+    const existing = await trail.db
+      .select({
+        id: documents.id,
+        filename: documents.filename,
+        path: documents.path,
+        createdAt: documents.createdAt,
+      })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.tenantId, tenant.id),
+          eq(documents.knowledgeBaseId, kbId),
+          eq(documents.kind, 'source'),
+          eq(documents.archived, false),
+          eq(documents.contentHash, contentHash),
+        ),
+      )
+      .get();
+    if (existing) {
+      return c.json(
+        {
+          error: 'A source with identical content already exists in this Trail.',
+          code: 'duplicate_source',
+          existingDocumentId: existing.id,
+          existingFilename: existing.filename,
+          existingPath: existing.path,
+          existingCreatedAt: existing.createdAt,
+          hint: 'Append ?force=true to upload anyway as a separate Source.',
+        },
+        409,
+      );
+    }
+  }
+
+  const docId = crypto.randomUUID();
+  const uploadId = crypto.randomUUID();
+  const tempPath = tempPathFor(uploadId);
+  const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+
+  // Two writes — kept as separate statements rather than wrapped in a
+  // BEGIN/COMMIT because libSQL's drizzle adapter doesn't expose
+  // transactions for write-only flows; if the second insert fails we
+  // unwind by deleting the documents row.
+  await trail.db
+    .insert(documents)
+    .values({
+      id: docId,
+      tenantId: tenant.id,
+      knowledgeBaseId: kbId,
+      userId: user.id,
+      kind: 'source',
+      filename,
+      path,
+      fileType: ext,
+      fileSize: contentLength,
+      status: 'uploading',
+      tags: body.metadata?.tags?.join(', ') ?? null,
+      metadata: body.metadata?.connector
+        ? JSON.stringify({ connector: body.metadata.connector, sourceUrl: body.metadata.sourceUrl })
+        : null,
+      contentHash,
+      seq: sql<number>`COALESCE((SELECT MAX(${documents.seq}) FROM ${documents} WHERE ${documents.knowledgeBaseId} = ${kbId}), 0) + 1`,
+    })
+    .run();
+
+  try {
+    await trail.db
+      .insert(uploadSessions)
+      .values({
+        id: uploadId,
+        tenantId: tenant.id,
+        knowledgeBaseId: kbId,
+        documentId: docId,
+        userId: user.id,
+        filename,
+        contentLength,
+        contentHash,
+        receivedBytes: 0,
+        status: 'uploading',
+        tempPath,
+        expiresAt,
+      })
+      .run();
+  } catch (err) {
+    // Roll back the documents insert so we don't leak an orphan
+    // 'uploading'-state row that no client knows the uploadId for.
+    await trail.db.delete(documents).where(eq(documents.id, docId)).run();
+    throw err;
+  }
+
+  return c.json(
+    {
+      uploadId,
+      docId,
+      chunkSize: CHUNK_SIZE,
+      expiresAt,
+    },
+    201,
+  );
+});
+
+// PATCH /api/v1/uploads/:uploadId/chunk
+uploadRoutes.patch('/uploads/:uploadId/chunk', async (c) => {
+  const trail = getTrail(c);
+  const user = getUser(c);
+  const tenant = getTenant(c);
+  const uploadId = c.req.param('uploadId');
+
+  const session = await trail.db
+    .select()
+    .from(uploadSessions)
+    .where(eq(uploadSessions.id, uploadId))
+    .get();
+  if (!session) return c.json({ error: 'Upload session not found' }, 404);
+  if (session.tenantId !== tenant.id || session.userId !== user.id) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+  if (session.status !== 'uploading') {
+    return c.json({ error: `Upload session is ${session.status}` }, 410);
+  }
+
+  const range = parseContentRange(c.req.header('content-range'));
+  if (!range) return c.json({ error: 'Malformed Content-Range header' }, 416);
+  if (range.total !== session.contentLength) {
+    return c.json({ error: 'Content-Range total does not match contentLength at /init' }, 416);
+  }
+
+  const body = await c.req.arrayBuffer();
+  const expectedLen = range.end - range.start + 1;
+  if (body.byteLength !== expectedLen) {
+    return c.json(
+      { error: `Body length ${body.byteLength} does not match Content-Range span ${expectedLen}` },
+      416,
+    );
+  }
+
+  const result = await withChunkMutex(uploadId, async () => {
+    await storage.appendChunk(session.tempPath, range.start, new Uint8Array(body));
+    // received_bytes = MAX(current, end+1) — out-of-order chunk acks
+    // don't roll the high-water-mark back. Sequential clients converge
+    // monotonically; idempotent re-sends are no-ops.
+    await trail.db
+      .update(uploadSessions)
+      .set({
+        receivedBytes: sql<number>`MAX(${uploadSessions.receivedBytes}, ${range.end + 1})`,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(uploadSessions.id, uploadId))
+      .run();
+    const updated = await trail.db
+      .select({ receivedBytes: uploadSessions.receivedBytes })
+      .from(uploadSessions)
+      .where(eq(uploadSessions.id, uploadId))
+      .get();
+    return updated?.receivedBytes ?? range.end + 1;
+  });
+
+  return c.json({ uploadId, receivedBytes: result });
+});
+
+// POST /api/v1/uploads/:uploadId/finalize
+uploadRoutes.post('/uploads/:uploadId/finalize', async (c) => {
+  const trail = getTrail(c);
+  const user = getUser(c);
+  const tenant = getTenant(c);
+  const uploadId = c.req.param('uploadId');
+
+  let body: { contentHash?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const session = await trail.db
+    .select()
+    .from(uploadSessions)
+    .where(eq(uploadSessions.id, uploadId))
+    .get();
+  if (!session) return c.json({ error: 'Upload session not found' }, 404);
+  if (session.tenantId !== tenant.id || session.userId !== user.id) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+  if (session.status !== 'uploading') {
+    return c.json({ error: `Upload session is ${session.status}` }, 410);
+  }
+
+  if (session.receivedBytes < session.contentLength) {
+    return c.json(
+      {
+        error: 'incomplete',
+        receivedBytes: session.receivedBytes,
+        expectedBytes: session.contentLength,
+      },
+      422,
+    );
+  }
+
+  const tempFs = tempFsPath(uploadId);
+  if (!existsSync(tempFs)) {
+    return c.json({ error: 'Temp file missing — upload likely expired or aborted' }, 410);
+  }
+  const stat = statSync(tempFs);
+  if (stat.size !== session.contentLength) {
+    return c.json(
+      {
+        error: 'incomplete',
+        receivedBytes: stat.size,
+        expectedBytes: session.contentLength,
+      },
+      422,
+    );
+  }
+
+  const computedHash = await sha256OfFile(tempFs);
+  if (body.contentHash && body.contentHash !== computedHash) {
+    return c.json({ error: 'hash-mismatch', receivedBytes: stat.size, computedHash }, 422);
+  }
+  if (computedHash !== session.contentHash) {
+    return c.json({ error: 'hash-mismatch', receivedBytes: stat.size, computedHash }, 422);
+  }
+
+  const ext = session.filename.split('.').pop()?.toLowerCase() ?? '';
+  const finalRel = sourcePath(tenant.id, session.knowledgeBaseId, session.documentId, ext);
+  await storage.finalize(session.tempPath, finalRel);
+
+  const isText = TEXT_EXTENSIONS.has(ext);
+  const hasExtractor = isText || pickPipeline(session.filename) !== null;
+  const initialStatus = !hasExtractor ? 'failed' : isText ? 'ready' : 'pending';
+  const initialError = !hasExtractor ? unsupportedFormatMessage(ext) : null;
+
+  // Read final bytes for the text/inline path + processFileAsync. For
+  // a 100MB file this still buffers — same memory ceiling as the
+  // single-shot route. Phase 1 keeps post-finalize cost at parity;
+  // Phase 3 may stream extractors.
+  const finalBytes = await storage.get(finalRel);
+  if (!finalBytes) {
+    return c.json({ error: 'finalize: storage.get returned null after rename' }, 500);
+  }
+  const buffer = Buffer.from(finalBytes);
+
+  await trail.db
+    .update(documents)
+    .set({
+      status: initialStatus,
+      errorMessage: initialError,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(documents.id, session.documentId))
+    .run();
+
+  if (isText) {
+    const content = new TextDecoder().decode(buffer);
+    const title = ext === 'md' ? extractTitle(content) ?? session.filename : session.filename;
+    await trail.db
+      .update(documents)
+      .set({ content, title, status: 'processing', version: 1 })
+      .where(eq(documents.id, session.documentId))
+      .run();
+
+    if (content.trim()) {
+      const chunks = chunkText(content);
+      await storeChunks(trail, session.documentId, tenant.id, session.knowledgeBaseId, chunks);
+    }
+  }
+
+  if (!isText && pickPipeline(session.filename) !== null) {
+    processFileAsync(
+      trail,
+      session.documentId,
+      tenant.id,
+      session.knowledgeBaseId,
+      user.id,
+      session.filename,
+      buffer,
+    ).catch(async (err) => {
+      console.error(`[pipeline] failed for ${session.filename}:`, err);
+      await trail.db
+        .update(documents)
+        .set({
+          status: 'failed',
+          errorMessage: String(err).slice(0, 1000),
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(documents.id, session.documentId))
+        .run();
+    });
+  }
+
+  await trail.db
+    .update(uploadSessions)
+    .set({ status: 'complete', updatedAt: new Date().toISOString() })
+    .where(eq(uploadSessions.id, uploadId))
+    .run();
+
+  const doc = await trail.db
+    .select()
+    .from(documents)
+    .where(eq(documents.id, session.documentId))
+    .get();
+
+  let connector: string | undefined;
+  if (doc?.metadata) {
+    try {
+      connector = JSON.parse(doc.metadata).connector;
+    } catch {
+      // metadata may legitimately be non-JSON; fall through.
+    }
+  }
+
+  await logActivity(trail, {
+    tenantId: tenant.id,
+    knowledgeBaseId: session.knowledgeBaseId,
+    actorId: user.id,
+    actorKind: 'user',
+    kind: 'source.uploaded',
+    subjectType: 'document',
+    subjectId: session.documentId,
+    summary: `Uploaded ${session.filename}`,
+    metadata: {
+      fileType: ext,
+      fileSize: session.contentLength,
+      connector: connector ?? 'upload',
+      initialStatus,
+      uploadMode: 'chunked',
+    },
+  });
+
+  if (isText) {
+    triggerIngest({
+      trail,
+      docId: session.documentId,
+      kbId: session.knowledgeBaseId,
+      tenantId: tenant.id,
+      userId: user.id,
+    });
+  }
+
+  return c.json({ doc }, 201);
+});
+
+// GET /api/v1/uploads/:uploadId — resume probe
+uploadRoutes.get('/uploads/:uploadId', async (c) => {
+  const trail = getTrail(c);
+  const user = getUser(c);
+  const tenant = getTenant(c);
+  const uploadId = c.req.param('uploadId');
+
+  const session = await trail.db
+    .select()
+    .from(uploadSessions)
+    .where(eq(uploadSessions.id, uploadId))
+    .get();
+  if (!session) return c.json({ error: 'Upload session not found' }, 404);
+  if (session.tenantId !== tenant.id || session.userId !== user.id) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+
+  return c.json({
+    uploadId: session.id,
+    docId: session.documentId,
+    knowledgeBaseId: session.knowledgeBaseId,
+    filename: session.filename,
+    contentLength: session.contentLength,
+    contentHash: session.contentHash,
+    receivedBytes: session.receivedBytes,
+    status: session.status,
+    expiresAt: session.expiresAt,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+  });
+});
+
+// DELETE /api/v1/uploads/:uploadId — curator-driven cancel
+uploadRoutes.delete('/uploads/:uploadId', async (c) => {
+  const trail = getTrail(c);
+  const user = getUser(c);
+  const tenant = getTenant(c);
+  const uploadId = c.req.param('uploadId');
+
+  const session = await trail.db
+    .select()
+    .from(uploadSessions)
+    .where(eq(uploadSessions.id, uploadId))
+    .get();
+  if (!session) return c.body(null, 204); // idempotent
+
+  if (session.tenantId !== tenant.id || session.userId !== user.id) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+
+  // Mark + delete temp file + cascade-delete documents row. Order
+  // matters: mark first so a concurrent finalize-attempt sees the
+  // 'aborted' status and 410s out cleanly.
+  await trail.db
+    .update(uploadSessions)
+    .set({ status: 'aborted', updatedAt: new Date().toISOString() })
+    .where(eq(uploadSessions.id, uploadId))
+    .run();
+
+  try {
+    await storage.delete(session.tempPath);
+  } catch {
+    // Best-effort — GC will sweep stragglers.
+  }
+
+  // Documents row cascade-deletes the upload_sessions row via FK,
+  // so we delete the document last. (If we deleted the document
+  // first, the upload_sessions row would be gone before we could
+  // mark it 'aborted'.)
+  if (session.status === 'uploading') {
+    await trail.db.delete(documents).where(eq(documents.id, session.documentId)).run();
+  }
+
+  return c.body(null, 204);
 });
 
 /**

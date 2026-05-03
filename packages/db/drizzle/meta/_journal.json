@@ -225,6 +225,13 @@
       "when": 1779700000000,
       "tag": "0031_per_kb_lint_schedule",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1779800000000,
+      "tag": "0032_upload_sessions",
+      "breakpoints": true
     }
   ]
 }

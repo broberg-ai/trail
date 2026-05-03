@@ -1,5 +1,18 @@
 import { join, dirname } from 'node:path';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  unlinkSync,
+  readdirSync,
+  statSync,
+  openSync,
+  closeSync,
+  writeSync,
+  renameSync,
+  copyFileSync,
+} from 'node:fs';
 import type { Storage } from './index.js';
 
 export class LocalStorage implements Storage {
@@ -36,6 +49,37 @@ export class LocalStorage implements Storage {
   async signedUrl(path: string, _expiresSec = 3600): Promise<string> {
     // In local mode, return an in-app URL. Server serves this via authenticated route.
     return `/api/v1/storage/${encodeURIComponent(path)}`;
+  }
+
+  async appendChunk(tempPath: string, offset: number, bytes: Uint8Array): Promise<void> {
+    const full = this.resolve(tempPath);
+    mkdirSync(dirname(full), { recursive: true });
+    // O_RDWR|O_CREAT — open-for-write without truncating; creates if missing.
+    const fd = openSync(full, 'a+');
+    try {
+      const buf = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      writeSync(fd, buf, 0, buf.length, offset);
+    } finally {
+      closeSync(fd);
+    }
+  }
+
+  async finalize(tempPath: string, finalPath: string): Promise<void> {
+    const tempFull = this.resolve(tempPath);
+    const finalFull = this.resolve(finalPath);
+    if (!existsSync(tempFull)) {
+      throw new Error(`finalize: temp file missing at ${tempPath}`);
+    }
+    mkdirSync(dirname(finalFull), { recursive: true });
+    try {
+      renameSync(tempFull, finalFull);
+    } catch (err) {
+      // EXDEV — cross-device link. Fall back to copy + unlink.
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== 'EXDEV') throw err;
+      copyFileSync(tempFull, finalFull);
+      unlinkSync(tempFull);
+    }
   }
 
   async list(prefix: string): Promise<string[]> {

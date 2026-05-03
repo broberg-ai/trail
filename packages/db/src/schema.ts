@@ -121,7 +121,7 @@ export const documents = sqliteTable(
     fileType: text('file_type').notNull(),
     fileSize: integer('file_size').notNull().default(0),
     status: text('status', {
-      enum: ['pending', 'processing', 'ready', 'failed', 'archived'],
+      enum: ['uploading', 'pending', 'processing', 'ready', 'failed', 'archived'],
     }).notNull().default('pending'),
     pageCount: integer('page_count'),
     content: text('content'),
@@ -847,5 +847,47 @@ export const activityLog = sqliteTable(
     index('idx_activity_actor').on(table.tenantId, table.actorId, table.createdAt),
     index('idx_activity_subject').on(table.tenantId, table.subjectType, table.subjectId),
     index('idx_activity_kind').on(table.tenantId, table.kind, table.createdAt),
+  ],
+);
+
+// ── F180 — Resumable chunked upload sessions ─────────────────────────────
+//
+// One row per active uploadId. Created at /upload/init, advanced
+// at PATCH /uploads/:id/chunk, terminated at /finalize (status =
+// 'complete'), DELETE /:id (status = 'aborted'), or GC tick
+// (status = 'expired'). The temp file at `tempPath` carries the
+// partial bytes; sha256 is verified at finalize against the
+// `contentHash` declared at /init.
+//
+// `received_bytes` is updated via UPDATE…SET received_bytes =
+// MAX(received_bytes, ?) so out-of-order chunk acks don't roll back.
+//
+// Cascade-deletes on tenant / KB / document mean a tenant-tear-down
+// also reaps in-flight sessions; the GC service unlinks the temp
+// file before deleting the row.
+export const uploadSessions = sqliteTable(
+  'upload_sessions',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    knowledgeBaseId: text('knowledge_base_id').notNull().references(() => knowledgeBases.id, { onDelete: 'cascade' }),
+    documentId: text('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull().references(() => users.id),
+    filename: text('filename').notNull(),
+    contentLength: integer('content_length').notNull(),
+    contentHash: text('content_hash').notNull(),
+    receivedBytes: integer('received_bytes').notNull().default(0),
+    status: text('status', {
+      enum: ['uploading', 'complete', 'aborted', 'expired'],
+    }).notNull().default('uploading'),
+    tempPath: text('temp_path').notNull(),
+    createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+    updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
+    expiresAt: text('expires_at').notNull(),
+  },
+  (table) => [
+    index('idx_upload_sessions_tenant').on(table.tenantId, table.status),
+    index('idx_upload_sessions_doc').on(table.documentId),
+    index('idx_upload_sessions_expires').on(table.expiresAt),
   ],
 );
