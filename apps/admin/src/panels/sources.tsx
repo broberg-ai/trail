@@ -547,6 +547,7 @@ export function SourcesPanel() {
         {docs?.map((doc) => (
           <SourceRow
             key={doc.id}
+            kbId={kbId}
             doc={doc}
             isExpanded={expanded.has(doc.id)}
             onToggle={() => toggleExpanded(doc.id)}
@@ -659,6 +660,10 @@ export function SourcesPanel() {
 }
 
 interface RowProps {
+  /** F151 — kbId threaded through so the row can build the
+      `/kb/:kbId/sources/:docId/compare` deep-link without re-reading
+      the route. */
+  kbId: string;
   doc: Document;
   isExpanded: boolean;
   onToggle: () => void;
@@ -673,6 +678,7 @@ interface RowProps {
 }
 
 function SourceRow({
+  kbId,
   doc,
   isExpanded,
   onToggle,
@@ -818,6 +824,18 @@ function SourceRow({
               >
                 {t('sources.runVision').toLowerCase()}
               </button>
+            ) : null}
+            {/* F151 — deep-link to Quality-tab. The compare-page handles
+                the 0-runs / 1-run case gracefully, so showing on every
+                ready/failed row keeps discoverability simple. */}
+            {doc.status === 'ready' || doc.status === 'failed' ? (
+              <a
+                href={`/kb/${kbId}/sources/${doc.id}/compare`}
+                class="text-[11px] font-mono text-[color:var(--color-accent)] hover:text-[color:var(--color-fg)] transition"
+                title={t('sources.compareHint')}
+              >
+                {t('sources.compare').toLowerCase()}
+              </a>
             ) : null}
             <button
               onClick={() => onArchive(doc)}
