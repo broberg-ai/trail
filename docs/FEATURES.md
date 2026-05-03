@@ -262,7 +262,7 @@ Admin-panel der gør F149's `cost_cents` + `model_trail`-data synligt. **Cost-ta
 
 | # | Feature | Status | Phase | Plan |
 |---|---------|--------|-------|------|
-| F151 | [Cost & Quality Dashboard](features/F151-cost-quality-dashboard.md) | Planned | 1/2 | [plan](features/F151-cost-quality-dashboard.md) |
+| F151 | [Cost & Quality Dashboard](features/F151-cost-quality-dashboard.md) | Done | 1/2 | [plan](features/F151-cost-quality-dashboard.md) |
 
 ### F152 — Runtime Model Switcher UI
 

@@ -635,7 +635,7 @@
       },
       "backupHealth": {
         "title": "Backup system",
-        "subtitle": "Operator-level continuous backup of the whole Trail database to R2. Read-only — only the operator role can trigger backups.",
+        "subtitle": "This engine's trail.db is continuously backed up to R2. Each engine has its own DB with its own tenants; backup passes run independently per engine. Read-only — only the operator role can trigger backups.",
         "state": "Status",
         "lastSuccess": "Last backup",
         "last30Days": "Last 30 days",
