@@ -1,6 +1,6 @@
 {
-  "name": "trail",
-  "short_name": "trail",
+  "name": "trail-landing",
+  "short_name": "trail-landing",
   "description": "",
   "start_url": "/",
   "display": "standalone",

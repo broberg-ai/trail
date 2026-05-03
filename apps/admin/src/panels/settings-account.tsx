@@ -11,7 +11,9 @@ import {
   type BackupHealth,
 } from '../api';
 import { t, useLocale } from '../lib/i18n';
+import { formatLocaleDate } from '../lib/dates';
 import { ambientEnabled, ambientVolume } from '../lib/ambient-store';
+import { showClaimAnchors, setShowClaimAnchors } from '../lib/claim-anchors-pref';
 import { CenteredLoader } from '../components/centered-loader';
 import { Modal, ModalButton } from '../components/modal';
 
@@ -150,6 +152,27 @@ export function SettingsAccountPanel() {
           </div>
         </section>
 
+        <section class="pt-4 border-t border-[color:var(--color-border)]">
+          <h2 class="text-sm font-medium mb-1">{t('settings.account.display.title')}</h2>
+          <p class="text-xs text-[color:var(--color-fg-muted)] mb-3 max-w-md">
+            {t('settings.account.display.subtitle')}
+          </p>
+          <label class="flex items-start gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showClaimAnchors.value}
+              onChange={(e) => setShowClaimAnchors((e.target as HTMLInputElement).checked)}
+              class="mt-0.5 accent-[color:var(--color-accent)]"
+            />
+            <span class="text-sm">
+              {t('settings.account.display.showClaimAnchors')}
+              <span class="block text-[11px] text-[color:var(--color-fg-subtle)] mt-0.5 max-w-md">
+                {t('settings.account.display.showClaimAnchorsHint')}
+              </span>
+            </span>
+          </label>
+        </section>
+
         <ApiKeysSection />
 
         <BackupHealthSection />
@@ -179,6 +202,7 @@ export function SettingsAccountPanel() {
  * it costs nothing.
  */
 function ApiKeysSection() {
+  const locale = useLocale();
   const [keys, setKeys] = useState<ApiKeyRow[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -310,10 +334,10 @@ function ApiKeysSection() {
                 >
                   <td class="px-3 py-2">{k.name}</td>
                   <td class="px-3 py-2 text-[color:var(--color-fg-muted)] text-xs">
-                    {k.lastUsedAt ? formatDate(k.lastUsedAt) : t('settings.account.apiKeys.neverUsed')}
+                    {k.lastUsedAt ? formatLocaleDate(k.lastUsedAt, locale) : t('settings.account.apiKeys.neverUsed')}
                   </td>
                   <td class="px-3 py-2 text-[color:var(--color-fg-muted)] text-xs">
-                    {formatDate(k.createdAt)}
+                    {formatLocaleDate(k.createdAt, locale)}
                   </td>
                   <td class="px-3 py-2 text-right">
                     <button
@@ -436,11 +460,8 @@ function ApiKeysSection() {
   );
 }
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
+// Date formatting moved to lib/dates.ts so every panel honours the
+// Trail-locale (set via the header switcher) rather than navigator.language.
 
 /**
  * F153 Phase 4 — Read-only backup health card.

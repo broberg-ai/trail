@@ -3,7 +3,7 @@ import { documents, knowledgeBases, chatSessions, chatTurns, type TrailDatabase 
 import { and, asc, eq, like, sql } from 'drizzle-orm';
 import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
 import { ChatRequestSchema } from '@trail/shared';
-import { resolveKbId } from '@trail/core';
+import { resolveKbId, stripClaimAnchors } from '@trail/core';
 import {
   HEURISTIC_PATH,
   computeConfidence,
@@ -265,14 +265,21 @@ chatRoutes.post('/chat', async (c) => {
     // hard "start ny chat" prompt at N. Counted AFTER the persist
     // above so the freshly-landed user-turn is included.
     const turnsUsed = sessionId ? await countUserTurns(trail, sessionId, tenant.id) : 1;
+    // F22 leak-prevention defense-in-depth: even though stripClaimAnchors
+    // runs on the input context, a creative model could still emit
+    // `{#claim-xxx}` if it learned the pattern from earlier turns or
+    // training. Strip at the answer-output layer too so the user-facing
+    // payload is guaranteed clean across both `answer` and
+    // `renderedAnswer`.
+    const cleanAnswer = stripClaimAnchors(answer);
     return c.json({
-      answer,
+      answer: cleanAnswer,
       // For tool / public audience there are no `[[wiki-links]]` left in
       // the answer (postprocess stripped them), so renderedAnswer is
       // identical content but kept for response-shape stability across
       // audiences. Admin curator gets the rewriteWikiLinks pass that
       // resolves to admin-paths.
-      renderedAnswer: audience === 'curator' ? renderAnswer(answer) : answer,
+      renderedAnswer: audience === 'curator' ? renderAnswer(cleanAnswer) : cleanAnswer,
       citations,
       sessionId,
       // F159 — surface backend + model on every reply so the admin UI
@@ -537,7 +544,12 @@ async function retrieveContext(
       if (totalChars >= MAX_CHARS) break;
       if (fadedHeuristicIds.has(hit.documentId)) continue;
       const header = hit.headerBreadcrumb ? `[${hit.headerBreadcrumb}] ` : '';
-      const text = `### chunk ${header}\n${hit.content.slice(0, 2500)}`;
+      // F22 leak-prevention: claim-anchor markers must NEVER reach the
+      // chat-LLM — if they do, the model can echo them into the
+      // user-visible answer. Strip at the chunk-content layer so every
+      // backend (claude-cli, openrouter, claude-api) sees clean prose.
+      const cleanContent = stripClaimAnchors(hit.content.slice(0, 2500));
+      const text = `### chunk ${header}\n${cleanContent}`;
       chunks.push(text);
       totalChars += text.length;
       if (!seen.has(hit.documentId)) {

@@ -613,6 +613,12 @@
       "ambient": "Ambient audio",
       "ambientEnabled": "Play ambient loops while I work",
       "ambientVolume": "Volume",
+      "display": {
+        "title": "Display",
+        "subtitle": "How Neuron prose is rendered when you read. Pure cosmetic — doesn't affect content or what chat sees.",
+        "showClaimAnchors": "Show claim-anchors in Neuron prose",
+        "showClaimAnchorsHint": "Claim-anchors are small # icons before each paragraph that link to a stable identifier (e.g. claim-0791f933) — used by lint tools and cross-Neuron references. Default hidden; enable if you want to deep-link to specific claims. NEVER leaks into chat answers regardless of this setting."
+      },
       "apiKeys": {
         "title": "API Keys",
         "subtitle": "Bearer tokens for integrating Trail with external sites and scripts.",

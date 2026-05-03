@@ -26,7 +26,7 @@ import { documents, documentImages, knowledgeBases } from '@trail/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
 import { canonicaliseTag, parseTags, kbPrefix } from '@trail/shared';
-import { resolveKbId } from '@trail/core';
+import { resolveKbId, stripClaimAnchors } from '@trail/core';
 import {
   parseAudienceParam,
   defaultAudienceForAuth,
@@ -172,7 +172,12 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
       seqId: prefix && doc.seq != null ? `${prefix}_${String(doc.seq).padStart(8, '0')}` : null,
       title: doc.title ?? doc.path.split('/').pop() ?? doc.path,
       neuronPath: doc.path,
-      content: chunk.content,
+      // F22 leak-prevention: strip claim-anchor markers before any
+      // external orchestrator (Sanne's site, third-party integrators)
+      // sees the content. The markers are an internal cross-reference
+      // primitive — they leaking into a downstream LLM prompt is the
+      // failure-mode Christian flagged 2026-05-03.
+      content: stripClaimAnchors(chunk.content),
       headerBreadcrumb: chunk.headerBreadcrumb,
       rank: chunk.rank,
     });

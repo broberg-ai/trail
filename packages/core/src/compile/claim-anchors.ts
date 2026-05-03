@@ -159,6 +159,24 @@ export function injectClaimAnchors(markdown: string): string {
 }
 
 /**
+ * Strip all `{#claim-xxxxxxxx}` markers from text. Used at:
+ *   1. Chat input layer (chat retrieveContext) — the LLM should
+ *      NEVER see markers, otherwise it might echo them back into
+ *      the user-visible answer.
+ *   2. Chat output layer (renderAnswer) — defense in depth in case
+ *      a model leaks them despite (1).
+ *   3. Plain-text previews where the marked-renderer extension
+ *      isn't in play.
+ *
+ * Idempotent on already-clean text (regex match-fail = no-op).
+ * Collapses doubled whitespace left behind by the strip.
+ */
+export function stripClaimAnchors(text: string): string {
+  if (!text) return text;
+  return text.replace(ANCHOR_REGEX_GLOBAL, '').replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n');
+}
+
+/**
  * Extract `{anchor → text}` map from anchored markdown. Used by
  * F78 trust-tiers (future) and the verify-script.
  */

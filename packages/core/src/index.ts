@@ -95,6 +95,7 @@ export {
   generateClaimAnchor,
   injectClaimAnchors,
   extractClaimAnchors,
+  stripClaimAnchors,
   ensureTypeFrontmatter,
   prepareCompiledMarkdown,
 } from './compile/claim-anchors.js';

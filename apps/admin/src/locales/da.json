@@ -613,6 +613,12 @@
       "ambient": "Ambient lyd",
       "ambientEnabled": "Afspil ambient-loops mens jeg arbejder",
       "ambientVolume": "Lydstyrke",
+      "display": {
+        "title": "Visning",
+        "subtitle": "Indstillinger for hvordan Neuron-prosa renderes når du læser. Ren cosmetic — påvirker ikke selve indholdet eller hvad chat ser.",
+        "showClaimAnchors": "Vis claim-anchors i Neuron-prosa",
+        "showClaimAnchorsHint": "Claim-anchors er små # ikoner foran hvert afsnit som linker til en stabil identifier (fx claim-0791f933) — bruges af lint-værktøjer og krydsreferencer mellem Neuroner. Default skjult; tænd hvis du vil deep-linke til specifikke claims. Kommer ALDRIG ud i chat-svar uanset indstilling."
+      },
       "apiKeys": {
         "title": "API-nøgler",
         "subtitle": "Bearer tokens til integration af Trail med eksterne sites og scripts.",

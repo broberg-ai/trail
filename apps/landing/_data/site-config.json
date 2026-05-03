@@ -7,7 +7,7 @@
   "deployHookUrl": "",
   "deployApiToken": "",
   "deployFlyOrg": "",
-  "deployCustomDomain": "trail.webhouse.app",
+  "deployCustomDomain": "www.trailmem.com",
   "deployOnSave": true,
   "deployFlyLiveRegion": "arn",
   "deployFlyLiveVolumeName": "site_data",

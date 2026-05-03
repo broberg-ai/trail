@@ -32,6 +32,7 @@ import {
 import { useKb } from '../lib/kb-cache';
 import { useKbEvents } from '../lib/event-stream';
 import { t, useLocale } from '../lib/i18n';
+import { formatLocaleDate } from '../lib/dates';
 import { CenteredLoader } from '../components/centered-loader';
 
 export function LinkReportPanel() {
@@ -236,6 +237,7 @@ function FindingRow({
   onAccept: () => void;
   onDismiss: () => void;
 }) {
+  const locale = useLocale();
   const slug = finding.fromFilename.replace(/\.md$/, '');
   const href = `/kb/${kbSlug}/neurons/${slug}`;
   return (
@@ -259,7 +261,7 @@ function FindingRow({
         )}
       </td>
       <td class="px-4 py-3 font-mono text-[11px] text-[color:var(--color-fg-muted)]">
-        {finding.reportedAt.slice(0, 10)}
+        {formatLocaleDate(finding.reportedAt.slice(0, 10), locale)}
       </td>
       <td class="px-4 py-3 text-right">
         <div class="inline-flex items-center gap-2 justify-end">

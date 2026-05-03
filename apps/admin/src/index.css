@@ -211,3 +211,34 @@ body {
 .ambient-on {
   animation: ambient-pulse 2.5s ease-in-out infinite;
 }
+
+/* F22 — claim-anchor markers. Internal cross-reference primitive
+ * (curator-power-user feature). Default hidden — only show when
+ * the user opts in via Settings → Account → Vis claim-anchors.
+ * The icon sits inline before the first word, with title-tooltip
+ * carrying the full claim id. Click jumps to the in-page #anchor.
+ *
+ * The wrapper applies `.claims-hidden` based on the localStorage
+ * preference; CSS does the rest. We use display:none rather than
+ * opacity so screen-readers don't announce a hidden link.
+ */
+.claim-anchor {
+  display: inline-block;
+  margin-right: 0.4em;
+  padding: 0 0.25em;
+  font-size: 0.75em;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--color-fg-subtle);
+  text-decoration: none;
+  border-radius: 3px;
+  vertical-align: middle;
+  transition: color 0.12s, background-color 0.12s;
+  user-select: none;
+}
+.claim-anchor:hover {
+  color: var(--color-accent);
+  background-color: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+.claims-hidden .claim-anchor {
+  display: none;
+}

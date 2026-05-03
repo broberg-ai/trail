@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 import { useKb } from '../lib/kb-cache';
 import { t, useLocale } from '../lib/i18n';
+import { formatLocaleDate, formatShortLocaleDate } from '../lib/dates';
 import {
   getCostSummary,
   costCsvUrl,
@@ -46,28 +47,9 @@ function displayTitle(title: string | null, filename: string): string {
   return filename.replace(/\.[a-z0-9]+$/i, '');
 }
 
-/**
- * Format an ISO YYYY-MM-DD date for tooltip display in Trail's
- * active i18n locale (not the browser default — the curator may
- * have flipped the language switcher manually). Falls back to ISO
- * if the locale formatter rejects it.
- *
- * Used in the daily-usage bar-chart tooltips so a Danish curator
- * sees "29. apr. 2026" rather than "2026-04-29".
- */
-function formatTooltipDate(iso: string, locale: 'da' | 'en'): string {
-  try {
-    const d = new Date(iso + 'T00:00:00');
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString(locale === 'da' ? 'da-DK' : 'en-US', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
-}
+// Date formatting is centralised in lib/dates.ts so every panel
+// honours the Trail-locale (set via the header switcher) rather
+// than navigator.language.
 
 export function CostPanel() {
   const route = useRoute();
@@ -317,7 +299,7 @@ export function CostPanel() {
               // "year-month-day" to nerds but is wrong for everyone
               // outside ISO-8601-land. toLocaleDateString uses the
               // browser's lang-tag which the i18n switcher syncs.
-              const dateLabel = formatTooltipDate(d.date, locale);
+              const dateLabel = formatLocaleDate(d.date, locale);
               const title =
                 estPart > 0
                   ? `${dateLabel}: ${fmt(d.cents)} + ${fmt(estPart)} est. · ${d.jobs} ${jobLabel}`
@@ -433,7 +415,7 @@ export function CostPanel() {
                     {s.jobCount}
                   </td>
                   <td class="py-2 text-right font-mono text-xs text-[color:var(--color-fg-muted)]">
-                    {s.lastIngestedAt ? s.lastIngestedAt.slice(0, 10) : '—'}
+                    {s.lastIngestedAt ? formatLocaleDate(s.lastIngestedAt.slice(0, 10), locale) : '—'}
                   </td>
                 </tr>
               ))}
@@ -452,6 +434,7 @@ export function CostPanel() {
  * Phase 2 (F123).
  */
 function CreditsCard({ credits }: { credits: CreditsResponse }) {
+  const locale = useLocale();
   const balanceClass =
     credits.balance < 0
       ? 'text-red-400'
@@ -487,7 +470,7 @@ function CreditsCard({ credits }: { credits: CreditsResponse }) {
               {recent.map((tx) => (
                 <li key={tx.id} class="flex items-center gap-2 justify-end">
                   <span class="text-[color:var(--color-fg-subtle)]">
-                    {tx.createdAt.slice(5, 10)}
+                    {formatShortLocaleDate(tx.createdAt, locale)}
                   </span>
                   <span
                     class={

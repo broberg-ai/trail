@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 import { marked } from 'marked';
+import { showClaimAnchors } from '../lib/claim-anchors-pref';
 import type { Document } from '@trail/shared';
 import { formatSeqId, deriveType } from '@trail/shared';
 import { useKb } from '../lib/kb-cache';
@@ -314,7 +315,7 @@ function ReaderView() {
             </div>
           ) : (
             <div
-              class="prose-body text-[15px] leading-relaxed"
+              class={`prose-body text-[15px] leading-relaxed${showClaimAnchors.value ? '' : ' claims-hidden'}`}
               // eslint-disable-next-line react/no-danger
               dangerouslySetInnerHTML={{ __html: html }}
             />
