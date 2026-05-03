@@ -36,7 +36,7 @@
     "credits": {
       "balance": "Credits",
       "monthlyIncluded": "{amount} included monthly",
-      "devSeed": "Dev seed (TRAIL_DEV_CREDITS)",
+      "explanation": "Credits are used each time Trail calls an LLM on your behalf — e.g. compiling a source into Neurons, or when someone chats with your Trail. We charge actual usage so you can see exactly what you're paying for, and switch between fast or deeper models as needed. Top up before the balance approaches zero.",
       "recent": "Recent"
     },
     "total": "Total",

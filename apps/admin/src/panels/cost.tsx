@@ -46,6 +46,29 @@ function displayTitle(title: string | null, filename: string): string {
   return filename.replace(/\.[a-z0-9]+$/i, '');
 }
 
+/**
+ * Format an ISO YYYY-MM-DD date for tooltip display in Trail's
+ * active i18n locale (not the browser default — the curator may
+ * have flipped the language switcher manually). Falls back to ISO
+ * if the locale formatter rejects it.
+ *
+ * Used in the daily-usage bar-chart tooltips so a Danish curator
+ * sees "29. apr. 2026" rather than "2026-04-29".
+ */
+function formatTooltipDate(iso: string, locale: 'da' | 'en'): string {
+  try {
+    const d = new Date(iso + 'T00:00:00');
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString(locale === 'da' ? 'da-DK' : 'en-US', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export function CostPanel() {
   const route = useRoute();
   const kbId = route.params.kbId ?? '';
@@ -290,10 +313,15 @@ export function CostPanel() {
               const heightPct =
                 d.effectiveCents === 0 ? 2 : Math.max(2, (d.effectiveCents / maxDayCents) * 100);
               const jobLabel = t(d.jobs === 1 ? 'cost.job_one' : 'cost.job_other');
+              // Locale-aware date in tooltip: ISO YYYY-MM-DD reads as
+              // "year-month-day" to nerds but is wrong for everyone
+              // outside ISO-8601-land. toLocaleDateString uses the
+              // browser's lang-tag which the i18n switcher syncs.
+              const dateLabel = formatTooltipDate(d.date, locale);
               const title =
                 estPart > 0
-                  ? `${d.date}: ${fmt(d.cents)} + ${fmt(estPart)} est. · ${d.jobs} ${jobLabel}`
-                  : `${d.date}: ${fmt(d.cents)} · ${d.jobs} ${jobLabel}`;
+                  ? `${dateLabel}: ${fmt(d.cents)} + ${fmt(estPart)} est. · ${d.jobs} ${jobLabel}`
+                  : `${dateLabel}: ${fmt(d.cents)} · ${d.jobs} ${jobLabel}`;
               return (
                 <div
                   key={d.date}
@@ -419,9 +447,9 @@ export function CostPanel() {
 
 /**
  * F156 Phase 0 — credits balance card. Renders the tenant's running
- * balance + last 5 transactions. No top-up button in v1: dev tenants
- * are seeded via TRAIL_DEV_CREDITS, paying tenants come in Phase 2 with
- * Stripe Checkout.
+ * balance + last 5 transactions + a friendly explanation of what
+ * credits buy. No top-up button in v1; Stripe Checkout lands in
+ * Phase 2 (F123).
  */
 function CreditsCard({ credits }: { credits: CreditsResponse }) {
   const balanceClass =
@@ -434,20 +462,23 @@ function CreditsCard({ credits }: { credits: CreditsResponse }) {
   return (
     <div class="p-4 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)]/40">
       <div class="flex items-end justify-between gap-4">
-        <div>
+        <div class="flex-1 min-w-0">
           <div class="text-xs font-mono uppercase tracking-wider text-[color:var(--color-fg-muted)] mb-1">
             {t('cost.credits.balance')}
           </div>
           <div class={`text-3xl font-mono ${balanceClass}`}>
             {credits.balance.toLocaleString()}
           </div>
-          <div class="text-[11px] font-mono text-[color:var(--color-fg-muted)] mt-1">
-            {credits.monthlyIncluded > 0
-              ? t('cost.credits.monthlyIncluded', {
-                  amount: credits.monthlyIncluded.toLocaleString(),
-                })
-              : t('cost.credits.devSeed')}
-          </div>
+          {credits.monthlyIncluded > 0 ? (
+            <div class="text-[11px] font-mono text-[color:var(--color-fg-muted)] mt-1">
+              {t('cost.credits.monthlyIncluded', {
+                amount: credits.monthlyIncluded.toLocaleString(),
+              })}
+            </div>
+          ) : null}
+          <p class="text-[11px] text-[color:var(--color-fg-muted)] mt-2 max-w-xl leading-relaxed">
+            {t('cost.credits.explanation')}
+          </p>
         </div>
         {recent.length > 0 ? (
           <div class="text-right text-[11px] font-mono text-[color:var(--color-fg-muted)]">
