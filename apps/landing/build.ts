@@ -11,6 +11,7 @@
 import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync, cpSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { marked } from "marked";
+import { z } from "zod";
 
 // Local shim — @webhouse/cms upstream removed expandShortcodes after the
 // April-22 build. The only shortcode actually used in posts is {{svg:slug}};
@@ -57,6 +58,57 @@ interface Block {
   [key: string]: unknown;
 }
 
+// ── Content schemas (F178 Lag 2) ───────────────────────────
+//
+// Strict Zod validation for posts. The 2026-05-02 incident showed
+// that build.ts silently skipped/half-rendered posts whose required
+// fields had been moved out of `data{}`. With validation, a malformed
+// post fails the whole build with a precise field-path message.
+//
+// Pages + categories aren't currently schema-checked: their shape
+// varies more (some are flat, some are nested) and they don't carry
+// the marketing-critical metadata that posts do. If a class of
+// silent-bug shows up there, port the same pattern.
+
+const PostDataSchema = z.object({
+  title: z.string().min(1),
+  excerpt: z.string().min(1),
+  content: z.string().min(10),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD'),
+  author: z.string().min(1),
+  category: z.enum([
+    'how-trail-works',
+    'research',
+    'field-notes',
+    'dispatches',
+    'the-1945-concept',
+  ]),
+  tags: z.array(z.string()).min(1),
+  readTime: z.string().regex(/^\d+\s+min\s+read$/, 'must be "<n> min read"'),
+}).passthrough(); // allow _lastEditedBy etc.
+
+const PostSchema = z.object({
+  slug: z.string().min(1),
+  status: z.enum(['draft', 'published', 'archived']),
+  data: PostDataSchema,
+  id: z.string().min(1),
+}).passthrough(); // allow _fieldMeta, updatedAt etc.
+
+function validatePost(filePath: string, raw: unknown): z.infer<typeof PostSchema> {
+  const parsed = PostSchema.safeParse(raw);
+  if (parsed.success) return parsed.data;
+  console.error(`\n❌ Invalid post: ${filePath}`);
+  for (const issue of parsed.error.issues) {
+    console.error(`   ${issue.path.join('.') || '(root)'}: ${issue.message}`);
+  }
+  console.error(`\n   Valid post structure (matches knowledge-that-compounds.json):`);
+  console.error(
+    `   { slug, status: 'draft'|'published'|'archived',\n` +
+      `     data: { title, excerpt, content, date, author, category, tags, readTime }, id }\n`,
+  );
+  process.exit(1);
+}
+
 // ── Content readers ─────────────────────────────────────────
 
 function readCollection(name: string): Doc[] {
@@ -65,7 +117,12 @@ function readCollection(name: string): Doc[] {
   return readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
     .map((f) => {
-      const raw = JSON.parse(readFileSync(join(dir, f), "utf-8"));
+      const filePath = join(dir, f);
+      const raw = JSON.parse(readFileSync(filePath, "utf-8"));
+      if (name === 'posts') {
+        const validated = validatePost(filePath, raw);
+        return { slug: validated.slug, data: validated.data, status: validated.status };
+      }
       return { slug: f.replace(/\.json$/, ""), data: raw.data ?? raw, status: raw.status };
     })
     .filter((d) => d.status !== "draft" || INCLUDE_DRAFTS);

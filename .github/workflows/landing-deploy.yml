@@ -1,0 +1,61 @@
+name: Landing auto-deploy
+
+# F178 Lag 3 — auto-deploy trail-landing on push to main when content,
+# public assets, or build/deploy config change. Closes the "I committed
+# but live shows old content" bug class from 2026-05-02.
+#
+# Trigger paths are intentionally narrow:
+#   - apps/landing/content/**     posts, pages, categories
+#   - apps/landing/public/**      uploads, SVGs, static assets
+#   - apps/landing/build.ts       SSG itself
+#   - apps/landing/Dockerfile     deploy image
+#   - apps/landing/fly.toml       Fly config
+#   - apps/landing/package.json   scripts (this file)
+#
+# Explicitly NOT triggered by:
+#   - apps/landing/deploy/**      build output (CI builds fresh)
+#   - apps/landing/_data/**       runtime CMS state (audit/server logs)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/landing/content/**'
+      - 'apps/landing/public/**'
+      - 'apps/landing/build.ts'
+      - 'apps/landing/Dockerfile'
+      - 'apps/landing/fly.toml'
+      - 'apps/landing/package.json'
+      - '.github/workflows/landing-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build static site (Zod schema enforced)
+        working-directory: apps/landing
+        run: pnpm build
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly
+        working-directory: apps/landing
+        run: flyctl deploy --remote-only --config fly.toml .
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
