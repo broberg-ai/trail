@@ -36,21 +36,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      # apps/landing is explicitly excluded from the root pnpm
+      # workspace (see pnpm-workspace.yaml: '!apps/landing') so
+      # `pnpm install` at the repo root does not populate
+      # apps/landing/node_modules. Install in-place instead — landing
+      # has a tiny standalone dep set (marked, tsx, zod, @webhouse/cms).
+      - name: Install landing dependencies
+        working-directory: apps/landing
+        run: npm install --no-package-lock
 
       - name: Build static site (Zod schema enforced)
         working-directory: apps/landing
-        run: pnpm build
+        run: npm run build
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
