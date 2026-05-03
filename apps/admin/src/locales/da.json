@@ -643,7 +643,9 @@
         "stale": "Forsinket",
         "unknown": "Ukendt",
         "never": "har aldrig kørt",
-        "justNow": "lige nu"
+        "justNow": "lige nu",
+        "notConfigured": "Ikke konfigureret",
+        "notConfiguredHint": "TRAIL_BACKUP_R2_* env-variabler er ikke sat på engine — sæt dem via flyctl secrets, og scheduler-pass på 24h cadence aktiveres automatisk."
       }
     }
   },

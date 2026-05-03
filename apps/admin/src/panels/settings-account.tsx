@@ -450,8 +450,10 @@ function formatDate(iso: string): string {
  * shows tenants "the backup pipeline is alive" without exposing
  * trigger controls (those stay owner-gated under /admin/backups).
  *
- * Hidden when the backup pipeline isn't configured, so dev environments
- * without R2 credentials don't show a permanently-yellow card.
+ * Renders even when not configured — the operator (Christian) needs
+ * to SEE that state on prod, otherwise the card vanishes mysteriously
+ * and "did anything ship?" becomes impossible to answer from the UI.
+ * Hidden only when the fetch itself fails (auth gone, server down).
  */
 function BackupHealthSection() {
   const [health, setHealth] = useState<BackupHealth | null>(null);
@@ -463,7 +465,41 @@ function BackupHealthSection() {
       .catch(() => setLoadFailed(true));
   }, []);
 
-  if (loadFailed || !health || !health.configured) return null;
+  if (loadFailed || !health) return null;
+
+  // Unconfigured state — render the section so operator knows the
+  // system exists but isn't wired yet, with a one-line hint pointing
+  // at the env vars to set.
+  if (!health.configured) {
+    return (
+      <section class="pt-4 border-t border-[color:var(--color-border)]">
+        <h2 class="text-sm font-medium mb-1">{t('settings.account.backupHealth.title')}</h2>
+        <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-md mb-3">
+          {t('settings.account.backupHealth.subtitle')}
+        </p>
+        <div class="rounded-md border border-[color:var(--color-border)] p-3 text-[12px] max-w-2xl">
+          <div class="font-mono flex items-center gap-2">
+            <span
+              aria-hidden
+              style={{
+                display: 'inline-block',
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: 'var(--color-fg-subtle)',
+              }}
+            />
+            <span class="text-[color:var(--color-fg-muted)]">
+              {t('settings.account.backupHealth.notConfigured')}
+            </span>
+          </div>
+          <p class="mt-2 text-[11px] text-[color:var(--color-fg-subtle)]">
+            {t('settings.account.backupHealth.notConfiguredHint')}
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   const stateColor =
     health.healthy === true

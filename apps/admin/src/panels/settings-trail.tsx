@@ -16,6 +16,7 @@ import {
 import { matchKb } from '../lib/kb-cache';
 import { t, useLocale } from '../lib/i18n';
 import { CenteredLoader } from '../components/centered-loader';
+import { Dropdown, type DropdownOption } from '../components/dropdown';
 
 /**
  * Per-Trail settings at `/kb/:kbId/settings`. Home for all configuration
@@ -325,28 +326,35 @@ export function SettingsTrailPanel() {
           <label class="block mb-2">
             <span class="text-sm font-medium">{t('settings.trail.lintSchedule.cadenceLabel')}</span>
           </label>
-          <select
-            value={lintScheduleDays === null ? '' : String(lintScheduleDays)}
-            onChange={(e) => {
-              const v = (e.target as HTMLSelectElement).value;
-              setLintScheduleDays(v === '' ? null : Number(v));
-            }}
-            class="px-3 py-1.5 text-sm rounded-md border border-[color:var(--color-border)] bg-transparent focus:outline-none focus:border-[color:var(--color-accent)] transition"
-          >
-            <option value="">
-              {t('settings.trail.lintSchedule.useDefault')}
-              {lintStatus ? ` (${lintStatus.defaultDays}d)` : ''}
-            </option>
-            <option value="1">{t('settings.trail.lintSchedule.daily')}</option>
-            <option value="3">3 {t('settings.trail.lintSchedule.days')}</option>
-            <option value="7">
-              7 {t('settings.trail.lintSchedule.days')} — {t('settings.trail.lintSchedule.recommended')}
-            </option>
-            <option value="14">14 {t('settings.trail.lintSchedule.days')}</option>
-            <option value="30">30 {t('settings.trail.lintSchedule.days')}</option>
-            <option value="60">60 {t('settings.trail.lintSchedule.days')}</option>
-            <option value="90">90 {t('settings.trail.lintSchedule.days')}</option>
-          </select>
+          {(() => {
+            const lintCadenceOptions: DropdownOption[] = [
+              {
+                value: '',
+                label: lintStatus
+                  ? `${t('settings.trail.lintSchedule.useDefault')} (${lintStatus.defaultDays}d)`
+                  : t('settings.trail.lintSchedule.useDefault'),
+              },
+              { value: '1', label: t('settings.trail.lintSchedule.daily') },
+              { value: '3', label: `3 ${t('settings.trail.lintSchedule.days')}` },
+              {
+                value: '7',
+                label: `7 ${t('settings.trail.lintSchedule.days')}`,
+                hint: t('settings.trail.lintSchedule.recommended'),
+              },
+              { value: '14', label: `14 ${t('settings.trail.lintSchedule.days')}` },
+              { value: '30', label: `30 ${t('settings.trail.lintSchedule.days')}` },
+              { value: '60', label: `60 ${t('settings.trail.lintSchedule.days')}` },
+              { value: '90', label: `90 ${t('settings.trail.lintSchedule.days')}` },
+            ];
+            return (
+              <Dropdown
+                value={lintScheduleDays === null ? '' : String(lintScheduleDays)}
+                onChange={(v) => setLintScheduleDays(v === '' ? null : Number(v))}
+                options={lintCadenceOptions}
+                buttonClass="w-[18rem]"
+              />
+            );
+          })()}
           <p class="mt-1.5 text-[11px] text-[color:var(--color-fg-subtle)] max-w-md">
             {t('settings.trail.lintSchedule.hint')}
           </p>
@@ -398,25 +406,31 @@ export function SettingsTrailPanel() {
           <label class="block mb-2">
             <span class="text-sm font-medium">{t('settings.trail.ingestModel.modelLabel')}</span>
           </label>
-          <select
-            value={selectedModelKey}
-            onChange={(e) => setSelectedModelKey((e.target as HTMLSelectElement).value)}
-            class="px-3 py-1.5 text-sm rounded-md border border-[color:var(--color-border)] bg-transparent focus:outline-none focus:border-[color:var(--color-accent)] transition min-w-[20rem]"
-          >
-            <option value="">{t('settings.trail.ingestModel.useDefault')}</option>
-            {INGEST_MODELS.map((m: IngestModel) => {
-              const key = `${m.backend}:${m.id}`;
-              const cost =
-                m.costPerMillion.input === 0 && m.costPerMillion.output === 0
-                  ? t('settings.trail.ingestModel.maxPlanFree')
-                  : `$${m.costPerMillion.input.toFixed(2)} in / $${m.costPerMillion.output.toFixed(2)} out per 1M`;
-              return (
-                <option key={key} value={key}>
-                  {m.label} — {cost}
-                </option>
-              );
-            })}
-          </select>
+          {(() => {
+            const modelOptions: DropdownOption[] = [
+              { value: '', label: t('settings.trail.ingestModel.useDefault') },
+              ...INGEST_MODELS.map((m: IngestModel): DropdownOption => {
+                const cost =
+                  m.costPerMillion.input === 0 && m.costPerMillion.output === 0
+                    ? t('settings.trail.ingestModel.maxPlanFree')
+                    : `$${m.costPerMillion.input.toFixed(2)} in / $${m.costPerMillion.output.toFixed(2)} out per 1M`;
+                return {
+                  value: `${m.backend}:${m.id}`,
+                  label: m.label,
+                  hint: cost,
+                };
+              }),
+            ];
+            return (
+              <Dropdown
+                value={selectedModelKey}
+                onChange={setSelectedModelKey}
+                options={modelOptions}
+                buttonClass="w-[28rem]"
+                menuClass="w-[28rem]"
+              />
+            );
+          })()}
 
           {ingestSettings ? (
             <p class="mt-2 text-[11px] font-mono text-[color:var(--color-fg-subtle)] max-w-2xl">

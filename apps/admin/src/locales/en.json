@@ -643,7 +643,9 @@
         "stale": "Stale",
         "unknown": "Unknown",
         "never": "never run",
-        "justNow": "just now"
+        "justNow": "just now",
+        "notConfigured": "Not configured",
+        "notConfiguredHint": "TRAIL_BACKUP_R2_* env vars aren't set on the engine — set them via flyctl secrets and the 24h scheduler pass activates automatically."
       }
     }
   },
