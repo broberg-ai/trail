@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 import { marked } from 'marked';
-import { showClaimAnchors, setShowClaimAnchors } from '../lib/claim-anchors-pref';
+import { showClaimAnchors } from '../lib/claim-anchors-pref';
 import type { Document } from '@trail/shared';
 import { formatSeqId, deriveType } from '@trail/shared';
 import { useKb } from '../lib/kb-cache';
@@ -192,37 +192,14 @@ function ReaderView() {
         >
           ← Neurons
         </a>
-        <div class="flex items-center gap-2">
-          {/* F22.1 — sticky toggle for claim-anchor visibility. Same global
-              showClaimAnchors signal as Settings → Visning, just a second
-              entry-point so the curator can flip in flow. */}
-          <button
-            type="button"
-            onClick={() => setShowClaimAnchors(!showClaimAnchors.value)}
-            aria-pressed={showClaimAnchors.value}
-            title={t(
-              showClaimAnchors.value
-                ? 'wikiReader.claimAnchors.hide'
-                : 'wikiReader.claimAnchors.show',
-            )}
-            class={
-              'w-9 h-9 inline-flex items-center justify-center rounded-md border text-sm font-mono transition active:scale-95 ' +
-              (showClaimAnchors.value
-                ? 'border-[color:var(--color-accent)]/40 bg-[color:var(--color-accent)]/10 text-[color:var(--color-accent)]'
-                : 'border-[color:var(--color-border)] text-[color:var(--color-fg-subtle)] hover:text-[color:var(--color-fg)] hover:border-[color:var(--color-border-strong)]')
-            }
+        {editHref ? (
+          <a
+            href={editHref}
+            class="px-3 py-1.5 rounded-md border border-[color:var(--color-border)] text-sm hover:bg-[color:var(--color-bg-card)] transition"
           >
-            #
-          </button>
-          {editHref ? (
-            <a
-              href={editHref}
-              class="px-3 py-1.5 rounded-md border border-[color:var(--color-border)] text-sm hover:bg-[color:var(--color-bg-card)] transition"
-            >
-              {t('neuronEditor.editButton')}
-            </a>
-          ) : null}
-        </div>
+            {t('neuronEditor.editButton')}
+          </a>
+        ) : null}
       </header>
 
       {error ? (

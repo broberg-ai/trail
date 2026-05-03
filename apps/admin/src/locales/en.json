@@ -519,12 +519,6 @@
     "conflict": "Can't do that — the item changed under your feet.",
     "unknown": "Unknown error: {message}"
   },
-  "wikiReader": {
-    "claimAnchors": {
-      "show": "Show claim-anchors",
-      "hide": "Hide claim-anchors"
-    }
-  },
   "neuronEditor": {
     "editButton": "Edit",
     "openEditor": "Open editor",
