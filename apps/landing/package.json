@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "BUILD_OUT_DIR=deploy npx tsx build.ts",
+    "build": "BUILD_OUT_DIR=deploy tsx build.ts",
     "ship": "pnpm build && flyctl deploy --remote-only --config fly.toml ."
   },
   "dependencies": {
