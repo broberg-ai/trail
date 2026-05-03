@@ -1,7 +1,18 @@
 import { useEffect, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 import type { KnowledgeBase } from '@trail/shared';
-import { listKnowledgeBases, updateKnowledgeBase, getLintStatus, type LintStatus, ApiError } from '../api';
+import { INGEST_MODELS, type IngestModel } from '@trail/shared';
+import {
+  listKnowledgeBases,
+  updateKnowledgeBase,
+  getLintStatus,
+  getIngestSettings,
+  updateIngestSettings,
+  type LintStatus,
+  type IngestSettingsResponse,
+  type IngestBackendId,
+  ApiError,
+} from '../api';
 import { matchKb } from '../lib/kb-cache';
 import { t, useLocale } from '../lib/i18n';
 import { CenteredLoader } from '../components/centered-loader';
@@ -39,6 +50,15 @@ export function SettingsTrailPanel() {
   // form-state stays expressive without a separate "is overridden" flag.
   const [lintScheduleDays, setLintScheduleDays] = useState<number | null>(null);
   const [lintStatus, setLintStatus] = useState<LintStatus | null>(null);
+  // F152 — per-KB ingest backend/model. Local form-state vs server value
+  // are kept separately so dirty-check is honest. selectedModelKey shape:
+  //   ""                 → use env / default chain
+  //   "<backend>:<id>"   → per-KB single-step override
+  // The full effective-chain (resolveIngestChain output) is rendered as
+  // a preview line so curator sees what runs after fallback.
+  const [ingestSettings, setIngestSettings] = useState<IngestSettingsResponse | null>(null);
+  const [selectedModelKey, setSelectedModelKey] = useState<string>('');
+  const [ingestSavePending, setIngestSavePending] = useState(false);
 
   useEffect(() => {
     listKnowledgeBases()
@@ -60,6 +80,17 @@ export function SettingsTrailPanel() {
           getLintStatus(match.id)
             .then((s) => setLintStatus(s))
             .catch(() => setLintStatus(null));
+          // F152 — fetch ingest settings + effective chain. Same fail-soft.
+          getIngestSettings(match.id)
+            .then((s) => {
+              setIngestSettings(s);
+              if (s.overrides.ingestBackend && s.overrides.ingestModel) {
+                setSelectedModelKey(`${s.overrides.ingestBackend}:${s.overrides.ingestModel}`);
+              } else {
+                setSelectedModelKey('');
+              }
+            })
+            .catch(() => setIngestSettings(null));
         }
       })
       .catch((err: ApiError) => setError(err.message));
@@ -109,6 +140,43 @@ export function SettingsTrailPanel() {
       });
     } finally {
       setBusy(false);
+    }
+  };
+
+  // F152 — server-side dirty check is implicit (PATCH is idempotent).
+  // We just gate the button on form-state vs the last-loaded server
+  // value to avoid a no-op round-trip.
+  const ingestServerKey = (() => {
+    if (!ingestSettings) return '';
+    const o = ingestSettings.overrides;
+    return o.ingestBackend && o.ingestModel ? `${o.ingestBackend}:${o.ingestModel}` : '';
+  })();
+  const ingestDirty = ingestSettings !== null && selectedModelKey !== ingestServerKey;
+
+  const onSaveIngestModel = async () => {
+    if (!kb || ingestSavePending || !ingestDirty) return;
+    setIngestSavePending(true);
+    try {
+      let body: { ingestBackend: IngestBackendId | null; ingestModel: string | null };
+      if (selectedModelKey === '') {
+        body = { ingestBackend: null, ingestModel: null };
+      } else {
+        const [backend, ...rest] = selectedModelKey.split(':');
+        body = {
+          ingestBackend: backend as IngestBackendId,
+          ingestModel: rest.join(':'),
+        };
+      }
+      const updated = await updateIngestSettings(kb.id, body);
+      setIngestSettings(updated);
+      setToast({ kind: 'success', text: t('settings.savedToast') });
+    } catch (err) {
+      setToast({
+        kind: 'error',
+        text: err instanceof Error ? err.message : t('common.error'),
+      });
+    } finally {
+      setIngestSavePending(false);
     }
   };
 
@@ -312,6 +380,76 @@ export function SettingsTrailPanel() {
               </div>
             </div>
           ) : null}
+        </section>
+
+        {/* F152 — Ingest model picker. Dropdown over INGEST_MODELS plus
+            a "use default" sentinel; preview line shows the full
+            fallback chain that resolveIngestChain would produce. Save
+            is independent of the global form save because it hits a
+            separate PATCH endpoint. */}
+        <section class="pt-2 border-t border-[color:var(--color-border)]">
+          <div class="mb-3">
+            <h2 class="text-sm font-medium">{t('settings.trail.ingestModel.title')}</h2>
+            <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-md">
+              {t('settings.trail.ingestModel.subtitle')}
+            </p>
+          </div>
+
+          <label class="block mb-2">
+            <span class="text-sm font-medium">{t('settings.trail.ingestModel.modelLabel')}</span>
+          </label>
+          <select
+            value={selectedModelKey}
+            onChange={(e) => setSelectedModelKey((e.target as HTMLSelectElement).value)}
+            class="px-3 py-1.5 text-sm rounded-md border border-[color:var(--color-border)] bg-transparent focus:outline-none focus:border-[color:var(--color-accent)] transition min-w-[20rem]"
+          >
+            <option value="">{t('settings.trail.ingestModel.useDefault')}</option>
+            {INGEST_MODELS.map((m: IngestModel) => {
+              const key = `${m.backend}:${m.id}`;
+              const cost =
+                m.costPerMillion.input === 0 && m.costPerMillion.output === 0
+                  ? t('settings.trail.ingestModel.maxPlanFree')
+                  : `$${m.costPerMillion.input.toFixed(2)} in / $${m.costPerMillion.output.toFixed(2)} out per 1M`;
+              return (
+                <option key={key} value={key}>
+                  {m.label} — {cost}
+                </option>
+              );
+            })}
+          </select>
+
+          {ingestSettings ? (
+            <p class="mt-2 text-[11px] font-mono text-[color:var(--color-fg-subtle)] max-w-2xl">
+              <span class="uppercase tracking-wider mr-2">
+                {t('settings.trail.ingestModel.fallbackPrefix')}
+              </span>
+              {ingestSettings.effectiveChain
+                .map((step) => {
+                  const found = INGEST_MODELS.find(
+                    (m) => m.backend === step.backend && m.id === step.model,
+                  );
+                  return found ? found.label : `${step.backend}:${step.model}`;
+                })
+                .join(' → ')}
+            </p>
+          ) : null}
+
+          <div class="mt-3">
+            <button
+              type="button"
+              onClick={onSaveIngestModel}
+              disabled={!ingestDirty || ingestSavePending}
+              class="px-3 py-1.5 text-sm rounded-md border border-[color:var(--color-accent)]/40 bg-[color:var(--color-accent)]/10 hover:bg-[color:var(--color-accent)]/20 disabled:opacity-40 disabled:cursor-not-allowed active:bg-[color:var(--color-accent)]/30 transition"
+            >
+              {ingestSavePending
+                ? t('settings.trail.ingestModel.saving')
+                : t('settings.trail.ingestModel.save')}
+            </button>
+          </div>
+
+          <p class="mt-2 text-[11px] text-[color:var(--color-fg-subtle)] max-w-md">
+            {t('settings.trail.ingestModel.hint')}
+          </p>
         </section>
 
         <section class="pt-2 border-t border-[color:var(--color-border)]">

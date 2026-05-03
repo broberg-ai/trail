@@ -123,7 +123,7 @@ The remaining Phase 1 scope, ordered by leverage and dependency.
 | F149 | Pluggable Ingest Backends (Claude CLI + OpenRouter, live fallback chain, per-tenant billing, per-KB model) | F06, F111.2, F137, F140, F143, F148 | Large |
 | F150 | ~~Admin Link-Report Panel~~ — **Done 2026-04-26** (UI for F148 `broken_links` + accept/dismiss/reopen + SSE live-update on `link_check_*` events) | F148, F87, F17, F18 | Small |
 | F151 | Cost & Quality Dashboard (cost-tab + side-by-side ingest-compare for F149 data) | F149, F143, F148 | Medium |
-| F152 | Runtime Model Switcher UI (per-KB model-dropdown, chain-preview, F151 recommendation-badge) | F149, F151, F18 | Small |
+| F152 | ~~Runtime Model Switcher UI~~ — **Done 2026-05-03** (per-KB ingest-model dropdown over `INGEST_MODELS` whitelist + effective-fallback-chain preview line; routes/ingest-settings.ts mirrors F159 chat-settings pattern; settings-trail.tsx adds independent save-button so model-change is its own PATCH; v1 cuts F151 recommendation-badge + OpenRouter-key warning to F152.1) | F149, F151, F18 | Small |
 | F153 | Continuous online backup of `trail.db` to Cloudflare R2 (VACUUM INTO + gzip + R2 multipart upload, `backup-scheduler` service, admin panel, stopped-server restore CLI) | — | Small |
 | F158 | ~~Idempotent Contradiction-Lint~~ — **Done 2026-04-25** (signature-skip → 0 LLM calls when brain at rest; saves ~1740 Haiku-calls/day on quiet 348-Neuron fleet) | F32, F118 | Small |
 | F159 | [Pluggable Chat Backends](./features/F159-pluggable-chat-backends.md) — F149 mirror for chat: ClaudeCLIBackend + OpenRouterBackend, per-KB chain config, cost stamping. **Unblocks F33** (Fly.io prod chat needs no `claude` CLI). | F149, F144 | Medium |

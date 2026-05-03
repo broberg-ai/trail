@@ -576,6 +576,17 @@
         "lastFindings": "Findings",
         "never": "never run"
       },
+      "ingestModel": {
+        "title": "Ingest model",
+        "subtitle": "Which LLM backend primarily compiles Sources into Neurons on this Trail. Pick 'Use global default' to inherit the engine config, or pin this Trail to a specific model.",
+        "modelLabel": "Primary model",
+        "useDefault": "Use global default",
+        "fallbackPrefix": "Fallback chain:",
+        "maxPlanFree": "Max Plan (no extra credits)",
+        "save": "Save model",
+        "saving": "Saving…",
+        "hint": "The model here is the FIRST step in the fallback chain. If it fails (rate-limit, refusal, network) ingest advances to the next step — so this Trail never stops on a single provider hiccup."
+      },
       "personas": {
         "title": "Chat personas (external integrations)",
         "subtitle": "When this Trail is queried via Bearer-token chat (e.g. an embedded widget or a site-LLM orchestrator), these snippets are appended to the base persona-template. Leave empty to use the defaults.",

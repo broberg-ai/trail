@@ -26,6 +26,7 @@ import { backupRoutes } from './routes/backups.js';
 import { costRoutes } from './routes/cost.js';
 import { fxRoutes } from './routes/fx.js';
 import { chatSettingsRoutes } from './routes/chat-settings.js';
+import { ingestSettingsRoutes } from './routes/ingest-settings.js';
 import { creditsRoutes } from './routes/credits.js';
 import { jobRoutes } from './routes/jobs.js';
 import { beamRoutes } from './routes/beam.js';
@@ -156,6 +157,8 @@ export function createApp(trail: TrailDatabase): Hono<AppBindings> {
   app.route('/api/v1', fxRoutes);
   // F159 — per-KB chat backend overrides (GET + PATCH /knowledge-bases/:kbId/chat-settings).
   app.route('/api/v1', chatSettingsRoutes);
+  // F152 — per-KB ingest backend overrides (GET + PATCH /knowledge-bases/:kbId/ingest-settings).
+  app.route('/api/v1', ingestSettingsRoutes);
   // F156 Phase 0 — credits balance + recent transactions for the cost panel card.
   app.route('/api/v1', creditsRoutes);
   // F164 — generic background-jobs API (submit, list, get, abort, SSE stream).

@@ -270,7 +270,7 @@ Admin-dropdown pr. KB der lader curator flippe `ingest_backend` + `ingest_model`
 
 | # | Feature | Status | Phase | Plan |
 |---|---------|--------|-------|------|
-| F152 | [Runtime Model Switcher UI](features/F152-runtime-model-switcher-ui.md) | Planned | 1/2 | [plan](features/F152-runtime-model-switcher-ui.md) |
+| F152 | [Runtime Model Switcher UI](features/F152-runtime-model-switcher-ui.md) | Done | 1/2 | [plan](features/F152-runtime-model-switcher-ui.md) |
 
 ### F153 — Continuous online backup of `trail.db` to Cloudflare R2
 

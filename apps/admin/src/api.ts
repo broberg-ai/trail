@@ -1338,3 +1338,40 @@ export function listActivity(f: ActivityFilter = {}): Promise<ActivityListRespon
   const tail = qs.toString() ? `?${qs}` : '';
   return api(`/api/v1/activity${tail}`);
 }
+
+// ── F152 — Per-KB ingest backend settings ────────────────────────────────
+
+export type IngestBackendId = 'claude-cli' | 'openrouter';
+
+export interface ChainStep {
+  backend: IngestBackendId;
+  model: string;
+  translationModel?: string;
+}
+
+export interface IngestSettingsResponse {
+  overrides: {
+    ingestBackend: IngestBackendId | null;
+    ingestModel: string | null;
+    ingestFallbackChain: ChainStep[] | null;
+  };
+  effectiveChain: ChainStep[];
+}
+
+export function getIngestSettings(kbId: string): Promise<IngestSettingsResponse> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/ingest-settings`);
+}
+
+export function updateIngestSettings(
+  kbId: string,
+  body: {
+    ingestBackend?: IngestBackendId | null;
+    ingestModel?: string | null;
+    ingestFallbackChain?: ChainStep[] | null;
+  },
+): Promise<IngestSettingsResponse> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/ingest-settings`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}

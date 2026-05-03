@@ -576,6 +576,17 @@
         "lastFindings": "Findings",
         "never": "har aldrig kørt"
       },
+      "ingestModel": {
+        "title": "Ingest-model",
+        "subtitle": "Hvilken LLM-backend der primært kompilerer Kilder til Neuroner på denne Trail. Vælg 'Brug global default' for at følge engine-konfigurationen, eller pin denne Trail til en specifik model.",
+        "modelLabel": "Primær model",
+        "useDefault": "Brug global default",
+        "fallbackPrefix": "Fallback-kæde:",
+        "maxPlanFree": "Max Plan (ingen ekstra credits)",
+        "save": "Gem model",
+        "saving": "Gemmer…",
+        "hint": "Modellen her er FØRSTE skridt i fallback-kæden. Hvis den fejler (rate-limit, refusal, netværk) går ingest videre til næste skridt — så denne Trail aldrig stopper på en enkelt provider-hikkup."
+      },
       "personas": {
         "title": "Chat-personas (eksterne integrationer)",
         "subtitle": "Når denne Trail bliver spurgt via Bearer-token-chat (fx en indlejret widget eller en site-LLM-orchestrator), bliver disse tekststykker tilføjet base-templaten. Lad stå tomt for at bruge default.",
