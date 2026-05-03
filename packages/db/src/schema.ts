@@ -180,6 +180,13 @@ export const documents = sqliteTable(
     // (migration 0024) is for lookup speed only — no DB-level UNIQUE
     // so force=true uploads can intentionally bypass.
     contentHash: text('content_hash'),
+    // F112 — Luhmann-friction "Your Take" field. Curator's own
+    // reflection on the Neuron, separate from the LLM-compiled body.
+    // Survives re-ingest because the compile pipeline only rewrites
+    // `content`, not arbitrary columns. NEVER included in chat
+    // context — that would echo the user's own thinking back at
+    // them and defeat the friction the field exists to create.
+    userNote: text('user_note'),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
     updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
   },

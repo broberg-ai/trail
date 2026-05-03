@@ -135,6 +135,10 @@ export const DocumentSchema = z.object({
   // F145 — per-KB monotone sequence. Nullable on the schema for pre-0008
   // snapshots; every row should have one after the migration backfill.
   seq: z.number().int().nullable().optional(),
+  // F112 — Luhmann-friction "Your Take" field. Curator's own
+  // reflection. Optional on wire so consumers that don't request it
+  // don't need to include it; nullable on disk.
+  userNote: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

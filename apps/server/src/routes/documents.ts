@@ -248,6 +248,9 @@ documentRoutes.get('/documents/:docId/content', async (c) => {
       version: documents.version,
       kind: documents.kind,
       knowledgeBaseId: documents.knowledgeBaseId,
+      // F112 — include user-note so the reader can render "Din tanke"
+      // in the same payload, no extra round-trip.
+      userNote: documents.userNote,
     })
     .from(documents)
     .where(and(eq(documents.id, docId), eq(documents.tenantId, tenant.id)))
@@ -269,7 +272,12 @@ documentRoutes.get('/documents/:docId/content', async (c) => {
     });
   }
 
-  return c.json({ id: doc.id, content: doc.content, version: doc.version });
+  return c.json({
+    id: doc.id,
+    content: doc.content,
+    version: doc.version,
+    userNote: doc.userNote,
+  });
 });
 
 // NOTE (F17): this endpoint currently writes directly to documents where

@@ -519,6 +519,16 @@
     "conflict": "Can't do that — the item changed under your feet.",
     "unknown": "Unknown error: {message}"
   },
+  "wikiReader": {
+    "userNote": {
+      "heading": "Your take",
+      "hint": "Write in your own words. The act of formulating, not reading, makes ideas stick. Your take lives separately from the Neuron's LLM body and is never overwritten by a re-ingest. It's never shared with chat or external integrations.",
+      "placeholder": "What grabs you about this? Where do you disagree? How would you put it differently?",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "dirty": "Unsaved changes"
+    }
+  },
   "neuronEditor": {
     "editButton": "Edit",
     "openEditor": "Open editor",

@@ -19,6 +19,7 @@ import {
   getDocumentContent,
   getNeuronProvenance,
   saveNeuronEdit,
+  updateUserNote,
   NeuronEditConflictError,
   ApiError,
   type NeuronProvenance,
@@ -104,6 +105,13 @@ function ReaderView() {
   const [provenance, setProvenance] = useState<NeuronProvenance | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [localVersion, setLocalVersion] = useState<number | null>(null);
+  // F112 — "Din tanke" / Luhmann-friction note. Local form-state vs
+  // server value tracked separately so dirty-check works honestly.
+  // null = not yet loaded; '' = loaded and empty.
+  const [userNote, setUserNote] = useState<string | null>(null);
+  const [userNoteServer, setUserNoteServer] = useState<string | null>(null);
+  const [userNoteSaving, setUserNoteSaving] = useState(false);
+  const [userNoteSaved, setUserNoteSaved] = useState(false);
 
   useEffect(() => {
     if (!kbId) return;
@@ -150,10 +158,17 @@ function ReaderView() {
     if (!doc) {
       setContent(null);
       setProvenance(null);
+      setUserNote(null);
+      setUserNoteServer(null);
       return;
     }
     getDocumentContent(doc.id)
-      .then((r) => setContent(r.content ?? ''))
+      .then((r) => {
+        setContent(r.content ?? '');
+        const note = r.userNote ?? '';
+        setUserNote(note);
+        setUserNoteServer(note);
+      })
       .catch((err: ApiError) => setError(err.message));
     // Provenance lookup is independent of content — fire in parallel.
     // Silent on failure; the panel just doesn't render the "Created via"
@@ -320,6 +335,35 @@ function ReaderView() {
               dangerouslySetInnerHTML={{ __html: html }}
             />
           )}
+
+          {/* F112 — Luhmann-friction "Your Take" field. Curator's own
+              reflection, persisted via PUT /user-note (queue-bypass).
+              Renders only when content has loaded so curator doesn't
+              start typing into a phantom Neuron during route flicker. */}
+          {doc && content !== null && userNote !== null ? (
+            <UserNoteSection
+              docId={doc.id}
+              value={userNote}
+              serverValue={userNoteServer}
+              onChange={setUserNote}
+              onSave={async (value) => {
+                setUserNoteSaving(true);
+                setUserNoteSaved(false);
+                try {
+                  await updateUserNote(doc.id, value);
+                  setUserNoteServer(value.trim() === '' ? '' : value);
+                  setUserNoteSaved(true);
+                  setTimeout(() => setUserNoteSaved(false), 2000);
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : String(err));
+                } finally {
+                  setUserNoteSaving(false);
+                }
+              }}
+              saving={userNoteSaving}
+              savedToast={userNoteSaved}
+            />
+          ) : null}
         </article>
       ) : null}
     </div>
@@ -458,4 +502,94 @@ function formatAbsolute(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+/**
+ * F112 — "Your Take" / Din tanke field.
+ *
+ * Curator's own reflection on the Neuron. Auto-saves on blur AND on
+ * 1.5s debounce while typing. Visually distinct from the LLM-body
+ * (left amber rule + soft card background) so the curator immediately
+ * reads "this is mine, not the model's".
+ *
+ * The Luhmann pattern in one widget: writing in your own words is
+ * the act that makes ideas stick. The textarea uses ample whitespace
+ * + plain monospace to reinforce "this is your scratch-pad", not a
+ * polished publishing surface.
+ */
+function UserNoteSection({
+  docId,
+  value,
+  serverValue,
+  onChange,
+  onSave,
+  saving,
+  savedToast,
+}: {
+  docId: string;
+  value: string;
+  serverValue: string | null;
+  onChange: (v: string) => void;
+  onSave: (v: string) => Promise<void>;
+  saving: boolean;
+  savedToast: boolean;
+}) {
+  // Debounced auto-save while typing. Resets on every keystroke, fires
+  // 1.5s after the last change. Saved on blur regardless. The dirty
+  // check (value !== serverValue) prevents save-thrash on identical
+  // re-edits.
+  useEffect(() => {
+    if (serverValue === null) return;
+    if (value === serverValue) return;
+    const timer = setTimeout(() => {
+      void onSave(value);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [value, serverValue, onSave]);
+
+  const dirty = serverValue !== null && value !== serverValue;
+  const empty = value.trim().length === 0;
+
+  return (
+    <section
+      class="mt-10 pt-6 border-t border-[color:var(--color-border)]"
+      aria-labelledby={`user-note-${docId}`}
+    >
+      <div class="flex items-baseline justify-between gap-3 mb-3">
+        <div>
+          <h2
+            id={`user-note-${docId}`}
+            class="text-sm font-medium text-[color:var(--color-fg)]"
+          >
+            {t('wikiReader.userNote.heading')}
+          </h2>
+          <p class="text-[11px] text-[color:var(--color-fg-subtle)] mt-0.5 max-w-xl">
+            {t('wikiReader.userNote.hint')}
+          </p>
+        </div>
+        <div class="text-[11px] font-mono text-[color:var(--color-fg-subtle)] shrink-0">
+          {saving
+            ? t('wikiReader.userNote.saving')
+            : savedToast
+              ? t('wikiReader.userNote.saved')
+              : dirty
+                ? t('wikiReader.userNote.dirty')
+                : ''}
+        </div>
+      </div>
+      <div class="border-l-2 border-[color:var(--color-accent)]/40 pl-4">
+        <textarea
+          value={value}
+          onInput={(e) => onChange((e.target as HTMLTextAreaElement).value)}
+          onBlur={() => {
+            if (dirty) void onSave(value);
+          }}
+          placeholder={t('wikiReader.userNote.placeholder')}
+          rows={empty ? 3 : Math.max(3, Math.min(20, value.split('\n').length + 1))}
+          maxLength={4000}
+          class="w-full font-mono text-[14px] leading-relaxed bg-[color:var(--color-bg-card)]/30 border border-[color:var(--color-border)] rounded-md px-3 py-2 text-[color:var(--color-fg)] placeholder:text-[color:var(--color-fg-subtle)] focus:outline-none focus:border-[color:var(--color-accent)]/40 transition resize-y"
+        />
+      </div>
+    </section>
+  );
 }

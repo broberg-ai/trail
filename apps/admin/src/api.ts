@@ -410,11 +410,22 @@ export function listSources(
   );
 }
 
-/** Fetch a document + its full content. */
+/** Fetch a document + its full content + F112 user-note. */
 export function getDocumentContent(
   docId: string,
-): Promise<{ id: string; content: string | null; version: number }> {
+): Promise<{ id: string; content: string | null; version: number; userNote: string | null }> {
   return api(`/api/v1/documents/${encodeURIComponent(docId)}/content`);
+}
+
+/** F112 — Luhmann-friction "Your Take" upsert. Empty/whitespace-only string clears it. */
+export function updateUserNote(
+  docId: string,
+  userNote: string,
+): Promise<{ documentId: string; updatedAt: string }> {
+  return api(`/api/v1/documents/${encodeURIComponent(docId)}/user-note`, {
+    method: 'PUT',
+    body: JSON.stringify({ userNote }),
+  });
 }
 
 /**

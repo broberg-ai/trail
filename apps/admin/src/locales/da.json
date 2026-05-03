@@ -519,6 +519,16 @@
     "conflict": "Kan ikke udføres — elementet er ændret siden du åbnede det.",
     "unknown": "Ukendt fejl: {message}"
   },
+  "wikiReader": {
+    "userNote": {
+      "heading": "Din tanke",
+      "hint": "Skriv i dine egne ord. Det er handlingen — ikke at læse — der får ideer til at sidde fast. Din tanke gemmes adskilt fra Neuronens LLM-indhold og overskrives aldrig af en re-ingest. Den deles aldrig med chat eller eksterne integrationer.",
+      "placeholder": "Hvad fanger dig ved dette? Hvor er du uenig? Hvad ville du formulere anderledes?",
+      "saving": "Gemmer…",
+      "saved": "Gemt",
+      "dirty": "Ugemte ændringer"
+    }
+  },
   "neuronEditor": {
     "editButton": "Rediger",
     "openEditor": "Åbn editor",
