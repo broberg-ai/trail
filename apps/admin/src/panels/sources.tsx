@@ -175,10 +175,22 @@ export function SourcesPanel() {
   // Derived list for the current tab + per-tab counts. Both flow from
   // `allDocs` so they stay consistent — the count in the tab badge
   // always matches the row-count the user sees after the click.
-  const docs = useMemo(
-    () => (allDocs ? narrowByFilter(allDocs, filter) : null),
-    [allDocs, filter],
-  );
+  //
+  // Sort by recency (createdAt DESC) on success/active/extracted/failed
+  // — the curator's mental question on those tabs is "what just landed?"
+  // not "find a known filename". `archived` + `all` keep the alphabetic
+  // sort so curator-driven scanning stays predictable on long lists.
+  const docs = useMemo(() => {
+    if (!allDocs) return null;
+    const narrowed = narrowByFilter(allDocs, filter);
+    if (filter === 'archived' || filter === 'all') return narrowed;
+    return narrowed.slice().sort((a, b) => {
+      const ad = a.createdAt ?? '';
+      const bd = b.createdAt ?? '';
+      if (ad === bd) return a.filename.localeCompare(b.filename);
+      return bd.localeCompare(ad);
+    });
+  }, [allDocs, filter]);
   const tabCounts = useMemo(() => {
     if (!allDocs) return null;
     return {
