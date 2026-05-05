@@ -522,11 +522,13 @@
   "wikiReader": {
     "userNote": {
       "heading": "Din tanke",
-      "hint": "Skriv i dine egne ord. Det er handlingen — ikke at læse — der får ideer til at sidde fast. Din tanke gemmes adskilt fra Neuronens LLM-indhold og overskrives aldrig af en re-ingest. Den deles aldrig med chat eller eksterne integrationer.",
+      "hint": "Skriv i dine egne ord. Det er handlingen — ikke at læse — der får ideer til at sidde fast. Din tanke gemmes adskilt fra Neuronens LLM-indhold og overskrives aldrig af en re-ingest. Default privat — tikker du boksen nedenfor deles den med chat og eksterne integrationer som 'din egen formulering'.",
       "placeholder": "Hvad fanger dig ved dette? Hvor er du uenig? Hvad ville du formulere anderledes?",
       "saving": "Gemmer…",
       "saved": "Gemt",
-      "dirty": "Ugemte ændringer"
+      "dirty": "Ugemte ændringer",
+      "shareLabel": "Anvend også i chat og eksterne integrationer",
+      "shareHint": "LLM ser din tanke som adskilt sektion mærket som din egen formulering, ikke som Neuron-indhold. Kan slås fra igen når som helst."
     }
   },
   "neuronEditor": {

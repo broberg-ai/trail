@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { documents, knowledgeBases, chatSessions, chatTurns, type TrailDatabase } from '@trail/db';
-import { and, asc, eq, like, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, like, sql } from 'drizzle-orm';
 import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
 import { ChatRequestSchema } from '@trail/shared';
 import { resolveKbId, stripClaimAnchors } from '@trail/core';
@@ -584,6 +584,39 @@ async function retrieveContext(
           actorKind: 'user',
         });
       }
+    }
+  }
+
+  // F112.1 — append shared user-notes as separately-labelled sections
+  // so the LLM can distinguish curator's own formulation from the
+  // Neuron's compiled body. Only includes notes where share=1 AND the
+  // parent document is already represented in `seen` (i.e. it
+  // contributed a chunk or doc-hit to this answer's context).
+  if (seen.size > 0 && totalChars < MAX_CHARS) {
+    const docIds = Array.from(seen);
+    const sharedNotes = await trail.db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        filename: documents.filename,
+        userNote: documents.userNote,
+      })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.tenantId, tenantId),
+          eq(documents.userNoteShare, true),
+          inArray(documents.id, docIds),
+        ),
+      )
+      .all();
+    for (const row of sharedNotes) {
+      if (!row.userNote) continue;
+      if (totalChars >= MAX_CHARS) break;
+      const label = row.title ?? row.filename;
+      const block = `### Curator's reflection on "${label}" (their own words, opt-in shared)\n${row.userNote}`;
+      chunks.push(block);
+      totalChars += block.length;
     }
   }
 

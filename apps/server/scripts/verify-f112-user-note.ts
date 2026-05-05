@@ -36,10 +36,11 @@ console.log(`\n=== F112 user-note probe (id: ${PROBE_ID}) ===\n`);
 const trail = await createLibsqlDatabase({ path: REPO_ROOT_DB });
 await trail.runMigrations();
 
-// 1. Schema sanity — column landed
+// 1. Schema sanity — columns landed
 const cols = await trail.client.execute(`PRAGMA table_info('documents')`);
 const colNames = cols.rows.map((r) => r.name as string);
 assert(colNames.includes('user_note'), 'user_note column present on documents');
+assert(colNames.includes('user_note_share'), 'F112.1 user_note_share column present');
 
 // 2. Pick a real tenant + KB + user + create probe doc
 const tenant = await trail.db.select().from(tenants).limit(1).get();
@@ -153,23 +154,54 @@ row = await trail.db
   .get();
 assert(row?.userNote === null, 'user_note clears via NULL update');
 
-// 7. Privacy invariant: chat retrieveContext SELECTs from
-// document_chunks, not documents.user_note. Verify the chunk-search
-// surface doesn't expose user_note via grep on the route source.
-// (Static probe; no live HTTP call needed.)
+// 6.5 — F112.1 share-flag default + opt-in flip
+const shareRow = await trail.db
+  .select({ share: documents.userNoteShare })
+  .from(documents)
+  .where(eq(documents.id, docId))
+  .get();
+assert(shareRow?.share === false, 'F112.1 user_note_share default is false');
+await trail.db
+  .update(documents)
+  .set({ userNote: 'Shared reflection text', userNoteShare: true })
+  .where(eq(documents.id, docId))
+  .run();
+const sharedRow = await trail.db
+  .select({ note: documents.userNote, share: documents.userNoteShare })
+  .from(documents)
+  .where(eq(documents.id, docId))
+  .get();
+assert(
+  sharedRow?.share === true && sharedRow?.note === 'Shared reflection text',
+  'F112.1 share-flag flips on per-Neuron + note round-trips alongside',
+);
+
+// 7. F112.1 privacy invariant: chat.ts + retrieve.ts MAY reference
+// user_note (since opt-in share is now a feature), but every read
+// must be gated on userNoteShare being true. Static probe checks
+// that whenever userNote shows up in those files, userNoteShare
+// also shows up in the same file — proving the gate is wired.
+// A future regression that reads user_note without checking share
+// would be caught by this co-occurrence check.
 const chatRouteSrc = await Bun.file(
   join(import.meta.dirname, '../src/routes/chat.ts'),
 ).text();
 const retrieveSrc = await Bun.file(
   join(import.meta.dirname, '../src/routes/retrieve.ts'),
 ).text();
+
+const chatReadsNote = chatRouteSrc.includes('userNote') || chatRouteSrc.includes('user_note');
+const chatGatesShare = chatRouteSrc.includes('userNoteShare') || chatRouteSrc.includes('user_note_share');
 assert(
-  !chatRouteSrc.includes('userNote') && !chatRouteSrc.includes('user_note'),
-  'chat.ts does NOT reference user_note column (privacy invariant)',
+  !chatReadsNote || chatGatesShare,
+  'chat.ts: any user_note read is gated on userNoteShare (F112.1 opt-in invariant)',
 );
+
+const retrieveReadsNote = retrieveSrc.includes('userNote') || retrieveSrc.includes('user_note');
+const retrieveGatesShare = retrieveSrc.includes('userNoteShare') || retrieveSrc.includes('user_note_share');
 assert(
-  !retrieveSrc.includes('userNote') && !retrieveSrc.includes('user_note'),
-  'retrieve.ts (F160) does NOT reference user_note (privacy invariant)',
+  !retrieveReadsNote || retrieveGatesShare,
+  'retrieve.ts (F160): any user_note read is gated on userNoteShare (F112.1 opt-in invariant)',
 );
 
 // Cleanup

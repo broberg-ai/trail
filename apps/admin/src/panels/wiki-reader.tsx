@@ -112,6 +112,9 @@ function ReaderView() {
   const [userNoteServer, setUserNoteServer] = useState<string | null>(null);
   const [userNoteSaving, setUserNoteSaving] = useState(false);
   const [userNoteSaved, setUserNoteSaved] = useState(false);
+  // F112.1 — per-Neuron share flag. Default false on new docs.
+  const [userNoteShare, setUserNoteShare] = useState(false);
+  const [userNoteShareServer, setUserNoteShareServer] = useState(false);
 
   useEffect(() => {
     if (!kbId) return;
@@ -160,6 +163,8 @@ function ReaderView() {
       setProvenance(null);
       setUserNote(null);
       setUserNoteServer(null);
+      setUserNoteShare(false);
+      setUserNoteShareServer(false);
       return;
     }
     getDocumentContent(doc.id)
@@ -168,6 +173,8 @@ function ReaderView() {
         const note = r.userNote ?? '';
         setUserNote(note);
         setUserNoteServer(note);
+        setUserNoteShare(r.userNoteShare ?? false);
+        setUserNoteShareServer(r.userNoteShare ?? false);
       })
       .catch((err: ApiError) => setError(err.message));
     // Provenance lookup is independent of content — fire in parallel.
@@ -346,6 +353,26 @@ function ReaderView() {
               value={userNote}
               serverValue={userNoteServer}
               onChange={setUserNote}
+              share={userNoteShare}
+              shareServer={userNoteShareServer}
+              onShareChange={(next) => {
+                setUserNoteShare(next);
+                // Share is a deliberate click — fire save immediately
+                // rather than waiting for a debounced text-save.
+                setUserNoteSaving(true);
+                setUserNoteSaved(false);
+                updateUserNote(doc.id, userNote, next)
+                  .then(() => {
+                    setUserNoteShareServer(next);
+                    setUserNoteServer(userNote.trim() === '' ? '' : userNote);
+                    setUserNoteSaved(true);
+                    setTimeout(() => setUserNoteSaved(false), 2000);
+                  })
+                  .catch((err) =>
+                    setError(err instanceof Error ? err.message : String(err)),
+                  )
+                  .finally(() => setUserNoteSaving(false));
+              }}
               onSave={async (value) => {
                 setUserNoteSaving(true);
                 setUserNoteSaved(false);
@@ -522,6 +549,9 @@ function UserNoteSection({
   value,
   serverValue,
   onChange,
+  share,
+  shareServer: _shareServer,
+  onShareChange,
   onSave,
   saving,
   savedToast,
@@ -530,6 +560,9 @@ function UserNoteSection({
   value: string;
   serverValue: string | null;
   onChange: (v: string) => void;
+  share: boolean;
+  shareServer: boolean;
+  onShareChange: (next: boolean) => void;
   onSave: (v: string) => Promise<void>;
   saving: boolean;
   savedToast: boolean;
@@ -589,6 +622,24 @@ function UserNoteSection({
           maxLength={4000}
           class="w-full font-mono text-[14px] leading-relaxed bg-[color:var(--color-bg-card)]/30 border border-[color:var(--color-border)] rounded-md px-3 py-2 text-[color:var(--color-fg)] placeholder:text-[color:var(--color-fg-subtle)] focus:outline-none focus:border-[color:var(--color-accent)]/40 transition resize-y"
         />
+        {/* F112.1 — opt-in share toggle. Default off; only when curator
+            explicitly checks does the note flow into chat retrieveContext
+            + F160 retrieve responses. Saves immediately on click (not
+            debounced) since it's a deliberate action, not a typing flow. */}
+        <label class="mt-2 flex items-start gap-2 text-[11px] text-[color:var(--color-fg-muted)] cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={share}
+            onChange={(e) => onShareChange((e.target as HTMLInputElement).checked)}
+            class="mt-0.5 accent-[color:var(--color-accent)]"
+          />
+          <span>
+            {t('wikiReader.userNote.shareLabel')}
+            <span class="block text-[10px] text-[color:var(--color-fg-subtle)] mt-0.5 max-w-md">
+              {t('wikiReader.userNote.shareHint')}
+            </span>
+          </span>
+        </label>
       </div>
     </section>
   );

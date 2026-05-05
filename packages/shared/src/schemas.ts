@@ -139,6 +139,9 @@ export const DocumentSchema = z.object({
   // reflection. Optional on wire so consumers that don't request it
   // don't need to include it; nullable on disk.
   userNote: z.string().nullable().optional(),
+  // F112.1 — opt-in flag. When true, the note is shared with chat
+  // and external integrations as a "Curator's reflection" section.
+  userNoteShare: z.boolean().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

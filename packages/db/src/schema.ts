@@ -183,10 +183,15 @@ export const documents = sqliteTable(
     // F112 — Luhmann-friction "Your Take" field. Curator's own
     // reflection on the Neuron, separate from the LLM-compiled body.
     // Survives re-ingest because the compile pipeline only rewrites
-    // `content`, not arbitrary columns. NEVER included in chat
-    // context — that would echo the user's own thinking back at
-    // them and defeat the friction the field exists to create.
+    // `content`, not arbitrary columns. Default-private — only fed
+    // into chat / retrieve when F112.1 share-flag is opted in below.
     userNote: text('user_note'),
+    // F112.1 — per-Neuron opt-in to share user_note with chat
+    // retrieveContext + F160 retrieve. Default 0 = private (matches
+    // F112's original behaviour). When 1, the note is included as a
+    // separately-labelled "Curator's reflection" section so the LLM
+    // can distinguish it from the Neuron's own content.
+    userNoteShare: integer('user_note_share', { mode: 'boolean' }).notNull().default(false),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
     updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
   },

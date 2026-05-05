@@ -251,6 +251,9 @@ documentRoutes.get('/documents/:docId/content', async (c) => {
       // F112 — include user-note so the reader can render "Din tanke"
       // in the same payload, no extra round-trip.
       userNote: documents.userNote,
+      // F112.1 — share-flag so the reader can render the checkbox
+      // in its persisted state.
+      userNoteShare: documents.userNoteShare,
     })
     .from(documents)
     .where(and(eq(documents.id, docId), eq(documents.tenantId, tenant.id)))
@@ -277,6 +280,7 @@ documentRoutes.get('/documents/:docId/content', async (c) => {
     content: doc.content,
     version: doc.version,
     userNote: doc.userNote,
+    userNoteShare: doc.userNoteShare,
   });
 });
 

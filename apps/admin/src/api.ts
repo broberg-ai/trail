@@ -410,21 +410,35 @@ export function listSources(
   );
 }
 
-/** Fetch a document + its full content + F112 user-note. */
+/** Fetch a document + its full content + F112 user-note + F112.1 share-flag. */
 export function getDocumentContent(
   docId: string,
-): Promise<{ id: string; content: string | null; version: number; userNote: string | null }> {
+): Promise<{
+  id: string;
+  content: string | null;
+  version: number;
+  userNote: string | null;
+  userNoteShare: boolean;
+}> {
   return api(`/api/v1/documents/${encodeURIComponent(docId)}/content`);
 }
 
-/** F112 — Luhmann-friction "Your Take" upsert. Empty/whitespace-only string clears it. */
+/**
+ * F112 — Luhmann-friction "Your Take" upsert. Empty/whitespace-only
+ * string clears it.
+ *
+ * F112.1 — pass `share` to opt this Neuron's note in (or out of)
+ * chat + external-integration sharing. Omitting `share` keeps the
+ * previous flag value (idempotent on text-only edits).
+ */
 export function updateUserNote(
   docId: string,
   userNote: string,
+  share?: boolean,
 ): Promise<{ documentId: string; updatedAt: string }> {
   return api(`/api/v1/documents/${encodeURIComponent(docId)}/user-note`, {
     method: 'PUT',
-    body: JSON.stringify({ userNote }),
+    body: JSON.stringify(share === undefined ? { userNote } : { userNote, share }),
   });
 }
 

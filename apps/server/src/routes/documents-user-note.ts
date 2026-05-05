@@ -29,6 +29,10 @@ userNoteRoutes.use('*', requireAuth);
 const PutBodySchema = z
   .object({
     userNote: z.string().max(4000),
+    // F112.1 — opt-in share-flag. Optional; when omitted the
+    // current value on the row is kept (idempotent on text-only
+    // edits). When provided, flips per-Neuron share state.
+    share: z.boolean().optional(),
   })
   .strict();
 
@@ -64,9 +68,16 @@ userNoteRoutes.put('/documents/:docId/user-note', async (c) => {
   if (!existing) return c.json({ error: 'Not found' }, 404);
 
   const nowIso = new Date().toISOString();
+  // F112.1 — only update share-flag when the request explicitly
+  // sends one. Text-only edits leave the previous flag intact so a
+  // curator can save text without re-asserting share-state.
+  const update: Record<string, unknown> = { userNote: value, updatedAt: nowIso };
+  if (parsed.data.share !== undefined) {
+    update.userNoteShare = parsed.data.share;
+  }
   await trail.db
     .update(documents)
-    .set({ userNote: value, updatedAt: nowIso })
+    .set(update)
     .where(and(eq(documents.id, docId), eq(documents.tenantId, tenant.id)))
     .run();
 

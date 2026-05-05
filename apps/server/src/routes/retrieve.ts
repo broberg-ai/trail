@@ -127,6 +127,11 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
       tags: documents.tags,
       seq: documents.seq,
       knowledgeBaseId: documents.knowledgeBaseId,
+      // F112.1 — only surface user_note when curator explicitly opted
+      // this Neuron in to share. Default-private rows return null
+      // here even when the column is set.
+      userNote: documents.userNote,
+      userNoteShare: documents.userNoteShare,
     })
     .from(documents)
     .where(
@@ -157,6 +162,13 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
     content: string;
     headerBreadcrumb: string | null;
     rank: number;
+    /**
+     * F112.1 — curator's own reflection, only present when
+     * userNoteShare is opted-in on the parent document. NULL when
+     * private (default) or absent. Already stripped of claim-anchor
+     * markers if those ever leak into a note.
+     */
+    userNote: string | null;
   }> = [];
 
   for (const chunk of rawChunks) {
@@ -167,6 +179,13 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
       const docTags = parseTags(doc.tags ?? null).map((t) => t.toLowerCase());
       if (!tagFilter.every((t) => docTags.includes(t))) continue;
     }
+    // F112.1 — only expose user_note when curator opted this Neuron
+    // in to sharing. Default-private rows yield null even when the
+    // column is set on disk.
+    const sharedUserNote =
+      doc.userNoteShare && doc.userNote
+        ? stripClaimAnchors(doc.userNote)
+        : null;
     filtered.push({
       documentId: doc.id,
       seqId: prefix && doc.seq != null ? `${prefix}_${String(doc.seq).padStart(8, '0')}` : null,
@@ -180,6 +199,7 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
       content: stripClaimAnchors(chunk.content),
       headerBreadcrumb: chunk.headerBreadcrumb,
       rank: chunk.rank,
+      userNote: sharedUserNote,
     });
     if (filtered.length >= topK) break;
   }
@@ -198,11 +218,19 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
   const sections: string[] = [];
   const includedChunks: typeof filtered = [];
   let totalChars = 0;
+  // F112.1 — track which docs we've already appended user-note for so
+  // we don't repeat it on every chunk from the same parent. The note
+  // is per-document, not per-chunk.
+  const userNoteAppendedFor = new Set<string>();
   for (const c of filtered) {
     const header = c.headerBreadcrumb
       ? `## ${c.title} — ${c.headerBreadcrumb}`
       : `## ${c.title}`;
-    const section = `${header}\n\n${c.content}`;
+    let section = `${header}\n\n${c.content}`;
+    if (c.userNote && !userNoteAppendedFor.has(c.documentId)) {
+      section += `\n\n### Curator's reflection (their own words, opt-in shared)\n${c.userNote}`;
+      userNoteAppendedFor.add(c.documentId);
+    }
     const sep = sections.length > 0 ? 2 : 0;
     const projected = totalChars + section.length + sep;
     if (projected <= maxChars) {

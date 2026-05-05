@@ -239,6 +239,13 @@
       "when": 1779900000000,
       "tag": "0033_user_note",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1780000000000,
+      "tag": "0034_user_note_share",
+      "breakpoints": true
     }
   ]
 }

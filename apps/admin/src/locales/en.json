@@ -522,11 +522,13 @@
   "wikiReader": {
     "userNote": {
       "heading": "Your take",
-      "hint": "Write in your own words. The act of formulating, not reading, makes ideas stick. Your take lives separately from the Neuron's LLM body and is never overwritten by a re-ingest. It's never shared with chat or external integrations.",
+      "hint": "Write in your own words. The act of formulating, not reading, makes ideas stick. Your take lives separately from the Neuron's LLM body and is never overwritten by a re-ingest. Default private — tick the box below to share it with chat and external integrations as 'your own formulation'.",
       "placeholder": "What grabs you about this? Where do you disagree? How would you put it differently?",
       "saving": "Saving…",
       "saved": "Saved",
-      "dirty": "Unsaved changes"
+      "dirty": "Unsaved changes",
+      "shareLabel": "Also use in chat and external integrations",
+      "shareHint": "The LLM sees your take as a separately-labelled section marked as your own formulation, not as Neuron content. You can toggle it off again at any time."
     }
   },
   "neuronEditor": {
