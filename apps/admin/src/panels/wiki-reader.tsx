@@ -359,12 +359,14 @@ function ReaderView() {
                 setUserNoteShare(next);
                 // Share is a deliberate click — fire save immediately
                 // rather than waiting for a debounced text-save.
+                // Send ONLY the share field so a stale text-state can't
+                // accidentally clobber the saved note. The textarea
+                // has its own debounced save path for text edits.
                 setUserNoteSaving(true);
                 setUserNoteSaved(false);
-                updateUserNote(doc.id, userNote, next)
+                updateUserNote(doc.id, undefined, next)
                   .then(() => {
                     setUserNoteShareServer(next);
-                    setUserNoteServer(userNote.trim() === '' ? '' : userNote);
                     setUserNoteSaved(true);
                     setTimeout(() => setUserNoteSaved(false), 2000);
                   })

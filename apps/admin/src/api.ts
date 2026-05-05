@@ -430,15 +430,24 @@ export function getDocumentContent(
  * F112.1 — pass `share` to opt this Neuron's note in (or out of)
  * chat + external-integration sharing. Omitting `share` keeps the
  * previous flag value (idempotent on text-only edits).
+ *
+ * The body intentionally only carries fields the caller wants to
+ * change. Server treats missing fields as "leave alone". This matters
+ * for share-only checkbox clicks where the textarea state may be
+ * stale or empty — sending `userNote` then would either no-op the
+ * edit or accidentally clear a saved note.
  */
 export function updateUserNote(
   docId: string,
-  userNote: string,
+  userNote: string | null | undefined,
   share?: boolean,
 ): Promise<{ documentId: string; updatedAt: string }> {
+  const body: { userNote?: string; share?: boolean } = {};
+  if (typeof userNote === 'string') body.userNote = userNote;
+  if (share !== undefined) body.share = share;
   return api(`/api/v1/documents/${encodeURIComponent(docId)}/user-note`, {
     method: 'PUT',
-    body: JSON.stringify(share === undefined ? { userNote } : { userNote, share }),
+    body: JSON.stringify(body),
   });
 }
 
