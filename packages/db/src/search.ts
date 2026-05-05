@@ -85,3 +85,96 @@ export async function searchChunks(
     rank: row.rank as number,
   }));
 }
+
+/**
+ * F112.2 — search shared user-notes via LIKE.
+ *
+ * user_note isn't part of the FTS5 virtual table (would require a
+ * migration + trigger rewrite). Notes are short (< 4000 chars) and
+ * the share-gate filters out the vast majority, so a per-row LIKE
+ * scan is plenty fast at single-tenant scale. If/when a tenant has
+ * 10k+ shared notes we revisit and fold into documents_fts.
+ *
+ * Privacy gate: ONLY surfaces rows where user_note_share = 1. Private
+ * notes never leak to the search-result list — same opt-in stance as
+ * F112.1's chat + retrieve gates.
+ *
+ * The plain-text query is matched as a substring (case-insensitive
+ * via LOWER(...)). Multiple words are split + AND'ed: each term must
+ * appear somewhere in the note. Highlight is a manually-built
+ * <mark>...</mark> wrap of the first matching term so the UI can
+ * render it consistently with FTS hits.
+ */
+const USER_NOTES_SQL = `
+  SELECT d.id                AS id,
+         d.knowledge_base_id AS knowledgeBaseId,
+         d.filename          AS filename,
+         d.title             AS title,
+         d.path              AS path,
+         d.kind              AS kind,
+         d.seq               AS seq,
+         d.user_note         AS userNote
+    FROM documents d
+   WHERE d.tenant_id = ?
+     AND d.knowledge_base_id = ?
+     AND d.archived = 0
+     AND d.user_note_share = 1
+     AND d.user_note IS NOT NULL
+`;
+
+export async function searchUserNotes(
+  client: LibSqlClient,
+  query: string,
+  kbId: string,
+  tenantId: string,
+  limit = 10,
+): Promise<DocumentSearchHit[]> {
+  const terms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((t) => t.replace(/[^\p{L}\p{N}]/gu, ''))
+    .filter((t) => t.length > 0);
+  if (terms.length === 0) return [];
+
+  const result = await client.execute({ sql: USER_NOTES_SQL, args: [tenantId, kbId] });
+  const matches: DocumentSearchHit[] = [];
+  for (const row of result.rows) {
+    const note = (row.userNote as string | null) ?? '';
+    const noteLower = note.toLowerCase();
+    if (!terms.every((t) => noteLower.includes(t))) continue;
+    // Build a highlight snippet — wrap the first matching term + show
+    // up to 80 chars surrounding context so the UI has something to
+    // render alongside the title. FTS hits show full chunk highlights;
+    // user-note hits get a snippet view that mirrors that visually.
+    const firstTerm = terms[0]!;
+    const idx = noteLower.indexOf(firstTerm);
+    const start = Math.max(0, idx - 30);
+    const end = Math.min(note.length, idx + firstTerm.length + 50);
+    const before = start > 0 ? '…' : '';
+    const after = end < note.length ? '…' : '';
+    const slice = note.slice(start, end);
+    const highlight =
+      before +
+      slice.slice(0, idx - start) +
+      '<mark>' +
+      slice.slice(idx - start, idx - start + firstTerm.length) +
+      '</mark>' +
+      slice.slice(idx - start + firstTerm.length) +
+      after;
+    matches.push({
+      id: row.id as string,
+      knowledgeBaseId: row.knowledgeBaseId as string,
+      filename: row.filename as string,
+      title: (row.title as string | null) ?? null,
+      path: row.path as string,
+      kind: row.kind as 'source' | 'wiki',
+      highlight: `📝 ${highlight}`,
+      // Synthetic rank: user-note hits rank slightly behind FTS hits
+      // by default. The route can re-sort if it wants notes-first.
+      rank: 0.5,
+      seq: (row.seq as number | null) ?? null,
+    });
+    if (matches.length >= limit) break;
+  }
+  return matches;
+}

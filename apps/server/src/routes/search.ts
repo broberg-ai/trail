@@ -69,10 +69,26 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
   const ftsQuery = sanitizeFtsQuery(query);
   if (!ftsQuery) return c.json({ documents: [], chunks: [] });
 
-  const [documents, chunks] = await Promise.all([
+  // F112.2 — also search shared user-notes (LIKE on user_note column).
+  // Notes opted-in via F112.1's share-flag are surfaced as
+  // document-level hits, deduplicated against FTS hits below so a
+  // Neuron whose body AND note both match shows once with the FTS
+  // hit (richer highlight) rather than twice.
+  const [documents, chunks, noteHits] = await Promise.all([
     trail.searchDocuments(ftsQuery, kbId, tenant.id, limit),
     trail.searchChunks(ftsQuery, kbId, tenant.id, limit),
+    trail.searchUserNotes(query, kbId, tenant.id, limit),
   ]);
+
+  // Merge note-hits with FTS document-hits, dropping duplicates by id.
+  // FTS hits keep their slot (better highlight) — note-only hits append.
+  const seenIds = new Set(documents.map((d) => d.id));
+  for (const note of noteHits) {
+    if (seenIds.has(note.id)) continue;
+    documents.push(note);
+    seenIds.add(note.id);
+    if (documents.length >= limit) break;
+  }
 
   // F92 tag facet. searchDocuments returns a narrow projection that
   // doesn't include the tags column, so we re-hydrate tags here for

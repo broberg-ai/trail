@@ -431,7 +431,16 @@
     "thinking": "Thinking…",
     "saveAsNeuron": "Save as Neuron",
     "saveTitlePrompt": "Title for the Neuron",
-    "citations": "Sources"
+    "citations": "Sources",
+    "questionLabel": "Question",
+    "promoteHint": "Useful? Promote it to a Neuron.",
+    "savedToQueue": "✓ saved to queue as \"{title}\"",
+    "saved": "Saved",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyTitle": "Copy answer",
+    "saveAsNeuronTitle": "Save as Neuron",
+    "emptyHint": "Ask a question to get started — answers are grounded in the Neurons + Sources in this Trail."
   },
   "graph": {
     "searchPlaceholder": "Filter nodes…",

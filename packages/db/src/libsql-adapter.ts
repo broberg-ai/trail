@@ -14,7 +14,11 @@ import type {
   SqlArg,
 } from './interface.js';
 import { initFTS as installFts } from './fts.js';
-import { searchDocuments as searchDocs, searchChunks as searchChks } from './search.js';
+import {
+  searchDocuments as searchDocs,
+  searchChunks as searchChks,
+  searchUserNotes as searchUsrNotes,
+} from './search.js';
 
 /**
  * libSQL-backed TrailDatabase — default implementation for F40.1.
@@ -93,6 +97,16 @@ export class LibsqlTrailDatabase implements TrailDatabase {
   ): Promise<ChunkSearchHit[]> {
     this.assertOpen();
     return searchChks(this.client, query, kbId, tenantId, limit);
+  }
+
+  async searchUserNotes(
+    query: string,
+    kbId: string,
+    tenantId: string,
+    limit = 10,
+  ): Promise<DocumentSearchHit[]> {
+    this.assertOpen();
+    return searchUsrNotes(this.client, query, kbId, tenantId, limit);
   }
 
   async close(): Promise<void> {

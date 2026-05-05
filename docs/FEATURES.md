@@ -142,6 +142,7 @@ Ship'er Trail til "markedets bedste Karpathy-LLM-Wiki-killer" via ~34 features f
 | F111.2 | [Admin API-key panel + multi-origin CORS](features/F111.2-admin-api-keys-cors.md) | Planned | 1 | [plan](features/F111.2-admin-api-keys-cors.md) |
 | F112 | [User Notes / "Your Take" Field (Luhmann friction)](features/F112-user-notes-your-take.md) | Done | 1 | [plan](features/F112-user-notes-your-take.md) |
 | F112.1 | [Per-Neuron opt-in share for "Din tanke"](features/F112.1-user-note-share-toggle.md) | Done | 1 | [plan](features/F112.1-user-note-share-toggle.md) |
+| F112.2 | [User-note searchable internally (opt-in gated)](features/F112.2-user-note-search.md) | Done | 1 | [plan](features/F112.2-user-note-search.md) |
 | F113 | [Auto-fix in Lint](features/F113-auto-fix-lint.md) | Planned | 2 | [plan](features/F113-auto-fix-lint.md) |
 | F114 | [Image Archiving for Web Content](features/F114-image-archiving.md) | Planned | 2 | [plan](features/F114-image-archiving.md) |
 

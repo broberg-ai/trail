@@ -431,7 +431,16 @@
     "thinking": "Tænker…",
     "saveAsNeuron": "Gem som Neuron",
     "saveTitlePrompt": "Titel til Neuronen",
-    "citations": "Kilder"
+    "citations": "Kilder",
+    "questionLabel": "Spørgsmål",
+    "promoteHint": "Brugbart? Forfrem til en Neuron.",
+    "savedToQueue": "✓ gemt i kø som \"{title}\"",
+    "saved": "Gemt",
+    "copy": "Kopiér",
+    "copied": "Kopieret",
+    "copyTitle": "Kopiér svar",
+    "saveAsNeuronTitle": "Gem som Neuron",
+    "emptyHint": "Stil et spørgsmål for at komme i gang — svar er funderet i Neuronerne + Kilderne i denne Trail."
   },
   "graph": {
     "searchPlaceholder": "Filtrér noder…",

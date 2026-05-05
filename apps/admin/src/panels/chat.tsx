@@ -18,6 +18,7 @@ import { rewriteWikiLinks } from '../lib/wiki-links';
 import { Modal, ModalButton } from '../components/modal';
 import { ThinkingAnimation } from '../components/thinking-animation';
 import { CenteredLoader } from '../components/centered-loader';
+import { t, useLocale } from '../lib/i18n';
 
 /**
  * F144 — Chat-against-a-Trail with persistent history.
@@ -105,6 +106,9 @@ function groupSessionByDay(updatedAt: string, now: Date): DayGroup {
 export function ChatPanel() {
   const route = useRoute();
   const kbId = route.params.kbId ?? '';
+  // Subscribe to locale so English/Danish strings reactively swap when
+  // the curator flips the header language switcher.
+  useLocale();
   const [sessions, setSessions] = useState<ChatSession[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [turns, setTurns] = useState<LocalTurn[]>([]);
@@ -505,11 +509,11 @@ export function ChatPanel() {
 
       <Modal
         open={saveTarget !== null}
-        title="Save as Neuron"
+        title={t('chat.saveAsNeuronTitle')}
         onClose={() => setSaveTarget(null)}
         footer={
           <>
-            <ModalButton onClick={() => setSaveTarget(null)}>Cancel</ModalButton>
+            <ModalButton onClick={() => setSaveTarget(null)}>{t('common.cancel')}</ModalButton>
             <ModalButton
               variant="primary"
               onClick={confirmSave}
@@ -804,7 +808,7 @@ function TurnPair({
     <div>
       <div class="mb-2">
         <div class="text-[11px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-1">
-          Question
+          {t('chat.questionLabel')}
         </div>
         <div class="text-sm">{pair.userTurn.content}</div>
       </div>
@@ -845,7 +849,7 @@ function AnswerView({
       {turn.citations.length > 0 ? (
         <div class="mt-3 flex flex-wrap items-center gap-1.5">
           <span class="text-[10px] font-mono text-[color:var(--color-fg-subtle)] uppercase tracking-wider mr-1 flex-shrink-0">
-            Sources
+            {t('chat.citations')}
           </span>
           {turn.citations.map((c) => {
             const slug = c.filename.replace(/\.md$/i, '');
@@ -869,11 +873,11 @@ function AnswerView({
       <div class="mt-4 pt-3 border-t border-[color:var(--color-border)] flex items-center justify-between gap-3">
         {turn.savedAs ? (
           <span class="text-[11px] font-mono text-[color:var(--color-success)]">
-            ✓ saved to queue as "{turn.savedAs}"
+            {t('chat.savedToQueue', { title: turn.savedAs })}
           </span>
         ) : (
           <span class="text-[11px] font-mono text-[color:var(--color-fg-subtle)]">
-            Useful? Promote it to a Neuron.
+            {t('chat.promoteHint')}
           </span>
         )}
         <div class="flex items-center gap-2">
@@ -883,7 +887,7 @@ function AnswerView({
             disabled={!!turn.savedAs}
             class="text-xs px-3 py-1.5 rounded-md border border-[color:var(--color-border-strong)] hover:bg-[color:var(--color-bg)] disabled:opacity-50 transition"
           >
-            {turn.savedAs ? 'Saved' : 'Save as Neuron'}
+            {turn.savedAs ? t('chat.saved') : t('chat.saveAsNeuron')}
           </button>
         </div>
       </div>
@@ -908,7 +912,7 @@ function CopyAnswer({ text }: { text: string }) {
       type="button"
       onClick={onClick}
       disabled={!text}
-      title={copied ? 'Copied' : 'Copy answer'}
+      title={copied ? t('chat.copied') : t('chat.copyTitle')}
       class={
         'text-xs px-3 py-1.5 rounded-md border transition ' +
         (copied
@@ -917,7 +921,7 @@ function CopyAnswer({ text }: { text: string }) {
         ' disabled:opacity-50'
       }
     >
-      {copied ? 'Copied' : 'Copy'}
+      {copied ? t('chat.copied') : t('chat.copy')}
     </button>
   );
 }
@@ -925,7 +929,7 @@ function CopyAnswer({ text }: { text: string }) {
 function EmptyHint() {
   return (
     <div class="text-center py-16 text-[color:var(--color-fg-subtle)] text-sm">
-      Ask a question to get started — answers are grounded in the Neurons + Sources in this Trail.
+      {t('chat.emptyHint')}
     </div>
   );
 }
