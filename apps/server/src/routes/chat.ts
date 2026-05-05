@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { documents, knowledgeBases, chatSessions, chatTurns, type TrailDatabase } from '@trail/db';
-import { and, asc, eq, inArray, like, sql } from 'drizzle-orm';
+import { and, asc, eq, like, sql } from 'drizzle-orm';
 import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
 import { ChatRequestSchema } from '@trail/shared';
 import { resolveKbId, stripClaimAnchors } from '@trail/core';
@@ -587,36 +587,56 @@ async function retrieveContext(
     }
   }
 
-  // F112.1 — append shared user-notes as separately-labelled sections
-  // so the LLM can distinguish curator's own formulation from the
-  // Neuron's compiled body. Only includes notes where share=1 AND the
-  // parent document is already represented in `seen` (i.e. it
-  // contributed a chunk or doc-hit to this answer's context).
-  if (seen.size > 0 && totalChars < MAX_CHARS) {
-    const docIds = Array.from(seen);
-    const sharedNotes = await trail.db
-      .select({
-        id: documents.id,
-        title: documents.title,
-        filename: documents.filename,
-        userNote: documents.userNote,
-      })
-      .from(documents)
-      .where(
-        and(
-          eq(documents.tenantId, tenantId),
-          eq(documents.userNoteShare, true),
-          inArray(documents.id, docIds),
-        ),
-      )
-      .all();
-    for (const row of sharedNotes) {
-      if (!row.userNote) continue;
+  // F112.1/F112.2 — search shared user-notes INDEPENDENTLY of the
+  // FTS body/chunks loop. The original implementation only enriched
+  // notes for documents that had ALREADY hit body-FTS, which meant
+  // a Neuron whose UNIQUE relevant content lived in the curator's
+  // note (e.g. "Obi-wan Kenobi" on the Livets træ Neuron) was
+  // invisible to chat. Now we run searchUserNotes against the same
+  // KBs, fold the parent docs into seen + citations if absent, and
+  // append the note as a labelled context block so the LLM treats
+  // it pedagogically as curator's own words.
+  for (const kbId of kbIds) {
+    if (totalChars >= MAX_CHARS) break;
+    const noteHits = await trail.searchUserNotes(query, kbId, tenantId, 5);
+    for (const hit of noteHits) {
       if (totalChars >= MAX_CHARS) break;
+      // Pull the actual note text + title for the context block. The
+      // search hit's `highlight` is a snippet view; we want the full
+      // note here so the LLM has the curator's complete formulation.
+      const row = await trail.db
+        .select({
+          id: documents.id,
+          title: documents.title,
+          filename: documents.filename,
+          userNote: documents.userNote,
+          path: documents.path,
+        })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.tenantId, tenantId),
+            eq(documents.id, hit.id),
+            eq(documents.userNoteShare, true),
+          ),
+        )
+        .get();
+      if (!row?.userNote) continue;
       const label = row.title ?? row.filename;
       const block = `### Curator's reflection on "${label}" (their own words, opt-in shared)\n${row.userNote}`;
       chunks.push(block);
       totalChars += block.length;
+      if (!seen.has(row.id)) {
+        seen.add(row.id);
+        citations.push({ documentId: row.id, path: row.path, filename: row.filename });
+        recordAccess(trail, {
+          tenantId,
+          knowledgeBaseId: kbId,
+          documentId: row.id,
+          source: 'chat',
+          actorKind: 'user',
+        });
+      }
     }
   }
 

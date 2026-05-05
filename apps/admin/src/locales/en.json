@@ -434,6 +434,8 @@
     "citations": "Sources",
     "questionLabel": "Question",
     "promoteHint": "Useful? Promote it to a Neuron.",
+    "placeholderTurnLimit": "Start a new chat to continue…",
+    "keybindHint": "Enter to send · Shift+Enter for newline",
     "savedToQueue": "✓ saved to queue as \"{title}\"",
     "saved": "Saved",
     "copy": "Copy",

@@ -434,6 +434,8 @@
     "citations": "Kilder",
     "questionLabel": "Spørgsmål",
     "promoteHint": "Brugbart? Forfrem til en Neuron.",
+    "placeholderTurnLimit": "Start en ny chat for at fortsætte…",
+    "keybindHint": "Enter for at sende · Shift+Enter for ny linje",
     "savedToQueue": "✓ gemt i kø som \"{title}\"",
     "saved": "Gemt",
     "copy": "Kopiér",

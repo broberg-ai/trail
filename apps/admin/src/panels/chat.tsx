@@ -466,7 +466,7 @@ export function ChatPanel() {
             <div class="flex gap-2">
               <textarea
                 rows={2}
-                placeholder={atTurnLimit ? 'Start en ny chat for at fortsætte…' : 'Ask the Trail…'}
+                placeholder={atTurnLimit ? t('chat.placeholderTurnLimit') : t('chat.placeholder')}
                 value={input}
                 disabled={busy || atTurnLimit}
                 onInput={(e) => setInput((e.currentTarget as HTMLTextAreaElement).value)}
@@ -484,11 +484,11 @@ export function ChatPanel() {
                 disabled={!input.trim() || busy || atTurnLimit}
                 class="px-5 py-2 rounded-md bg-[color:var(--color-accent)] text-[color:var(--color-accent-fg)] font-medium text-sm hover:brightness-105 active:scale-[0.98] disabled:bg-[color:var(--color-border)] disabled:text-[color:var(--color-fg-muted)] disabled:cursor-not-allowed transition"
               >
-                {busy ? '…' : 'Ask'}
+                {busy ? '…' : t('chat.ask')}
               </button>
             </div>
             <div class="text-[11px] font-mono text-[color:var(--color-fg-subtle)] mt-1">
-              Enter to send · Shift+Enter for newline
+              {t('chat.keybindHint')}
             </div>
           </form>
         </main>
