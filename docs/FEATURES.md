@@ -361,6 +361,9 @@ Inspireret af Shuyi Wang's "Should You Actually Try Karpathy's LLM Wiki?" (2026-
 | F179 | [Provider-direct ingest path for bulk jobs (caching + Batch API)](features/F179-provider-direct-bulk-ingest.md) | Planned | 1/2 | [plan](features/F179-provider-direct-bulk-ingest.md) |
 | F180 | [Resumable chunked uploads (durable-once-clicked)](features/F180-resumable-chunked-uploads.md) | Planned | 1 | [plan](features/F180-resumable-chunked-uploads.md) |
 | F181 | [Trail Routines: user-defined scheduled KB workflows](features/F181-trail-routines.md) | Planned (post-Sanne) | 1+2 | [plan](features/F181-trail-routines.md) |
+| F182 | [Memory Lifecycle: per-Neuron confidence + supersession + retention decay](features/F182-memory-lifecycle.md) | Planned (post-Sanne) | 2 | [plan](features/F182-memory-lifecycle.md) |
+| F183 | [Consolidation Tiers: working / episodic / semantic / procedural](features/F183-consolidation-tiers.md) | Planned (post-Sanne) | 2 | [plan](features/F183-consolidation-tiers.md) |
+| F184 | [Entity Layer + Knowledge Graph Queries](features/F184-entity-layer-graph-queries.md) | Planned (post-Sanne) | 3 | [plan](features/F184-entity-layer-graph-queries.md) |
 
 ---
 
