@@ -155,8 +155,13 @@ export async function searchUserNotes(
   // "Obi-" hitting but "Obi-Wan" not on 2026-05-06.
   const fullNeedle = query.trim().toLowerCase();
   if (fullNeedle.length < 2) return [];
+  // Strip EDGE punctuation only (?, !, . at start/end). Preserves
+  // intra-token hyphens like "Obi-Wan" so they still match the note's
+  // "obi-wan kenobi". "jedi?" → "jedi"; "(noget)." → "noget";
+  // "Star-Wars-stuff" → "Star-Wars-stuff" (untouched).
   const tokens = fullNeedle
     .split(/\s+/)
+    .map((t) => t.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''))
     .filter((t) => t.length >= 3);
 
   const result = await client.execute({ sql: USER_NOTES_SQL, args: [tenantId, kbId] });
