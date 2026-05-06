@@ -51,6 +51,13 @@ export interface SystemPromptInput {
    * Ignored entirely for `curator` audience — see module header.
    */
   kbPersonaOverride?: string | null;
+  /**
+   * KB.language (ISO-639-1 like "da", "en"). Threaded into the system
+   * prompt as a hard instruction so the model doesn't fall back to
+   * English on short queries ("Jedi?") that can't be language-detected.
+   * Defaults to 'da' to match Christian's Danish-first stance.
+   */
+  kbLanguage?: string;
 }
 
 const THIS_DIR = dirname(fileURLToPath(import.meta.url));
@@ -61,11 +68,26 @@ function loadTemplate(audience: Audience): string {
   return readFileSync(resolve(PERSONA_DIR, file), 'utf8');
 }
 
+function languageDirective(code: string): string {
+  // Map common ISO codes to a clear English instruction. The model
+  // gets confused by raw codes ("answer in 'da'") so we expand to
+  // a recognizable noun-phrase. Default Danish for unknown codes —
+  // matches Christian's primary tenant locale.
+  const c = code.toLowerCase();
+  if (c.startsWith('da')) return 'Always answer in Danish (dansk). Never English.';
+  if (c.startsWith('en')) return 'Always answer in English. Never Danish.';
+  if (c.startsWith('de')) return 'Always answer in German (Deutsch). Never English.';
+  if (c.startsWith('sv')) return 'Always answer in Swedish (svenska). Never English.';
+  if (c.startsWith('no')) return 'Always answer in Norwegian (norsk). Never English.';
+  return 'Always answer in Danish (dansk). Never English.';
+}
+
 export function buildSystemPrompt({
   currentTrailName,
   context,
   audience = 'curator',
   kbPersonaOverride = null,
+  kbLanguage = 'da',
 }: SystemPromptInput): string {
   const template = loadTemplate(audience);
 
@@ -86,6 +108,14 @@ export function buildSystemPrompt({
   const trailContext = `${trailLine}${contextBlock}`.trim();
 
   let prompt = template.replace('{{TRAIL_CONTEXT}}', trailContext);
+
+  // Hard language directive — appended at the END so it's the last
+  // instruction the model reads before the user question. Models
+  // weight late-instructions more on output-style decisions.
+  // Christian flagged 2026-05-06: chat answered "Jedi?" in English
+  // because the persona's "answer in same language as the question"
+  // soft-rule fails on short queries the model can't language-detect.
+  prompt += `\n\n## Language\n${languageDirective(kbLanguage)}`;
 
   // Append per-KB persona override (tool + public only). Curator audience
   // gets the override stripped intentionally — admin tone is global.

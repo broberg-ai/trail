@@ -105,6 +105,10 @@ chatRoutes.post('/chat', async (c) => {
   const kbColumns = {
     id: knowledgeBases.id,
     name: knowledgeBases.name,
+    // KB.language threaded into buildSystemPrompt so the model gets a
+    // hard "answer in <lang>" directive instead of the soft "match
+    // the question's language" rule (which fails on short queries).
+    language: knowledgeBases.language,
     chatBackend: knowledgeBases.chatBackend,
     chatModel: knowledgeBases.chatModel,
     chatFallbackChain: knowledgeBases.chatFallbackChain,
@@ -198,6 +202,9 @@ chatRoutes.post('/chat', async (c) => {
     context,
     audience,
     kbPersonaOverride,
+    // Thread KB.language so the model gets a hard "answer in <lang>"
+    // directive. Default 'da' matches the schema-level default.
+    kbLanguage: primaryKbForPrompt?.language ?? 'da',
   });
 
   // F30 — server-side render of [[wiki-links]] into `[display](href)`
