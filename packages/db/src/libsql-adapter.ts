@@ -147,7 +147,13 @@ export async function createLibsqlDatabase(config: DatabaseConfig): Promise<Trai
   // being buried behind a later statement.
   await client.execute('PRAGMA journal_mode = WAL');
   await client.execute('PRAGMA foreign_keys = ON');
-  await client.execute('PRAGMA busy_timeout = 5000');
+  // 2026-05-06: bumped 5s → 15s after F164 jobs runner tick was
+  // hitting SQLITE_BUSY under load + crashing the engine. The chat
+  // path also reads document tables that the lint/access trackers
+  // write to; 15s gives slow writers room to commit before BUSY
+  // bubbles. Combined with the runner's catch-and-log retry, this
+  // turns transient contention into noise rather than 500s.
+  await client.execute('PRAGMA busy_timeout = 15000');
 
   return new LibsqlTrailDatabase({ ...config, path: absPath }, client);
 }

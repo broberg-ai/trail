@@ -70,7 +70,18 @@ export class JobRunner {
   async start(): Promise<void> {
     await this.recoverZombies();
     this.tickTimer = setInterval(() => {
-      void this.tick();
+      // 2026-05-06: a SQLITE_BUSY in tick()'s claim-UPDATE was
+      // bubbling out as an unhandled rejection and crashing the
+      // engine process (bun re-spawned via launchctl, which
+      // mid-request 500'd any in-flight HTTP). Catch + log so a
+      // contended tick is just noisy, not fatal — handlers are
+      // idempotent so the next tick re-tries cleanly.
+      this.tick().catch((err) => {
+        console.warn(
+          '[jobs] tick failed (will retry next interval):',
+          err instanceof Error ? err.message : String(err),
+        );
+      });
     }, TICK_INTERVAL_MS);
   }
 
