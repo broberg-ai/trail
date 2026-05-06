@@ -140,28 +140,46 @@ export async function searchUserNotes(
   tenantId: string,
   limit = 10,
 ): Promise<UserNoteSearchHit[]> {
-  // Plain case-insensitive substring match on the user's literal
-  // query (Christian's rule 2026-05-06: "søg efter den streng
-  // brugeren taster ind"). No tokenization, no AND/OR, no
-  // dash-stripping. Notes are short (<4000 chars) and the share-gate
-  // filters >95% of rows, so a per-row substring scan is fast.
-  // Tokenization-pipelines kept producing surprising results like
-  // "Obi-" hitting but "Obi-Wan" missing because the dash got
-  // stripped before comparison. This avoids that whole class of
-  // bugs by trusting the user typed what they meant.
-  const needle = query.trim().toLowerCase();
-  if (needle.length < 2) return [];
+  // Two-pass substring match on the user's query:
+  //   1. Try the FULL query as a substring (handles literal lookups
+  //      like "Obi-Wan Kenobi" or "VIP customer").
+  //   2. Fall back to per-token OR (split on whitespace ONLY,
+  //      preserves hyphenation like "Obi-Wan"). Each whitespace-
+  //      separated token of length ≥ 3 is tried as a substring.
+  //      "Kender Sanne Obi-Wan Kenobi" → tokens [kender, sanne,
+  //      obi-wan, kenobi], "obi-wan" matches "obi-wan kenobi" in
+  //      the note → hit.
+  //
+  // Punctuation is intentionally NOT stripped from tokens — that
+  // bug-class (idx=-1 because dash was removed) was the source of
+  // "Obi-" hitting but "Obi-Wan" not on 2026-05-06.
+  const fullNeedle = query.trim().toLowerCase();
+  if (fullNeedle.length < 2) return [];
+  const tokens = fullNeedle
+    .split(/\s+/)
+    .filter((t) => t.length >= 3);
 
   const result = await client.execute({ sql: USER_NOTES_SQL, args: [tenantId, kbId] });
   const matches: UserNoteSearchHit[] = [];
   for (const row of result.rows) {
     const note = (row.userNote as string | null) ?? '';
     const noteLower = note.toLowerCase();
-    if (!noteLower.includes(needle)) continue;
+    let matchedNeedle: string | null = null;
+    if (noteLower.includes(fullNeedle)) {
+      matchedNeedle = fullNeedle;
+    } else {
+      for (const tok of tokens) {
+        if (noteLower.includes(tok)) {
+          matchedNeedle = tok;
+          break;
+        }
+      }
+    }
+    if (!matchedNeedle) continue;
     // Build a highlight snippet — wrap the matched substring + show
     // up to 80 chars surrounding context so the UI has something to
     // render alongside the title.
-    const firstTerm = needle;
+    const firstTerm = matchedNeedle;
     const idx = noteLower.indexOf(firstTerm);
     const start = Math.max(0, idx - 30);
     const end = Math.min(note.length, idx + firstTerm.length + 50);
