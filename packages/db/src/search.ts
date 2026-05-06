@@ -140,38 +140,28 @@ export async function searchUserNotes(
   tenantId: string,
   limit = 10,
 ): Promise<UserNoteSearchHit[]> {
-  // OR-semantics on signal terms (length ≥ 3). The user's query
-  // typically mixes intent words ("kender du", "hvad ved du om") with
-  // the actual subject ("Obi-Wan Kenobi"). AND on every word would
-  // fail any natural-language query — only literal-substring queries
-  // would match. OR on length-≥3 terms is the right semantics: a
-  // note that contains ANY meaningful query word is a candidate hit;
-  // the share-gate already filters >95% of notes out so noise is
-  // bounded. Length-1/2 terms (Danish "om", "af", "en") are dropped
-  // to avoid universal matching.
-  const terms = query
-    .toLowerCase()
-    .split(/\s+/)
-    .map((t) => t.replace(/[^\p{L}\p{N}]/gu, ''))
-    .filter((t) => t.length >= 3);
-  if (terms.length === 0) return [];
+  // Plain case-insensitive substring match on the user's literal
+  // query (Christian's rule 2026-05-06: "søg efter den streng
+  // brugeren taster ind"). No tokenization, no AND/OR, no
+  // dash-stripping. Notes are short (<4000 chars) and the share-gate
+  // filters >95% of rows, so a per-row substring scan is fast.
+  // Tokenization-pipelines kept producing surprising results like
+  // "Obi-" hitting but "Obi-Wan" missing because the dash got
+  // stripped before comparison. This avoids that whole class of
+  // bugs by trusting the user typed what they meant.
+  const needle = query.trim().toLowerCase();
+  if (needle.length < 2) return [];
 
   const result = await client.execute({ sql: USER_NOTES_SQL, args: [tenantId, kbId] });
   const matches: UserNoteSearchHit[] = [];
   for (const row of result.rows) {
     const note = (row.userNote as string | null) ?? '';
     const noteLower = note.toLowerCase();
-    // Find the FIRST term that actually matched (OR-semantics means
-    // the first query term may not be present in this note). Falling
-    // back to the first term would produce idx=-1 and a broken
-    // highlight slice.
-    const matchedTerm = terms.find((t) => noteLower.includes(t));
-    if (!matchedTerm) continue;
-    // Build a highlight snippet — wrap the matched term + show up to
-    // 80 chars surrounding context so the UI has something to render
-    // alongside the title. FTS hits show full chunk highlights;
-    // user-note hits get a snippet view that mirrors that visually.
-    const firstTerm = matchedTerm;
+    if (!noteLower.includes(needle)) continue;
+    // Build a highlight snippet — wrap the matched substring + show
+    // up to 80 chars surrounding context so the UI has something to
+    // render alongside the title.
+    const firstTerm = needle;
     const idx = noteLower.indexOf(firstTerm);
     const start = Math.max(0, idx - 30);
     const end = Math.min(note.length, idx + firstTerm.length + 50);
