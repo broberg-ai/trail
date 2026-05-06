@@ -56,9 +56,16 @@ export interface TrailDatabase {
   /**
    * F112.2 — LIKE-search over `documents.user_note` for shared notes
    * (user_note_share=1). Private notes never surface here, matching
-   * F112.1's opt-in stance for chat + retrieve consumers.
+   * F112.1's opt-in stance for chat + retrieve consumers. The hit
+   * shape carries the full note text so callers don't need a
+   * follow-up SELECT.
    */
-  searchUserNotes(query: string, kbId: string, tenantId: string, limit?: number): Promise<DocumentSearchHit[]>;
+  searchUserNotes(
+    query: string,
+    kbId: string,
+    tenantId: string,
+    limit?: number,
+  ): Promise<Array<DocumentSearchHit & { userNote: string }>>;
 
   /** Release the connection. Idempotent. */
   close(): Promise<void>;

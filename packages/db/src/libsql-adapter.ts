@@ -104,7 +104,7 @@ export class LibsqlTrailDatabase implements TrailDatabase {
     kbId: string,
     tenantId: string,
     limit = 10,
-  ): Promise<DocumentSearchHit[]> {
+  ): Promise<Array<DocumentSearchHit & { userNote: string }>> {
     this.assertOpen();
     return searchUsrNotes(this.client, query, kbId, tenantId, limit);
   }

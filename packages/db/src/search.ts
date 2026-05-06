@@ -122,13 +122,24 @@ const USER_NOTES_SQL = `
      AND d.user_note IS NOT NULL
 `;
 
+/**
+ * Hit shape matches DocumentSearchHit + an extra `userNote` field
+ * carrying the full note text. Chat retrieveContext consumes
+ * `userNote` directly to build the LLM context block, avoiding a
+ * per-hit follow-up SELECT (which contended with parallel writes
+ * and produced "database is locked" errors).
+ */
+export interface UserNoteSearchHit extends DocumentSearchHit {
+  userNote: string;
+}
+
 export async function searchUserNotes(
   client: LibSqlClient,
   query: string,
   kbId: string,
   tenantId: string,
   limit = 10,
-): Promise<DocumentSearchHit[]> {
+): Promise<UserNoteSearchHit[]> {
   const terms = query
     .toLowerCase()
     .split(/\s+/)
@@ -137,7 +148,7 @@ export async function searchUserNotes(
   if (terms.length === 0) return [];
 
   const result = await client.execute({ sql: USER_NOTES_SQL, args: [tenantId, kbId] });
-  const matches: DocumentSearchHit[] = [];
+  const matches: UserNoteSearchHit[] = [];
   for (const row of result.rows) {
     const note = (row.userNote as string | null) ?? '';
     const noteLower = note.toLowerCase();
@@ -173,6 +184,7 @@ export async function searchUserNotes(
       // by default. The route can re-sort if it wants notes-first.
       rank: 0.5,
       seq: (row.seq as number | null) ?? null,
+      userNote: note,
     });
     if (matches.length >= limit) break;
   }

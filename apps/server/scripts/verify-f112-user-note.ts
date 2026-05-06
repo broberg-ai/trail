@@ -190,11 +190,18 @@ const retrieveSrc = await Bun.file(
   join(import.meta.dirname, '../src/routes/retrieve.ts'),
 ).text();
 
+// F112.2: chat.ts may now delegate user-note retrieval to
+// searchUserNotes() (whose SQL hard-codes user_note_share=1). Accept
+// either path: direct userNoteShare gate OR searchUserNotes helper.
+// Both enforce the same opt-in invariant.
 const chatReadsNote = chatRouteSrc.includes('userNote') || chatRouteSrc.includes('user_note');
-const chatGatesShare = chatRouteSrc.includes('userNoteShare') || chatRouteSrc.includes('user_note_share');
+const chatGatesShare =
+  chatRouteSrc.includes('userNoteShare') ||
+  chatRouteSrc.includes('user_note_share') ||
+  chatRouteSrc.includes('searchUserNotes');
 assert(
   !chatReadsNote || chatGatesShare,
-  'chat.ts: any user_note read is gated on userNoteShare (F112.1 opt-in invariant)',
+  'chat.ts: any user_note read is gated on userNoteShare or via searchUserNotes (F112.1 opt-in invariant)',
 );
 
 const retrieveReadsNote = retrieveSrc.includes('userNote') || retrieveSrc.includes('user_note');

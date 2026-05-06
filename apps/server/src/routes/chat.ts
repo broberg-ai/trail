@@ -601,38 +601,17 @@ async function retrieveContext(
     const noteHits = await trail.searchUserNotes(query, kbId, tenantId, 5);
     for (const hit of noteHits) {
       if (totalChars >= MAX_CHARS) break;
-      // Pull the actual note text + title for the context block. The
-      // search hit's `highlight` is a snippet view; we want the full
-      // note here so the LLM has the curator's complete formulation.
-      const row = await trail.db
-        .select({
-          id: documents.id,
-          title: documents.title,
-          filename: documents.filename,
-          userNote: documents.userNote,
-          path: documents.path,
-        })
-        .from(documents)
-        .where(
-          and(
-            eq(documents.tenantId, tenantId),
-            eq(documents.id, hit.id),
-            eq(documents.userNoteShare, true),
-          ),
-        )
-        .get();
-      if (!row?.userNote) continue;
-      const label = row.title ?? row.filename;
-      const block = `### Curator's reflection on "${label}" (their own words, opt-in shared)\n${row.userNote}`;
+      const label = hit.title ?? hit.filename;
+      const block = `### Curator's reflection on "${label}" (their own words, opt-in shared)\n${hit.userNote}`;
       chunks.push(block);
       totalChars += block.length;
-      if (!seen.has(row.id)) {
-        seen.add(row.id);
-        citations.push({ documentId: row.id, path: row.path, filename: row.filename });
+      if (!seen.has(hit.id)) {
+        seen.add(hit.id);
+        citations.push({ documentId: hit.id, path: hit.path, filename: hit.filename });
         recordAccess(trail, {
           tenantId,
           knowledgeBaseId: kbId,
-          documentId: row.id,
+          documentId: hit.id,
           source: 'chat',
           actorKind: 'user',
         });
