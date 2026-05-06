@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { documents, knowledgeBases, chatSessions, chatTurns, type TrailDatabase } from '@trail/db';
-import { and, asc, eq, like, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, like, sql } from 'drizzle-orm';
 import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
 import { ChatRequestSchema } from '@trail/shared';
 import { resolveKbId, stripClaimAnchors } from '@trail/core';
@@ -587,35 +587,72 @@ async function retrieveContext(
     }
   }
 
-  // F112.1/F112.2 — search shared user-notes INDEPENDENTLY of the
-  // FTS body/chunks loop. The original implementation only enriched
-  // notes for documents that had ALREADY hit body-FTS, which meant
-  // a Neuron whose UNIQUE relevant content lived in the curator's
-  // note (e.g. "Obi-wan Kenobi" on the Livets træ Neuron) was
-  // invisible to chat. Now we run searchUserNotes against the same
-  // KBs, fold the parent docs into seen + citations if absent, and
-  // append the note as a labelled context block so the LLM treats
-  // it pedagogically as curator's own words.
+  // F112.1/F112.2 — surface shared user-notes via TWO paths:
+  //
+  // (1) ENRICH any document already pulled into `seen` by FTS. If
+  //     the body matches the question and the curator opted-in to
+  //     share their note, the note rides along as context. This is
+  //     the meta-data flow: the note follows its parent Neuron into
+  //     chat scope regardless of whether the note text itself
+  //     matched the query.
+  //
+  // (2) SUBSTRING-MATCH the literal query against shared notes via
+  //     searchUserNotes. Catches the case where ONLY the note has
+  //     the relevant content (e.g. curator wrote a private aside
+  //     that's now share-opted-in and the question matches it
+  //     exactly). Parent doc is added to seen+citations if absent.
+  //
+  // Order: (1) first so docs already in `seen` claim their note
+  // via the typed Drizzle path; (2) second adds note-only hits
+  // without re-emitting notes for docs (1) already covered.
+
+  if (seen.size > 0 && totalChars < MAX_CHARS) {
+    const docIds = Array.from(seen);
+    const enrichedNotes = await trail.db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        filename: documents.filename,
+        userNote: documents.userNote,
+      })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.tenantId, tenantId),
+          eq(documents.userNoteShare, true),
+          inArray(documents.id, docIds),
+        ),
+      )
+      .all();
+    for (const row of enrichedNotes) {
+      if (!row.userNote) continue;
+      if (totalChars >= MAX_CHARS) break;
+      const label = row.title ?? row.filename;
+      const block = `### Curator's reflection on "${label}" (their own words, opt-in shared)\n${row.userNote}`;
+      chunks.push(block);
+      totalChars += block.length;
+    }
+  }
+
   for (const kbId of kbIds) {
     if (totalChars >= MAX_CHARS) break;
     const noteHits = await trail.searchUserNotes(query, kbId, tenantId, 5);
     for (const hit of noteHits) {
+      if (seen.has(hit.id)) continue; // already enriched above
       if (totalChars >= MAX_CHARS) break;
       const label = hit.title ?? hit.filename;
       const block = `### Curator's reflection on "${label}" (their own words, opt-in shared)\n${hit.userNote}`;
       chunks.push(block);
       totalChars += block.length;
-      if (!seen.has(hit.id)) {
-        seen.add(hit.id);
-        citations.push({ documentId: hit.id, path: hit.path, filename: hit.filename });
-        recordAccess(trail, {
-          tenantId,
-          knowledgeBaseId: kbId,
-          documentId: hit.id,
-          source: 'chat',
-          actorKind: 'user',
-        });
-      }
+      seen.add(hit.id);
+      citations.push({ documentId: hit.id, path: hit.path, filename: hit.filename });
+      recordAccess(trail, {
+        tenantId,
+        knowledgeBaseId: kbId,
+        documentId: hit.id,
+        source: 'chat',
+        actorKind: 'user',
+      });
     }
   }
 
