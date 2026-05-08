@@ -104,14 +104,27 @@ svg { max-width: 100%; height: auto; }
 }
 @media (min-width: 768px) { .nav-brand .brand-text { font-size: 1.375rem; } }
 
-/* "docs" suffix — same role as "admin" on app.trailmem.com.
-   Subtle, monospace, sits next to .brand-text. */
+/* "docs" suffix — mirrors admin's "trail admin" pattern verbatim:
+   - font-family inherited from body (sans-serif), NOT mono. Admin's
+     <span class="text-fg-subtle text-sm md:text-base ml-1">admin</span>
+     in apps/admin/src/app.tsx has no font-mono class, so it falls
+     back to the body's --font-sans.
+   - text-sm (14px) mobile / text-base (16px) desktop
+   - ml-1 (0.25rem)
+   - color: --fg-40 (matches Tailwind's text-fg-subtle = 0.40 alpha).
+   - line-height: 1 + flex align-items: baseline alternative — we
+     explicitly set line-height: 1 on BOTH .brand-text and
+     .brand-section so flex centering hits the glyph midpoints
+     rather than centering wildly different line-boxes. (Mono +
+     sans at different sizes have different default line-heights;
+     without this both would render but "docs" appears to "hop"
+     vertically relative to "trail".) */
+.nav-brand .brand-text { line-height: 1; }
 .nav-brand .brand-section {
-  font-family: var(--font-mono);
   font-size: 0.875rem;
   font-weight: 400;
+  line-height: 1;
   color: var(--fg-40);
-  letter-spacing: -0.01em;
   margin-left: 0.25rem;
   white-space: nowrap;
 }
