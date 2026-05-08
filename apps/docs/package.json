@@ -1,0 +1,17 @@
+{
+  "name": "trail-docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "BUILD_OUT_DIR=deploy tsx build.ts",
+    "ship": "pnpm build && flyctl deploy --remote-only --config fly.toml ."
+  },
+  "dependencies": {
+    "marked": "^15.0.0",
+    "shiki": "^3.4.0",
+    "gray-matter": "^4.0.3",
+    "tsx": "^4.19.0",
+    "zod": "^3.23.8"
+  }
+}

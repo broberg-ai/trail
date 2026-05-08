@@ -108,53 +108,62 @@ blueprint contract) lands and formalises a unified model.
 
 ### Stack
 
-- **Next.js 16 SSR** on Fly. SSR is needed for Redoc embed,
-  `llms.txt` dynamic generation, server-side i18n (unused here, but
-  consistent with the cms-docs precedent).
-- **`@webhouse/cms`** for collections + content management
-  (file-based, no DB).
+- **Custom build.ts (`tsx`) + `marked` + `shiki`**, mirroring
+  `apps/landing`'s proven pattern. Static HTML output → nginx
+  Docker container → Fly. No Next.js runtime.
+- Justification: the SSR features cms-docs needs (server-side i18n,
+  dynamic OG images, dynamic `/api-reference`) all happen to be
+  client-side or build-time on `docs.trailmem.com`:
+  - Redoc loads its YAML client-side from a static `public/` asset
+  - `llms.txt` is generated at build time from the same content tree
+    that the sidebar reads
+  - EN-only means no i18n routing
+- **Markdown source** with YAML frontmatter (developer ergonomics —
+  better than editing JSON-wrapped markdown for hand-authored
+  technical reference). Content tree under `apps/docs/content/`
+  organised by category prefix in the filename (`concepts-neurons.md`,
+  `api-queue.md`) — a `category` field in frontmatter still drives
+  sidebar grouping, kept compatible with the cms-collection shape
+  if we ever migrate to admin-managed.
 - **Shiki** for syntax highlight in code blocks (matches cms-docs).
 - **Redoc CDN bundle** for `/api-reference` viewer (matches
   cms-docs's choice over Scalar / Swagger UI).
-- **Tailwind v4** + dark mode default (matches Trail brand).
+- **Hand-rolled CSS** (Trail brand: warm off-white, charcoal, amber
+  accent — same palette as `apps/landing/public/`). Tailwind not
+  needed for ~30 docs pages.
+
+If we later need true SSR (e.g. dynamic `/api-reference` pulling
+the live spec from an engine instead of a baked YAML), Phase 5 can
+flip the stack to Next.js without breaking the content tree —
+markdown + frontmatter loads identically into Next.js's MDX or
+contentlayer.
 
 ### Directory layout
 
 ```
 apps/docs/
   package.json
-  next.config.ts
   tsconfig.json
-  cms.config.ts            # @webhouse/cms collections (docs, changelog, snippets)
-  Dockerfile               # node-server (Next.js standalone output)
+  build.ts                 # static-site generator (mirrors apps/landing/build.ts)
+  Dockerfile               # nginx-alpine static (same as apps/landing)
+  nginx.conf
   fly.toml                 # app="trail-docs", org="broberg-ai", region="arn"
-  src/
-    app/
-      page.tsx             # / — landing/intro card
-      [slug]/page.tsx      # /{doc-slug} — generic doc renderer
-      api-reference/page.tsx     # Redoc embed
-      llms.txt/route.ts    # dynamic llms.txt
-    components/
-      docs-sidebar.tsx     # runtime nav from cms.content.findMany("docs")
-      mobile-nav-drawer.tsx
-      code-block.tsx       # shiki-rendered
-    lib/
-      cms.ts               # @webhouse/cms client init
-      shiki.ts             # shared highlighter
-      sidebar-tree.ts      # group docs by category → tree
+  templates/
+    page.html              # base template (header, sidebar, content slot)
   content/
     docs/
-      intro.json
-      why-not-rag.json
-      quick-start.json
-      concepts-neurons.json     # Phase 2 — category: "concepts"
-      api-queue.json            # Phase 3 — category: "api"
+      intro.md             # frontmatter: title, slug, category, order, summary
+      why-not-rag.md
+      quick-start.md
+      concepts-neurons.md  # Phase 2 — category: "concepts"
+      api-queue.md         # Phase 3 — category: "api"
       ...
     changelog/
     snippets/
   public/
-    openapi-trail.yaml      # Phase 3, prebuild-mirrored from packages/shared
+    openapi-trail.yaml     # Phase 3, build-time copy from packages/shared
     favicon.svg
+    styles.css             # Trail brand palette
 ```
 
 ### OpenAPI source-of-truth (Phase 3)
@@ -251,10 +260,11 @@ Add `category` field to `docs` collection. Sidebar groups by category.
 ## Dependencies
 
 Phase 1:
-- `next` ^16
-- `@webhouse/cms` (same version as `apps/landing`)
-- `shiki` ^3
-- `tailwindcss` ^4
+- `tsx` (build-time TypeScript runner — already in `apps/landing`)
+- `marked` ^15 (already in `apps/landing`)
+- `shiki` ^3 (new — code-block highlighter)
+- `gray-matter` ^4 (new — YAML frontmatter parser)
+- `zod` (already in `apps/landing` — content-shape validation)
 
 Phase 3:
 - `js-yaml` (engine reads OpenAPI YAML at boot)

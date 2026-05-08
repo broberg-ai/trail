@@ -1,0 +1,52 @@
+name: Docs auto-deploy
+
+# F185 Phase 1 — auto-deploy trail-docs (docs.trailmem.com) on push to main
+# when content, public assets, or build/deploy config change. Mirrors the
+# landing-deploy workflow's narrow trigger-paths so unrelated commits don't
+# rebuild the docs site.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/docs/content/**'
+      - 'apps/docs/public/**'
+      - 'apps/docs/build.ts'
+      - 'apps/docs/Dockerfile'
+      - 'apps/docs/nginx.conf'
+      - 'apps/docs/fly.toml'
+      - 'apps/docs/package.json'
+      - '.github/workflows/docs-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # apps/docs is excluded from the root pnpm workspace
+      # (see pnpm-workspace.yaml: '!apps/docs') so `pnpm install`
+      # at the repo root does not populate apps/docs/node_modules.
+      # Install in-place — docs has a tiny standalone dep set
+      # (marked, shiki, gray-matter, tsx, zod).
+      - name: Install docs dependencies
+        working-directory: apps/docs
+        run: npm install --no-package-lock
+
+      - name: Build static site
+        working-directory: apps/docs
+        run: npm run build
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly
+        working-directory: apps/docs
+        run: flyctl deploy --remote-only --config fly.toml .
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

@@ -1,0 +1,22 @@
+# Trail Docs — public technical reference for docs.trailmem.com (F185).
+# Region: arn (Stockholm). Per global policy never us-* or ams.
+# Org: broberg-ai. Deploy: fly deploy -c apps/docs/fly.toml (from trail repo root)
+
+app = "trail-docs"
+primary_region = "arn"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
