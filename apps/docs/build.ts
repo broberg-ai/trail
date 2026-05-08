@@ -137,14 +137,21 @@ function renderPage(opts: {
   <title>${escapeHtml(title)}</title>
   <meta name="description" content="${escapeHtml(doc.summary)}" />
   ${audienceMeta}
+  <meta name="theme-color" content="#FAF9F5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#17140F" media="(prefers-color-scheme: dark)" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/memx-logo.svg" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <header class="site-header">
-    <a href="/" class="brand">
-      <span class="brand-mark">▲</span>
-      <span class="brand-text">Trail <span class="brand-sub">Docs</span></span>
+    <a href="/" class="nav-brand" aria-label="Trail docs home">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" class="brand-mark" aria-hidden="true">
+        <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2" />
+        <circle cx="16" cy="16" r="9" fill="none" stroke="var(--color-accent)" stroke-width="0.9" opacity="0.55" />
+        <circle cx="16" cy="16" r="3.5" fill="var(--color-accent)" />
+      </svg>
+      <span class="brand-name">trail</span><span class="brand-section">docs</span>
     </a>
     <nav class="site-nav" aria-label="Top">
       <a href="/why-not-rag/">Why not RAG?</a>
