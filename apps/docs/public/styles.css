@@ -26,6 +26,13 @@ html[data-theme="light"] {
   --fg-90: rgba(26, 23, 21, 0.90);
   --bg-50: rgba(250, 249, 245, 0.50);
   --bg-80: rgba(250, 249, 245, 0.80);
+  /* Graph-canvas tokens — the script reads these and renders the
+     neuron-particle background. RGB-triplet form so the script can
+     wrap them in rgba(triplet, alpha). Lifted from apps/landing. */
+  --graph-node: #1a1715;
+  --graph-accent: #e8a87c;
+  --graph-line: 26, 23, 21;
+  --graph-accent-line: 232, 168, 124;
   --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Fira Code", "Courier New", monospace;
 }
@@ -44,6 +51,10 @@ html[data-theme="dark"] {
   --fg-90: rgba(245, 241, 234, 0.90);
   --bg-50: rgba(23, 20, 15, 0.50);
   --bg-80: rgba(23, 20, 15, 0.80);
+  --graph-node: #f5f1ea;
+  --graph-accent: #e8a87c;
+  --graph-line: 245, 241, 234;
+  --graph-accent-line: 232, 168, 124;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -71,6 +82,14 @@ body {
 }
 
 ::selection { background: rgba(232, 168, 124, 0.3); color: var(--fg); }
+
+/* Neuron-particle canvas — sits at z-index: -1 behind everything,
+   visible through translucent backgrounds. Lifted verbatim from
+   apps/landing's #trail-graph rule. */
+#trail-graph {
+  position: fixed; inset: 0;
+  pointer-events: none; opacity: 0.4; z-index: -1;
+}
 
 a { color: inherit; text-decoration: none; }
 img { max-width: 100%; display: block; height: auto; }
