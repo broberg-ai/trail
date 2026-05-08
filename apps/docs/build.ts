@@ -125,41 +125,70 @@ function renderSidebar(items: SidebarItem[], currentSlug: string): string {
 function renderPage(opts: {
   doc: Doc;
   sidebar: string;
+  topLinks: SidebarItem[];
 }): string {
-  const { doc, sidebar } = opts;
-  const title = `${doc.title} — Trail Docs`;
+  const { doc, sidebar, topLinks } = opts;
+  // Title pattern matches admin's "Trail · Admin": "{Page} — trail · docs"
+  // — the en-dash + lowercase site identifier are landing's typography.
+  const title = doc.slug === "index"
+    ? "trail · docs"
+    : `${doc.title} — trail · docs`;
   const audienceMeta = `<meta name="audience" content="${doc.audience}" />`;
+  // Build top-nav links from the same content tree the sidebar uses,
+  // skipping the home doc (since "trail" wordmark is already a link to /).
+  const topNavLinks = topLinks
+    .filter((item) => item.slug !== "index")
+    .sort((a, b) => a.order - b.order)
+    .map((item) => `<a href="/${item.slug}/">${escapeHtml(item.title)}</a>`)
+    .join("\n      ");
+
   return `<!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(title)}</title>
   <meta name="description" content="${escapeHtml(doc.summary)}" />
   ${audienceMeta}
-  <meta name="theme-color" content="#FAF9F5" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#17140F" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#FAF9F5" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" href="/memx-logo.svg" />
   <link rel="stylesheet" href="/styles.css" />
+  <script>
+    (function(){try{var t=localStorage.getItem('trail.theme');document.documentElement.setAttribute('data-theme', t==='dark'?'dark':'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}})();
+  </script>
 </head>
 <body>
-  <header class="site-header">
-    <a href="/" class="nav-brand" aria-label="Trail docs home">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" class="brand-mark" aria-hidden="true">
-        <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2" />
-        <circle cx="16" cy="16" r="9" fill="none" stroke="var(--color-accent)" stroke-width="0.9" opacity="0.55" />
-        <circle cx="16" cy="16" r="3.5" fill="var(--color-accent)" />
+  <nav class="nav">
+    <a href="/" class="nav-brand">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40" role="img" aria-label="trail">
+        <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2"/>
+        <circle cx="16" cy="16" r="9" fill="none" stroke="#e8a87c" stroke-width="0.9" opacity="0.55"/>
+        <circle cx="16" cy="16" r="3.5" fill="#e8a87c"/>
       </svg>
-      <span class="brand-name">trail</span><span class="brand-section">docs</span>
+      <span class="brand-text">trail</span>
+      <span class="brand-section">docs</span>
     </a>
-    <nav class="site-nav" aria-label="Top">
-      <a href="/why-not-rag/">Why not RAG?</a>
-      <a href="/quick-start/">Quick start</a>
-      <a href="https://github.com/broberg-ai/trail" rel="external">GitHub</a>
-      <a href="https://trailmem.com/" rel="external">trailmem.com</a>
-    </nav>
-  </header>
+    <div class="nav-links">
+      ${topNavLinks}
+    </div>
+    <div class="nav-actions">
+      <button type="button" class="theme-toggle" aria-label="Toggle theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+      <a href="https://trailmem.com/" class="nav-signin">trailmem.com</a>
+      <a href="https://github.com/broberg-ai/trail" class="nav-cta" rel="external">GitHub</a>
+      <button type="button" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
+  <div id="mobile-menu" class="nav-mobile" role="navigation" aria-label="Mobile menu" aria-hidden="true">
+    ${topNavLinks}
+    <a href="https://trailmem.com/">trailmem.com</a>
+    <a href="https://github.com/broberg-ai/trail">GitHub</a>
+  </div>
   <div class="layout">
     ${sidebar}
     <main class="content">
@@ -181,6 +210,38 @@ function renderPage(opts: {
       </footer>
     </main>
   </div>
+  <script>
+    (function () {
+      var btn = document.querySelector('.nav-toggle');
+      var menu = document.getElementById('mobile-menu');
+      var body = document.body;
+      if (!btn || !menu) return;
+      function setOpen(open) {
+        body.dataset.menuOpen = open ? 'true' : 'false';
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+        menu.setAttribute('aria-hidden', open ? 'false' : 'true');
+      }
+      btn.addEventListener('click', function () { setOpen(body.dataset.menuOpen !== 'true'); });
+      menu.addEventListener('click', function (e) {
+        if (e.target instanceof HTMLAnchorElement) setOpen(false);
+      });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setOpen(false); });
+    })();
+
+    (function () {
+      var tbtn = document.querySelector('.theme-toggle');
+      if (!tbtn) return;
+      tbtn.addEventListener('click', function () {
+        var current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+        var next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        try { localStorage.setItem('trail.theme', next); } catch (e) {}
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', next === 'dark' ? '#17140F' : '#FAF9F5');
+      });
+    })();
+  </script>
 </body>
 </html>
 `;
@@ -265,7 +326,7 @@ async function build(): Promise<void> {
   mkdirSync(OUT_DIR, { recursive: true });
   for (const doc of docs) {
     const sidebar = renderSidebar(sidebarItems, doc.slug);
-    const html = renderPage({ doc, sidebar });
+    const html = renderPage({ doc, sidebar, topLinks: sidebarItems });
     const outFile =
       doc.slug === "index"
         ? join(OUT_DIR, "index.html")
