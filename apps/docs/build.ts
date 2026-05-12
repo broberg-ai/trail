@@ -424,7 +424,8 @@ function renderLlmsTxt(items: SidebarItem[], summaries: Map<string, string>): st
   lines.push("");
   lines.push("- Repository: https://github.com/broberg-ai/trail");
   lines.push("- License: FSL-1.1-Apache-2.0");
-  lines.push("- API: docs.trailmem.com/api-reference (Phase 3, coming soon)");
+  lines.push("- Interactive API reference: https://docs.trailmem.com/api-reference/");
+  lines.push("- Raw OpenAPI 3.1 YAML: https://docs.trailmem.com/openapi-trail.yaml");
   lines.push("");
   return lines.join("\n");
 }
@@ -485,6 +486,18 @@ async function build(): Promise<void> {
   if (existsSync(PUBLIC_DIR)) {
     cpSync(PUBLIC_DIR, OUT_DIR, { recursive: true });
     console.log(`  → public/* copied`);
+  }
+
+  // 6. Mirror packages/shared/openapi.yaml → deploy/openapi-trail.yaml
+  // so the /api-reference/ page's Redoc can fetch it from the same
+  // origin. Single source of truth: the YAML in packages/shared/.
+  const OPENAPI_SRC = join(import.meta.dirname, "..", "..", "packages", "shared", "openapi.yaml");
+  if (existsSync(OPENAPI_SRC)) {
+    const yaml = readFileSync(OPENAPI_SRC, "utf-8");
+    writeFileSync(join(OUT_DIR, "openapi-trail.yaml"), yaml, "utf-8");
+    console.log(`  → /openapi-trail.yaml (synced from packages/shared/openapi.yaml)`);
+  } else {
+    console.warn(`[trail-docs] WARNING: packages/shared/openapi.yaml not found — /api-reference/ Redoc will 404`);
   }
 
   console.log(`[trail-docs] built ${docs.length} pages`);

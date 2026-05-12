@@ -1,0 +1,596 @@
+openapi: 3.1.0
+info:
+  title: Trail API
+  version: v1
+  description: |
+    Trail's external HTTP surface — the endpoints external apps and AI
+    agents call to ingest knowledge, retrieve grounded context, search,
+    and chat against a knowledge base.
+
+    **Auth model.** All endpoints require a `Bearer` token in the
+    `Authorization` header. Tokens are scoped to a tenant + KB and are
+    created in the admin UI under **Settings → API keys**.
+
+    **Endpoint stability.** Paths under `/api/v1/` are the external
+    contract — request/response shapes are versioned and will not break
+    without a `v2/` prefix bump. Paths under `/api/internal/` are
+    private and may change without notice; they are excluded from this
+    spec on purpose.
+
+    **Source of truth.** This spec is hand-written from
+    `packages/shared/src/schemas.ts` and the route handlers in
+    `apps/server/src/routes/*.ts` in the trail repository. Phase 5 of
+    F185 will add a CI contract test that diffs live routes against the
+    spec.
+  contact:
+    name: Trail
+    url: https://docs.trailmem.com/
+  license:
+    name: FSL-1.1-Apache-2.0
+    url: https://github.com/broberg-ai/trail/blob/main/LICENSE
+servers:
+  - url: https://engine.trailmem.com
+    description: Production engine (Christian's hosted fleet)
+  - url: http://127.0.0.1:58021
+    description: Local development engine
+
+# ─── Tags group endpoints into Redoc nav sections ─────────────────
+
+tags:
+  - name: retrieve
+    description: |
+      Grounded retrieval from a knowledge base. The right primitive
+      when you are building your own site-LLM and want Trail to be one
+      tool among many (Pattern C — see
+      [docs](https://docs.trailmem.com/site-llm-with-trail-as-tool/)).
+  - name: queue
+    description: |
+      Submit candidate Neurons for curator review. The single write
+      path into Trail's KB; everything that enters Trail flows through
+      this endpoint or its sibling internal ingest routes.
+  - name: chat
+    description: |
+      Synthesised answer with citations. The right primitive for
+      Pattern A — a simple chat-proxy over a KB. For tone-controlled
+      multi-tool composition, prefer `/retrieve` from your own LLM.
+  - name: search
+    description: |
+      FTS5 keyword search across Neurons + share-gated user-notes.
+
+# ─── Auth ─────────────────────────────────────────────────────────
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: |
+        Tenant + KB-scoped bearer token. Create one in the admin UI
+        (**Settings → API keys**). Store server-side only; never expose
+        to the browser. Tokens look like `trail_live_...`.
+
+  # ─── Shared schemas ────────────────────────────────────────────
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          oneOf:
+            - type: string
+            - type: object
+              description: |
+                Zod flattened-error shape when the request body failed
+                schema validation. Contains `fieldErrors` and
+                `formErrors` arrays per
+                [Zod docs](https://zod.dev/?id=flattening-errors).
+      required: [error]
+
+    CandidateKind:
+      type: string
+      description: |
+        Discriminator for what shape of candidate this is. The most
+        common kinds for external apps:
+
+        * `chat-answer` — a Q&A pair produced by a user-facing chat
+          (curator may approve to add to KB).
+        * `user-correction` — a diff against an existing Neuron;
+          provide its seqId in `metadata.targetNeuron`.
+        * `reader-feedback` — feedback flagged from the reader UI.
+        * `gap-detection` — automated finding that the KB is missing
+          knowledge for a topic.
+
+        See `packages/shared/src/schemas.ts:197` for the full enum.
+      enum:
+        - chat-answer
+        - ingest-summary
+        - ingest-page-update
+        - cross-ref-suggestion
+        - contradiction-alert
+        - gap-detection
+        - user-correction
+        - reader-feedback
+
+    CreateCandidateRequest:
+      type: object
+      required: [knowledgeBaseId, kind, title, content]
+      properties:
+        knowledgeBaseId:
+          type: string
+          description: |
+            KB slug or canonical UUID. Both are accepted; slug is
+            normalised server-side via F135.
+          examples:
+            - my-product-docs
+            - 01H5...
+        kind:
+          $ref: "#/components/schemas/CandidateKind"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+          examples:
+            - VIP customer escalation policy
+        content:
+          type: string
+          minLength: 1
+          description: Markdown body of the proposed Neuron.
+        metadata:
+          type: string
+          nullable: true
+          description: |
+            JSON-stringified metadata blob. The orchestrator looks
+            here for `connector` (attribution id — see
+            `packages/shared/src/connectors.ts`), `sourceUrl`,
+            `targetNeuron` (when kind=user-correction), etc.
+          examples:
+            - '{"connector":"api","sourceUrl":"https://internal.example.com/x"}'
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          nullable: true
+          description: |
+            Optional confidence score [0, 1] the writer attaches. Feeds
+            the auto-approval policy (F19) when set.
+        impactEstimate:
+          type: integer
+          nullable: true
+          description: |
+            Optional positive integer estimating downstream impact of
+            this Neuron. Used by curator-prioritisation.
+
+    CreateCandidateResponse:
+      type: object
+      required: [candidateId, status]
+      properties:
+        candidateId:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, dismissed]
+        kbId:
+          type: string
+          description: Canonical KB UUID (resolved from slug if a slug was sent).
+
+    RetrieveRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+          description: User's question or a reformulated FTS-friendly variant.
+          examples:
+            - "Does reflexology help with insomnia?"
+        audience:
+          type: string
+          enum: [curator, tool, public, student]
+          default: tool
+          description: |
+            Controls per-Neuron audience filtering and the shape of
+            `formattedContext`. `tool` is the default for site-LLM
+            consumption; `public` formats for direct end-user display
+            with longer narrative chunks; `student` is an
+            implementation-defined custom audience the deployed system
+            uses for educational sub-audiences.
+        maxChars:
+          type: integer
+          minimum: 1
+          maximum: 16000
+          default: 2000
+          description: |
+            Hard upper-bound on `sum(chunks.content)` in the returned
+            `formattedContext`. Conservative default works well for
+            Gemini Flash / Claude Haiku; bump to 4000 for deeper
+            contexts.
+        topK:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 5
+          description: |
+            Max number of Neuron-chunks to return after audience + tag
+            filtering. The engine pulls `topK * 3` candidates from
+            FTS to ensure filtering still leaves enough material.
+
+    RetrieveChunk:
+      type: object
+      required: [documentId, seqId, title, neuronPath, content, headerBreadcrumb, rank]
+      properties:
+        documentId:
+          type: string
+          description: Internal document UUID.
+        seqId:
+          type: string
+          pattern: '^[a-z0-9-]+_[0-9]{8}$'
+          description: |
+            Canonical per-KB sequence id (F145).
+            Format `{kbPrefix}_{8-digit-seq}`, stable across edits and
+            recompiles. The right handle to use when citing back to a
+            Neuron from your own UI.
+          examples:
+            - practice_00000037
+        title:
+          type: string
+        neuronPath:
+          type: string
+          description: Slug-path of the Neuron in the wiki tree.
+          examples:
+            - /wiki/reflexology-and-sleep-practice-notes
+        content:
+          type: string
+          description: Chunk body — the actual retrieved markdown.
+        headerBreadcrumb:
+          type: string
+          description: "Hierarchical breadcrumb of headings the chunk sits under (e.g. `Wellness > Sleep`)."
+        rank:
+          type: number
+          format: float
+          description: FTS5 BM25 rank, [0, 1]-normalised.
+
+    RetrieveResponse:
+      type: object
+      required: [hitCount, totalChars, formattedContext, chunks]
+      properties:
+        hitCount:
+          type: integer
+          description: Number of chunks returned (after filtering).
+        totalChars:
+          type: integer
+          description: Total character count across all returned chunks.
+        formattedContext:
+          type: string
+          description: |
+            Pre-formatted markdown string ready to feed directly to an
+            LLM as additional context. Consumed by `kb_retrieve`-style
+            tool handlers in site-LLM orchestrators — no further
+            chunk-rendering required.
+        chunks:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetrieveChunk"
+
+    ChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+        knowledgeBaseId:
+          type: string
+          description: KB slug or UUID. Required for grounded answers.
+        sessionId:
+          type: string
+          description: |
+            Optional chat-session id (F144). When omitted + a KB is
+            specified, the server creates a new session and echoes its
+            id back so subsequent turns can append.
+        audience:
+          type: string
+          enum: [curator, tool, public]
+          description: |
+            Controls persona-template + post-processing.
+            Default: `tool` for Bearer auth, `curator` for session auth.
+
+    Citation:
+      type: object
+      required: [documentId, path, filename]
+      properties:
+        documentId:
+          type: string
+        path:
+          type: string
+        filename:
+          type: string
+
+    ChatResponse:
+      type: object
+      required: [answer]
+      properties:
+        answer:
+          type: string
+        sessionId:
+          type: string
+          description: Present when the question was scoped to a KB.
+        citations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Citation"
+
+    SearchHit:
+      type: object
+      required: [id, knowledgeBaseId, filename, path, kind, highlight, rank]
+      properties:
+        id:
+          type: string
+        knowledgeBaseId:
+          type: string
+        filename:
+          type: string
+        title:
+          type: string
+          nullable: true
+        path:
+          type: string
+        kind:
+          type: string
+          enum: [source, wiki]
+        seq:
+          type: integer
+          nullable: true
+        highlight:
+          type: string
+          description: HTML snippet with `<mark>` wrapping matched terms.
+        rank:
+          type: number
+          format: float
+
+    SearchResponse:
+      type: object
+      required: [documents]
+      properties:
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchHit"
+
+security:
+  - BearerAuth: []
+
+# ─── Paths ────────────────────────────────────────────────────────
+
+paths:
+  /api/v1/knowledge-bases/{kbId}/retrieve:
+    post:
+      summary: Retrieve grounded context from a KB
+      operationId: retrieveContext
+      tags: [retrieve]
+      description: |
+        Primary endpoint for **Pattern C** — site-LLM with Trail as a
+        tool. Returns the top-K Neuron-chunks for a query, plus a
+        pre-formatted `formattedContext` string the orchestrator can
+        feed directly to its LLM.
+
+        The deployed reflexology-practice integration calls this from
+        its `kb_retrieve` tool handler; see
+        [docs](https://docs.trailmem.com/site-llm-with-trail-as-tool/)
+        for the full case study.
+      parameters:
+        - name: kbId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: KB slug or canonical UUID.
+          example: my-product-docs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetrieveRequest"
+            examples:
+              minimal:
+                summary: Minimal — just a query
+                value:
+                  query: "How fast must VIP escalations be paged?"
+              tuned:
+                summary: Tuned — bigger context window for longer answer
+                value:
+                  query: "Walk me through every step of our incident-response procedure"
+                  audience: tool
+                  maxChars: 4000
+                  topK: 8
+      responses:
+        "200":
+          description: Retrieved chunks + pre-formatted context.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetrieveResponse"
+        "400":
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token.
+        "404":
+          description: KB not found for this tenant.
+
+  /api/v1/queue/candidates:
+    post:
+      summary: Submit a candidate Neuron for curator review
+      operationId: createCandidate
+      tags: [queue]
+      description: |
+        Submit content that should become a Neuron after curator
+        review. This is the single write-path into a Trail KB — all
+        ingest flows (web-clipper, MCP, REST, chat-save) ultimately
+        land here.
+
+        After approval, the candidate becomes a Neuron with a stable
+        `seqId` like `{kbPrefix}_{8-digit-seq}`. The KB's auto-approval
+        policy (F19) decides whether curator review is required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCandidateRequest"
+            examples:
+              policy:
+                summary: Programmatic policy candidate from a webhook
+                value:
+                  knowledgeBaseId: my-product-docs
+                  kind: chat-answer
+                  title: VIP customer escalation policy
+                  content: |
+                    When a VIP customer raises a ticket, page the
+                    on-call lead via PagerDuty within 5 minutes.
+                    Escalation overrides queue priority.
+                  metadata: '{"connector":"api","sourceUrl":"https://internal.example.com/policies/vip-escalation"}'
+              correction:
+                summary: User-correction against an existing Neuron
+                value:
+                  knowledgeBaseId: my-product-docs
+                  kind: user-correction
+                  title: "Correction: VIP SLA is 3 minutes, not 5"
+                  content: |
+                    The current Neuron says 5 minutes; the updated
+                    policy is 3 minutes (effective 2026-04-01).
+                  metadata: '{"connector":"api","targetNeuron":"myprod_a1b2c3d4"}'
+      responses:
+        "201":
+          description: Candidate created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateCandidateResponse"
+        "400":
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token.
+        "404":
+          description: KB not found for this tenant.
+
+  /api/v1/chat:
+    post:
+      summary: Grounded chat answer with citations
+      operationId: chat
+      tags: [chat]
+      description: |
+        Primary endpoint for **Pattern A** — a thin chat-proxy over a
+        KB. Returns a synthesised answer in the KB's configured tone,
+        with citations to the Neurons that grounded it.
+
+        For multi-tool composition or distinct brand voice, prefer
+        `/retrieve` from your own LLM
+        ([docs](https://docs.trailmem.com/site-llm-with-trail-as-tool/)).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+            examples:
+              kbQuestion:
+                summary: KB-grounded question
+                value:
+                  message: "How fast must VIP escalations be paged?"
+                  knowledgeBaseId: my-product-docs
+              continueSession:
+                summary: Continue a previous chat session
+                value:
+                  message: "And what if the on-call lead is unreachable?"
+                  knowledgeBaseId: my-product-docs
+                  sessionId: "chat_sess_..."
+      responses:
+        "200":
+          description: Synthesised answer + citations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+              examples:
+                grounded:
+                  summary: Grounded answer
+                  value:
+                    answer: |
+                      VIP escalations must be paged to the on-call lead
+                      within 5 minutes via PagerDuty. This overrides
+                      normal queue priority.
+                    sessionId: chat_sess_...
+                    citations:
+                      - documentId: doc_...
+                        path: /wiki/vip-customer-escalation-policy.md
+                        filename: vip-customer-escalation-policy.md
+        "400":
+          description: Validation error.
+        "401":
+          description: Missing or invalid bearer token.
+        "404":
+          description: KB not found.
+
+  /api/v1/knowledge-bases/{kbId}/search:
+    get:
+      summary: FTS5 keyword search across Neurons
+      operationId: searchKb
+      tags: [search]
+      description: |
+        Full-text search using SQLite FTS5. Matches against title +
+        body + headers. Also matches opt-in user-notes via a substring
+        scan (F112). Returns up to 50 documents by default, ranked by
+        BM25.
+      parameters:
+        - name: kbId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: KB slug or canonical UUID.
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query. FTS5 syntax supported (`"phrase"`, `term1 OR term2`, `prefix*`).
+          example: VIP escalation
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [source, wiki, all]
+            default: all
+          description: Filter by document kind.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: Search hits.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "400":
+          description: Missing/invalid query.
+        "401":
+          description: Missing or invalid bearer token.
+        "404":
+          description: KB not found.
