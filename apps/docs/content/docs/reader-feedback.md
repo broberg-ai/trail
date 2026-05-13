@@ -21,6 +21,15 @@ bundled in. The curator sees the feedback in context, decides
 whether to update a Neuron, add a new one, or dismiss as
 already-handled.
 
+## Before you start
+
+A bearer token for your tenant. Get one at
+**<https://app.trailmem.com/settings>** → **API Keys** section →
+**Create new key**. The value is shown ONCE — save it to your
+secret manager immediately. Tenant-scoped (works for any KB you
+own); never expose the value in browser-side code (proxy through
+your server).
+
 ## The endpoint
 
 ```http

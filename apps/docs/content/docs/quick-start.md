@@ -23,16 +23,25 @@ You need:
 1. A Trail engine you can reach over HTTPS. For Christian's
    production fleet that is `engine.trailmem.com`. For local
    development, an engine running on `127.0.0.1:58021`.
-2. A **bearer token** scoped to a tenant + KB. Tokens are created in
-   the admin UI under **Settings → API keys** for the KB you want to
-   write to. Store the value securely; the admin shows it once.
-3. The KB's slug (e.g. `my-product-docs`).
+2. A **bearer token** scoped to your tenant. Get one at
+   **<https://app.trailmem.com/settings>** → scroll to the
+   **API Keys** section → click **Create new key** → copy the value
+   (shown ONCE — the admin won't show it again, so save it now in
+   your secret manager).
+
+   Keys are **tenant-scoped, not per-KB** — one key authenticates
+   against any KB owned by your tenant. If you operate multiple KBs
+   under one tenant (e.g. `my-product-docs` and `internal-playbook`),
+   the same key works for both.
+
+3. The KB's slug (e.g. `my-product-docs`) — visible in the admin's KB
+   URL: `https://app.trailmem.com/kb/{slug}/...`.
 
 The examples below use shell variables you set once:
 
 ```bash
 export TRAIL_API_BASE="https://engine.trailmem.com"
-export TRAIL_TOKEN="trail_live_…"   # from admin → API keys
+export TRAIL_TOKEN="trail_live_…"   # from app.trailmem.com/settings → API Keys
 export TRAIL_KB="my-product-docs"
 ```
 

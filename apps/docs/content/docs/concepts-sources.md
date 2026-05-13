@@ -18,6 +18,33 @@ programmatically (a Slack-attachment listener, a webhook receiver,
 a scheduled import from a CMS), this is the endpoint surface to
 use.
 
+## Before you start
+
+You need:
+
+1. A **bearer token** for your tenant. Get one at
+   **<https://app.trailmem.com/settings>** → scroll to the **API
+   Keys** section → click **Create new key** → copy the value (the
+   admin shows it ONCE; save it to your secret manager now).
+
+   Keys are tenant-scoped — one key authenticates against any KB
+   owned by your tenant. Don't expose the value in browser-side
+   code; uploads should run server-side through your own proxy.
+
+2. The **KB slug** you want to upload to (e.g. `sanne-andersen`,
+   `my-product-docs`). Visible in the admin's URL bar
+   `https://app.trailmem.com/kb/{slug}/...`.
+
+3. The **engine URL**: `https://engine.trailmem.com` for the
+   production fleet, or `http://127.0.0.1:58021` for local
+   development.
+
+```bash
+export TRAIL_API_BASE="https://engine.trailmem.com"
+export TRAIL_TOKEN="trail_live_…"     # from app.trailmem.com/settings → API Keys
+export TRAIL_KB="sanne-andersen"
+```
+
 ## The pipeline in 60 seconds
 
 ```

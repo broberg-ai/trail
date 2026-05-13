@@ -8,8 +8,11 @@ info:
     and chat against a knowledge base.
 
     **Auth model.** All endpoints require a `Bearer` token in the
-    `Authorization` header. Tokens are scoped to a tenant + KB and are
-    created in the admin UI under **Settings → API keys**.
+    `Authorization` header. Tokens are tenant-scoped (one key
+    authenticates against any KB owned by your tenant) and created at
+    [`https://app.trailmem.com/settings`](https://app.trailmem.com/settings)
+    → **API Keys** → **Create new key**. The value is shown ONCE —
+    save it to your secret manager immediately.
 
     **Endpoint stability.** Paths under `/api/v1/` are the external
     contract — request/response shapes are versioned and will not break
@@ -80,9 +83,13 @@ components:
       scheme: bearer
       bearerFormat: opaque
       description: |
-        Tenant + KB-scoped bearer token. Create one in the admin UI
-        (**Settings → API keys**). Store server-side only; never expose
-        to the browser. Tokens look like `trail_live_...`.
+        Tenant-scoped bearer token. Create one at
+        [`https://app.trailmem.com/settings`](https://app.trailmem.com/settings)
+        → **API Keys** → **Create new key**. The value is shown ONCE;
+        save it to your secret manager immediately. Store server-side
+        only; never expose to the browser. Tokens look like
+        `trail_live_...`. One key works for any KB owned by your
+        tenant.
 
   # ─── Shared schemas ────────────────────────────────────────────
 

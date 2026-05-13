@@ -232,8 +232,11 @@ Neuron edits, format `{kb-prefix}_{8-digit-seq}` (see
 
 ### Auth
 
-Bearer token, scoped to a tenant + KB. Create one in the admin UI
-under **Settings → API keys** for the KB you want to read.
+Bearer token, scoped to your tenant. Create one at
+**<https://app.trailmem.com/settings>** → **API Keys** section →
+**Create new key**. The value is shown ONCE — copy it to your
+server's secret manager immediately. Keys are tenant-scoped, not
+per-KB; one key authenticates against any KB owned by your tenant.
 
 Store the token in your site's secret manager
 (`flyctl secrets set`, Vercel env, etc.) — never inline it in the
@@ -436,7 +439,7 @@ retrieval in 30 minutes.
 
 - A Trail tenant + KB with at least 5–10 Neurons (signup at
   `app.trailmem.com`).
-- A bearer-token for that KB. **Admin → Settings → API keys**.
+- A bearer token. Get one at **<https://app.trailmem.com/settings>** → **API Keys** → **Create new key**. Tenant-scoped (works for any KB you own).
 - An LLM provider key — OpenRouter is the simplest for
   multi-model fallback (Gemini Flash + Claude Haiku). Get one at
   openrouter.ai.
