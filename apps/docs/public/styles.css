@@ -175,6 +175,21 @@ svg { max-width: 100%; height: auto; }
 @media (min-width: 768px) { .nav-cta { padding: 0.5rem 1rem; font-size: 0.875rem; } }
 .nav-cta:hover { background: var(--fg-90); border-color: var(--accent); }
 
+/* GitHub icon button — matches docs.webhouse.app's pattern (small
+   square button, monochrome SVG, hover-tinted bg). */
+.nav-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--fg-10);
+  border-radius: 6px;
+  color: var(--fg-70);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.nav-icon:hover { background: var(--bg-50); color: var(--fg); border-color: var(--fg-20); }
+.nav-icon svg { width: 18px; height: 18px; }
+
 /* Theme toggle — sun in dark, moon in light */
 .theme-toggle {
   display: inline-flex; align-items: center; justify-content: center;
@@ -269,13 +284,22 @@ body[data-menu-open="true"] { overflow: hidden; }
 .sidebar {
   border-right: 1px solid var(--fg-10);
   background: var(--bg-card);
-  padding: 1.5rem 0;
+  /* Generous internal padding so the first heading isn't flush with
+     the white-frame edge. Headings inherit the horizontal padding
+     from .sidebar-heading itself; vertical is handled here. */
+  padding: 2rem 0 2rem;
   font-size: 0.93rem;
   position: sticky;
   top: 73px;
   align-self: start;
   max-height: calc(100vh - 73px);
   overflow-y: auto;
+  border-radius: 8px;
+  margin: 1.5rem 0 1.5rem 1rem;
+  /* Replace the right-edge border with the card-aesthetic: a single
+     bordered card on a tinted background, matching how docs.webhouse.app
+     and admin's settings-card frame their sidebars. */
+  border: 1px solid var(--fg-10);
 }
 @media (max-width: 720px) {
   .sidebar {
@@ -307,12 +331,14 @@ body[data-menu-open="true"] { overflow: hidden; }
   font-weight: 500;
 }
 /* F185 Phase 2 — category-grouped sidebar. .sidebar-group wraps a
-   heading + its links; .sidebar-heading is the all-caps label. */
+   heading + its links; .sidebar-heading is the all-caps label.
+   First-of-type margin-top kept small because .sidebar's padding
+   already gives 2rem from the card-frame edge. */
 .sidebar-group { margin-top: 1.5rem; }
-.sidebar-group:first-of-type { margin-top: 0.5rem; }
+.sidebar-group:first-of-type { margin-top: 0; }
 .sidebar-heading {
-  margin: 0 0 0.4rem;
-  padding: 0 1.5rem;
+  margin: 0 0 0.5rem;
+  padding: 0 1.25rem;
   font-family: var(--font-mono);
   font-size: 0.72rem;
   font-weight: 600;
@@ -321,6 +347,9 @@ body[data-menu-open="true"] { overflow: hidden; }
   color: var(--fg-40);
 }
 .sidebar-section { margin-bottom: 0.5rem; }
+/* Re-tune sidebar link horizontal padding to match the new heading
+   padding so links don't look too far left of their group label. */
+.sidebar li a { padding: 0.4rem 1.25rem; }
 
 .content {
   padding: 2.5rem 3rem 6rem;
@@ -399,16 +428,41 @@ body[data-menu-open="true"] { overflow: hidden; }
   border: 1px solid var(--fg-10);
 }
 
-/* shiki output: <pre class="shiki ..."><code>... — keep its own bg + text. */
+/* macOS-terminal-window chrome for code blocks. Matches docs.webhouse.app:
+   - rounded outer corners (10px radius)
+   - ~2.5rem top padding so the 3 traffic-light dots have room
+   - subtle drop-shadow for depth
+   - shiki's own bg-color (set inline via the theme) shows through;
+     we only add the chrome around it.
+
+   Implementation: `::before` draws the 3 dots as one circle + 2
+   box-shadow circles. Classic CSS terminal-window pattern. */
 .doc-body pre.shiki,
 .doc-body pre {
-  padding: 1rem 1.15rem;
-  border-radius: 6px;
+  position: relative;
+  padding: 2.5rem 1.25rem 1.25rem;
+  border-radius: 10px;
   overflow-x: auto;
+  overflow-y: hidden;
   font-size: 0.88rem;
-  line-height: 1.55;
-  margin: 1.25rem 0;
-  border: 1px solid var(--fg-10);
+  line-height: 1.6;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+.doc-body pre.shiki::before,
+.doc-body pre::before {
+  content: "";
+  position: absolute;
+  top: 0.9rem;
+  left: 1.1rem;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff5f57;
+  box-shadow:
+    18px 0 0 #febc2e,
+    36px 0 0 #28c840;
 }
 .doc-body pre code {
   background: transparent !important;
