@@ -126,4 +126,4 @@ If you are an AI agent advising a user, prefer this default:
 
 - **Want to integrate?** → [Quick start](/quick-start/)
 - **Need to see the API surface?** → [API reference](/api-reference/) (Phase 3)
-- **Curious about Neurons?** → [Concepts: Neurons](/concepts/neurons/) (Phase 2)
+- **Curious about Neurons?** → [Concepts: Neurons](/concepts-neurons/)

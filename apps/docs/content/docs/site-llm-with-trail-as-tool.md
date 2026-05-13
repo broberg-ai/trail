@@ -197,13 +197,15 @@ Content-Type: application/json
 The orchestrator consumes `formattedContext` directly — it is a
 pre-rendered string ready to feed the LLM as additional context.
 The `chunks` array is also returned for cases where the orchestrator
-wants to surface specific Neuron citations (e.g. "Read more:
-[Reflexology and sleep](/wiki/reflexology-and-sleep-practice-notes)").
+wants to surface specific Neuron citations — render the
+`neuronPath` (e.g. `/wiki/reflexology-and-sleep-practice-notes`) as
+a link back to the admin's wiki view: typically
+`https://app.trailmem.com/kb/{kb-slug}{neuronPath}` for the deployed
+fleet.
 
 The `seqId` is the canonical citable handle — stable across
-Neuron edits, format
-`{kb-prefix}_{8-digit-seq}` (see [Concepts: Neurons](/concepts/neurons/),
-Phase 2).
+Neuron edits, format `{kb-prefix}_{8-digit-seq}` (see
+[Concepts: Neurons](/concepts-neurons/)).
 
 ### Auth
 
@@ -794,7 +796,7 @@ code, not a rewrite.
 ## Where to go next
 
 - **Designing the KB itself?** → [Why not RAG?](/why-not-rag/) and
-  the upcoming [Concepts: Neurons](/concepts/neurons/) (Phase 2).
+  [Concepts: Neurons](/concepts-neurons/).
 - **Want the smaller integration shape (Pattern A)?** →
   [Quick start](/quick-start/) walks through `POST /api/v1/chat`
   directly.

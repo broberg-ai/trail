@@ -278,5 +278,5 @@ upgrade to plan. Trail handles the compile-at-ingest middle.
 ## Where to go next
 
 - **Want to see all endpoints?** → [API reference](/api-reference/) (Phase 3)
-- **Building an MCP-based AI agent?** → [MCP integration](/mcp/overview/) (Phase 4)
-- **Designing a connector?** → [Concepts: connectors](/concepts/connectors/) (Phase 2)
+- **Building an MCP-based AI agent?** → MCP integration guide (coming in Phase 4 of [F185](https://github.com/broberg-ai/trail/blob/main/docs/features/F185-trail-docs-site.md))
+- **Designing a connector?** → [Concepts: connectors](/concepts-connectors/)
