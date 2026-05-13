@@ -329,7 +329,7 @@ Mirror af F149's pluggable ingest pattern, anvendt på chat-routen. Abstraherer 
 
 | # | Feature | Status | Phase | Plan |
 |---|---------|--------|-------|------|
-| F159 | [Pluggable Chat Backends](features/F159-pluggable-chat-backends.md) | Planned | 1 | [plan](features/F159-pluggable-chat-backends.md) |
+| F159 | [Pluggable Chat Backends](features/F159-pluggable-chat-backends.md) | Done | 1 | [plan](features/F159-pluggable-chat-backends.md) |
 | F160 | [Three-tier integration contract + audience-aware chat](features/F160-three-tier-integration-contract.md) | Planned | 1 | [plan](features/F160-three-tier-integration-contract.md) |
 | F161 | [Inline media in retrieval responses](features/F161-inline-media-in-retrieval.md) | Planned | 1 | [plan](features/F161-inline-media-in-retrieval.md) |
 | F162 | [Source dedup via SHA-256 checksum](features/F162-source-dedup-via-checksum.md) | Planned | 1 | [plan](features/F162-source-dedup-via-checksum.md) |
@@ -355,7 +355,7 @@ Inspireret af Shuyi Wang's "Should You Actually Try Karpathy's LLM Wiki?" (2026-
 |---|---------|--------|-------|------|
 | F174 | [Action-Zone Governance Policy (green/yellow/red)](features/F174-action-zone-governance.md) | Planned | 2 | [plan](features/F174-action-zone-governance.md) |
 | F175 | [Schema-level provenance enforcement (sources-required)](features/F175-schema-provenance-enforcement.md) | Planned | 2 | [plan](features/F175-schema-provenance-enforcement.md) |
-| F176 | [Per-KB Lint Schedule + Settings UI (1-90 days, weekly default)](features/F176-per-kb-lint-schedule.md) | Planned | 1 | [plan](features/F176-per-kb-lint-schedule.md) |
+| F176 | [Per-KB Lint Schedule + Settings UI (1-90 days, weekly default)](features/F176-per-kb-lint-schedule.md) | Done | 1 | [plan](features/F176-per-kb-lint-schedule.md) |
 | F177 | [Pre-deploy build-context audit (`pnpm verify:dockerignore`)](features/F177-pre-deploy-build-context-audit.md) | Planned | 1 | [plan](features/F177-pre-deploy-build-context-audit.md) |
 | F178 | [Landing build automation + auto-deploy (`pnpm landing:ship`)](features/F178-landing-build-automation-auto-deploy.md) | Done | 1 | [plan](features/F178-landing-build-automation-auto-deploy.md) |
 | F179 | [Provider-direct ingest path for bulk jobs (caching + Batch API)](features/F179-provider-direct-bulk-ingest.md) | Planned | 1/2 | [plan](features/F179-provider-direct-bulk-ingest.md) |

@@ -612,6 +612,17 @@
         "saving": "Gemmer…",
         "hint": "Modellen her er FØRSTE skridt i fallback-kæden. Hvis den fejler (rate-limit, refusal, netværk) går ingest videre til næste skridt — så denne Trail aldrig stopper på en enkelt provider-hikkup."
       },
+      "chatModel": {
+        "title": "Chat-model",
+        "subtitle": "Hvilken LLM-backend der svarer på chat-spørgsmål mod denne Trail. Pattern A-integrationer (POST /api/v1/chat) bruger denne; Pattern C-orkestratorer der kalder /retrieve styrer selv deres LLM. Vælg 'Brug global default' for engine-default, eller pin per Trail.",
+        "modelLabel": "Primær model",
+        "useDefault": "Brug global default",
+        "fallbackPrefix": "Fallback-kæde:",
+        "maxPlanFree": "Max Plan (ingen ekstra credits)",
+        "save": "Gem model",
+        "saving": "Gemmer…",
+        "hint": "Modellen her er FØRSTE skridt i chat-fallback-kæden. Hvis den fejler (rate-limit, refusal, netværk, eller binær-fraværer som claude-cli på Fly) går chat videre til næste backend — så chat aldrig stopper på en enkelt provider-hikkup."
+      },
       "personas": {
         "title": "Chat-personas (eksterne integrationer)",
         "subtitle": "Når denne Trail bliver spurgt via Bearer-token-chat (fx en indlejret widget eller en site-LLM-orchestrator), bliver disse tekststykker tilføjet base-templaten. Lad stå tomt for at bruge default.",

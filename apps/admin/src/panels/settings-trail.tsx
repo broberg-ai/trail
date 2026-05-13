@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 import type { KnowledgeBase } from '@trail/shared';
-import { INGEST_MODELS, type IngestModel } from '@trail/shared';
+import { INGEST_MODELS, CHAT_MODELS, type IngestModel, type ChatModel } from '@trail/shared';
 import {
   listKnowledgeBases,
   updateKnowledgeBase,
   getLintStatus,
   getIngestSettings,
   updateIngestSettings,
+  getChatSettings,
+  updateChatSettings,
   type LintStatus,
   type IngestSettingsResponse,
   type IngestBackendId,
+  type ChatSettingsResponse,
   ApiError,
 } from '../api';
 import { matchKb } from '../lib/kb-cache';
@@ -60,6 +63,10 @@ export function SettingsTrailPanel() {
   const [ingestSettings, setIngestSettings] = useState<IngestSettingsResponse | null>(null);
   const [selectedModelKey, setSelectedModelKey] = useState<string>('');
   const [ingestSavePending, setIngestSavePending] = useState(false);
+  // F159 — per-KB chat backend/model. Same shape as F152 ingest-settings.
+  const [chatSettings, setChatSettings] = useState<ChatSettingsResponse | null>(null);
+  const [selectedChatModelKey, setSelectedChatModelKey] = useState<string>('');
+  const [chatSavePending, setChatSavePending] = useState(false);
 
   useEffect(() => {
     listKnowledgeBases()
@@ -92,6 +99,17 @@ export function SettingsTrailPanel() {
               }
             })
             .catch(() => setIngestSettings(null));
+          // F159 — fetch chat settings + effective chain. Same fail-soft.
+          getChatSettings(match.id)
+            .then((s) => {
+              setChatSettings(s);
+              if (s.overrides.chatBackend && s.overrides.chatModel) {
+                setSelectedChatModelKey(`${s.overrides.chatBackend}:${s.overrides.chatModel}`);
+              } else {
+                setSelectedChatModelKey('');
+              }
+            })
+            .catch(() => setChatSettings(null));
         }
       })
       .catch((err: ApiError) => setError(err.message));
@@ -178,6 +196,43 @@ export function SettingsTrailPanel() {
       });
     } finally {
       setIngestSavePending(false);
+    }
+  };
+
+  // F159 — same shape as ingestServerKey/ingestDirty/onSaveIngestModel,
+  // applied to the chat backend/model fields. PATCH endpoint is
+  // /chat-settings; the rest is identical.
+  const chatServerKey = (() => {
+    if (!chatSettings) return '';
+    const o = chatSettings.overrides;
+    return o.chatBackend && o.chatModel ? `${o.chatBackend}:${o.chatModel}` : '';
+  })();
+  const chatDirty = chatSettings !== null && selectedChatModelKey !== chatServerKey;
+
+  const onSaveChatModel = async () => {
+    if (!kb || chatSavePending || !chatDirty) return;
+    setChatSavePending(true);
+    try {
+      let body: { chatBackend: import('@trail/shared').ChatBackendId | null; chatModel: string | null };
+      if (selectedChatModelKey === '') {
+        body = { chatBackend: null, chatModel: null };
+      } else {
+        const [backend, ...rest] = selectedChatModelKey.split(':');
+        body = {
+          chatBackend: backend as import('@trail/shared').ChatBackendId,
+          chatModel: rest.join(':'),
+        };
+      }
+      const updated = await updateChatSettings(kb.id, body);
+      setChatSettings(updated);
+      setToast({ kind: 'success', text: t('settings.savedToast') });
+    } catch (err) {
+      setToast({
+        kind: 'error',
+        text: err instanceof Error ? err.message : t('common.error'),
+      });
+    } finally {
+      setChatSavePending(false);
     }
   };
 
@@ -463,6 +518,80 @@ export function SettingsTrailPanel() {
 
           <p class="mt-2 text-[11px] text-[color:var(--color-fg-subtle)] max-w-md">
             {t('settings.trail.ingestModel.hint')}
+          </p>
+        </section>
+
+        {/* F159 — Per-KB chat backend/model picker. Mirrors F152's
+            ingest-model section verbatim; PATCH endpoint is
+            /chat-settings instead of /ingest-settings. */}
+        <section class="pt-2 border-t border-[color:var(--color-border)]">
+          <div class="mb-3">
+            <h2 class="text-sm font-medium">{t('settings.trail.chatModel.title')}</h2>
+            <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-md">
+              {t('settings.trail.chatModel.subtitle')}
+            </p>
+          </div>
+
+          <label class="block mb-2">
+            <span class="text-sm font-medium">{t('settings.trail.chatModel.modelLabel')}</span>
+          </label>
+          {(() => {
+            const modelOptions: DropdownOption[] = [
+              { value: '', label: t('settings.trail.chatModel.useDefault') },
+              ...CHAT_MODELS.map((m: ChatModel): DropdownOption => {
+                const cost =
+                  m.costPerMillion.input === 0 && m.costPerMillion.output === 0
+                    ? t('settings.trail.chatModel.maxPlanFree')
+                    : `$${m.costPerMillion.input.toFixed(2)} in / $${m.costPerMillion.output.toFixed(2)} out per 1M`;
+                return {
+                  value: `${m.backend}:${m.id}`,
+                  label: m.label,
+                  hint: cost,
+                };
+              }),
+            ];
+            return (
+              <Dropdown
+                value={selectedChatModelKey}
+                onChange={setSelectedChatModelKey}
+                options={modelOptions}
+                buttonClass="w-[28rem]"
+                menuClass="w-[28rem]"
+              />
+            );
+          })()}
+
+          {chatSettings ? (
+            <p class="mt-2 text-[11px] font-mono text-[color:var(--color-fg-subtle)] max-w-2xl">
+              <span class="uppercase tracking-wider mr-2">
+                {t('settings.trail.chatModel.fallbackPrefix')}
+              </span>
+              {chatSettings.effectiveChain
+                .map((step) => {
+                  const found = CHAT_MODELS.find(
+                    (m) => m.backend === step.backend && m.id === step.model,
+                  );
+                  return found ? found.label : `${step.backend}:${step.model}`;
+                })
+                .join(' → ')}
+            </p>
+          ) : null}
+
+          <div class="mt-3">
+            <button
+              type="button"
+              onClick={onSaveChatModel}
+              disabled={!chatDirty || chatSavePending}
+              class="px-3 py-1.5 text-sm rounded-md border border-[color:var(--color-accent)]/40 bg-[color:var(--color-accent)]/10 hover:bg-[color:var(--color-accent)]/20 disabled:opacity-40 disabled:cursor-not-allowed active:bg-[color:var(--color-accent)]/30 transition"
+            >
+              {chatSavePending
+                ? t('settings.trail.chatModel.saving')
+                : t('settings.trail.chatModel.save')}
+            </button>
+          </div>
+
+          <p class="mt-2 text-[11px] text-[color:var(--color-fg-subtle)] max-w-md">
+            {t('settings.trail.chatModel.hint')}
           </p>
         </section>
 

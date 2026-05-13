@@ -1410,6 +1410,42 @@ export function updateIngestSettings(
   });
 }
 
+// ── F159 — Per-KB Chat Backends settings ──────────────────────────
+
+import type { ChatBackendId } from '@trail/shared';
+
+export interface ChatChainStep {
+  backend: ChatBackendId;
+  model: string;
+}
+
+export interface ChatSettingsResponse {
+  overrides: {
+    chatBackend: ChatBackendId | null;
+    chatModel: string | null;
+    chatFallbackChain: ChatChainStep[] | null;
+  };
+  effectiveChain: ChatChainStep[];
+}
+
+export function getChatSettings(kbId: string): Promise<ChatSettingsResponse> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/chat-settings`);
+}
+
+export function updateChatSettings(
+  kbId: string,
+  body: {
+    chatBackend?: ChatBackendId | null;
+    chatModel?: string | null;
+    chatFallbackChain?: ChatChainStep[] | null;
+  },
+): Promise<ChatSettingsResponse> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/chat-settings`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
 // ── F153 Phase 4 — Read-only backup health ─────────────────────────
 
 export interface BackupHealth {

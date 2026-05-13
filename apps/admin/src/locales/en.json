@@ -612,6 +612,17 @@
         "saving": "Saving…",
         "hint": "The model here is the FIRST step in the fallback chain. If it fails (rate-limit, refusal, network) ingest advances to the next step — so this Trail never stops on a single provider hiccup."
       },
+      "chatModel": {
+        "title": "Chat model",
+        "subtitle": "Which LLM backend answers chat questions against this Trail. Pattern A integrations (POST /api/v1/chat) use this; Pattern C orchestrators that call /retrieve drive their own LLM. Pick 'Use global default' to inherit the engine config, or pin per Trail.",
+        "modelLabel": "Primary model",
+        "useDefault": "Use global default",
+        "fallbackPrefix": "Fallback chain:",
+        "maxPlanFree": "Max Plan (no extra credits)",
+        "save": "Save model",
+        "saving": "Saving…",
+        "hint": "The model here is the FIRST step in the chat fallback chain. If it fails (rate-limit, refusal, network, or missing binary like claude-cli on Fly) chat advances to the next backend — so chat never stops on a single provider hiccup."
+      },
       "personas": {
         "title": "Chat personas (external integrations)",
         "subtitle": "When this Trail is queried via Bearer-token chat (e.g. an embedded widget or a site-LLM orchestrator), these snippets are appended to the base persona-template. Leave empty to use the defaults.",
