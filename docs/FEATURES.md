@@ -46,7 +46,7 @@ Status reflects the engine (this repo). Landing-site and CMS-adapter work lives 
 | F24 | [DOCX Pipeline](#f24-docx-pipeline) | Done | 1 | [plan](features/F24-docx-pipeline.md) |
 | F25 | [Image Source Pipeline (Standalone Images + SVG Passthrough)](#f25-image-pipeline) | Done | 1 | [plan](features/F25-image-source-pipeline.md) |
 | ~~F26~~ | ~~[HTML / Web Clipper Ingest](#f26-web-clipper)~~ — superseded by F111 | Superseded | 1 | [plan](features/F26-html-web-clipper-ingest.md) |
-| F27 | [Pluggable Vision Adapter](#f27-vision-adapter) | Planned | 1 | [plan](features/F27-pluggable-vision-adapter.md) |
+| F27 | [Pluggable Vision Adapter](#f27-vision-adapter) | Done (audit 2026-05-13) | 1 | [plan](features/F27-pluggable-vision-adapter.md) |
 | F28 | [Pluggable Pipeline Interface](#f28-pipeline-interface) | Done | 1 | [features/F28-pipeline-interface.md](features/F28-pipeline-interface.md) |
 | F29 | [`<trail-chat>` Embeddable Widget (Lit)](#f29-trail-chat-widget) | Planned | 1 | [features/F29-trail-chat-widget.md](features/F29-trail-chat-widget.md) |
 | F30 | [Chat Citations Render (`[[wiki-links]]` → `<a>`)](#f30-chat-citations) | Done | 1 | [plan](features/F30-chat-citations-render.md) |
@@ -56,7 +56,7 @@ Status reflects the engine (this repo). Landing-site and CMS-adapter work lives 
 | F36 | [`docs.trailmem.com` as a Trail Brain](#f36-dogfooding-wiki) | Planned | 1 | [features/F36-dogfooding-wiki.md](features/F36-dogfooding-wiki.md) |
 | F38 | [Cross-Trail Search + Chat (Frontpage)](#f38-cross-trail-search) | Planned | 2 | [features/F38-cross-trail-search.md](features/F38-cross-trail-search.md) |
 | F39 | [Claude Code Session → Trail Ingest](#f39-cc-session-ingest) | Done | 1 | [features/F39-cc-session-ingest.md](features/F39-cc-session-ingest.md) |
-| F40 | [Multi-Tenancy on `app.trailmem.com` (libSQL embedded per-tenant)](#f40-multi-tenancy) | Planned | 1/2 | [features/F40-multi-tenancy.md](features/F40-multi-tenancy.md) |
+| F40 | [Multi-Tenancy on `app.trailmem.com` (libSQL embedded per-tenant)](#f40-multi-tenancy) | Done (audit 2026-05-13) | 1/2 | [features/F40-multi-tenancy.md](features/F40-multi-tenancy.md) |
 | F41 | [Tenant Provisioning + Signup Flow](#f41-tenant-provisioning) | Idea | 2 | — |
 | F42 | [Pluggable Storage (Tigris default + R2 alternative)](#f42-r2-storage) | Planned | 2 | [features/F42-pluggable-storage.md](features/F42-pluggable-storage.md) |
 | F43 | [Stripe Billing (Hobby / Pro / Business)](#f43-stripe-billing) | Idea | 2 | — |
@@ -139,7 +139,7 @@ Ship'er Trail til "markedets bedste Karpathy-LLM-Wiki-killer" via ~34 features f
 | # | Feature | Status | Phase | Plan |
 |---|---------|--------|-------|------|
 | F111 | [Trail Web Clipper (Browser Extension)](features/F111-trail-web-clipper.md) | Done (local/dev) | 2 | [plan](features/F111-trail-web-clipper.md) |
-| F111.2 | [Admin API-key panel + multi-origin CORS](features/F111.2-admin-api-keys-cors.md) | Planned | 1 | [plan](features/F111.2-admin-api-keys-cors.md) |
+| F111.2 | [Admin API-key panel + multi-origin CORS](features/F111.2-admin-api-keys-cors.md) | Backend Done; admin panel Planned | 1 | [plan](features/F111.2-admin-api-keys-cors.md) |
 | F112 | [User Notes / "Your Take" Field (Luhmann friction)](features/F112-user-notes-your-take.md) | Done | 1 | [plan](features/F112-user-notes-your-take.md) |
 | F112.1 | [Per-Neuron opt-in share for "Din tanke"](features/F112.1-user-note-share-toggle.md) | Done | 1 | [plan](features/F112.1-user-note-share-toggle.md) |
 | F112.2 | [User-note searchable internally (opt-in gated)](features/F112.2-user-note-search.md) | Done | 1 | [plan](features/F112.2-user-note-search.md) |
@@ -249,7 +249,7 @@ Factor `apps/server/src/services/ingest.ts` bag et `IngestBackend`-interface med
 
 | # | Feature | Status | Phase | Plan |
 |---|---------|--------|-------|------|
-| F149 | [Pluggable Ingest Backends](features/F149-pluggable-ingest-backends.md) | Planned | 1/2 | [plan](features/F149-pluggable-ingest-backends.md) |
+| F149 | [Pluggable Ingest Backends](features/F149-pluggable-ingest-backends.md) | Done (audit 2026-05-13) | 1/2 | [plan](features/F149-pluggable-ingest-backends.md) |
 
 ### F150 — Admin Link-Report Panel
 
@@ -330,18 +330,18 @@ Mirror af F149's pluggable ingest pattern, anvendt på chat-routen. Abstraherer 
 | # | Feature | Status | Phase | Plan |
 |---|---------|--------|-------|------|
 | F159 | [Pluggable Chat Backends](features/F159-pluggable-chat-backends.md) | Done | 1 | [plan](features/F159-pluggable-chat-backends.md) |
-| F160 | [Three-tier integration contract + audience-aware chat](features/F160-three-tier-integration-contract.md) | Planned | 1 | [plan](features/F160-three-tier-integration-contract.md) |
-| F161 | [Inline media in retrieval responses](features/F161-inline-media-in-retrieval.md) | Planned | 1 | [plan](features/F161-inline-media-in-retrieval.md) |
-| F162 | [Source dedup via SHA-256 checksum](features/F162-source-dedup-via-checksum.md) | Planned | 1 | [plan](features/F162-source-dedup-via-checksum.md) |
-| F163 | [Image Gallery panel (curator-facing browse + search)](features/F163-image-gallery-panel.md) | Planned | 1 | [plan](features/F163-image-gallery-panel.md) |
-| F164 | [Background jobs framework + bulk Vision-rerun](features/F164-background-jobs-bulk-vision.md) | Planned | 1 | [plan](features/F164-background-jobs-bulk-vision.md) |
-| F163.1 | [Image Gallery: bulk-actions (multi-select + flag/delete)](features/F163.1-image-gallery-bulk-actions.md) | Planned | 1 | [plan](features/F163.1-image-gallery-bulk-actions.md) |
-| F163.2 | [Image auto-flag (Vision-prompt + regex) + Flagged filter](features/F163.2-image-auto-flag-and-filter.md) | Planned | 1 | [plan](features/F163.2-image-auto-flag-and-filter.md) |
-| F163.3 | [Image-detail Lightbox port (CMS-style: side-panel + EXIF + tags + pagination)](features/F163.3-image-detail-cms-style.md) | Planned | 1 | [plan](features/F163.3-image-detail-cms-style.md) |
+| F160 | [Three-tier integration contract + audience-aware chat](features/F160-three-tier-integration-contract.md) | Done (audit 2026-05-13) | 1 | [plan](features/F160-three-tier-integration-contract.md) |
+| F161 | [Inline media in retrieval responses](features/F161-inline-media-in-retrieval.md) | Done (audit 2026-05-13) | 1 | [plan](features/F161-inline-media-in-retrieval.md) |
+| F162 | [Source dedup via SHA-256 checksum](features/F162-source-dedup-via-checksum.md) | Done (audit 2026-05-13) | 1 | [plan](features/F162-source-dedup-via-checksum.md) |
+| F163 | [Image Gallery panel (curator-facing browse + search)](features/F163-image-gallery-panel.md) | Done (audit 2026-05-13) | 1 | [plan](features/F163-image-gallery-panel.md) |
+| F164 | [Background jobs framework + bulk Vision-rerun](features/F164-background-jobs-bulk-vision.md) | Done (audit 2026-05-13) | 1 | [plan](features/F164-background-jobs-bulk-vision.md) |
+| F163.1 | [Image Gallery: bulk-actions (multi-select + flag/delete)](features/F163.1-image-gallery-bulk-actions.md) | Done (audit 2026-05-13) | 1 | [plan](features/F163.1-image-gallery-bulk-actions.md) |
+| F163.2 | [Image auto-flag (Vision-prompt + regex) + Flagged filter](features/F163.2-image-auto-flag-and-filter.md) | Done (audit 2026-05-13) | 1 | [plan](features/F163.2-image-auto-flag-and-filter.md) |
+| F163.3 | [Image-detail Lightbox port (CMS-style: side-panel + EXIF + tags + pagination)](features/F163.3-image-detail-cms-style.md) | Done (audit 2026-05-13) | 1 | [plan](features/F163.3-image-detail-cms-style.md) |
 | F165 | [Async Vision-describe (move out of upload critical path)](features/F165-async-vision-describe.md) | Done | 1 | [plan](features/F165-async-vision-describe.md) |
 | F165.1 | [Vision derivatives (WebP) + strict-availability fallback](features/F165.1-vision-derivatives-webp.md) | Done | 1 | [plan](features/F165.1-vision-derivatives-webp.md) |
 | F33 | [Fly.io deploy: multi-tenant admin + stateless engine fleet (Phase 1)](features/F33-fly-deploy-multi-tenant.md) | Done | 1 | [plan](features/F33-fly-deploy-multi-tenant.md) |
-| F168 | [Beam: tenant-level export/import between Trail engines](features/F168-beam-tenant-migration.md) | Planned | 1 | [plan](features/F168-beam-tenant-migration.md) |
+| F168 | [Beam: tenant-level export/import between Trail engines](features/F168-beam-tenant-migration.md) | Done (audit 2026-05-13) | 1 | [plan](features/F168-beam-tenant-migration.md) |
 | F169 | [New-engine provisioning script (`pnpm trail engine spawn`)](features/F169-engine-provisioning-script.md) | Planned | 1 | [plan](features/F169-engine-provisioning-script.md) |
 | F170 | [Multi-engine orchestrator (router + tenant migration)](features/F170-multi-engine-orchestrator.md) | Planned | 2 | [plan](features/F170-multi-engine-orchestrator.md) |
 | F173 | [Tigris-backed blob storage (S3 driver for `@trail/storage`)](features/F173-tigris-blob-storage.md) | Planned | 1 | [plan](features/F173-tigris-blob-storage.md) |
@@ -359,7 +359,7 @@ Inspireret af Shuyi Wang's "Should You Actually Try Karpathy's LLM Wiki?" (2026-
 | F177 | [Pre-deploy build-context audit (`pnpm verify:dockerignore`)](features/F177-pre-deploy-build-context-audit.md) | Planned | 1 | [plan](features/F177-pre-deploy-build-context-audit.md) |
 | F178 | [Landing build automation + auto-deploy (`pnpm landing:ship`)](features/F178-landing-build-automation-auto-deploy.md) | Done | 1 | [plan](features/F178-landing-build-automation-auto-deploy.md) |
 | F179 | [Provider-direct ingest path for bulk jobs (caching + Batch API)](features/F179-provider-direct-bulk-ingest.md) | Planned | 1/2 | [plan](features/F179-provider-direct-bulk-ingest.md) |
-| F180 | [Resumable chunked uploads (durable-once-clicked)](features/F180-resumable-chunked-uploads.md) | Planned | 1 | [plan](features/F180-resumable-chunked-uploads.md) |
+| F180 | [Resumable chunked uploads (durable-once-clicked)](features/F180-resumable-chunked-uploads.md) | Done (audit 2026-05-13) | 1 | [plan](features/F180-resumable-chunked-uploads.md) |
 | F181 | [Trail Routines: user-defined scheduled KB workflows](features/F181-trail-routines.md) | Planned (post-Sanne) | 1+2 | [plan](features/F181-trail-routines.md) |
 | F182 | [Memory Lifecycle: per-Neuron confidence + supersession + retention decay](features/F182-memory-lifecycle.md) | Planned (post-Sanne) | 2 | [plan](features/F182-memory-lifecycle.md) |
 | F183 | [Consolidation Tiers: working / episodic / semantic / procedural](features/F183-consolidation-tiers.md) | Planned (post-Sanne) | 2 | [plan](features/F183-consolidation-tiers.md) |
