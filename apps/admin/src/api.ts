@@ -1460,3 +1460,33 @@ export interface BackupHealth {
 export function getBackupHealth(): Promise<BackupHealth> {
   return api('/api/v1/backups/health');
 }
+
+// ── F31 — Reader feedback ─────────────────────────────────────────
+
+export interface ReaderFeedbackBody {
+  vote: 'up' | 'down' | 'flag';
+  question: string;
+  answer: string;
+  citations?: Array<{ documentId: string; path: string; filename: string }>;
+  sessionId?: string;
+  turnId?: string;
+  reason?: string;
+  category?: 'wrong-info' | 'missing-info' | 'irrelevant' | 'tone' | 'other';
+  pageUrl?: string;
+}
+
+export interface ReaderFeedbackResponse {
+  candidateId: string;
+  status: string;
+  queueUrl: string;
+}
+
+export function submitReaderFeedback(
+  kbId: string,
+  body: ReaderFeedbackBody,
+): Promise<ReaderFeedbackResponse> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/reader-feedback`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}

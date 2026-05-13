@@ -1,0 +1,29 @@
+name: Build-context audit
+
+# F177 — pre-deploy gate that fails CI when a Dockerfile would build
+# with the wrong inputs:
+#   - unanchored .dockerignore globs excluding code-assets
+#   - stale COPY directives where the source no longer exists
+#   - missing ship:<app> wrapper for Dockerfiles that COPY from
+#     pre-built dist/deploy/out/build directories
+
+on:
+  pull_request:
+    paths:
+      - 'apps/**/Dockerfile*'
+      - '.dockerignore'
+      - 'apps/**/.dockerignore'
+      - 'scripts/verify-dockerignore.ts'
+      - 'package.json'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun run scripts/verify-dockerignore.ts

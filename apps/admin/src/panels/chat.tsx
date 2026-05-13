@@ -8,11 +8,13 @@ import {
   getChatSession,
   patchChatSession,
   deleteChatSession,
+  submitReaderFeedback,
   ApiError,
   type ChatResponse,
   type ChatCitation,
   type ChatSession,
   type ChatTurnRow,
+  type ReaderFeedbackBody,
 } from '../api';
 import { rewriteWikiLinks } from '../lib/wiki-links';
 import { Modal, ModalButton } from '../components/modal';
@@ -820,7 +822,12 @@ function TurnPair({
           {pair.assistantTurn.error}
         </div>
       ) : pair.assistantTurn.content ? (
-        <AnswerView turn={pair.assistantTurn} kbId={kbId} onSave={() => onSave(pair.assistantTurn!)} />
+        <AnswerView
+          turn={pair.assistantTurn}
+          userQuestion={pair.userTurn.content}
+          kbId={kbId}
+          onSave={() => onSave(pair.assistantTurn!)}
+        />
       ) : (
         <div class="text-[color:var(--color-fg-subtle)] text-sm">…</div>
       )}
@@ -830,10 +837,12 @@ function TurnPair({
 
 function AnswerView({
   turn,
+  userQuestion,
   kbId,
   onSave,
 }: {
   turn: LocalTurn;
+  userQuestion: string;
   kbId: string;
   onSave: () => void;
 }) {
@@ -870,6 +879,12 @@ function AnswerView({
         </div>
       ) : null}
 
+      <FeedbackBar
+        turn={turn}
+        userQuestion={userQuestion}
+        kbId={kbId}
+      />
+
       <div class="mt-4 pt-3 border-t border-[color:var(--color-border)] flex items-center justify-between gap-3">
         {turn.savedAs ? (
           <span class="text-[11px] font-mono text-[color:var(--color-success)]">
@@ -891,6 +906,175 @@ function AnswerView({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * F31 — Reader feedback bar.
+ *
+ * Three vote buttons (👍 / 👎 / 🚩) under each assistant answer. Positive
+ * vote fires-and-forgets a POST; negative + flag open an inline reason
+ * form (textarea + category select) so the curator's reader-feedback
+ * candidate carries enough context to act on. Submit closes the form
+ * and shows a "thanks, sent to queue" state.
+ */
+type FeedbackState =
+  | { kind: 'idle' }
+  | { kind: 'composing'; vote: 'down' | 'flag'; reason: string; category: NonNullable<ReaderFeedbackBody['category']> }
+  | { kind: 'sending' }
+  | { kind: 'sent'; vote: 'up' | 'down' | 'flag' }
+  | { kind: 'error'; message: string };
+
+function FeedbackBar({
+  turn,
+  userQuestion,
+  kbId,
+}: {
+  turn: LocalTurn;
+  userQuestion: string;
+  kbId: string;
+}) {
+  const [state, setState] = useState<FeedbackState>({ kind: 'idle' });
+
+  const send = async (
+    vote: 'up' | 'down' | 'flag',
+    reason?: string,
+    category?: ReaderFeedbackBody['category'],
+  ) => {
+    setState({ kind: 'sending' });
+    try {
+      await submitReaderFeedback(kbId, {
+        vote,
+        question: userQuestion,
+        answer: turn.content,
+        citations: turn.citations.map((c) => ({
+          documentId: c.documentId,
+          path: c.path,
+          filename: c.filename,
+        })),
+        turnId: turn.id,
+        reason,
+        category,
+        pageUrl: typeof window !== 'undefined' ? window.location.href : undefined,
+      });
+      setState({ kind: 'sent', vote });
+    } catch (err) {
+      setState({
+        kind: 'error',
+        message: err instanceof Error ? err.message : t('common.error'),
+      });
+    }
+  };
+
+  if (state.kind === 'sent') {
+    const emoji = state.vote === 'up' ? '👍' : state.vote === 'down' ? '👎' : '🚩';
+    return (
+      <div class="mt-3 text-[11px] font-mono text-[color:var(--color-success)] flex items-center gap-2">
+        <span>{emoji}</span>
+        <span>{t('chat.feedback.sent')}</span>
+      </div>
+    );
+  }
+
+  if (state.kind === 'composing') {
+    return (
+      <div class="mt-3 border border-[color:var(--color-border)] rounded-md p-3 bg-[color:var(--color-bg)]/60 space-y-2">
+        <div class="text-[11px] font-mono uppercase tracking-wider text-[color:var(--color-fg-muted)]">
+          {state.vote === 'flag' ? t('chat.feedback.flagTitle') : t('chat.feedback.downTitle')}
+        </div>
+        <textarea
+          autoFocus
+          value={state.reason}
+          onInput={(e) =>
+            setState({ ...state, reason: (e.target as HTMLTextAreaElement).value })
+          }
+          placeholder={t('chat.feedback.reasonPlaceholder')}
+          rows={3}
+          class="w-full px-2 py-1.5 rounded border border-[color:var(--color-border)] bg-transparent text-sm resize-y"
+        />
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)]">
+            {t('chat.feedback.categoryLabel')}
+          </span>
+          {(['wrong-info', 'missing-info', 'irrelevant', 'tone', 'other'] as const).map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setState({ ...state, category: cat })}
+              class={
+                'text-[11px] px-2 py-0.5 rounded-full border transition ' +
+                (state.category === cat
+                  ? 'border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/15 text-[color:var(--color-fg)]'
+                  : 'border-[color:var(--color-border)] text-[color:var(--color-fg-muted)] hover:border-[color:var(--color-border-strong)]')
+              }
+            >
+              {t(`chat.feedback.category.${cat}`)}
+            </button>
+          ))}
+        </div>
+        <div class="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => setState({ kind: 'idle' })}
+            class="text-xs px-3 py-1 rounded-md border border-[color:var(--color-border)] hover:bg-[color:var(--color-bg-card)] transition"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            disabled={!state.reason.trim()}
+            onClick={() => send(state.vote, state.reason.trim(), state.category)}
+            class="text-xs px-3 py-1 rounded-md border border-[color:var(--color-accent)]/40 bg-[color:var(--color-accent)]/10 hover:bg-[color:var(--color-accent)]/20 disabled:opacity-40 disabled:cursor-not-allowed transition"
+          >
+            {t('chat.feedback.submit')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div class="mt-3 flex items-center gap-1.5">
+      <span class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mr-1">
+        {t('chat.feedback.label')}
+      </span>
+      <button
+        type="button"
+        title={t('chat.feedback.upTitle')}
+        disabled={state.kind === 'sending'}
+        onClick={() => send('up')}
+        class="text-sm px-2 py-1 rounded-md border border-[color:var(--color-border)] hover:border-[color:var(--color-success)]/40 hover:bg-[color:var(--color-success)]/5 disabled:opacity-40 transition"
+      >
+        👍
+      </button>
+      <button
+        type="button"
+        title={t('chat.feedback.downTitle')}
+        disabled={state.kind === 'sending'}
+        onClick={() =>
+          setState({ kind: 'composing', vote: 'down', reason: '', category: 'wrong-info' })
+        }
+        class="text-sm px-2 py-1 rounded-md border border-[color:var(--color-border)] hover:border-[color:var(--color-danger)]/40 hover:bg-[color:var(--color-danger)]/5 disabled:opacity-40 transition"
+      >
+        👎
+      </button>
+      <button
+        type="button"
+        title={t('chat.feedback.flagTitle')}
+        disabled={state.kind === 'sending'}
+        onClick={() =>
+          setState({ kind: 'composing', vote: 'flag', reason: '', category: 'wrong-info' })
+        }
+        class="text-sm px-2 py-1 rounded-md border border-[color:var(--color-border)] hover:border-[color:var(--color-warning)]/40 hover:bg-[color:var(--color-warning)]/5 disabled:opacity-40 transition"
+      >
+        🚩
+      </button>
+      {state.kind === 'error' ? (
+        <span class="text-[11px] font-mono text-[color:var(--color-danger)] ml-2">
+          {state.message}
+        </span>
+      ) : null}
     </div>
   );
 }

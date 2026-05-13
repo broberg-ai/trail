@@ -53,6 +53,12 @@ tags:
       Synthesised answer with citations. The right primitive for
       Pattern A — a simple chat-proxy over a KB. For tone-controlled
       multi-tool composition, prefer `/retrieve` from your own LLM.
+  - name: feedback
+    description: |
+      Reader feedback (👍/👎/🚩) on chat answers. Submission becomes a
+      `reader-feedback` candidate in the curator's queue with the
+      original question + AI answer + citations bundled in. Closes
+      the embed → curation loop.
   - name: search
     description: |
       FTS5 keyword search across Neurons + share-gated user-notes.
@@ -321,6 +327,84 @@ components:
           items:
             $ref: "#/components/schemas/Citation"
 
+    ReaderFeedbackVote:
+      type: string
+      enum: [up, down, flag]
+      description: |
+        - `up`   — 👍, positive vote. No reason required.
+        - `down` — 👎, negative vote. **Reason required.** Indicates
+          the answer was wrong, vague, or unhelpful.
+        - `flag` — 🚩, escalate to curator. **Reason required.** Use
+          when the answer crossed a boundary (out-of-scope claim,
+          potentially harmful, ethical concern).
+
+    ReaderFeedbackRequest:
+      type: object
+      required: [vote, question, answer]
+      properties:
+        vote:
+          $ref: "#/components/schemas/ReaderFeedbackVote"
+        question:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: The user's question that produced the answer.
+        answer:
+          type: string
+          minLength: 1
+          maxLength: 50000
+          description: The AI's answer being voted on.
+        citations:
+          type: array
+          description: Citations that grounded the answer, optional but recommended.
+          items:
+            $ref: "#/components/schemas/Citation"
+        sessionId:
+          type: string
+          description: Chat session id (if the answer came from a multi-turn session).
+        turnId:
+          type: string
+          description: Specific turn within the session (for granular cross-reference).
+        reason:
+          type: string
+          maxLength: 2000
+          description: |
+            Free-text from the reader. **Required** when `vote` is `down`
+            or `flag`. Omitted on `up`.
+        category:
+          type: string
+          enum: [wrong-info, missing-info, irrelevant, tone, other]
+          description: |
+            Optional category for the curator's queue filter. Embedders
+            with a different taxonomy may omit; the admin queue UI
+            shows the canonical 5 categories as quick-click chips.
+        pageUrl:
+          type: string
+          maxLength: 500
+          description: |
+            Where the feedback originated. For widget-embed integrations
+            this is the page URL the user was on; the curator sees it
+            in the queue card so they can correlate feedback patterns
+            with content.
+
+    ReaderFeedbackResponse:
+      type: object
+      required: [candidateId, status, queueUrl]
+      properties:
+        candidateId:
+          type: string
+          description: ID of the created `reader-feedback` candidate.
+        status:
+          type: string
+          enum: [pending, approved, dismissed]
+          description: |
+            Almost always `pending` — reader feedback rarely meets the
+            auto-approval threshold (negative feedback gets confidence
+            0.3, well below typical auto-approval thresholds).
+        queueUrl:
+          type: string
+          description: Admin-relative URL to jump straight to the feedback in the queue.
+
     SearchHit:
       type: object
       required: [id, knowledgeBaseId, filename, path, kind, highlight, rank]
@@ -540,6 +624,87 @@ paths:
           description: Missing or invalid bearer token.
         "404":
           description: KB not found.
+
+  /api/v1/knowledge-bases/{kbId}/reader-feedback:
+    post:
+      summary: Submit reader feedback (👍/👎/🚩) on a chat answer
+      operationId: submitReaderFeedback
+      tags: [feedback]
+      description: |
+        Turns a 👍/👎/🚩 click on a chat answer into a
+        `reader-feedback` candidate in the curator's queue. The
+        candidate bundles the question + answer + citations + the
+        reader's reason so the curator can act on it without
+        re-loading the original session.
+
+        Used by:
+
+        - **Admin chat** (`/kb/:kbId/chat`) — internal curator feedback
+          on their own answers (so they can flag answers they
+          themselves got wrong and want to fix the KB for next time).
+        - **`<trail-chat>` widget** (Pattern A embed) — public-facing
+          feedback from end-users on an external site, scoped to a
+          Bearer-token-authenticated KB.
+
+        **Vote semantics**: `up` requires no `reason`; `down` and
+        `flag` **require** a non-empty `reason` (the server returns
+        400 `reason_required_for_negative_vote` otherwise).
+      parameters:
+        - name: kbId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: KB slug or canonical UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReaderFeedbackRequest"
+            examples:
+              upvote:
+                summary: 👍 minimal — just a positive vote
+                value:
+                  vote: up
+                  question: "How fast must VIP escalations be paged?"
+                  answer: "VIP escalations must be paged within 5 minutes via PagerDuty."
+              downvote:
+                summary: 👎 with reason + category
+                value:
+                  vote: down
+                  question: "What treatments work for chronic headaches?"
+                  answer: "Reflexology may help with some types of headaches."
+                  reason: "The answer is too vague — doesn't cite which types or research backing."
+                  category: missing-info
+                  pageUrl: "https://example.com/treatments"
+              flag:
+                summary: 🚩 escalate to curator
+                value:
+                  vote: flag
+                  question: "Is this safe during pregnancy?"
+                  answer: "Yes, this is safe."
+                  reason: "AI gave a definitive medical answer — should defer to practitioner instead. Please review."
+                  category: other
+      responses:
+        "201":
+          description: Feedback candidate created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReaderFeedbackResponse"
+        "400":
+          description: |
+            Validation error. Common case: `reason` missing on a
+            `down` or `flag` vote → `error: "reason_required_for_negative_vote"`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token.
+        "404":
+          description: KB not found for this tenant.
 
   /api/v1/knowledge-bases/{kbId}/search:
     get:

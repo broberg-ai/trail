@@ -15,7 +15,9 @@
     "ship:engine": "flyctl deploy --config apps/server/fly.toml --dockerfile apps/server/Dockerfile .",
     "ship:admin": "pnpm --filter @trail/admin build && flyctl deploy --config apps/admin-server/fly.toml --dockerfile apps/admin-server/Dockerfile .",
     "ship:landing": "cd apps/landing && BUILD_OUT_DIR=deploy npx tsx build.ts && flyctl deploy --config fly.toml .",
-    "ship": "pnpm ship:engine"
+    "ship:docs": "cd apps/docs && BUILD_OUT_DIR=deploy npm run build && flyctl deploy --remote-only --config fly.toml .",
+    "ship": "pnpm ship:engine",
+    "verify:dockerignore": "bun run scripts/verify-dockerignore.ts"
   },
   "devDependencies": {
     "turbo": "^2.0.0",

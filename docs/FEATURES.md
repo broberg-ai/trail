@@ -50,7 +50,7 @@ Status reflects the engine (this repo). Landing-site and CMS-adapter work lives 
 | F28 | [Pluggable Pipeline Interface](#f28-pipeline-interface) | Done | 1 | [features/F28-pipeline-interface.md](features/F28-pipeline-interface.md) |
 | F29 | [`<trail-chat>` Embeddable Widget (Lit)](#f29-trail-chat-widget) | Planned | 1 | [features/F29-trail-chat-widget.md](features/F29-trail-chat-widget.md) |
 | F30 | [Chat Citations Render (`[[wiki-links]]` → `<a>`)](#f30-chat-citations) | Done | 1 | [plan](features/F30-chat-citations-render.md) |
-| F31 | [Reader Feedback Button → Queue](#f31-reader-feedback) | Planned | 1 | [plan](features/F31-reader-feedback.md) |
+| F31 | [Reader Feedback Button → Queue](#f31-reader-feedback) | Done 2026-05-13 | 1 | [plan](features/F31-reader-feedback.md) |
 | F32 | [Lint Pass (Orphans / Gaps / Contradictions)](#f32-lint-pass) | Done | 1 | [plan](features/F32-lint-pass.md) |
 | F34 | [Landing Site Deploy (`trailmem.com` + `trail.broberg.ai`)](#f34-landing-deploy) | Done | 1 | [features/F34-landing-deploy.md](features/F34-landing-deploy.md) |
 | F36 | [`docs.trailmem.com` as a Trail Brain](#f36-dogfooding-wiki) | Planned | 1 | [features/F36-dogfooding-wiki.md](features/F36-dogfooding-wiki.md) |
@@ -139,7 +139,7 @@ Ship'er Trail til "markedets bedste Karpathy-LLM-Wiki-killer" via ~34 features f
 | # | Feature | Status | Phase | Plan |
 |---|---------|--------|-------|------|
 | F111 | [Trail Web Clipper (Browser Extension)](features/F111-trail-web-clipper.md) | Done (local/dev) | 2 | [plan](features/F111-trail-web-clipper.md) |
-| F111.2 | [Admin API-key panel + multi-origin CORS](features/F111.2-admin-api-keys-cors.md) | Backend Done; admin panel Planned | 1 | [plan](features/F111.2-admin-api-keys-cors.md) |
+| F111.2 | [Admin API-key panel + multi-origin CORS](features/F111.2-admin-api-keys-cors.md) | Done (audit 2026-05-13) | 1 | [plan](features/F111.2-admin-api-keys-cors.md) |
 | F112 | [User Notes / "Your Take" Field (Luhmann friction)](features/F112-user-notes-your-take.md) | Done | 1 | [plan](features/F112-user-notes-your-take.md) |
 | F112.1 | [Per-Neuron opt-in share for "Din tanke"](features/F112.1-user-note-share-toggle.md) | Done | 1 | [plan](features/F112.1-user-note-share-toggle.md) |
 | F112.2 | [User-note searchable internally (opt-in gated)](features/F112.2-user-note-search.md) | Done | 1 | [plan](features/F112.2-user-note-search.md) |
@@ -356,7 +356,7 @@ Inspireret af Shuyi Wang's "Should You Actually Try Karpathy's LLM Wiki?" (2026-
 | F174 | [Action-Zone Governance Policy (green/yellow/red)](features/F174-action-zone-governance.md) | Planned | 2 | [plan](features/F174-action-zone-governance.md) |
 | F175 | [Schema-level provenance enforcement (sources-required)](features/F175-schema-provenance-enforcement.md) | Planned | 2 | [plan](features/F175-schema-provenance-enforcement.md) |
 | F176 | [Per-KB Lint Schedule + Settings UI (1-90 days, weekly default)](features/F176-per-kb-lint-schedule.md) | Done | 1 | [plan](features/F176-per-kb-lint-schedule.md) |
-| F177 | [Pre-deploy build-context audit (`pnpm verify:dockerignore`)](features/F177-pre-deploy-build-context-audit.md) | Planned | 1 | [plan](features/F177-pre-deploy-build-context-audit.md) |
+| F177 | [Pre-deploy build-context audit (`pnpm verify:dockerignore`)](features/F177-pre-deploy-build-context-audit.md) | Done 2026-05-13 | 1 | [plan](features/F177-pre-deploy-build-context-audit.md) |
 | F178 | [Landing build automation + auto-deploy (`pnpm landing:ship`)](features/F178-landing-build-automation-auto-deploy.md) | Done | 1 | [plan](features/F178-landing-build-automation-auto-deploy.md) |
 | F179 | [Provider-direct ingest path for bulk jobs (caching + Batch API)](features/F179-provider-direct-bulk-ingest.md) | Planned | 1/2 | [plan](features/F179-provider-direct-bulk-ingest.md) |
 | F180 | [Resumable chunked uploads (durable-once-clicked)](features/F180-resumable-chunked-uploads.md) | Done (audit 2026-05-13) | 1 | [plan](features/F180-resumable-chunked-uploads.md) |

@@ -442,7 +442,24 @@
     "copied": "Kopieret",
     "copyTitle": "Kopiér svar",
     "saveAsNeuronTitle": "Gem som Neuron",
-    "emptyHint": "Stil et spørgsmål for at komme i gang — svar er funderet i Neuronerne + Kilderne i denne Trail."
+    "emptyHint": "Stil et spørgsmål for at komme i gang — svar er funderet i Neuronerne + Kilderne i denne Trail.",
+    "feedback": {
+      "label": "Feedback",
+      "upTitle": "Godt svar",
+      "downTitle": "Forkert eller utilfredsstillende svar",
+      "flagTitle": "Flag for curator-review",
+      "reasonPlaceholder": "Hvad var galt med svaret? Beskriv kort så curator kan rette det…",
+      "categoryLabel": "Kategori:",
+      "submit": "Send feedback",
+      "sent": "Tak — feedback sendt til curator-queue.",
+      "category": {
+        "wrong-info": "forkert info",
+        "missing-info": "manglende info",
+        "irrelevant": "irrelevant",
+        "tone": "tone",
+        "other": "andet"
+      }
+    }
   },
   "graph": {
     "searchPlaceholder": "Filtrér noder…",

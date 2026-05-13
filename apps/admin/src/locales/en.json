@@ -442,7 +442,24 @@
     "copied": "Copied",
     "copyTitle": "Copy answer",
     "saveAsNeuronTitle": "Save as Neuron",
-    "emptyHint": "Ask a question to get started — answers are grounded in the Neurons + Sources in this Trail."
+    "emptyHint": "Ask a question to get started — answers are grounded in the Neurons + Sources in this Trail.",
+    "feedback": {
+      "label": "Feedback",
+      "upTitle": "Good answer",
+      "downTitle": "Wrong or unsatisfactory answer",
+      "flagTitle": "Flag for curator review",
+      "reasonPlaceholder": "What was wrong with the answer? Briefly so the curator can fix it…",
+      "categoryLabel": "Category:",
+      "submit": "Send feedback",
+      "sent": "Thanks — feedback sent to the curator queue.",
+      "category": {
+        "wrong-info": "wrong info",
+        "missing-info": "missing info",
+        "irrelevant": "irrelevant",
+        "tone": "tone",
+        "other": "other"
+      }
+    }
   },
   "graph": {
     "searchPlaceholder": "Filter nodes…",

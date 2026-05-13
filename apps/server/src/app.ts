@@ -17,6 +17,7 @@ import { chatSessionRoutes } from './routes/chat-sessions.js';
 import { ingestRoutes } from './routes/ingest.js';
 import { streamRoutes } from './routes/stream.js';
 import { queueRoutes } from './routes/queue.js';
+import { readerFeedbackRoutes } from './routes/reader-feedback.js';
 import { lintRoutes } from './routes/lint.js';
 import { glossaryRoutes } from './routes/glossary.js';
 import { graphRoutes } from './routes/graph.js';
@@ -145,6 +146,7 @@ export function createApp(trail: TrailDatabase): Hono<AppBindings> {
   app.route('/api/v1', ingestRoutes);
   app.route('/api/v1', streamRoutes);
   app.route('/api/v1', queueRoutes);
+  app.route('/api/v1', readerFeedbackRoutes);
   app.route('/api/v1', lintRoutes);
   app.route('/api/v1', glossaryRoutes);
   app.route('/api/v1', graphRoutes);
