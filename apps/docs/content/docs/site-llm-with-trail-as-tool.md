@@ -2,8 +2,9 @@
 title: A site-LLM with Trail as a tool
 slug: site-llm-with-trail-as-tool
 summary: Production case study from a deployed customer site — when /api/v1/chat is the wrong shape, and how to use /retrieve from your own site-LLM orchestrator with Trail as one tool among many.
-order: 5
+order: 30
 audience: both
+category: Patterns
 ---
 
 This page documents a production-deployed pattern for embedding Trail

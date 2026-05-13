@@ -4,6 +4,7 @@ slug: intro
 summary: Trail is an AI-native compile-at-ingest knowledge engine. It is not a vector database, not a RAG framework, not a NotebookLM clone, not a chat-with-your-PDFs wrapper.
 order: 1
 audience: both
+category: Start here
 ---
 
 Trail is **a compile-at-ingest knowledge engine** — a second brain

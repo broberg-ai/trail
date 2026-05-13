@@ -306,6 +306,21 @@ body[data-menu-open="true"] { overflow: hidden; }
   background: var(--bg);
   font-weight: 500;
 }
+/* F185 Phase 2 — category-grouped sidebar. .sidebar-group wraps a
+   heading + its links; .sidebar-heading is the all-caps label. */
+.sidebar-group { margin-top: 1.5rem; }
+.sidebar-group:first-of-type { margin-top: 0.5rem; }
+.sidebar-heading {
+  margin: 0 0 0.4rem;
+  padding: 0 1.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-40);
+}
+.sidebar-section { margin-bottom: 0.5rem; }
 
 .content {
   padding: 2.5rem 3rem 6rem;

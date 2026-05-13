@@ -4,6 +4,7 @@ slug: index
 summary: Trail is a compile-at-ingest second brain. Not RAG. POST candidates to the queue, get curated Neurons back, query via FTS5 + chat.
 order: 0
 audience: both
+category: Start here
 ---
 
 **Trail is a knowledge engine for software you build, not a tool you use.**

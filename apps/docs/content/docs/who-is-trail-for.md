@@ -2,8 +2,9 @@
 title: Who is Trail for?
 slug: who-is-trail-for
 summary: Concrete profiles of the people and teams who benefit most from Trail — from software engineers using AI agents, to reflexologists, physiotherapists, wellness coaches, researchers, consultants, and customer-facing teams.
-order: 4
+order: 20
 audience: human
+category: Audiences
 ---
 
 Trail is a general-purpose AI memory and second-brain platform. It is

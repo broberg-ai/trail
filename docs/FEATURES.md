@@ -364,7 +364,7 @@ Inspireret af Shuyi Wang's "Should You Actually Try Karpathy's LLM Wiki?" (2026-
 | F182 | [Memory Lifecycle: per-Neuron confidence + supersession + retention decay](features/F182-memory-lifecycle.md) | Planned (post-Sanne) | 2 | [plan](features/F182-memory-lifecycle.md) |
 | F183 | [Consolidation Tiers: working / episodic / semantic / procedural](features/F183-consolidation-tiers.md) | Planned (post-Sanne) | 2 | [plan](features/F183-consolidation-tiers.md) |
 | F184 | [Entity Layer + Knowledge Graph Queries](features/F184-entity-layer-graph-queries.md) | Planned (post-Sanne) | 3 | [plan](features/F184-entity-layer-graph-queries.md) |
-| F185 | [`docs.trailmem.com` (AI-friendly technical reference)](features/F185-trail-docs-site.md) | In Progress | 1 | [plan](features/F185-trail-docs-site.md) |
+| F185 | [`docs.trailmem.com` (AI-friendly technical reference)](features/F185-trail-docs-site.md) | Phase 1+2+3 Done · Phase 4+5 Planned | 1 | [plan](features/F185-trail-docs-site.md) |
 
 ---
 

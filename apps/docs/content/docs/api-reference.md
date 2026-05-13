@@ -2,8 +2,9 @@
 title: API reference
 slug: api-reference
 summary: Interactive OpenAPI 3.1 reference for Trail's external HTTP surface. Spec is hand-written from packages/shared/openapi.yaml and rendered with Redoc; download the raw YAML at /openapi-trail.yaml.
-order: 6
+order: 40
 audience: ai-agent
+category: API
 ---
 
 <!--

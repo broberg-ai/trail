@@ -4,6 +4,7 @@ slug: quick-start
 summary: Five-step external-app integration. Get a token, POST a candidate, see it land in the queue, approve it, query the resulting Neuron via search and chat.
 order: 3
 audience: both
+category: Start here
 ---
 
 This page walks an external app through the smallest end-to-end

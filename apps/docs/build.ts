@@ -104,20 +104,59 @@ interface SidebarItem {
 }
 
 function renderSidebar(items: SidebarItem[], currentSlug: string): string {
-  const sorted = [...items].sort((a, b) => a.order - b.order);
-  // Phase 1: flat list. Phase 2 will group by category here.
-  const links = sorted
-    .map((item) => {
-      const href = item.slug === "index" ? "/" : `/${item.slug}/`;
-      const active = item.slug === currentSlug ? ' class="active"' : "";
-      return `<li><a href="${href}"${active}>${escapeHtml(item.title)}</a></li>`;
-    })
-    .join("\n      ");
+  // F185 Phase 2: group by `category` frontmatter field. Items without
+  // a category render at the top under no header (kept for the index
+  // page that links to everything). Groups are ordered by the lowest
+  // `order` value within each — so curators can place a section first
+  // by giving its members low order numbers, without needing a
+  // separate category-order config.
+  const groups = new Map<string, SidebarItem[]>();
+  const ungrouped: SidebarItem[] = [];
+  for (const item of items) {
+    if (item.category) {
+      const arr = groups.get(item.category) ?? [];
+      arr.push(item);
+      groups.set(item.category, arr);
+    } else {
+      ungrouped.push(item);
+    }
+  }
+
+  const renderLink = (item: SidebarItem): string => {
+    const href = item.slug === "index" ? "/" : `/${item.slug}/`;
+    const active = item.slug === currentSlug ? ' class="active"' : "";
+    return `<li><a href="${href}"${active}>${escapeHtml(item.title)}</a></li>`;
+  };
+
+  // Order groups by min `order` of their members.
+  const groupEntries: Array<{ name: string; minOrder: number; items: SidebarItem[] }> = [];
+  for (const [name, arr] of groups.entries()) {
+    const sorted = [...arr].sort((a, b) => a.order - b.order);
+    const minOrder = sorted.length > 0 && sorted[0] ? sorted[0].order : Infinity;
+    groupEntries.push({ name, minOrder, items: sorted });
+  }
+  groupEntries.sort((a, b) => a.minOrder - b.minOrder);
+
+  const sections: string[] = [];
+
+  if (ungrouped.length > 0) {
+    const links = ungrouped
+      .sort((a, b) => a.order - b.order)
+      .map(renderLink)
+      .join("\n        ");
+    sections.push(`<ul class="sidebar-section">\n        ${links}\n      </ul>`);
+  }
+
+  for (const group of groupEntries) {
+    const links = group.items.map(renderLink).join("\n        ");
+    sections.push(
+      `<div class="sidebar-group">\n        <h3 class="sidebar-heading">${escapeHtml(group.name)}</h3>\n        <ul>\n          ${links}\n        </ul>\n      </div>`,
+    );
+  }
+
   return `<nav class="sidebar" aria-label="Documentation navigation">
-    <ul>
-      ${links}
-    </ul>
-  </nav>`;
+      ${sections.join("\n      ")}
+    </nav>`;
 }
 
 // ── Page template ──────────────────────────────────────────
