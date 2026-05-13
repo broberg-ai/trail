@@ -59,6 +59,14 @@ tags:
       `reader-feedback` candidate in the curator's queue with the
       original question + AI answer + citations bundled in. Closes
       the embed → curation loop.
+  - name: sources
+    description: |
+      Programmatic upload of Source files (PDFs, markdown, audio,
+      images, etc.) into a knowledge base. After upload, an ingest
+      pipeline compiles the source into Neurons. The right surface
+      for "push content from my own app into Trail" — Slack listeners,
+      webhook receivers, scheduled importers, the Eir widget's
+      attach-file flow.
   - name: search
     description: |
       FTS5 keyword search across Neurons + share-gated user-notes.
@@ -387,6 +395,95 @@ components:
             in the queue card so they can correlate feedback patterns
             with content.
 
+    DocumentSource:
+      type: object
+      required: [id, knowledgeBaseId, kind, filename, path, fileType, fileSize, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Internal document UUID. Use with `/documents/{docId}/ingest`.
+        knowledgeBaseId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [source, wiki]
+          description: Uploads always create `kind: source`. Compiled Neurons appear later as `kind: wiki`.
+        filename:
+          type: string
+        path:
+          type: string
+          description: Logical path in the KB's source tree (default "/").
+        fileType:
+          type: string
+          description: Extension without dot, lowercased (e.g. `pdf`, `md`, `mp3`).
+        fileSize:
+          type: integer
+          description: Bytes.
+        status:
+          type: string
+          enum: [pending, ready, processing, success, failed]
+          description: |
+            Source lifecycle:
+            - `pending` — uploaded; binary extractor (PDF, audio, ...) queued
+            - `ready` — text source uploaded + chunked; ready to compile
+            - `processing` — ingest pipeline running (extractor or LLM compile)
+            - `success` — fully compiled into Neurons; sits in KB
+            - `failed` — extractor or compile errored; see `errorMessage`
+        errorMessage:
+          type: string
+          nullable: true
+          description: Human-readable failure reason. Cleared on retry.
+        seq:
+          type: integer
+          description: Per-KB sequence number (`{kbPrefix}_{seq}`-style canonical id).
+        contentHash:
+          type: string
+          description: SHA-256 of the uploaded bytes. Used for dedup (F162).
+        tags:
+          type: string
+          nullable: true
+          description: Comma-separated tags inherited from the upload's metadata.
+        createdAt:
+          type: string
+          format: date-time
+
+    DuplicateSourceError:
+      type: object
+      required: [error, code, existingDocumentId]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          enum: [duplicate_source]
+        existingDocumentId:
+          type: string
+          format: uuid
+          description: ID of the previously-uploaded source with the same SHA-256.
+        existingFilename:
+          type: string
+        existingPath:
+          type: string
+        existingCreatedAt:
+          type: string
+          format: date-time
+        hint:
+          type: string
+          description: |
+            Always `"Append ?force=true to upload anyway as a separate Source."`
+            for predictable client handling.
+
+    IngestTriggerResponse:
+      type: object
+      required: [ok, message]
+      properties:
+        ok:
+          type: boolean
+        message:
+          type: string
+
     ReaderFeedbackResponse:
       type: object
       required: [candidateId, status, queueUrl]
@@ -624,6 +721,156 @@ paths:
           description: Missing or invalid bearer token.
         "404":
           description: KB not found.
+
+  /api/v1/knowledge-bases/{kbId}/documents/upload:
+    post:
+      summary: Upload a Source file (PDF, markdown, audio, image, ...)
+      operationId: uploadSource
+      tags: [sources]
+      description: |
+        Primary endpoint for **programmatically pushing Sources into
+        Trail** from your own app. Multipart form upload — server
+        stores the bytes, creates a `documents` row with `kind=source`,
+        and for **text formats** (md, txt, html, htm, csv) auto-triggers
+        the ingest pipeline immediately. For **binary formats** (pdf,
+        docx, audio, images), upload returns 201 fast and the
+        extractor + ingest queue handles compile asynchronously — poll
+        the document's `status` field to track progress.
+
+        **Supported extensions**: pdf, docx, pptx, doc, ppt, png, jpg,
+        jpeg, webp, gif, svg, wav, mp3, m4a, ogg, flac, aac, html, htm,
+        xlsx, xls, csv, md, txt. Max size 100 MB.
+
+        **Deduplication (F162)**: every upload's bytes get SHA-256
+        hashed before storage-write. If a Source with identical content
+        already exists in the same KB, the server returns 409 with
+        `code: "duplicate_source"` + the existing document's id. Append
+        `?force=true` to upload anyway as a separate Source (useful
+        when the same file legitimately appears under a different name
+        or path).
+
+        Sources written via this endpoint stamp
+        `metadata.connector="upload"` by default; pass a
+        `metadata.connector` in the form-data to override (e.g.
+        `"sanne-andersen-site"` or `"slack-attachments"`).
+      parameters:
+        - name: kbId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: KB slug or canonical UUID.
+        - name: force
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: |
+            Set to `true` to skip the duplicate-source check. Default
+            is dedup-enabled — a content-hash collision returns 409
+            without writing a new document row.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The Source file. Max 100 MB.
+                path:
+                  type: string
+                  default: "/"
+                  description: Logical path in the KB's source tree (organisational only).
+                metadata:
+                  type: string
+                  description: |
+                    JSON-stringified metadata blob. Recognised keys:
+                    `connector` (string, attribution id),
+                    `sourceUrl` (string, where this content originated),
+                    `tags` (array of strings, comma-joined into the Source row).
+                  example: '{"connector":"sanne-site","sourceUrl":"https://sanneandersen.dk/admin/upload/12","tags":["protocol","clinical"]}'
+      responses:
+        "201":
+          description: Source uploaded successfully. For text formats, ingest auto-triggered; for binary, extractor queued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentSource"
+        "400":
+          description: |
+            Invalid request. Common cases:
+            - `error: "No file provided"`
+            - `error: "File type .X not allowed"`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid bearer token.
+        "404":
+          description: KB not found for this tenant.
+        "409":
+          description: |
+            Duplicate source — identical content already exists in this
+            KB. Response body includes `existingDocumentId` so the client
+            can link to the existing row. Use `?force=true` to override.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DuplicateSourceError"
+        "413":
+          description: File exceeds 100 MB.
+
+  /api/v1/documents/{docId}/ingest:
+    post:
+      summary: Trigger (or re-trigger) the ingest pipeline on a Source
+      operationId: triggerIngest
+      tags: [sources]
+      description: |
+        Manually fire the ingest pipeline on a Source document. Useful
+        when:
+
+        - The auto-trigger failed and you want to retry after fixing
+          the source (e.g. the LLM rate-limited; try again now).
+        - You uploaded a binary that needed extraction first, the
+          extraction completed, and you want to push the compile.
+        - You're re-ingesting after changing the KB's ingest-model
+          (`/chat-settings` PATCH) to compile with a different LLM.
+
+        The pipeline runs async — endpoint returns 202 immediately;
+        the document's `status` will transition to `processing` and
+        then to `success` or `failed`. Poll via `/documents/{docId}` or
+        listen on the SSE event stream for completion.
+
+        Only Source documents (`kind=source`) can be ingested. Wiki
+        documents are output, not input.
+      parameters:
+        - name: docId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Internal document UUID from the upload response.
+      responses:
+        "202":
+          description: Ingest queued. Poll document.status for completion.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestTriggerResponse"
+        "400":
+          description: Document is not a Source (only `kind=source` can be ingested).
+        "401":
+          description: Missing or invalid bearer token.
+        "404":
+          description: Document not found in this tenant.
+        "409":
+          description: Already processing — wait for the current run to finish.
 
   /api/v1/knowledge-bases/{kbId}/reader-feedback:
     post:

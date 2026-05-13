@@ -26,7 +26,7 @@ practice-specific bits would change.
 > first if memory architecture itself is the question; this page
 > assumes that decision is made.
 
-## The choice — two valid integration shapes
+## The choice — three valid integration shapes
 
 There are two valid shapes for putting Trail behind a site's chat.
 Use the wrong one and you fight your own tooling.
@@ -66,6 +66,29 @@ Use Pattern C when:
 
 The reflexology practice's deployment is Pattern C. Everything below
 is what that looks like in production.
+
+### Pattern D — programmatic source-upload (writing INTO Trail)
+
+The third valid shape, orthogonal to A vs C: your app **writes
+content INTO Trail** (rather than reading from it). Upload PDFs,
+markdown, audio, images via `POST /api/v1/knowledge-bases/{kbId}/
+documents/upload` — Trail's ingest pipeline compiles them into
+Neurons. See [Concepts: Sources](/concepts-sources/) for the full
+lifecycle.
+
+Use Pattern D when:
+
+- Your app's users attach files that should land in Trail (a CMS
+  upload widget, an email-attachment listener, a Slack-file-bot).
+- You have a scheduled job that re-imports content from a third
+  party (Notion sync, GitHub repo watcher, RSS feed compiler).
+- The practitioner's site has an admin where they drop files that
+  should populate the chat KB without leaving the site.
+
+Pattern D pairs naturally with both A and C — uploads write to the
+KB; A or C reads from it. Most real-world deployments use exactly
+this combination: Pattern D for content authoring, Pattern A or C
+for user-facing chat.
 
 ## The pattern in 60 seconds
 

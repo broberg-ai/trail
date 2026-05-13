@@ -188,7 +188,47 @@ The chat endpoint:
 - Returns synthesised answer + an array of citations resolving to
   Neuron URLs in the admin
 
-## 5. Read a single Neuron
+## 5. Upload a Source file (PDF, markdown, audio, image, ...)
+
+For programmatic Source-upload — e.g. your app's "attach file" flow
+or a scheduled importer — POST multipart-form:
+
+```bash
+curl -X POST "${TRAIL_API_BASE}/api/v1/knowledge-bases/${TRAIL_KB}/documents/upload" \
+  -H "Authorization: Bearer ${TRAIL_TOKEN}" \
+  -F "file=@./protocol.pdf" \
+  -F 'path=/protocols' \
+  -F 'metadata={"connector":"myapp","sourceUrl":"https://internal.example.com/12","tags":["protocol"]}'
+```
+
+Response (HTTP 201):
+
+```json
+{
+  "id": "doc_...",
+  "kind": "source",
+  "filename": "protocol.pdf",
+  "fileType": "pdf",
+  "status": "pending",
+  "seq": 47,
+  "contentHash": "9f8e7d6c..."
+}
+```
+
+For text formats (md, txt, csv, html), the ingest pipeline triggers
+automatically and the Source compiles into Neurons within seconds.
+For binary formats (PDF, audio, images), upload returns immediately
+and the extractor + compile run async — poll `document.status` to
+track `pending → ready → processing → success`.
+
+**Duplicate handling (F162)**: bytes-identical re-uploads return
+HTTP 409 with `code: "duplicate_source"` + the existing document's
+id. Append `?force=true` to upload anyway.
+
+Full lifecycle + supported formats + resumable chunked-upload
+protocol in [Concepts: Sources](/concepts-sources/).
+
+## 6. Read a single Neuron
 
 If you have a seqID and want the raw Neuron:
 
