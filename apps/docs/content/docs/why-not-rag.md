@@ -67,7 +67,7 @@ replaced by a one-time compile step per source.
 | Cross-references | None | Bidirectional typed edges, rendered as a graph |
 | Query | Embed → top-K → paste into prompt | FTS5 + LIKE on user-notes → curated Neurons → cited synthesis |
 | Cost | Scales with `queries × tokens` | Scales with `sources ingested × tokens`, not with traffic |
-| Drift on model swap | Re-embed entire store | Pluggable backends (F149); change the ingest model, future ingests use it, existing Neurons unaffected |
+| Drift on model swap | Re-embed entire store | Pluggable backends; change the ingest model, future ingests use it, existing Neurons unaffected |
 
 ## When RAG **is** the right answer
 

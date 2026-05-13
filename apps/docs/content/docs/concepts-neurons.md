@@ -49,14 +49,14 @@ Five things live in every Neuron:
    tables, code blocks.
 3. **Wiki-links** — `[[Other Neuron]]` references that resolve via
    bidirectional backlinks. Typed edges are supported via
-   `[[cites:Other]]`, `[[contradicts:Other]]`, etc. (F137).
+   `[[cites:Other]]`, `[[contradicts:Other]]`, etc.
 4. **Claim anchors** — `{#claim-XXXXXXXX}` markers injected
    post-compile that give each named claim a stable identifier
-   surviving edits + recompiles (F22). Used for cross-Neuron citation
+   surviving edits + recompiles. Used for cross-Neuron citation
    precision.
 5. **User notes** — optional curator reflections per Neuron, stored
    separately. Private by default; opt-in shareable into chat + search
-   (F112).
+
 
 ## The seqId — canonical handle
 
@@ -85,7 +85,7 @@ needs to cite a Neuron back into Trail — newer than the internal
 `documentId` UUID, more stable than wiki-link slugs, more readable
 than hashes.
 
-See F145 in the [trail repository](https://github.com/broberg-ai/trail)
+Implementation reference in the [trail repository](https://github.com/broberg-ai/trail)
 for the implementation.
 
 ## Versions + supersession
@@ -100,11 +100,11 @@ Two-way edits that warrant explicit superseding:
   `version_X` row in history.
 - **Auto-supersession from a contradiction-lint finding** — when the
   contradiction detector concludes that a newer Neuron supersedes an
-  older one, a `supersedes` edge is added (F137 typed edges) and the
-  older Neuron is dimmed in the reader graph (F139 confidence decay).
+  older one, a `supersedes` edge is added (typed edges) and the
+  older Neuron is dimmed in the reader graph (confidence decay).
 
 Time-travel queries against any past `version` are a Phase 3
-roadmap-item (F74 in this repo's roadmap); the event log already
+roadmap-item (in this repo's roadmap); the event log already
 contains the data.
 
 ## Bidirectional, typed references
@@ -117,15 +117,16 @@ overriding the [[ticket-prioritisation policy]].
 ```
 
 When the Neuron compiles, the link-resolver finds the target Neurons
-(F148 link-checker — three layers of fuzzy + slug-normalised matching
-so DA/EN drift like `og`↔`and` doesn't break links).
+via a three-layer link-checker: fuzzy + slug-normalised matching that
+folds DA/EN drift like `og`↔`and` so common bilingual links don't
+break.
 
 Both directions are stored:
 
 - `document_references` — outbound (from this Neuron to others).
 - `wiki_backlinks` — inbound (which Neurons cite this one).
 
-Edge types (F137):
+Edge types:
 
 | Type | Meaning |
 |---|---|
@@ -140,15 +141,17 @@ Edge types (F137):
 Syntax: `[[cites:Other Neuron]]`, default-type is implicit `cites`
 when you write `[[Other Neuron]]` without a prefix.
 
-The graph that emerges renders in the admin's
-[F99 Neuron Graph](https://github.com/broberg-ai/trail/blob/main/docs/features/F99-neuron-graph.md)
-— Sigma + ForceAtlas2 layout with edge-type colors + legend.
+The graph that emerges renders in the admin's reader as a
+Sigma.js + ForceAtlas2 force-directed layout — edges coloured by
+type (cites in grey, contradicts in red, supersedes in amber, etc.)
+with a legend-chip row so the curator can read the structure at a
+glance.
 
 ## Audience tags
 
 Each Neuron can carry an `audience` array in frontmatter — `public`,
 `tool`, `curator`, or custom strings the deployer defines. Used by
-`/api/v1/knowledge-bases/{kbId}/retrieve` (F160) to filter the
+`/api/v1/knowledge-bases/{kbId}/retrieve` to filter the
 retrieve pool:
 
 - `audience: tool` (default for Bearer auth) — sees `tool` + `public`
@@ -162,7 +165,7 @@ sub-audience filtering you need.
 ## Confidence + decay
 
 Every Neuron has an implicit confidence in [0, 1] that decays over
-time (F139, generalised to all Neuron-types in the upcoming F182):
+time (generalised across all Neuron-types in upcoming releases):
 
 - Pin a Neuron explicitly → confidence held at 1.0.
 - Don't touch a Neuron for 365 days → confidence drifts toward 0.1.

@@ -147,7 +147,7 @@ Response:
 
 Search uses **FTS5** for full-text matching, plus a substring scan
 of opt-in user-notes (the curator's "your take" reflections that
-extend the Neuron's compiled content; see F112).
+extend the Neuron's compiled content).
 
 ## 4. Ask a question via chat
 
@@ -278,5 +278,5 @@ upgrade to plan. Trail handles the compile-at-ingest middle.
 ## Where to go next
 
 - **Want to see all endpoints?** → [API reference](/api-reference/) (Phase 3)
-- **Building an MCP-based AI agent?** → MCP integration guide (coming in Phase 4 of [F185](https://github.com/broberg-ai/trail/blob/main/docs/features/F185-trail-docs-site.md))
+- **Building an MCP-based AI agent?** → Dedicated MCP integration guide coming soon
 - **Designing a connector?** → [Concepts: connectors](/concepts-connectors/)

@@ -29,7 +29,7 @@ FTS5 indices exist on three tables, kept in sync by triggers:
 |---|---|---|
 | `documents_fts` | `title`, `content`, `header_breadcrumb` | Whole-Neuron matching, what `/search` consumes. |
 | `chunks_fts` | `content`, `header_breadcrumb` | Sub-section matching, what `/retrieve` uses to find the most relevant ~500-character spans. |
-| (`documents.user_note`) | LIKE-scanned at query time, not FTS-indexed | Curator's "Din tanke" reflections (F112). Substring matching across shared notes only. |
+| (`documents.user_note`) | LIKE-scanned at query time, not FTS-indexed | Curator's "Din tanke" reflections. Substring matching across shared notes only. |
 
 Chunks are split on heading boundaries during ingest, with overlap
 control for long sections. Each chunk knows its parent Neuron + its
@@ -50,7 +50,7 @@ A higher rank score means a better match. `/search` and `/retrieve`
 both return rank values in their responses; you can sort or filter
 client-side if you want.
 
-## The audience filter (F160)
+## The audience filter
 
 Every Neuron carries an `audience` array in its frontmatter. Bearer
 tokens carry an `authType` claim (`tool`, `public`, or `curator`).
@@ -67,7 +67,7 @@ This is enforced at the retrieve layer; the FTS index itself is not
 audience-aware. The engine fetches `topK * 3` candidates from FTS,
 then filters down to `topK` after applying audience + tag rules.
 
-## User-note search (F112)
+## User-note search
 
 Curators can attach a personal "Din tanke" reflection to any Neuron.
 By default these are **private** — they never appear in chat
@@ -153,7 +153,7 @@ HTML without further processing.
 
 ## Claim-anchor stripping
 
-Neurons compile with `{#claim-XXXXXXXX}` markers (F22) for
+Neurons compile with `{#claim-XXXXXXXX}` markers for
 cross-Neuron citation precision. These are **stripped before output**:
 
 - `/retrieve`'s `formattedContext` — no markers (would confuse the

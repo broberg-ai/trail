@@ -11,7 +11,7 @@ A **connector** is the named ingestion pathway that produced a
 candidate. The connector id rides on `metadata.connector` for every
 candidate; the system surfaces it in the queue UI (chip filter), in
 the Neuron reader (`Created via …` badge), and in lint detectors
-(orphan-detection skips Neurons from external connectors per F98).
+(orphan-detection skips Neurons from external connectors).
 
 Knowing the connector model is the difference between a clean KB
 where every Neuron's origin is traceable and a soup of mystery rows.
@@ -34,7 +34,7 @@ write site. No schema migration, no DB change.
 | `buddy` | A `buddy.trail_save(...)` call routed via the external-feed transport. |
 | `chat` | The admin chat panel's "save this answer as a Neuron" flow. |
 | `lint` | The orphan / contradiction / stale detector emits a finding. |
-| `curator` | Direct edit via the Neuron editor (F91). |
+| `curator` | Direct edit via the Neuron editor. |
 | `api` | A generic external app calling the REST API. |
 
 ### Roadmap connectors
@@ -68,7 +68,7 @@ The Neuron reader shows a "Skabt via *connector*"-badge with a small
 icon. Curators can answer "where did this come from?" without
 spelunking the wiki_events log.
 
-### 3. Orphan-lint awareness (F98)
+### 3. Orphan-lint awareness
 
 The orphan-Neuron detector — "this Neuron has no inbound `[[links]]`
 and no `document_references` rows" — skips Neurons whose originating
@@ -103,7 +103,7 @@ Four paths, ranked by precedence:
    `mcp:claude-code`; Cursor's MCP config sets `mcp:cursor`. Without
    the env, it falls through to `mcp`.
 3. **`metadata.source` legacy field** — older candidates that
-   predate F95 have a `source` field that `stampConnector()` in
+   predate the connector registry — have a `source` field that `stampConnector()` in
    `packages/core/src/queue/candidates.ts` infers a connector id
    from.
 4. **`kind` heuristic** — when nothing else is set,

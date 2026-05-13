@@ -34,14 +34,14 @@ In the deployed Fly fleet:
 
 - Each tenant lives on exactly one engine (`trail-engine-001`,
   `trail-engine-002`, ...).
-- The router (`engine.trailmem.com`, F170 — Phase 2 once fleet ≥ 2)
+- The router (`engine.trailmem.com`, Phase 2 once fleet ≥ 2)
   resolves bearer-token → tenant → engine.
 - Each tenant's `trail.db` lives on that engine's persistent volume.
 
 ## Slugs
 
 Every KB has a stable slug — kebab-case, unique per tenant — and a
-canonical UUID. Most API surfaces accept both interchangeably (F135).
+canonical UUID. Most API surfaces accept both interchangeably.
 The slug shows up in URLs and bearer-token scopes; the UUID is
 internal but exposed in JSON responses where needed:
 
@@ -64,8 +64,8 @@ Each KB has its own per-KB settings, configured in the admin UI under
 
 Two-letter ISO code (`da`, `en`, `de`, `sv`, `no`, ...) that drives:
 
-- The chat system prompt's "answer in this language" directive (F160).
-- The link-checker's `foldBilingual` heuristic (F148) — knows `og` ≈
+- The chat system prompt's "answer in this language" directive.
+- The link-checker's `foldBilingual` heuristic — knows `og` ≈
   `and`, `i` ≈ `of` for DA↔EN drift.
 - The ingest pipeline's compile-prompt language hint.
 - The admin's reader-pane prose translation toggle.
@@ -73,7 +73,7 @@ Two-letter ISO code (`da`, `en`, `de`, `sv`, `no`, ...) that drives:
 ### Persona
 
 Optional per-KB system-prompt override for tool + public audiences
-(F160). Curator persona is global to keep admin tone consistent; the
+. Curator persona is global to keep admin tone consistent; the
 tool + public personas can be specialised per KB so a customer-facing
 chat sounds different from a professional-tool chat. Pattern C
 deployments don't usually need this (the site sets its own system
@@ -87,11 +87,14 @@ prompt) — Pattern A deployments lean on it heavily.
   `glm-4.6`.
 - `ingest_fallback_chain`: ordered list — on model failure, the
   runner skips to the next entry mid-job, keeping already-written
-  Neurons (F149).
+  Neurons.
 
-The admin's [F152 model-switcher](https://github.com/broberg-ai/trail/blob/main/docs/features/F152-runtime-model-switcher-ui.md)
-flips these live without redeploy. F151 cost-dashboard tells you
-which models are paying their way per KB.
+The admin's per-KB **Settings → Trail** panel includes a model-
+switcher dropdown that flips these live without a redeploy, plus a
+preview line that renders the effective fallback-chain as it would
+run today (e.g. `Flash → GLM → Qwen → Sonnet API`). The cost +
+quality dashboard at `/kb/:kbId/cost` shows which models are
+actually paying their way per KB.
 
 ### Auto-approval policy
 
@@ -101,13 +104,13 @@ candidates skip curator review. See
 
 ### Lint schedule
 
-Per-KB cadence (1–90 days, weekly default — F176) for the
+Per-KB cadence (1–90 days, weekly default) for the
 orphan/stale/contradiction lint pass. KB with rapid-changing
 knowledge: shorter cadence. Stable archival KB: monthly.
 
 ### Backup retention
 
-Continuous backups to Cloudflare R2 (F153). 30-day retention by
+Continuous backups to Cloudflare R2. 30-day retention by
 default; curator can pull a `.vacuum.tar.gz` snapshot via the admin's
 backup health card.
 
@@ -116,14 +119,14 @@ backup health card.
 A KB is **not**:
 
 - **A schema-controlled database.** Neurons are markdown; the shape
-  varies per Neuron. The F140 schema vocabulary system layers
+  varies per Neuron. The schema vocabulary system layers
   optional structure on top (per-KB entity types, attribute schemas),
   but the underlying store stays flexible.
 - **A multi-tenant store.** One KB = one tenant. Cross-tenant
   isolation is enforced at the data layer (`WHERE tenant_id = ?` on
   every query), not just at the API.
 - **A document-storage bucket.** Uploaded source files live in
-  storage (Fly volume or Tigris S3 per F173); the KB holds the
+  storage (Fly volume or Tigris S3); the KB holds the
   compiled Neurons + provenance references back to the sources.
 - **Multilingual.** A KB has one canonical language. Multilingual
   *sites* drive their two-language navigation by reading from

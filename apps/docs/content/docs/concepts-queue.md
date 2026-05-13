@@ -32,7 +32,7 @@ POST /api/v1/queue/candidates  ──►  candidate (status=pending)
                                           │       ├─► [Dismiss] → status=dismissed
                                           │       └─► [Reopen]  → back to pending
                                           │
-                                          └─► Auto-approval policy (F19)
+                                          └─► Auto-approval policy
                                                   │
                                                   ├─► Confidence ≥ threshold + clean action zone
                                                   │     → auto-approve
@@ -53,7 +53,7 @@ ones external apps emit most often:
 | `kind` | When to use |
 |---|---|
 | `chat-answer` | A Q&A pair produced by a user-facing chat. The user asked, the AI answered, the answer is good enough that you want it canonicalised into the KB. Most common kind for site-LLM Pattern C deployments. |
-| `user-correction` | A diff against an existing Neuron. Supply the target seqId in `metadata.targetNeuron`. The curator sees a side-by-side diff (F20). |
+| `user-correction` | A diff against an existing Neuron. Supply the target seqId in `metadata.targetNeuron`. The curator sees a side-by-side diff. |
 | `external-feed` | Generic "this came from outside Trail" — use when none of the more specific kinds fit. Slack listeners, webhook receivers, CI integrations. |
 | `reader-feedback` | Flagged from the reader UI by the curator themselves. |
 | `ingest-summary` | Internal — emitted by Trail's own ingest pipeline when it compiles a source. You don't usually emit these from external apps. |
@@ -96,32 +96,32 @@ The admin's queue panel (`/kb/:kbId/queue`) shows pending candidates
 as cards. For each:
 
 - **Title** + **content preview** (markdown rendered).
-- **Suggested action** — a small LLM-pass (F96 Action Recommender)
+- **Suggested action** — a small LLM-pass (Action Recommender)
   proposes whether this should be approved as a new Neuron, merged
   into an existing one, or dismissed. One-click accept.
 - **Diff** — for `user-correction` kind, side-by-side before/after
-  (F20).
+
 - **Action menu** — Approve, Dismiss (with reason), Reopen.
 - **Connector chip** — filter by source ingestion path.
 - **Tag chips** — auto-suggested tags from the KB's vocabulary
-  (F92).
+
 
 Bulk operations are available: "Accept all recommended actions" runs
 the recommender's choice across all pending candidates.
 
-## Auto-approval policy (F19)
+## Auto-approval policy
 
 Most curators don't want to review *everything*. The auto-approval
 policy gates which candidates skip curator review:
 
 - **By confidence threshold** — if the candidate carries a
   `confidence` ≥ X (set per-KB), auto-approve.
-- **By action zone (F174, Phase 2)** — `green` zone candidates
+- **By action zone (Phase 2)** — `green` zone candidates
   auto-approve, `yellow` requires curator review, `red` requires
   curator + a flagged warning.
 - **By connector** — some connectors (e.g. `lint`) auto-approve
   because they're already running curated logic.
-- **By Solo Mode (F106)** — single-curator KBs can enable a more
+- **By Solo Mode** — single-curator KBs can enable a more
   permissive default.
 
 A candidate that fails the policy stays `pending` until a curator

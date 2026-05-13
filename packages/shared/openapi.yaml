@@ -19,9 +19,9 @@ info:
 
     **Source of truth.** This spec is hand-written from
     `packages/shared/src/schemas.ts` and the route handlers in
-    `apps/server/src/routes/*.ts` in the trail repository. Phase 5 of
-    F185 will add a CI contract test that diffs live routes against the
-    spec.
+    `apps/server/src/routes/*.ts` in the trail repository. A future
+    docs phase will add a CI contract test that diffs live routes
+    against the spec.
   contact:
     name: Trail
     url: https://docs.trailmem.com/
@@ -120,7 +120,7 @@ components:
           type: string
           description: |
             KB slug or canonical UUID. Both are accepted; slug is
-            normalised server-side via F135.
+            normalised server-side .
           examples:
             - my-product-docs
             - 01H5...
@@ -154,7 +154,7 @@ components:
           nullable: true
           description: |
             Optional confidence score [0, 1] the writer attaches. Feeds
-            the auto-approval policy (F19) when set.
+            the auto-approval policy when set.
         impactEstimate:
           type: integer
           nullable: true
@@ -227,7 +227,7 @@ components:
           type: string
           pattern: '^[a-z0-9-]+_[0-9]{8}$'
           description: |
-            Canonical per-KB sequence id (F145).
+            Canonical per-KB sequence id.
             Format `{kbPrefix}_{8-digit-seq}`, stable across edits and
             recompiles. The right handle to use when citing back to a
             Neuron from your own UI.
@@ -286,7 +286,7 @@ components:
         sessionId:
           type: string
           description: |
-            Optional chat-session id (F144). When omitted + a KB is
+            Optional chat-session id. When omitted + a KB is
             specified, the server creates a new session and echoes its
             id back so subsequent turns can append.
         audience:
@@ -436,7 +436,7 @@ paths:
 
         After approval, the candidate becomes a Neuron with a stable
         `seqId` like `{kbPrefix}_{8-digit-seq}`. The KB's auto-approval
-        policy (F19) decides whether curator review is required.
+        policy decides whether curator review is required.
       requestBody:
         required: true
         content:
@@ -549,7 +549,7 @@ paths:
       description: |
         Full-text search using SQLite FTS5. Matches against title +
         body + headers. Also matches opt-in user-notes via a substring
-        scan (F112). Returns up to 50 documents by default, ranked by
+        scan. Returns up to 50 documents by default, ranked by
         BM25.
       parameters:
         - name: kbId
