@@ -39,6 +39,12 @@ const FrontmatterSchema = z.object({
    * "ai-agent" so planning AIs know to read it first.
    */
   audience: z.enum(["human", "ai-agent", "both"]).default("both"),
+  /**
+   * Render this page without the sidebar, using the full content width.
+   * Used by /api-reference/ so Redoc's own 2-column layout has breathing
+   * room. Navigation back to docs lives in the top-nav ("Docs" link).
+   */
+  fullWidth: z.boolean().optional(),
 });
 
 interface DocFrontmatter extends z.infer<typeof FrontmatterSchema> {}
@@ -234,7 +240,15 @@ function renderPage(opts: {
     ${topNavLinks}
     <a href="https://github.com/broberg-ai/trail">GitHub</a>
   </div>
-  <div class="layout">
+  ${doc.fullWidth
+    ? `<main class="content-full">
+      <article>
+        <div class="doc-body">
+          ${doc.body}
+        </div>
+      </article>
+    </main>`
+    : `<div class="layout">
     ${sidebar}
     <main class="content">
       <article>
@@ -254,7 +268,7 @@ function renderPage(opts: {
         </p>
       </footer>
     </main>
-  </div>
+  </div>`}
   <script>
     (function () {
       var btn = document.querySelector('.nav-toggle');

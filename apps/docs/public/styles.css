@@ -359,6 +359,19 @@ body[data-menu-open="true"] { overflow: hidden; }
   .content { padding: 1.75rem 1.25rem 4rem; }
 }
 
+/* Full-width main for pages with `fullWidth: true` in frontmatter
+   (e.g. /api-reference/ where Redoc has its own 2-column layout).
+   No sidebar; main spans browser-width inside a soft outer margin. */
+.content-full {
+  display: block;
+  width: 100%;
+  max-width: none;
+  padding: 1rem 1.5rem 2rem;
+}
+@media (max-width: 720px) {
+  .content-full { padding: 0.75rem 0.5rem 1.5rem; }
+}
+
 .doc-header h1 {
   font-size: clamp(1.75rem, 3vw, 2.25rem);
   font-weight: 700;

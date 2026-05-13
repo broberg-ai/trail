@@ -5,6 +5,7 @@ summary: Interactive OpenAPI 3.1 reference for Trail's external HTTP surface. Sp
 order: 40
 audience: ai-agent
 category: API
+fullWidth: true
 ---
 
 <!--
@@ -34,17 +35,14 @@ The spec is hand-written from `packages/shared/openapi.yaml` in the
 Direct YAML download: [`openapi-trail.yaml`](/openapi-trail.yaml).
 
 <style>
-  /* Redoc has its own 2-column layout. Widen .content on this page
-     only — sidebar still visible, but main column gets ~1080px max
-     so Redoc's "method panel + sample panel" both fit. */
-  .layout > .content { max-width: 1100px; padding-right: 1.5rem; }
-  @media (max-width: 720px) { .layout > .content { max-width: 100%; } }
+  /* Page is rendered with fullWidth: true so .content-full spans
+     browser width. Redoc just needs to be display:block and have
+     a sensible min-height before its internal layout kicks in. */
   redoc {
     display: block;
-    margin: 1.5rem -1rem 2rem;
-    min-height: 80vh;
+    margin: 1rem 0 2rem;
+    min-height: 85vh;
   }
-  /* Redoc's loading-flash on dark backgrounds is jarring — fade in. */
   redoc:empty { opacity: 0; transition: opacity 0.3s; }
   redoc:not(:empty) { opacity: 1; }
 </style>
