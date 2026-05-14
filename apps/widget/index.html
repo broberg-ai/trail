@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>trail-chat widget — demo</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+        max-width: 800px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        background: #faf9f5;
+        color: #1a1715;
+      }
+      h1 {
+        font-size: 1.5rem;
+        margin-top: 0;
+      }
+      .note {
+        background: rgba(232, 168, 124, 0.08);
+        border-left: 3px solid #c97a1a;
+        padding: 0.75rem 1rem;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      .controls {
+        margin: 1rem 0;
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+      }
+      label {
+        font-size: 13px;
+      }
+      input {
+        font: inherit;
+        padding: 0.25rem 0.5rem;
+        border: 1px solid rgba(0, 0, 0, 0.15);
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>trail-chat widget — demo</h1>
+    <div class="note">
+      <strong>Local dev</strong>: this page hosts the widget in
+      <code>vite dev</code> mode for visual iteration. The <code>api</code>
+      attribute below points at your own proxy endpoint. For real
+      embedding, host
+      <code>https://widget.trailmem.com/v1/trail-chat.js</code>.
+    </div>
+
+    <div class="controls">
+      <label>api: <input id="api" value="/api/eir" /></label>
+      <label>theme: <input id="theme" value="auto" /></label>
+    </div>
+
+    <trail-chat api="/api/eir" theme="auto"></trail-chat>
+
+    <script type="module" src="/src/trail-chat.ts"></script>
+    <script>
+      const apiIn = document.getElementById('api');
+      const themeIn = document.getElementById('theme');
+      const w = document.querySelector('trail-chat');
+      apiIn.addEventListener('change', () => w.setAttribute('api', apiIn.value));
+      themeIn.addEventListener('change', () => w.setAttribute('theme', themeIn.value));
+      w.addEventListener('trail-chat:ready', () => console.log('widget ready'));
+      w.addEventListener('trail-chat:answer', (e) => console.log('answer', e.detail));
+      w.addEventListener('trail-chat:error', (e) => console.error('error', e.detail));
+    </script>
+  </body>
+</html>

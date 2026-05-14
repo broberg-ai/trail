@@ -1,0 +1,43 @@
+name: Widget auto-deploy
+
+# F29 — auto-deploy trail-widget on push to main when the widget
+# source or build/deploy config changes. Narrow trigger paths so
+# unrelated commits don't rebuild the bundle.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/widget/src/**'
+      - 'apps/widget/public/**'
+      - 'apps/widget/index.html'
+      - 'apps/widget/vite.config.ts'
+      - 'apps/widget/tsconfig.json'
+      - 'apps/widget/package.json'
+      - 'apps/widget/Dockerfile'
+      - 'apps/widget/nginx.conf'
+      - 'apps/widget/fly.toml'
+      - '.github/workflows/widget-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install widget dependencies
+        working-directory: apps/widget
+        run: npm install --no-package-lock
+      - name: Build widget bundle
+        working-directory: apps/widget
+        run: npm run build
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy to Fly
+        working-directory: apps/widget
+        run: flyctl deploy --remote-only --config fly.toml .
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

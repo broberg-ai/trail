@@ -48,12 +48,12 @@ Status reflects the engine (this repo). Landing-site and CMS-adapter work lives 
 | ~~F26~~ | ~~[HTML / Web Clipper Ingest](#f26-web-clipper)~~ — superseded by F111 | Superseded | 1 | [plan](features/F26-html-web-clipper-ingest.md) |
 | F27 | [Pluggable Vision Adapter](#f27-vision-adapter) | Done (audit 2026-05-13) | 1 | [plan](features/F27-pluggable-vision-adapter.md) |
 | F28 | [Pluggable Pipeline Interface](#f28-pipeline-interface) | Done | 1 | [features/F28-pipeline-interface.md](features/F28-pipeline-interface.md) |
-| F29 | [`<trail-chat>` Embeddable Widget (Lit)](#f29-trail-chat-widget) | Planned | 1 | [features/F29-trail-chat-widget.md](features/F29-trail-chat-widget.md) |
+| F29 | [`<trail-chat>` Embeddable Widget (Lit)](#f29-trail-chat-widget) | Done 2026-05-14 | 1 | [features/F29-trail-chat-widget.md](features/F29-trail-chat-widget.md) |
 | F30 | [Chat Citations Render (`[[wiki-links]]` → `<a>`)](#f30-chat-citations) | Done | 1 | [plan](features/F30-chat-citations-render.md) |
 | F31 | [Reader Feedback Button → Queue](#f31-reader-feedback) | Done 2026-05-13 | 1 | [plan](features/F31-reader-feedback.md) |
 | F32 | [Lint Pass (Orphans / Gaps / Contradictions)](#f32-lint-pass) | Done | 1 | [plan](features/F32-lint-pass.md) |
 | F34 | [Landing Site Deploy (`trailmem.com` + `trail.broberg.ai`)](#f34-landing-deploy) | Done | 1 | [features/F34-landing-deploy.md](features/F34-landing-deploy.md) |
-| F36 | [`docs.trailmem.com` as a Trail Brain](#f36-dogfooding-wiki) | Planned | 1 | [features/F36-dogfooding-wiki.md](features/F36-dogfooding-wiki.md) |
+| F36 | [`docs.trailmem.com` as a Trail Brain](#f36-dogfooding-wiki) | ~~Dropped 2026-05-14~~ | 1 | [features/F36-dogfooding-wiki.md](features/F36-dogfooding-wiki.md) |
 | F38 | [Cross-Trail Search + Chat (Frontpage)](#f38-cross-trail-search) | Planned | 2 | [features/F38-cross-trail-search.md](features/F38-cross-trail-search.md) |
 | F39 | [Claude Code Session → Trail Ingest](#f39-cc-session-ingest) | Done | 1 | [features/F39-cc-session-ingest.md](features/F39-cc-session-ingest.md) |
 | F40 | [Multi-Tenancy on `app.trailmem.com` (libSQL embedded per-tenant)](#f40-multi-tenancy) | Done (audit 2026-05-13) | 1/2 | [features/F40-multi-tenancy.md](features/F40-multi-tenancy.md) |

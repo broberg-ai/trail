@@ -2,5 +2,6 @@ packages:
   - 'apps/*'
   - '!apps/landing'
   - '!apps/docs'
+  - '!apps/widget'
   - 'packages/*'
   - 'adapters/*'

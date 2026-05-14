@@ -1,0 +1,22 @@
+# F29 — Trail chat widget bundle (widget.trailmem.com).
+# Region: arn (Stockholm), org: broberg-ai (per CLAUDE.md global rule).
+# Hosts the v1/trail-chat.js ESM bundle + a tiny landing page.
+
+app = "trail-widget"
+primary_region = "arn"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256

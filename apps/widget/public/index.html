@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>trail · widget</title>
+    <meta name="theme-color" content="#FAF9F5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#17140F" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <style>
+      :root {
+        --bg: #faf9f5;
+        --fg: #1a1715;
+        --fg-muted: rgba(26, 23, 21, 0.7);
+        --fg-subtle: rgba(26, 23, 21, 0.4);
+        --accent: #c97a1a;
+        --border: rgba(26, 23, 21, 0.1);
+        --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #17140f;
+          --fg: #f5f1ea;
+          --fg-muted: rgba(245, 241, 234, 0.7);
+          --fg-subtle: rgba(245, 241, 234, 0.4);
+          --accent: #e8a87c;
+          --border: rgba(245, 241, 234, 0.1);
+        }
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+        max-width: 760px;
+        margin: 3rem auto;
+        padding: 0 1.5rem;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.55;
+      }
+      h1 {
+        font-family: var(--font-mono);
+        font-size: 1.6rem;
+        letter-spacing: -0.02em;
+      }
+      h2 {
+        font-size: 1.2rem;
+        margin-top: 2.5rem;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 0.35rem;
+      }
+      a {
+        color: var(--accent);
+      }
+      code,
+      pre {
+        font-family: var(--font-mono);
+        font-size: 13px;
+      }
+      pre {
+        background: rgba(26, 23, 21, 0.04);
+        padding: 1rem 1.15rem;
+        border-radius: 8px;
+        overflow-x: auto;
+      }
+      @media (prefers-color-scheme: dark) {
+        pre {
+          background: rgba(245, 241, 234, 0.04);
+        }
+      }
+      .muted {
+        color: var(--fg-muted);
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>trail · widget</h1>
+    <p class="muted">
+      ESM bundle for embedding Trail-grounded chat on any HTML page.
+      One script tag, one custom element, drop-in.
+    </p>
+
+    <h2>Embed</h2>
+    <pre><code>&lt;script type="module"
+  src="https://widget.trailmem.com/v1/trail-chat.js"&gt;&lt;/script&gt;
+&lt;trail-chat api="/api/chat-proxy" theme="auto"&gt;&lt;/trail-chat&gt;</code></pre>
+
+    <p>
+      The <code>api</code> attribute points at your own proxy that
+      forwards to <code>engine.trailmem.com/api/v1/chat</code> with the
+      bearer token attached server-side. Full setup guide:
+      <a href="https://docs.trailmem.com/widget/">docs.trailmem.com/widget</a>.
+    </p>
+
+    <h2>Versions</h2>
+    <ul>
+      <li><a href="/v1/trail-chat.js">/v1/trail-chat.js</a> — current stable</li>
+    </ul>
+
+    <h2>Source</h2>
+    <p>
+      <a href="https://github.com/broberg-ai/trail/tree/main/apps/widget"
+        >github.com/broberg-ai/trail/apps/widget</a
+      >
+    </p>
+  </body>
+</html>
