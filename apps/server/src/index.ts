@@ -112,77 +112,71 @@ const tenantPool = await openTenantPool({
   bootSecondary: async (_slug, db) => bootTenant(db),
 });
 
-// F21 — start the periodic backpressure scheduler. It re-ticks queued
-// work every 30s so jobs blocked by global concurrency cap or per-tenant
-// rate cap don't hang waiting for a new enqueue event.
-startBackpressureScheduler(trail);
+// F40.2a-E: every background service runs for every tenant in the pool.
+// With TRAIL_MULTI_TENANT off, pool = { primary }, so the iteration is
+// a no-op and behaviour matches F40.1. With the flag on, broberg-ai
+// (or any other secondary tenant) gets the same lint scheduler,
+// contradiction lint, queue-backfill, action recommender, etc.
+// Collected stop-fns are torn down in shutdown below.
+const serviceStops: Array<() => void> = [];
+const jobRunners: Array<{ start(): Promise<void>; stop?: () => void | Promise<void> }> = [];
 
-// F15 — reference extractor subscribes to candidate_approved.
-const stopReferenceExtractor = startReferenceExtractor(trail);
+for (const [slug, db] of tenantPool) {
+  // F21 — periodic backpressure scheduler. Re-ticks queued ingest
+  // work every 30s; one timer per tenant so jobs in tenant A never
+  // wait on tenant B's rate cap.
+  startBackpressureScheduler(db);
 
-// F15 iter 2 — wiki-wiki backlink extractor subscribes to the same event.
-// Graph of [[link]]s between Neurons, populated live + at boot.
-const stopBacklinkExtractor = startBacklinkExtractor(trail);
+  // F15 — reference extractor subscribes to candidate_approved.
+  serviceStops.push(startReferenceExtractor(db));
 
-// F148 — link-checker subscribes to candidate_approved too. Re-scans the
-// committed doc's [[wiki-link]]s against the KB pool; unresolved links
-// land in broken_links for the curator.
-const stopLinkChecker = startLinkChecker(trail);
+  // F15 iter 2 — wiki-wiki backlink extractor subscribes to the same event.
+  serviceStops.push(startBacklinkExtractor(db));
 
-// F19 axis 3 — contradiction detection subscribes to candidate_approved.
-const stopContradictionLint = startContradictionLint(trail);
+  // F148 — link-checker subscribes to candidate_approved too. Re-scans the
+  // committed doc's [[wiki-link]]s against the KB pool; unresolved links
+  // land in broken_links for the curator.
+  serviceStops.push(startLinkChecker(db));
 
-// F32.2 — scheduled dreaming pass (orphans+stale + contradictions over
-// every KB, default every 24h). Complements the reactive subscribers above
-// by catching Neurons that changed OUT of scope (e.g. a source archival
-// made an existing Neuron orphaned), which no event flow would notice.
-const stopLintScheduler = startLintScheduler(trail);
+  // F19 axis 3 — contradiction detection subscribes to candidate_approved.
+  serviceStops.push(startContradictionLint(db));
 
-// F90 — one-shot enrichment of existing queue candidates: populate
-// actions[] on rows that landed before the primitive existed, and
-// pre-translate pending candidates into every configured locale so the
-// Danish admin boots with Danish content already cached. Runs 30s after
-// boot; sequential so the CLI subprocess doesn't fan out.
-const stopQueueBackfill = startQueueBackfill(trail);
+  // F32.2 — scheduled dreaming pass (orphans+stale + contradictions).
+  serviceStops.push(startLintScheduler(db));
 
-// F96 — action recommender subscribes to candidate_created. LLM call
-// per pending candidate; stamps metadata.recommendation with a
-// suggested action id + reasoning. Admin renders the badge; bulk-
-// accept route uses it for per-candidate dispatch.
-const stopActionRecommender = startActionRecommender(trail);
+  // F90 — queue-backfill + locale pre-translation.
+  serviceStops.push(startQueueBackfill(db));
 
-// F97 — activity-log subscriber. Translates broadcaster events into
-// activity_log rows (auth/upload/lint gaps filled by direct
-// logActivity() calls in routes/services).
-const stopActivityLogger = startActivityLogger(trail);
+  // F96 — action recommender per candidate.
+  serviceStops.push(startActionRecommender(db));
 
-// F180 — upload-session GC. Hourly tick: expire stale uploading
-// sessions (cleans temp file + cascades documents row), reap
-// expired/aborted rows older than 7d.
-const stopUploadSessionGc = startUploadSessionGc(trail);
+  // F97 — activity-log subscriber.
+  serviceStops.push(startActivityLogger(db));
 
-// One-shot backfill for existing pending candidates that landed
-// before the recommender was wired up. Runs 60s after boot so it
-// doesn't compete with queue-backfill's translation work. Serial, so
-// it cooks at CLI pace (~5s/candidate). The process owns its own
-// error isolation — a single bad candidate doesn't abort the batch.
-setTimeout(() => {
-  void backfillRecommendations(trail).catch((err) => {
-    console.error('[action-recommender] backfill failed:', err);
-  });
-}, 60_000);
+  // F180 — upload-session GC.
+  serviceStops.push(startUploadSessionGc(db));
 
-// F164 — Background-job runner. Recovers zombies (status='running' but
-// heartbeat stale) before HTTP routes start accepting POST /jobs, so a
-// re-attaching admin tab sees the right state immediately. Phase 1
-// registers the noop handler only when explicitly opted-in via env;
-// real handlers (vision-rerun, bulk-vision-rerun) ship in Phase 2+4.
-const jobRunner = initJobRunner(trail);
-if (process.env.TRAIL_JOBS_NOOP_HANDLER === '1') {
-  jobRunner.register('noop', noopHandler);
+  // F96 — recommender backfill for legacy pending candidates. Staggered
+  // by 60s + 30s-per-tenant so multi-tenant boots don't all hit the
+  // claude CLI at the same moment.
+  const backfillDelayMs = 60_000 + 30_000 * jobRunners.length;
+  setTimeout(() => {
+    void backfillRecommendations(db).catch((err) => {
+      console.error(`[action-recommender][${slug}] backfill failed:`, err);
+    });
+  }, backfillDelayMs);
+
+  // F164 — per-tenant background-job runner. Each tenant has its own
+  // job queue (queue_candidates + jobs tables live in the tenant DB),
+  // so the runner instance is also per-tenant.
+  const jobRunner = initJobRunner(db);
+  if (process.env.TRAIL_JOBS_NOOP_HANDLER === '1') {
+    jobRunner.register('noop', noopHandler);
+  }
+  jobRunner.register('vision-rerun', visionRerunHandler);
+  await jobRunner.start();
+  jobRunners.push(jobRunner);
 }
-jobRunner.register('vision-rerun', visionRerunHandler);
-await jobRunner.start();
 
 const app = createApp(trail, tenantPool);
 
@@ -203,20 +197,24 @@ console.log(`  database: ${trail.path}`);
 
 // Graceful shutdown: tear down background subscribers first so no async
 // handler can race an event against a closing libSQL client, then stop
-// the HTTP server, then close the DB so the WAL checkpoints cleanly.
+// the HTTP server, then close every tenant DB so each WAL checkpoints
+// cleanly.
 const shutdown = async () => {
   console.log('\nshutting down…');
-  stopReferenceExtractor();
-  stopBacklinkExtractor();
-  stopLinkChecker();
-  stopContradictionLint();
-  stopLintScheduler();
-  stopQueueBackfill();
-  stopActionRecommender();
-  stopActivityLogger();
-  stopUploadSessionGc();
+  for (const stop of serviceStops) {
+    try { stop(); } catch (err) { console.error('service stop failed:', err); }
+  }
+  for (const runner of jobRunners) {
+    try { await runner.stop?.(); } catch (err) { console.error('job runner stop failed:', err); }
+  }
   server.stop();
-  await trail.close();
+  for (const [slug, db] of tenantPool) {
+    try {
+      await db.close();
+    } catch (err) {
+      console.error(`tenant ${slug} close failed:`, err);
+    }
+  }
   process.exit(0);
 };
 process.on('SIGINT', shutdown);
