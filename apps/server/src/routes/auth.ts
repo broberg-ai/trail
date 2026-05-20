@@ -6,6 +6,7 @@ import { and, eq, gt } from 'drizzle-orm';
 import { slugify } from '@trail/core';
 import type { AppBindings } from '../app.js';
 import { getTrail } from '../middleware/auth.js';
+import { addSession, removeSession } from '../lib/key-index.js';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
@@ -151,7 +152,25 @@ authRoutes.get('/google/callback', async (c) => {
 
   const sessionId = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const sessionCreatedAt = new Date().toISOString();
   await trail.db.insert(sessions).values({ id: sessionId, userId, expiresAt }).run();
+  // F40.2a-B — dual-write into the global session index. Look up the
+  // tenant slug for this session's user so the index carries the same
+  // slug used for tenant-DB routing in the auth-middleware.
+  const tenantRow = await trail.db
+    .select({ slug: tenants.slug })
+    .from(tenants)
+    .where(eq(tenants.id, userTenantId))
+    .get();
+  if (tenantRow) {
+    addSession({
+      sessionId,
+      tenantSlug: tenantRow.slug,
+      userId,
+      expiresAt,
+      createdAt: sessionCreatedAt,
+    });
+  }
 
   setCookie(c, 'session', sessionId, {
     httpOnly: true,
@@ -210,6 +229,9 @@ authRoutes.post('/logout', async (c) => {
       tenantId = userRow?.tenantId ?? null;
     }
     await trail.db.delete(sessions).where(eq(sessions.id, sessionId)).run();
+    // F40.2a-B — mirror the deletion into the global session index so
+    // a revoked cookie can't be silently re-resolved through the index.
+    removeSession(sessionId);
     if (tenantId) {
       await logActivity(trail, {
         tenantId,
@@ -271,6 +293,7 @@ authRoutes.get('/dev-login', async (c) => {
   }
 
   const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+  const sessionCreatedAt = new Date().toISOString();
   await trail.db
     .insert(sessions)
     .values({ id: 'dev', userId: devUser.id, expiresAt })
@@ -279,6 +302,23 @@ authRoutes.get('/dev-login', async (c) => {
       set: { expiresAt, userId: devUser.id },
     })
     .run();
+  // F40.2a-B — mirror to global index. Look up the user's tenant slug
+  // so the index entry carries the same slug as the tenant-DB pool key.
+  const devTenant = await trail.db
+    .select({ slug: tenants.slug })
+    .from(users)
+    .innerJoin(tenants, eq(tenants.id, users.tenantId))
+    .where(eq(users.id, devUser.id))
+    .get();
+  if (devTenant) {
+    addSession({
+      sessionId: 'dev',
+      tenantSlug: devTenant.slug,
+      userId: devUser.id,
+      expiresAt,
+      createdAt: sessionCreatedAt,
+    });
+  }
 
   // Hardcoded session id — accepting `?session=X` used to let anyone
   // with TRAIL_DEV_AUTH=1 enabled adopt ANY existing session id,
