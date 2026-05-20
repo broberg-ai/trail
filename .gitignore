@@ -169,3 +169,6 @@ docs/assets/sound/**/*.mp3
 apps/server/test-fixtures/*.wav
 apps/server/test-fixtures/*.mp3
 apps/server/test-fixtures/*.m4a
+
+# Claude Code scheduled-task runtime locks — process-local, not state.
+.claude/scheduled_tasks.lock
