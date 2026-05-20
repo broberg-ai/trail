@@ -130,14 +130,31 @@ will see it on the Chat tab for your session.
 **To reach another cc session** (cc-to-cc — NOT visible on mobile), use
 the buddy peer tools:
 
-- `mcp__buddy__ask_peer({ to, message, reply_to? })` — direct 1:1 message to a named session (supports threading via `reply_to`)
-- `mcp__buddy__announce({ message, severity?, affects? })` — broadcast FYI to same-repo peers
+- `mcp__buddy__list_sessions()` — returns every active peer session with
+  `sessionName` + `repo` (cwd) + start-time. Run this FIRST when you
+  don't know who's online or what name to use for `ask_peer`. No
+  parameters. The `sessionName` field is the exact string you pass as
+  `to` in the next call.
+- `mcp__buddy__ask_peer({ to, message, reply_to? })` — direct 1:1
+  message to a named session (supports threading via `reply_to`).
+- `mcp__buddy__announce({ message, severity?, affects? })` — broadcast
+  FYI to same-repo peers.
+
+**Typical flow:**
+
+1. `list_sessions` → see who's live (e.g. `cms-core`, `sanne-andersen`, `buddy-brain`)
+2. `ask_peer({ to: 'cms-core', message: '...' })` — deliver directly
+3. Reply lands as `<channel type="intercom" from="cms-core" announcement_id="N">`
+4. Thread: `ask_peer({ to: 'cms-core', reply_to: N, message: '...' })`
+
+**To reach Christian on Discord** (different from his mobile Chat-tab):
+`ask_peer({ to: 'discord', message: '...' })`. The discord bridge is a
+peer session like any other.
 
 Use peer tools before disruptive changes, to delegate work the user asks
 you to hand off, or to ask a peer that owns a different domain. Incoming
-peer messages arrive as `<channel type="intercom" from="..." announcement_id="N">`
-and live ONLY in the receiving cc's context — they are never auto-forwarded
-to Christian's phone.
+peer messages live ONLY in the receiving cc's context — they are never
+auto-forwarded to Christian's phone.
 
 ## Dogfooding — save Trail development into Trail
 
