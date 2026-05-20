@@ -489,6 +489,7 @@ Buddy watches every cc session. At session end (or `/trail-save`), a summariser 
 **Decision locked:** libSQL embedded per-tenant, one `.db` file per tenant on Fly Volume, connection pool with LRU eviction, per-Machine `registry.db` for tenant routing. Ships in two phases:
 - **F40.1 (Phase 1, ~1 day):** swap driver from `bun:sqlite` to `@libsql/client`. Still single-tenant. Precedes F33 so Sanne's deploy is born on libSQL.
 - **F40.2 (Phase 2, 10-15 days):** `@trail/db` TrailDatabase interface, connection pool, registry, tenant-context middleware, provisioning + deprovisioning + tier-upgrade flows, dev-mode fallback.
+- **[F40.2a — Multi-tenant routing (engine-side, flag-gated)](features/F40.2a-multi-tenant-routing.md), ~6.5 h:** smallest slice of F40.2 — central `/data/key-index.db`, DB-pool keyed by tenant slug, auth-middleware does O(1) bearer/session → tenant lookup, background services iterate over pool. Gated behind `TRAIL_MULTI_TENANT=1` so deploy with flag-off is byte-for-byte identical to today (critical for Sanne's pre-release stability). Unblocks broberg.ai on engine-001 without F170 fleet work. Status: Planned.
 
 ### F41 — Tenant Provisioning + Signup
 Public signup flow creates a tenant + first user. Email verification, OAuth provider picker. Hooks to Stripe (F43) for plan selection.

@@ -179,6 +179,7 @@ Multi-tenant SaaS, billing, richer pipelines, first 3rd-party adapters.
 | # | Feature | Priority |
 |---|---------|----------|
 | F40 | Multi-Tenancy on `app.trailmem.com` (LibSQL/Turso or Postgres RLS) | Must |
+| [F40.2a](features/F40.2a-multi-tenant-routing.md) | Multi-tenant routing (engine-side, flag-gated) — smallest slice of F40.2 unblocking broberg.ai | Must |
 | F41 | Tenant Provisioning + Signup Flow | Must |
 | F42 | Cloudflare R2 Storage Adapter | Must |
 | F43 | Stripe Billing (Hobby / Pro / Business) | Must |
