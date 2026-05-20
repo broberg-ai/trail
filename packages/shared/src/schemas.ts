@@ -406,6 +406,18 @@ export const ChatRequestSchema = z.object({
   audience: z.enum(['curator', 'tool', 'public']).nullish(),
 });
 
+export const ChatImageSchema = z.object({
+  documentId: z.string(),
+  filename: z.string(),
+  /** Relative engine URL — admin/site-host proxy injects bearer. */
+  url: z.string(),
+  /** Vision-generated alt-text. Same string LLM saw in its context. */
+  alt: z.string(),
+  page: z.number().int().nullable(),
+  width: z.number().int(),
+  height: z.number().int(),
+});
+
 export const ChatResponseSchema = z.object({
   answer: z.string(),
   // F144 — always present when the question was scoped to a KB; echoed
@@ -416,6 +428,12 @@ export const ChatResponseSchema = z.object({
     path: z.string(),
     filename: z.string(),
   })).optional(),
+  // 2026-05-20 — images surfaced when the matched Neurons have any
+  // vision-described images. Gated by audience: omitted for 'public'
+  // (Eir-widget), included for 'curator' (admin) and 'tool' (downstream
+  // LLMs / external integrations). Each item carries alt-text so the
+  // consuming LLM can reference images explicitly in its rendered answer.
+  images: z.array(ChatImageSchema).optional(),
 });
 
 // ── Bulk Operations ───────────────────────────────────────────────────────────

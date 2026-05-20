@@ -1,5 +1,12 @@
 import { Hono } from 'hono';
-import { documents, knowledgeBases, chatSessions, chatTurns, type TrailDatabase } from '@trail/db';
+import {
+  documents,
+  documentImages,
+  knowledgeBases,
+  chatSessions,
+  chatTurns,
+  type TrailDatabase,
+} from '@trail/db';
 import { and, asc, eq, inArray, like, sql } from 'drizzle-orm';
 import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
 import { ChatRequestSchema } from '@trail/shared';
@@ -159,11 +166,19 @@ chatRoutes.post('/chat', async (c) => {
     }
   }
 
-  const { context, citations } = await retrieveContext(
+  // F160 Phase 2 — audience determines persona AND now (2026-05-20)
+  // whether retrieveContext surfaces images. Compute it before
+  // retrieval so the same value flows into both layers.
+  const authType = c.get('authType');
+  const audience: Audience =
+    parseAudienceParam(body.audience ?? null) ?? defaultAudienceForAuth(authType);
+
+  const { context, citations, images } = await retrieveContext(
     trail,
     body.message,
     kbs.map((kb) => kb.id),
     tenant.id,
+    audience,
   );
 
   // F144 follow-up: multi-turn memory. If the client pinned a sessionId,
@@ -181,13 +196,9 @@ chatRoutes.post('/chat', async (c) => {
   // via env (TRAIL_KNOWLEDGE_BASE_ID) — which is always the *current* KB.
   const currentTrailName = kbs.length === 1 ? kbs[0]!.name : null;
 
-  // F160 Phase 2 — pick audience + per-KB persona override before
-  // building the system prompt. Default audience: `tool` for Bearer
-  // (external integrations), `curator` for session-cookie (admin UI).
-  // Caller can always override via body.audience.
-  const authType = c.get('authType');
-  const audience: Audience =
-    parseAudienceParam(body.audience ?? null) ?? defaultAudienceForAuth(authType);
+  // F160 Phase 2 — per-KB persona override. audience + authType
+  // already resolved above (before retrieveContext) so we re-use
+  // those values here rather than recomputing.
   const primaryKbForPrompt = resolvedKbId
     ? (kbs.find((k) => k.id === resolvedKbId) ?? kbs[0]!)
     : kbs[0]!;
@@ -288,6 +299,11 @@ chatRoutes.post('/chat', async (c) => {
       // resolves to admin-paths.
       renderedAnswer: audience === 'curator' ? renderAnswer(cleanAnswer) : cleanAnswer,
       citations,
+      // 2026-05-20 — images surfaced for non-public audiences. Public
+      // (Eir-widget) gets undefined here, preserving its text-only
+      // contract; curator + tool get the array even when empty so
+      // consumers can render an "image carousel" zero-state.
+      ...(audience !== 'public' ? { images } : {}),
       sessionId,
       // F159 — surface backend + model on every reply so the admin UI
       // can render a small chip ("answered by gemini-2.5-flash") when
@@ -520,12 +536,29 @@ interface Citation {
   filename: string;
 }
 
+interface ChatImage {
+  documentId: string;
+  filename: string;
+  /** Relative URL — admin / site-host proxy injects bearer at fetch time. */
+  url: string;
+  alt: string;
+  page: number | null;
+  width: number;
+  height: number;
+}
+
+/** Hard cap on images surfaced per chat response. Eight is enough for
+ * a wall-style answer, small enough that the alt-text block doesn't
+ * dominate the LLM's prompt. */
+const CHAT_IMAGE_CAP = 8;
+
 async function retrieveContext(
   trail: TrailDatabase,
   query: string,
   kbIds: string[],
   tenantId: string,
-): Promise<{ context: string; citations: Citation[] }> {
+  audience: Audience = 'curator',
+): Promise<{ context: string; citations: Citation[]; images: ChatImage[] }> {
   const chunks: string[] = [];
   const citations: Citation[] = [];
   const seen = new Set<string>();
@@ -535,7 +568,7 @@ async function retrieveContext(
   const PER_KB_DOCS = 4;
 
   const ftsQuery = sanitizeFtsQuery(query);
-  if (!ftsQuery) return { context: '', citations: [] };
+  if (!ftsQuery) return { context: '', citations: [], images: [] };
 
   for (const kbId of kbIds) {
     if (totalChars >= MAX_CHARS) break;
@@ -663,7 +696,69 @@ async function retrieveContext(
     }
   }
 
-  return { context: chunks.join('\n\n---\n\n'), citations };
+  // 2026-05-20 — surface images from the retrieved Neurons so downstream
+  // consumers (admin chat, external LLM integrations) can render them
+  // alongside the answer. Gated on audience: `public` (Eir-widget,
+  // unauthenticated callers) gets NO images — Sanne's chat UI stays
+  // text-only by design. `curator` + `tool` audiences get up to
+  // CHAT_IMAGE_CAP image hits, ordered by (documentId, filename) for
+  // deterministic responses across calls.
+  //
+  // Also injects an "Available images" section into the LLM context
+  // when images exist so the model can SAY "here are three pictures
+  // of feet" instead of refusing the request. Without this, the LLM
+  // is unaware that images exist and apologises that it can't help.
+  const images: ChatImage[] = [];
+  if (audience !== 'public' && seen.size > 0) {
+    const docIdList = Array.from(seen);
+    const imageRows = await trail.db
+      .select({
+        documentId: documentImages.documentId,
+        filename: documentImages.filename,
+        page: documentImages.page,
+        width: documentImages.width,
+        height: documentImages.height,
+        visionDescription: documentImages.visionDescription,
+      })
+      .from(documentImages)
+      .where(
+        and(
+          eq(documentImages.tenantId, tenantId),
+          inArray(documentImages.documentId, docIdList),
+        ),
+      )
+      .all();
+    // Sort + cap for deterministic ordering across replays.
+    imageRows.sort((a, b) => {
+      if (a.documentId !== b.documentId) return a.documentId.localeCompare(b.documentId);
+      return a.filename.localeCompare(b.filename);
+    });
+    for (const row of imageRows.slice(0, CHAT_IMAGE_CAP)) {
+      images.push({
+        documentId: row.documentId,
+        filename: row.filename,
+        url: `/api/v1/documents/${row.documentId}/images/${row.filename.replace(/^\//, '')}`,
+        alt: row.visionDescription ?? '',
+        page: row.page,
+        width: row.width,
+        height: row.height,
+      });
+    }
+  }
+
+  let context = chunks.join('\n\n---\n\n');
+  if (images.length > 0) {
+    const block = images
+      .map((img, i) => {
+        const pageRef = img.page !== null ? ` (page ${img.page})` : '';
+        const altOrPlaceholder = img.alt.trim() || '(no alt-text)';
+        return `${i + 1}. ${altOrPlaceholder}${pageRef} — url: ${img.url}`;
+      })
+      .join('\n');
+    context += `\n\n---\n\n### Available images in this Trail (you MAY reference them)\n${block}`;
+  }
+
+  return { context, citations, images };
 }
 
 /**
