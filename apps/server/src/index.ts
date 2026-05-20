@@ -1,5 +1,6 @@
-import { createLibsqlDatabase, DEFAULT_DB_PATH } from '@trail/db';
+import { createLibsqlDatabase, DEFAULT_DB_PATH, type TrailDatabase } from '@trail/db';
 import { createApp } from './app.js';
+import { openTenantPool, inferPrimarySlug } from './lib/tenant-pool.js';
 import { ensureIngestUser } from './bootstrap/ingest-user.js';
 import { recoverZombieIngests } from './bootstrap/zombie-ingest.js';
 import { rewriteWikiToNeurons } from './bootstrap/rewrite-wiki-paths.js';
@@ -27,73 +28,94 @@ import { visionRerunHandler } from './services/jobs/handlers/vision-rerun.js';
 
 const PORT = Number(process.env.PORT ?? 3031);
 
-// F40.1: one TrailDatabase per process. F40.2 replaces this with a
-// per-tenant pool selected by tenant-context middleware — the rest
-// of the engine already receives `trail` via Hono context, so that
-// change will not require handler refactors.
+// F40.2a-C: per-tenant boot. Each tenant DB gets the same one-shot
+// treatment — migrations, FTS init, all backfills/recovery. Called
+// once for the primary (boot-time `trail` below) AND for every
+// secondary tenant when TRAIL_MULTI_TENANT=1 is set.
+//
+// Order matters here — keep parity with the historic single-tenant
+// boot order. Adding a new tenant via openTenantPool() runs this
+// exact sequence against the new DB.
+async function bootTenant(db: TrailDatabase): Promise<void> {
+  await db.runMigrations();
+  await db.initFTS();
+  await ensureIngestUser(db);
+  await recoverZombieIngests(db);
+  await rewriteWikiToNeurons(db);
+  // F98 — dismiss pending orphan-findings targeting external-originated
+  // Neurons (buddy, MCP, chat, api). Their sources live outside Trail;
+  // the orphan detector used to falsely flag them. Idempotent — zero
+  // rows to update after the first run is the steady state.
+  await cleanupExternalOrphans(db);
+  // F102 — ensure every KB has /neurons/glossary.md. Idempotent; seeds
+  // the Neuron for KBs created before F102 landed so the compile-pipeline
+  // has something to str_replace into on subsequent ingests.
+  await seedMissingGlossaryNeurons(db);
+  // Re-run extractor on any source stuck in `status='pending'` with a
+  // supported file type (pdf/docx/pptx/xlsx). Covers two cases:
+  // (1) uploads that predate the extractor for their type (e.g. a PPTX
+  // uploaded before the PPTX pipeline shipped), (2) server-crashed-
+  // mid-upload rows. Unsupported types stay pending — they need new
+  // pipelines. Fire-and-forget: the processXAsync helpers own their
+  // status transitions.
+  await recoverPendingSources(db);
+  // F162 — populate content_hash on legacy source-rows. Idempotent;
+  // once everything is hashed, re-runs are a single SELECT returning 0
+  // rows. Must run BEFORE the upload route starts accepting requests
+  // (which happens later in this file) so a fresh upload doesn't race
+  // the backfill on the same row.
+  await backfillContentHash(db);
+  // F161 — populate document_images for legacy PDFs. Storage scan +
+  // PNG-header dim parse + alt-text from compiled markdown. Idempotent;
+  // docs with existing rows skipped. Same boot-window placement
+  // argument as backfillContentHash.
+  await backfillDocumentImages(db);
+  // F161 follow-up — opt-in Vision-rerun. OFF by default; only fires
+  // when TRAIL_VISION_RERUN_NULL=1 is set. See rerun-vision.ts for
+  // the env-flag contract + recommended rollout.
+  await rerunVisionOnNull(db);
+  // F163.2 Phase 5 — opt-in regex-sweep over legacy image descriptions.
+  // Stamps auto_flag_signal on rows that predate the [QUALITY:]-marker
+  // prompt where the description text matches the regex backstop. Gated
+  // by TRAIL_VISION_AUTO_FLAG_SWEEP=1 so we don't surprise tenants on
+  // the upgrade.
+  await sweepAutoFlag(db);
+  // F156 Phase 0 — top up every tenant to TRAIL_DEV_CREDITS if set.
+  // Idempotent; only adds the delta needed to reach the target. Phase 2
+  // replaces this with Stripe Checkout self-serve top-up.
+  await seedDevCreditsOnBoot(db);
+  // F143 — roll any `running` ingest-jobs back to `queued` and kick the
+  // scheduler for each KB with work outstanding. Survives restarts without
+  // dropping half a 65-file upload batch on the floor.
+  await recoverIngestJobs(db);
+  await backfillReferences(db);
+  await backfillBacklinks(db);
+  // F148 — populate broken_links table so the admin link-report panel
+  // surfaces any unresolvable [[wiki-link]]s immediately on first deploy.
+  // Idempotent; runs after backfillBacklinks so the fresh backlinks table
+  // reflects the fold-enabled resolution.
+  await backfillLinkCheck(db);
+}
+
 const trail = await createLibsqlDatabase({ path: DEFAULT_DB_PATH });
-await trail.runMigrations();
-await trail.initFTS();
-await ensureIngestUser(trail);
-await recoverZombieIngests(trail);
-await rewriteWikiToNeurons(trail);
-// F98 — dismiss pending orphan-findings targeting external-originated
-// Neurons (buddy, MCP, chat, api). Their sources live outside Trail;
-// the orphan detector used to falsely flag them. Idempotent — zero
-// rows to update after the first run is the steady state.
-await cleanupExternalOrphans(trail);
-// F102 — ensure every KB has /neurons/glossary.md. Idempotent; seeds
-// the Neuron for KBs created before F102 landed so the compile-pipeline
-// has something to str_replace into on subsequent ingests.
-await seedMissingGlossaryNeurons(trail);
-// Re-run extractor on any source stuck in `status='pending'` with a
-// supported file type (pdf/docx/pptx/xlsx). Covers two cases:
-// (1) uploads that predate the extractor for their type (e.g. a PPTX
-// uploaded before the PPTX pipeline shipped), (2) server-crashed-
-// mid-upload rows. Unsupported types stay pending — they need new
-// pipelines. Fire-and-forget: the processXAsync helpers own their
-// status transitions.
-await recoverPendingSources(trail);
-// F162 — populate content_hash on legacy source-rows. Idempotent;
-// once everything is hashed, re-runs are a single SELECT returning 0
-// rows. Must run BEFORE the upload route starts accepting requests
-// (which happens later in this file) so a fresh upload doesn't race
-// the backfill on the same row.
-await backfillContentHash(trail);
-// F161 — populate document_images for legacy PDFs. Storage scan +
-// PNG-header dim parse + alt-text from compiled markdown. Idempotent;
-// docs with existing rows skipped. Same boot-window placement
-// argument as backfillContentHash.
-await backfillDocumentImages(trail);
-// F161 follow-up — opt-in Vision-rerun. OFF by default; only fires
-// when TRAIL_VISION_RERUN_NULL=1 is set. See rerun-vision.ts for
-// the env-flag contract + recommended rollout.
-await rerunVisionOnNull(trail);
-// F163.2 Phase 5 — opt-in regex-sweep over legacy image descriptions.
-// Stamps auto_flag_signal on rows that predate the [QUALITY:]-marker
-// prompt where the description text matches the regex backstop. Gated
-// by TRAIL_VISION_AUTO_FLAG_SWEEP=1 so we don't surprise tenants on
-// the upgrade.
-await sweepAutoFlag(trail);
-// F156 Phase 0 — top up every tenant to TRAIL_DEV_CREDITS if set.
-// Idempotent; only adds the delta needed to reach the target. Phase 2
-// replaces this with Stripe Checkout self-serve top-up.
-await seedDevCreditsOnBoot(trail);
-// F143 — roll any `running` ingest-jobs back to `queued` and kick the
-// scheduler for each KB with work outstanding. Survives restarts without
-// dropping half a 65-file upload batch on the floor.
-await recoverIngestJobs(trail);
+await bootTenant(trail);
+
+// F40.2a-C: build the tenant pool. With TRAIL_MULTI_TENANT off the pool
+// has only the primary — engine behaves exactly like F40.1. With the
+// flag on, every other /data/<slug>/trail.db is discovered, opened,
+// migrated, and added to the pool. Services in milestone E iterate
+// over this pool; auth-middleware in milestone D selects from it.
+const primarySlug = inferPrimarySlug(DEFAULT_DB_PATH);
+const tenantPool = await openTenantPool({
+  primarySlug,
+  primaryDb: trail,
+  bootSecondary: async (_slug, db) => bootTenant(db),
+});
+
 // F21 — start the periodic backpressure scheduler. It re-ticks queued
 // work every 30s so jobs blocked by global concurrency cap or per-tenant
 // rate cap don't hang waiting for a new enqueue event.
 startBackpressureScheduler(trail);
-await backfillReferences(trail);
-await backfillBacklinks(trail);
-// F148 — populate broken_links table so the admin link-report panel
-// surfaces any unresolvable [[wiki-link]]s immediately on first deploy.
-// Idempotent; runs after backfillBacklinks so the fresh backlinks table
-// reflects the fold-enabled resolution.
-await backfillLinkCheck(trail);
 
 // F15 — reference extractor subscribes to candidate_approved.
 const stopReferenceExtractor = startReferenceExtractor(trail);
