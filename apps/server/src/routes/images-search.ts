@@ -134,7 +134,6 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
     result = await trail.execute(sql, args);
   }
 
-  const baseUrl = new URL(c.req.url).origin;
   const visibleRows = (result.rows as Array<Record<string, unknown>>).filter((row) =>
     isVisibleToAudience(audience, String(row.doc_path), row.doc_tags as string | null),
   );
@@ -153,7 +152,16 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
     id: String(row.id),
     documentId: String(row.document_id),
     filename: String(row.filename),
-    url: `${baseUrl}/api/v1/documents/${row.document_id}/images/${String(row.filename).replace(/^\//, '')}`,
+    // Relative URL — same-origin from the admin SPA's POV. Admin-server
+    // proxies /api/v1/* to engine and injects the tenant bearer, so
+    // <img src="/api/v1/documents/…"> works with the session cookie.
+    // Building this with the engine's OWN origin (the previous
+    // `${baseUrl}/...` form) produced cross-origin URLs like
+    // engine-001.trailmem.com/... which the browser couldn't auth
+    // against from app.trailmem.com — every image rendered as a
+    // broken icon. Relative URL keeps the same-origin contract
+    // documented on the ImageHit type.
+    url: `/api/v1/documents/${row.document_id}/images/${String(row.filename).replace(/^\//, '')}`,
     alt: (row.vision_description as string | null) ?? '',
     page: row.page as number | null,
     width: row.width as number,

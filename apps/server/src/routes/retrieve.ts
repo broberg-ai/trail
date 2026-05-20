@@ -290,11 +290,19 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
         ),
       )
       .all();
-    const baseUrl = new URL(c.req.url).origin;
+    // Relative URL — same-origin contract with the caller. Admin uses
+    // app.trailmem.com → admin-server proxy injects bearer when the
+    // <img> request loops back to /api/v1/documents/.../images/...
+    // External embedders (widget chat-proxy etc.) need to proxy
+    // images through their own host the same way they proxy /chat,
+    // because the engine's image route is bearer-gated and browser
+    // <img> tags can't carry bearer headers. The previous absolute
+    // form `${engineOrigin}/...` looked correct but broke admin
+    // browsers (cross-origin cookies blocked).
     images = imageRows.slice(0, maxImages).map((row) => ({
       documentId: row.documentId,
       filename: row.filename,
-      url: `${baseUrl}/api/v1/documents/${row.documentId}/images/${row.filename.replace(/^\//, '')}`,
+      url: `/api/v1/documents/${row.documentId}/images/${row.filename.replace(/^\//, '')}`,
       alt: row.visionDescription ?? '',
       page: row.page,
       width: row.width,
