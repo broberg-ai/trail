@@ -172,3 +172,7 @@ apps/server/test-fixtures/*.m4a
 
 # Claude Code scheduled-task runtime locks — process-local, not state.
 .claude/scheduled_tasks.lock
+
+# F40.2a-F — captured API baselines for byte-for-byte verification.
+# Local-only; never commit because bearer-fetched responses leak data.
+apps/server/.baseline/
