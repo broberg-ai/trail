@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import type { TrailDatabase } from '@trail/db';
+import type { TenantPool } from './lib/tenant-pool.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { kbRoutes } from './routes/knowledge-bases.js';
@@ -49,6 +50,14 @@ import { activityRoutes } from './routes/activity.js';
 export interface AppBindings {
   Variables: {
     trail: TrailDatabase;
+    /**
+     * F40.2a — when set, the auth middleware selects the right
+     * tenant DB from this pool based on bearer/session lookup
+     * through `/data/key-index.db`. With TRAIL_MULTI_TENANT unset
+     * the pool contains only the primary tenant and the middleware
+     * stays on the legacy single-tenant code path.
+     */
+    tenantPool: TenantPool;
     user?: import('./middleware/auth.js').AuthUser;
     tenant?: import('./middleware/auth.js').AuthTenant;
     /**
@@ -62,7 +71,7 @@ export interface AppBindings {
   };
 }
 
-export function createApp(trail: TrailDatabase): Hono<AppBindings> {
+export function createApp(trail: TrailDatabase, tenantPool: TenantPool): Hono<AppBindings> {
   const app = new Hono<AppBindings>();
 
   app.use('*', logger());
@@ -121,10 +130,15 @@ export function createApp(trail: TrailDatabase): Hono<AppBindings> {
     }),
   );
 
-  // Inject the TrailDatabase into every request. F40.2 swaps this for
-  // tenant-aware resolution; the signature seen by handlers is the same.
+  // Inject the primary TrailDatabase + the full tenant pool into every
+  // request. The auth middleware (requireAuth in middleware/auth.ts)
+  // overrides `trail` with the bearer/session's resolved tenant DB
+  // when TRAIL_MULTI_TENANT=1; with the flag off it leaves `trail`
+  // as the primary (back-compat for routes that fire pre-auth like
+  // /health and /api/auth/google).
   app.use('*', async (c, next) => {
     c.set('trail', trail);
+    c.set('tenantPool', tenantPool);
     await next();
   });
 

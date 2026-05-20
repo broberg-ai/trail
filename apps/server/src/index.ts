@@ -184,7 +184,7 @@ if (process.env.TRAIL_JOBS_NOOP_HANDLER === '1') {
 jobRunner.register('vision-rerun', visionRerunHandler);
 await jobRunner.start();
 
-const app = createApp(trail);
+const app = createApp(trail, tenantPool);
 
 const server = Bun.serve({
   port: PORT,

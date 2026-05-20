@@ -4,6 +4,10 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { sessions, users, tenants, apiKeys, type TrailDatabase } from '@trail/db';
 import { and, eq, gt, isNull } from 'drizzle-orm';
 import { INGEST_USER_ID } from '../bootstrap/ingest-user.js';
+import { resolveBearer, resolveSession } from '../lib/key-index.js';
+import type { TenantPool } from '../lib/tenant-pool.js';
+
+const MULTI_TENANT = process.env.TRAIL_MULTI_TENANT === '1';
 
 export interface AuthUser {
   id: string;
@@ -39,8 +43,25 @@ const TENANT_COLUMNS = {
   plan: tenants.plan,
 } as const;
 
+/**
+ * F40.2a-D — pool-driven tenant DB selection when TRAIL_MULTI_TENANT=1.
+ *
+ * Given a tenant_slug from the key-index, look up the pre-opened DB
+ * handle in the pool. Returns null on miss (slug exists in index but
+ * pool doesn't have it — boot-state mismatch, treated as auth failure
+ * rather than 500 so we don't leak which slugs the engine knows about).
+ */
+function resolveTenantDb(c: Context, tenantSlug: string): TrailDatabase | null {
+  const pool = c.get('tenantPool') as TenantPool | undefined;
+  if (!pool) return null;
+  return pool.get(tenantSlug) ?? null;
+}
+
 export async function requireAuth(c: Context, next: Next): Promise<Response | void> {
-  const trail = c.get('trail') as TrailDatabase;
+  // `trail` is the primary DB at request-entry. The multi-tenant branch
+  // below may override it via `c.set('trail', tenantDb)` once the caller
+  // is resolved to a specific tenant.
+  let trail = c.get('trail') as TrailDatabase;
 
   // Bearer token path — two sub-variants:
   //   (a) trail_<64hex>  → DB-backed API key (F111, per-user, revocable)
@@ -52,6 +73,50 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
     // (a) DB-backed API key
     if (presented.startsWith('trail_')) {
       const hash = createHash('sha256').update(presented).digest('hex');
+
+      // F40.2a-D — flag-gated multi-tenant path. Look up the bearer in
+      // the global key-index FIRST to learn which tenant DB to open,
+      // then load user/tenant rows from THAT DB. No iteration across
+      // tenant DBs, no fallback to another tenant on miss.
+      if (MULTI_TENANT) {
+        const indexed = resolveBearer(hash);
+        if (!indexed) {
+          return c.json({ error: 'Invalid or revoked API key' }, 401);
+        }
+        const tenantDb = resolveTenantDb(c, indexed.tenantSlug);
+        if (!tenantDb) {
+          // Index points at a slug the pool doesn't have. Could be a
+          // partially-provisioned tenant or a config drift. 401 keeps
+          // us from leaking which slugs we know about.
+          return c.json({ error: 'Invalid or revoked API key' }, 401);
+        }
+        const row = await tenantDb.db
+          .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS, keyId: apiKeys.id })
+          .from(apiKeys)
+          .innerJoin(users, eq(users.id, apiKeys.userId))
+          .innerJoin(tenants, eq(tenants.id, users.tenantId))
+          .where(and(eq(apiKeys.keyHash, hash), isNull(apiKeys.revokedAt)))
+          .get();
+        if (!row) {
+          // Indexed but the per-tenant row went missing — treat as 401.
+          return c.json({ error: 'Invalid or revoked API key' }, 401);
+        }
+        c.set('trail', tenantDb);
+        trail = tenantDb;
+        c.set('user', row.user);
+        c.set('tenant', row.tenant);
+        c.set('authType', 'bearer');
+        tenantDb.db
+          .update(apiKeys)
+          .set({ lastUsedAt: new Date().toISOString() })
+          .where(eq(apiKeys.id, row.keyId))
+          .run()
+          .catch(() => {});
+        return next();
+      }
+
+      // Single-tenant path (TRAIL_MULTI_TENANT unset): historical
+      // F40.1 behaviour, query the primary DB directly.
       const row = await trail.db
         .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS, keyId: apiKeys.id })
         .from(apiKeys)
@@ -117,6 +182,36 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
   }
 
   const now = new Date().toISOString();
+
+  // F40.2a-D — multi-tenant: index resolves session → tenant first,
+  // then we read the user/tenant row from THAT tenant's DB.
+  if (MULTI_TENANT) {
+    const indexed = resolveSession(sessionId);
+    if (!indexed) {
+      return c.json({ error: 'Session expired' }, 401);
+    }
+    const tenantDb = resolveTenantDb(c, indexed.tenantSlug);
+    if (!tenantDb) {
+      return c.json({ error: 'Session expired' }, 401);
+    }
+    const result = await tenantDb.db
+      .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS })
+      .from(sessions)
+      .innerJoin(users, eq(users.id, sessions.userId))
+      .innerJoin(tenants, eq(tenants.id, users.tenantId))
+      .where(and(eq(sessions.id, sessionId), gt(sessions.expiresAt, now)))
+      .get();
+    if (!result) {
+      return c.json({ error: 'Session expired' }, 401);
+    }
+    c.set('trail', tenantDb);
+    c.set('user', result.user);
+    c.set('tenant', result.tenant);
+    c.set('authType', 'session');
+    return next();
+  }
+
+  // Single-tenant path (flag off): query the primary DB directly.
   const result = await trail.db
     .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS })
     .from(sessions)
