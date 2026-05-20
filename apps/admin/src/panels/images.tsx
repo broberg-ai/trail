@@ -11,7 +11,7 @@
  * needs.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { useRoute } from 'preact-iso';
+import { useRoute, useLocation } from 'preact-iso';
 import {
   listImages,
   listImageSources,
@@ -884,6 +884,18 @@ function ImageDetail({
 
   const sourceLabel = source?.title ?? source?.filename ?? hit.documentId.slice(0, 8) + '…';
   const openSourceHref = `/kb/${kbId}/sources?expanded=${encodeURIComponent(hit.documentId)}`;
+  const { route: routeNav } = useLocation();
+  const openSource = (e: MouseEvent) => {
+    // Explicit two-step: close the lightbox THEN route. A plain
+    // <a href> nested in the modal lost the query string through
+    // preact-iso's anchor interception in combination with the
+    // backdrop's onClose handler — user landed on /sources without
+    // ?expanded= and couldn't see which doc the image came from.
+    e.preventDefault();
+    e.stopPropagation();
+    onClose();
+    routeNav(openSourceHref);
+  };
 
   return (
     <div
@@ -935,6 +947,7 @@ function ImageDetail({
         <div class="flex flex-wrap items-center justify-center gap-3 pt-2">
           <a
             href={openSourceHref}
+            onClick={openSource}
             class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm bg-white/10 hover:bg-white/20 text-white transition"
           >
             {t('images.openSource')}

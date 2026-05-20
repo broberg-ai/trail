@@ -865,6 +865,16 @@ export interface ChatCitation {
   filename: string;
 }
 
+export interface ChatImage {
+  documentId: string;
+  filename: string;
+  url: string;
+  alt: string;
+  page: number | null;
+  width: number;
+  height: number;
+}
+
 export interface ChatResponse {
   answer: string;
   /**
@@ -875,6 +885,12 @@ export interface ChatResponse {
    */
   renderedAnswer?: string;
   citations?: ChatCitation[];
+  /**
+   * 2026-05-20 — images surfaced when matched Neurons have any
+   * vision-described images. Omitted for `public` audience (Eir);
+   * present (possibly empty) for `curator` + `tool`.
+   */
+  images?: ChatImage[];
   sessionId?: string;
   /**
    * F156 Phase 1 — per-session turn budget. `turnsUsed` is the count
@@ -886,6 +902,8 @@ export interface ChatResponse {
   turnsUsed?: number;
   turnsLimit?: number;
 }
+
+export type ChatAudience = 'curator' | 'tool' | 'public';
 
 export interface ChatSession {
   id: string;
@@ -910,11 +928,21 @@ export interface ChatTurnRow {
   createdAt: string;
 }
 
-/** Single-turn chat against a KB. Engine retrieves via FTS + calls Claude. */
-export function chat(kbId: string, message: string, sessionId?: string): Promise<ChatResponse> {
+/** Single-turn chat against a KB. Engine retrieves via FTS + calls Claude.
+ * `audience` controls persona + image-surfacing (curator default, public
+ * for Eir-style read-only, tool for downstream LLM integrations). */
+export function chat(
+  kbId: string,
+  message: string,
+  sessionId?: string,
+  audience?: ChatAudience,
+): Promise<ChatResponse> {
+  const body: Record<string, unknown> = { message, knowledgeBaseId: kbId };
+  if (sessionId) body.sessionId = sessionId;
+  if (audience) body.audience = audience;
   return api(`/api/v1/chat`, {
     method: 'POST',
-    body: JSON.stringify({ message, knowledgeBaseId: kbId, sessionId }),
+    body: JSON.stringify(body),
   });
 }
 

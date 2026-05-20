@@ -12,8 +12,10 @@ import {
   ApiError,
   type ChatResponse,
   type ChatCitation,
+  type ChatImage,
   type ChatSession,
   type ChatTurnRow,
+  type ChatAudience,
   type ReaderFeedbackBody,
 } from '../api';
 import { rewriteWikiLinks } from '../lib/wiki-links';
@@ -53,6 +55,13 @@ interface LocalTurn {
   role: 'user' | 'assistant';
   content: string;
   citations: ChatCitation[];
+  /** Images surfaced for this turn (curator/tool audience only). UI-only —
+   * not persisted in chat_turns table, so a session reload won't show
+   * the image carousel until the user re-asks. Acceptable trade-off:
+   * images are content-derived (FTS over docs), reproducible. */
+  images?: ChatImage[];
+  /** Audience the turn was sent as. UI-only, used to render the badge. */
+  audience?: ChatAudience;
   createdAt: string;
   /** UI-only: set when the turn is freshly in-flight (local id, no server id). */
   pending?: boolean;
@@ -60,6 +69,29 @@ interface LocalTurn {
   error?: string;
   /** UI-only: marker after Save-as-Neuron succeeded. */
   savedAs?: string;
+}
+
+const AUDIENCE_STORAGE_KEY = 'trail.admin.chat.audience';
+const AUDIENCE_VALUES: ChatAudience[] = ['curator', 'tool', 'public'];
+
+function readPersistedAudience(): ChatAudience {
+  try {
+    const raw = localStorage.getItem(AUDIENCE_STORAGE_KEY);
+    if (raw && (AUDIENCE_VALUES as string[]).includes(raw)) {
+      return raw as ChatAudience;
+    }
+  } catch {
+    /* ignore */
+  }
+  return 'curator';
+}
+
+function persistAudience(value: ChatAudience): void {
+  try {
+    localStorage.setItem(AUDIENCE_STORAGE_KEY, value);
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Decode a turn row from the server into the UI shape. */
@@ -131,6 +163,15 @@ export function ChatPanel() {
   // "start ny chat" prompt; `used === limit - 1` shows the soft
   // warning "1 svar tilbage". Null until the first response lands.
   const [turnBudget, setTurnBudget] = useState<{ used: number; limit: number } | null>(null);
+  // 2026-05-21 — audience selector so curator can preview what
+  // downstream LLMs (tool) or public widgets (Eir) would see for the
+  // same question. Persisted via localStorage so the choice survives
+  // reloads. Default: curator (the curator's own admin view).
+  const [audience, setAudience] = useState<ChatAudience>(() => readPersistedAudience());
+  const onAudienceChange = useCallback((next: ChatAudience) => {
+    setAudience(next);
+    persistAudience(next);
+  }, []);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const reloadSessions = useCallback(() => {
@@ -209,7 +250,7 @@ export function ChatPanel() {
     setBusy(true);
     setAskStartTime(Date.now());
     try {
-      const res: ChatResponse = await chat(kbId, q, activeId ?? undefined);
+      const res: ChatResponse = await chat(kbId, q, activeId ?? undefined, audience);
       setTurns((prev) =>
         prev.map((t) => {
           if (t.id === localAid) {
@@ -217,6 +258,8 @@ export function ChatPanel() {
               ...t,
               content: res.answer,
               citations: res.citations ?? [],
+              images: res.images ?? [],
+              audience,
               pending: false,
             };
           }
@@ -407,7 +450,7 @@ export function ChatPanel() {
         />
 
         <main class="flex-1 flex flex-col min-w-0">
-          <header class="mb-4 flex items-baseline gap-3">
+          <header class="mb-4 flex items-baseline gap-3 flex-wrap">
             <button
               type="button"
               onClick={() => setSidebarOpen((v) => !v)}
@@ -419,6 +462,7 @@ export function ChatPanel() {
             <h1 class="text-2xl font-semibold tracking-tight">
               {activeSession?.title ?? 'New chat'}
             </h1>
+            <AudienceSelector value={audience} onChange={onAudienceChange} />
           </header>
 
           <div ref={scrollRef} class="flex-1 overflow-y-auto space-y-6 pb-4">
@@ -879,6 +923,8 @@ function AnswerView({
         </div>
       ) : null}
 
+      {turn.images && turn.images.length > 0 ? <ImageCarousel images={turn.images} kbId={kbId} /> : null}
+
       <FeedbackBar
         turn={turn}
         userQuestion={userQuestion}
@@ -1114,6 +1160,102 @@ function EmptyHint() {
   return (
     <div class="text-center py-16 text-[color:var(--color-fg-subtle)] text-sm">
       {t('chat.emptyHint')}
+    </div>
+  );
+}
+
+/**
+ * Audience selector — segmented control that picks which persona +
+ * surfacing rule the next chat call uses. Lets the curator preview
+ * what an external tool-bearer or the public Eir-widget would see for
+ * the same question. Choice persists in localStorage so it survives
+ * reloads.
+ *
+ *   curator → admin view, images surfaced, wiki-links resolved
+ *   tool    → downstream-LLM view, images surfaced, no admin-paths
+ *   public  → Eir-style view, NO images, plain prose
+ */
+function AudienceSelector({
+  value,
+  onChange,
+}: {
+  value: ChatAudience;
+  onChange: (v: ChatAudience) => void;
+}) {
+  const opts: Array<{ id: ChatAudience; label: string; hint: string }> = [
+    { id: 'curator', label: 'Curator', hint: 'Admin view — images + wiki-links' },
+    { id: 'tool', label: 'Tool', hint: 'Downstream LLM — images, no admin paths' },
+    { id: 'public', label: 'Public', hint: 'Eir-widget — text only, no images' },
+  ];
+  return (
+    <div
+      class="ml-auto inline-flex items-center gap-0 rounded-md border border-[color:var(--color-border)] p-0.5 text-xs"
+      role="group"
+      aria-label="Chat audience"
+    >
+      <span class="px-2 text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)]">
+        as
+      </span>
+      {opts.map((o) => {
+        const active = o.id === value;
+        return (
+          <button
+            key={o.id}
+            type="button"
+            title={o.hint}
+            onClick={() => onChange(o.id)}
+            class={
+              'px-2.5 py-1 rounded-sm font-mono transition ' +
+              (active
+                ? 'bg-[color:var(--color-accent)] text-[color:var(--color-accent-fg)]'
+                : 'text-[color:var(--color-fg-muted)] hover:text-[color:var(--color-fg)]')
+            }
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Image carousel for chat answers (curator + tool audience only).
+ * Grid of thumbnails with alt-text overlay on hover. Click → open
+ * lightbox via the existing images-panel route, anchored to the
+ * Neuron the image came from. Relative URLs go through admin-server
+ * proxy which injects the tenant bearer for the engine fetch.
+ */
+function ImageCarousel({ images, kbId: _kbId }: { images: ChatImage[]; kbId: string }) {
+  return (
+    <div class="mt-4 pt-3 border-t border-[color:var(--color-border)]">
+      <div class="text-[10px] font-mono text-[color:var(--color-fg-subtle)] uppercase tracking-wider mb-2">
+        {images.length} image{images.length === 1 ? '' : 's'} from this Trail
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+        {images.map((img) => (
+          <a
+            key={img.documentId + ':' + img.filename}
+            href={img.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={img.alt || img.filename}
+            class="group relative aspect-square overflow-hidden rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg)]/40 hover:border-[color:var(--color-accent)]/50 transition"
+          >
+            <img
+              src={img.url}
+              alt={img.alt}
+              loading="lazy"
+              class="w-full h-full object-cover"
+            />
+            {img.alt ? (
+              <div class="absolute inset-x-0 bottom-0 px-2 py-1 bg-black/70 text-[10px] text-white leading-tight opacity-0 group-hover:opacity-100 transition line-clamp-2">
+                {img.alt}
+              </div>
+            ) : null}
+          </a>
+        ))}
+      </div>
     </div>
   );
 }
