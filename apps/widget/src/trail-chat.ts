@@ -114,13 +114,17 @@ export class TrailChat extends LitElement {
     this.scrollToBottom();
 
     try {
+      // Build the request body — only include sessionId when we
+      // have one. Sending {sessionId: null} causes some proxy/engine
+      // combos to 500 because their Zod schemas use .optional() not
+      // .nullable(). Omitting the key is the defensive default.
+      const reqBody: Record<string, unknown> = { message };
+      if (this.sessionId) reqBody.sessionId = this.sessionId;
+
       const res = await fetch(`${this.api}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message,
-          sessionId: this.sessionId,
-        }),
+        body: JSON.stringify(reqBody),
       });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}: ${await res.text().catch(() => res.statusText)}`);

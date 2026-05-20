@@ -395,16 +395,15 @@ export const ResolveCandidateSchema = z.object({
 
 export const ChatRequestSchema = z.object({
   message: z.string().min(1),
-  knowledgeBaseId: z.string().optional(),
-  // F144 — optional session id. When omitted + knowledgeBaseId is set, the
-  // chat endpoint creates a new session and returns its id so the client
-  // can append subsequent turns to it.
-  sessionId: z.string().optional(),
-  // F160 — audience-aware chat. Controls which persona-template the
-  // server uses to shape prose tone + which output post-processing
-  // applies. Default: `tool` for Bearer auth, `curator` for session.
-  // External integrations explicitly pass `tool` or `public`.
-  audience: z.enum(['curator', 'tool', 'public']).optional(),
+  // 2026-05-14: switched from .optional() to .nullish() across all three
+  // optional fields after a widget-side `JSON.stringify({sessionId:null})`
+  // crashed the chat route with a 500. JSON serialisation in browsers
+  // often emits `null` for missing values; engine should accept both
+  // omitted-key AND `null`. F144 (optional session id), F160 (optional
+  // audience) intent unchanged — just more forgiving on the wire.
+  knowledgeBaseId: z.string().nullish(),
+  sessionId: z.string().nullish(),
+  audience: z.enum(['curator', 'tool', 'public']).nullish(),
 });
 
 export const ChatResponseSchema = z.object({

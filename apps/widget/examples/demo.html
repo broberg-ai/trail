@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>trail-chat — local demo</title>
+    <style>
+      :root {
+        --bg: #faf9f5;
+        --fg: #1a1715;
+        --fg-muted: rgba(26, 23, 21, 0.7);
+        --fg-subtle: rgba(26, 23, 21, 0.4);
+        --accent: #c97a1a;
+        --border: rgba(26, 23, 21, 0.1);
+        --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #17140f;
+          --fg: #f5f1ea;
+          --fg-muted: rgba(245, 241, 234, 0.7);
+          --fg-subtle: rgba(245, 241, 234, 0.4);
+          --accent: #e8a87c;
+          --border: rgba(245, 241, 234, 0.1);
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        line-height: 1.55;
+      }
+      .wrap {
+        max-width: 900px;
+        margin: 2.5rem auto;
+        padding: 0 1.5rem 4rem;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+      }
+      header svg { width: 32px; height: 32px; flex-shrink: 0; }
+      header h1 {
+        font-family: var(--font-mono);
+        font-size: 1.5rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        margin: 0;
+      }
+      header .sub {
+        color: var(--fg-subtle);
+        font-family: var(--font-mono);
+        font-size: 0.95rem;
+        margin-left: 0.25rem;
+      }
+      p { margin: 0.75rem 0; }
+      .lead {
+        color: var(--fg-muted);
+        font-size: 1.05rem;
+        max-width: 60ch;
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.2rem 0.55rem;
+        background: rgba(232, 168, 124, 0.12);
+        color: var(--accent);
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        border-radius: 4px;
+        border: 1px solid rgba(232, 168, 124, 0.3);
+      }
+      .controls {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        align-items: center;
+        margin: 1.25rem 0;
+        padding: 0.85rem 1rem;
+        background: rgba(0, 0, 0, 0.025);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 13px;
+      }
+      @media (prefers-color-scheme: dark) {
+        .controls { background: rgba(255, 255, 255, 0.025); }
+      }
+      .controls label { display: inline-flex; align-items: center; gap: 0.4rem; }
+      select {
+        font: inherit;
+        padding: 0.25rem 0.5rem;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      h2 {
+        font-size: 1.1rem;
+        margin-top: 2.25rem;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        background: rgba(0, 0, 0, 0.05);
+        padding: 0.1em 0.35em;
+        border-radius: 3px;
+      }
+      @media (prefers-color-scheme: dark) {
+        code { background: rgba(255, 255, 255, 0.05); }
+      }
+      pre {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        background: rgba(0, 0, 0, 0.04);
+        padding: 0.85rem 1rem;
+        border-radius: 6px;
+        overflow-x: auto;
+      }
+      @media (prefers-color-scheme: dark) {
+        pre { background: rgba(255, 255, 255, 0.04); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-label="trail">
+          <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2"/>
+          <circle cx="16" cy="16" r="9" fill="none" stroke="#e8a87c" stroke-width="0.9" opacity="0.55"/>
+          <circle cx="16" cy="16" r="3.5" fill="#e8a87c"/>
+        </svg>
+        <h1>trail</h1>
+        <span class="sub">widget · local demo</span>
+      </header>
+
+      <p class="lead">
+        This page embeds <code>&lt;trail-chat&gt;</code> the same way any
+        customer site would. The widget bundle is served from this dev
+        server at <code>/widget.js</code>, and the chat-proxy
+        endpoints sit at <code>/api/chat-proxy/{chat,feedback}</code>.
+      </p>
+
+      <div class="controls">
+        <span><strong>Mode:</strong></span>
+        <span id="mode-badge" class="badge">checking…</span>
+        <span style="color: var(--fg-subtle); font-size: 12px;">
+          Set <code>TRAIL_API_KEY</code> + <code>TRAIL_KB</code> env to switch to real mode.
+        </span>
+        <label style="margin-left: auto;">
+          theme:
+          <select id="theme">
+            <option value="auto" selected>auto</option>
+            <option value="light">light</option>
+            <option value="dark">dark</option>
+          </select>
+        </label>
+      </div>
+
+      <trail-chat
+        id="widget"
+        api="/api/chat-proxy"
+        theme="auto"
+        height="520px"
+        placeholder="Ask me something about the practice…"></trail-chat>
+
+      <h2>How this works</h2>
+      <pre>&lt;script type="module" src="/widget.js"&gt;&lt;/script&gt;
+&lt;trail-chat api="/api/chat-proxy" theme="auto"&gt;&lt;/trail-chat&gt;</pre>
+      <p style="color: var(--fg-muted); font-size: 14px;">
+        The <code>api</code> attribute points at your own server's
+        proxy route — never directly at <code>engine.trailmem.com</code>.
+        The proxy holds the bearer key.
+      </p>
+
+      <h2>Try it</h2>
+      <p style="color: var(--fg-muted); font-size: 14px;">
+        Type a question, hit Enter (Shift+Enter for newline). Use 👍/👎/🚩
+        under each answer to send feedback into the curator queue
+        (stub mode: feedback is logged to the demo server's stdout;
+        real mode: lands in <code>app.trailmem.com</code>'s queue).
+      </p>
+    </div>
+
+    <script type="module" src="/widget.js"></script>
+    <script>
+      // Toggle theme attribute live.
+      document.getElementById('theme').addEventListener('change', (e) => {
+        document.getElementById('widget').setAttribute('theme', e.target.value);
+      });
+
+      // Probe the proxy to determine mode and update badge.
+      fetch('/api/chat-proxy/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: '__probe__' }),
+      }).then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        const badge = document.getElementById('mode-badge');
+        if (data.answer && data.answer.startsWith('**Stub answer**')) {
+          badge.textContent = '⚠ stub';
+          badge.title = 'No TRAIL_API_KEY set; demo returns canned answers';
+        } else if (r.ok && data.answer) {
+          badge.textContent = '✓ real';
+          badge.title = 'Connected to engine.trailmem.com';
+        } else {
+          badge.textContent = '✗ error';
+          badge.title = JSON.stringify(data).slice(0, 120);
+        }
+      }).catch(() => {
+        document.getElementById('mode-badge').textContent = '✗ unreachable';
+      });
+    </script>
+  </body>
+</html>
