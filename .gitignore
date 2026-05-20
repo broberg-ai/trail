@@ -176,3 +176,8 @@ apps/server/test-fixtures/*.m4a
 # F40.2a-F — captured API baselines for byte-for-byte verification.
 # Local-only; never commit because bearer-fetched responses leak data.
 apps/server/.baseline/
+
+# F40.2a — Playwright test artifacts. Recreated on every run; do not
+# pollute git with traces/videos/screenshots.
+apps/widget/test-results/
+apps/widget/playwright-report/
