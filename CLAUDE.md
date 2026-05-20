@@ -1,5 +1,46 @@
 # trail
 
+## HARD RULE — destructive ops on prod Fly volumes
+
+**`flyctl ssh console -C "<cmd>"` does NOT parse `<cmd>` as a shell.**
+Arguments are exec'd directly with argv-splitting. Shell metachars
+(`&&`, `;`, `|`, `>`, glob `*`) become **literal positional args** to
+the binary you invoked.
+
+Incident 2026-05-14: ran
+`flyctl ssh console -a trail-engine-001 -C "rm -rf /data/trail-research && ls /data/"`
+to clean up a botched tenant bootstrap. `rm` received 4 path args —
+`/data/trail-research`, `&&`, `ls`, `/data/` — and with `-rf` it
+recursively wiped EVERY child of `/data/` (including
+`/data/sanne-andersen/`, Sanne's entire prod tenant) before
+finally erroring out on the mount point itself with "Device or
+resource busy". Restored from `vs_pObkqPnVyK0XSA8xD0gAL9K` via
+`flyctl machine clone --from-snapshot` — but only because the
+5-day retention window happened to hold a 5-hour-old snapshot.
+
+**Rules:**
+
+1. **Never use `flyctl ssh ... -C` with shell metacharacters.** One
+   command per `-C` invocation. Multiple commands → write a script,
+   upload via `flyctl ssh sftp shell`, run with `-C "bash /tmp/x.sh"`.
+2. **Before any `rm -rf` on a prod Fly volume**, take a manual
+   snapshot first: `flyctl volumes snapshots create <vol_id> -a <app>`,
+   wait for `created`, THEN proceed. The auto-snapshots have a 5-day
+   retention — they are a safety net, not a guarantee.
+3. **Use `find … -exec rm -rf {} +` instead of bare `rm -rf <path>`**
+   when the target is inside a prod volume. `find` only ever sees
+   paths that match the predicate, so a metachar in the wrong
+   position can't widen the blast radius:
+   ```
+   find /data -maxdepth 1 -mindepth 1 -type d -name "trail-research" -exec rm -rf {} +
+   ```
+4. **Interactive shell beats `-C` for anything destructive.** Open a
+   real session with `flyctl ssh console -a <app>` and run commands
+   one at a time, reading output between each.
+
+This rule is non-negotiable. Re-derive cost: one mid-tier customer's
+trust + 1h of downtime. Do not pay that twice.
+
 ## Trail Fly deployment policy
 
 **ALL Trail Fly apps live in org `broberg-ai` and region `arn` (Stockholm).**
