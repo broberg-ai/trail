@@ -173,6 +173,14 @@ export function ChatPanel() {
     persistAudience(next);
   }, []);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  // 2026-05-21 — flag set right before we change activeId to the
+  // sessionId that just-arrived from a /chat response. Tells the
+  // load-turns effect to skip its fetch on this transition because
+  // the optimistic local turn carries fields (images, audience)
+  // that are NOT persisted in chat_turns and would be lost on
+  // reload. Without this guard the image carousel renders for one
+  // tick and then disappears when the server-reload overwrites it.
+  const skipNextReloadRef = useRef(false);
 
   const reloadSessions = useCallback(() => {
     if (!kbId) return;
@@ -190,6 +198,15 @@ export function ChatPanel() {
     if (!activeId) {
       setTurns([]);
       setTurnBudget(null);
+      return;
+    }
+    if (skipNextReloadRef.current) {
+      // The submit handler just pinned activeId from a /chat response;
+      // the optimistic-then-resolved turn already in state has the
+      // images + audience this run produced. Re-fetching would
+      // round-trip those fields out of existence (they aren't
+      // persisted in chat_turns).
+      skipNextReloadRef.current = false;
       return;
     }
     setTurnsLoading(true);
@@ -271,6 +288,7 @@ export function ChatPanel() {
       );
       // Pin the session id the server landed on (auto-created or echoed).
       if (res.sessionId && res.sessionId !== activeId) {
+        skipNextReloadRef.current = true;
         setActiveId(res.sessionId);
       }
       // F156 Phase 1 — server is authoritative on turn budget. The
