@@ -237,23 +237,61 @@ authRoutes.post('/logout', async (c) => {
  *
  * Removed before Fly deploy (F33) — or gated so it never ships to prod.
  */
-authRoutes.get('/dev-login', (c) => {
+authRoutes.get('/dev-login', async (c) => {
   if (process.env.TRAIL_DEV_AUTH !== '1') {
     return c.json({ error: 'dev-login disabled (set TRAIL_DEV_AUTH=1 in the engine env)' }, 403);
   }
-  // Hardcoded session id — the dev seed creates a matching `sessions`
-  // row with id='dev'. Accepting `?session=X` used to let anyone with
-  // TRAIL_DEV_AUTH=1 enabled adopt ANY existing session id, including
-  // a real curator's, which is a flat privilege-escalation bug if the
-  // flag ever slipped into a shared environment. There is no legitimate
-  // reason to parametrise this on query — dev-login is one user, one
-  // fixed session.
+  // Self-sufficient session bootstrap. The original implementation
+  // assumed a pre-seeded `sessions` row with id='dev' existed and was
+  // unexpired — but nothing in the codebase actually creates that row,
+  // and once its expires_at lapsed the SPA looped between /dev-login
+  // (which silently re-set the same expired-cookie) and /api/v1/me
+  // (which 401'd with "Session expired"). The handler now owns the
+  // row outright: pick the first owner-role user on this dev machine,
+  // UPSERT the dev session with a one-year horizon, set the cookie.
+  // No external seed required.
+  const trail = getTrail(c);
+
+  const devUser = await trail.db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.role, 'owner'))
+    .orderBy(users.createdAt)
+    .limit(1)
+    .get();
+
+  if (!devUser) {
+    return c.json(
+      {
+        error:
+          'dev-login: no owner-role user found in the local DB. Create a tenant + owner user via the admin onboarding flow first.',
+      },
+      503,
+    );
+  }
+
+  const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+  await trail.db
+    .insert(sessions)
+    .values({ id: 'dev', userId: devUser.id, expiresAt })
+    .onConflictDoUpdate({
+      target: sessions.id,
+      set: { expiresAt, userId: devUser.id },
+    })
+    .run();
+
+  // Hardcoded session id — accepting `?session=X` used to let anyone
+  // with TRAIL_DEV_AUTH=1 enabled adopt ANY existing session id,
+  // including a real curator's, which is a flat privilege-escalation
+  // bug if the flag ever slipped into a shared environment. There is
+  // no legitimate reason to parametrise this on query — dev-login is
+  // one machine, one fixed session.
   setCookie(c, 'session', 'dev', {
     httpOnly: true,
     secure: SECURE_COOKIE,
     sameSite: 'Lax',
     path: '/',
-    maxAge: 30 * 24 * 60 * 60,
+    maxAge: 365 * 24 * 60 * 60,
   });
   return c.redirect(APP_URL);
 });
