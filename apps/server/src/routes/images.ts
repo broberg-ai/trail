@@ -208,8 +208,12 @@ imageRoutes.get('/documents/:docId/images/:filename/rating', async (c) => {
  * Tenant-scope: a probe with image-ids from another tenant returns 0
  * deleted; we never DELETE rows we couldn't first SELECT scoped.
  *
- * Audience: Bearer-keys (tool audience) are forbidden — image deletion
- * is an operator-only action. Curator session-cookie passes.
+ * Permission: gated on user.role — owner + curator can bulk-delete,
+ * reader cannot. Previously this gated on auth-type (session-only)
+ * which broke in prod when admin-server proxies requests as Bearer
+ * to the engine — operator clicks "Slet permanent" in the admin UI,
+ * proxy strips cookie + injects tenant Bearer, engine sees
+ * authType='bearer' and 403'd legitimate operator actions.
  *
  * Storage purge is best-effort: if the blob is missing or unlink fails,
  * we log and surface in storageWarnings but the DB delete still
@@ -218,12 +222,17 @@ imageRoutes.get('/documents/:docId/images/:filename/rating', async (c) => {
 imageRoutes.post('/knowledge-bases/:kbId/images/bulk-delete', async (c) => {
   const trail = getTrail(c);
   const tenant = getTenant(c);
+  const user = getUser(c);
   const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
   if (!kbId) return c.json({ error: 'Not found' }, 404);
 
-  // Audience guard — operator-only.
-  if (c.get('authType') === 'bearer') {
-    return c.json({ error: 'Bulk-delete is operator-only (session-cookie required)' }, 403);
+  // Permission guard — readers can't delete. Anyone with a write-tier
+  // role (owner, curator, admin) can. Deny-list rather than whitelist
+  // because the schema accepts roles outside the TS type union
+  // ("admin" exists in the DB for cb@webhouse.dk's user-row); a
+  // strict whitelist would lock out a legitimate operator.
+  if (user.role === 'reader') {
+    return c.json({ error: 'Bulk-delete requires write-tier role' }, 403);
   }
 
   const body = (await c.req.json().catch(() => null)) as { imageIds?: unknown } | null;
