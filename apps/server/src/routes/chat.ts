@@ -773,49 +773,14 @@ async function retrieveContext(
       }
     }
 
-    // (B) Piggyback fill — only run if FTS didn't already cap the
-    // array. We deliberately DON'T piggyback when FTS found something,
-    // to keep the response focused on the visual subject the user
-    // asked about.
-    if (images.length === 0 && seen.size > 0) {
-      const docIdList = Array.from(seen);
-      const piggybackRows = await trail.db
-        .select({
-          id: documentImages.id,
-          documentId: documentImages.documentId,
-          filename: documentImages.filename,
-          page: documentImages.page,
-          width: documentImages.width,
-          height: documentImages.height,
-          visionDescription: documentImages.visionDescription,
-        })
-        .from(documentImages)
-        .where(
-          and(
-            eq(documentImages.tenantId, tenantId),
-            inArray(documentImages.documentId, docIdList),
-          ),
-        )
-        .all();
-      piggybackRows.sort((a, b) => {
-        if (a.documentId !== b.documentId) return a.documentId.localeCompare(b.documentId);
-        return a.filename.localeCompare(b.filename);
-      });
-      for (const row of piggybackRows) {
-        if (images.length >= CHAT_IMAGE_CAP) break;
-        if (seenImageRowIds.has(row.id)) continue;
-        seenImageRowIds.add(row.id);
-        images.push({
-          documentId: row.documentId,
-          filename: row.filename,
-          url: `/api/v1/documents/${row.documentId}/images/${row.filename.replace(/^\//, '')}`,
-          alt: row.visionDescription ?? '',
-          page: row.page,
-          width: row.width,
-          height: row.height,
-        });
-      }
-    }
+    // Piggyback path REMOVED 2026-05-21. Previously: when FTS over
+    // image alt-text returned 0 hits, we fell back to whatever images
+    // the text-retrieved docs had embedded. That filled responses
+    // with garbage — "Prøv igen" matched no FTS images so piggyback
+    // returned 1 random anatomy diagram from the only text-matched
+    // response-Neuron, presented as if it were an answer. FTS-only is
+    // the honest contract: surface images whose alt-text actually
+    // matches the query, nothing else.
   }
 
   let context = chunks.join('\n\n---\n\n');
