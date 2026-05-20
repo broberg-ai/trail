@@ -708,41 +708,113 @@ async function retrieveContext(
   // when images exist so the model can SAY "here are three pictures
   // of feet" instead of refusing the request. Without this, the LLM
   // is unaware that images exist and apologises that it can't help.
+  // Image surfacing for non-public audiences. FTS-first, piggyback-as-filler:
+  //
+  //   (A) FTS over document_images_fts.vision_description — matches
+  //       the query directly against vision-generated alt-text. This
+  //       has to run BEFORE piggyback or the cap gets eaten by random
+  //       images from text-matched Neurons that have nothing to do
+  //       with the visual subject the user asked about. ("vis mig
+  //       billeder af gule blomster" → text-retrieval pulls answer-
+  //       Neurons about "showing images" with anatomy images attached;
+  //       FTS pulls the actual yellow-flower images directly.)
+  //
+  //   (B) Piggyback fills any remaining slots with images from the
+  //       text-retrieved doc set. Useful when the question isn't
+  //       primarily visual but the matched Neurons happen to have
+  //       embedded figures.
   const images: ChatImage[] = [];
-  if (audience !== 'public' && seen.size > 0) {
-    const docIdList = Array.from(seen);
-    const imageRows = await trail.db
-      .select({
-        documentId: documentImages.documentId,
-        filename: documentImages.filename,
-        page: documentImages.page,
-        width: documentImages.width,
-        height: documentImages.height,
-        visionDescription: documentImages.visionDescription,
-      })
-      .from(documentImages)
-      .where(
-        and(
-          eq(documentImages.tenantId, tenantId),
-          inArray(documentImages.documentId, docIdList),
-        ),
-      )
-      .all();
-    // Sort + cap for deterministic ordering across replays.
-    imageRows.sort((a, b) => {
-      if (a.documentId !== b.documentId) return a.documentId.localeCompare(b.documentId);
-      return a.filename.localeCompare(b.filename);
-    });
-    for (const row of imageRows.slice(0, CHAT_IMAGE_CAP)) {
-      images.push({
-        documentId: row.documentId,
-        filename: row.filename,
-        url: `/api/v1/documents/${row.documentId}/images/${row.filename.replace(/^\//, '')}`,
-        alt: row.visionDescription ?? '',
-        page: row.page,
-        width: row.width,
-        height: row.height,
+  const seenImageRowIds = new Set<string>();
+  if (audience !== 'public') {
+    // (A) FTS-first
+    if (ftsQuery && kbIds.length > 0) {
+      const placeholders = kbIds.map(() => '?').join(',');
+      const ftsResult = await trail.execute(
+        `SELECT di.id, di.document_id, di.knowledge_base_id, di.filename,
+                di.page, di.width, di.height, di.vision_description
+           FROM document_images_fts fts
+           JOIN document_images di ON di.rowid = fts.rowid
+          WHERE fts.vision_description MATCH ?
+            AND di.tenant_id = ?
+            AND di.knowledge_base_id IN (${placeholders})
+          ORDER BY bm25(document_images_fts) ASC
+          LIMIT ?`,
+        [ftsQuery, tenantId, ...kbIds, CHAT_IMAGE_CAP],
+      );
+      for (const row of ftsResult.rows as Array<Record<string, unknown>>) {
+        if (images.length >= CHAT_IMAGE_CAP) break;
+        const imageId = String(row.id);
+        if (seenImageRowIds.has(imageId)) continue;
+        seenImageRowIds.add(imageId);
+        const docId = String(row.document_id);
+        const filename = String(row.filename);
+        images.push({
+          documentId: docId,
+          filename,
+          url: `/api/v1/documents/${docId}/images/${filename.replace(/^\//, '')}`,
+          alt: (row.vision_description as string | null) ?? '',
+          page: (row.page as number | null) ?? null,
+          width: Number(row.width),
+          height: Number(row.height),
+        });
+        // Adopt the parent doc into seen so the citations array can
+        // surface it too. Cheap one-row lookup; only fires for hits.
+        if (!seen.has(docId)) {
+          seen.add(docId);
+          const parent = await trail.db
+            .select({ id: documents.id, path: documents.path, filename: documents.filename })
+            .from(documents)
+            .where(eq(documents.id, docId))
+            .get();
+          if (parent) {
+            citations.push({ documentId: parent.id, path: parent.path, filename: parent.filename });
+          }
+        }
+      }
+    }
+
+    // (B) Piggyback fill — only run if FTS didn't already cap the
+    // array. We deliberately DON'T piggyback when FTS found something,
+    // to keep the response focused on the visual subject the user
+    // asked about.
+    if (images.length === 0 && seen.size > 0) {
+      const docIdList = Array.from(seen);
+      const piggybackRows = await trail.db
+        .select({
+          id: documentImages.id,
+          documentId: documentImages.documentId,
+          filename: documentImages.filename,
+          page: documentImages.page,
+          width: documentImages.width,
+          height: documentImages.height,
+          visionDescription: documentImages.visionDescription,
+        })
+        .from(documentImages)
+        .where(
+          and(
+            eq(documentImages.tenantId, tenantId),
+            inArray(documentImages.documentId, docIdList),
+          ),
+        )
+        .all();
+      piggybackRows.sort((a, b) => {
+        if (a.documentId !== b.documentId) return a.documentId.localeCompare(b.documentId);
+        return a.filename.localeCompare(b.filename);
       });
+      for (const row of piggybackRows) {
+        if (images.length >= CHAT_IMAGE_CAP) break;
+        if (seenImageRowIds.has(row.id)) continue;
+        seenImageRowIds.add(row.id);
+        images.push({
+          documentId: row.documentId,
+          filename: row.filename,
+          url: `/api/v1/documents/${row.documentId}/images/${row.filename.replace(/^\//, '')}`,
+          alt: row.visionDescription ?? '',
+          page: row.page,
+          width: row.width,
+          height: row.height,
+        });
+      }
     }
   }
 
