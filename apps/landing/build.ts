@@ -977,6 +977,171 @@ body[data-menu-open="true"] { overflow: hidden; }
   display: inline-block;
 }
 .post-related a:hover .post-related-arrow { color: var(--accent); transform: translateX(3px); }
+
+/* Pricing page */
+.pricing-page { padding-top: 5rem; }
+.pricing-hero {
+  padding: 5rem 2rem 3.5rem;
+  text-align: center;
+  border-bottom: 1px solid var(--fg-10);
+}
+.pricing-hero-inner { max-width: 48rem; margin: 0 auto; }
+.pricing-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 1rem;
+}
+.pricing-hero h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 700; letter-spacing: -0.035em; line-height: 1.1;
+  margin-bottom: 1rem;
+}
+.pricing-hero-lead {
+  font-size: 1.125rem; color: var(--fg-70); line-height: 1.6; max-width: 38rem; margin: 0 auto;
+}
+.pricing-section {
+  padding: 4rem 2rem;
+  border-bottom: 1px solid var(--fg-10);
+}
+.pricing-section-inner { max-width: 72rem; margin: 0 auto; }
+.pricing-section h2 {
+  font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.5rem;
+}
+.pricing-section-sub { color: var(--fg-60); font-size: 0.9375rem; margin-bottom: 2.5rem; max-width: 44rem; }
+
+/* Plan cards */
+.plan-grid {
+  display: grid; grid-template-columns: 1fr; gap: 0.25rem;
+}
+@media (min-width: 640px) { .plan-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1024px) { .plan-grid { grid-template-columns: repeat(4, 1fr); } }
+.plan-card {
+  position: relative;
+  padding: 1.75rem;
+  border: 1px solid var(--fg-10);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  display: flex; flex-direction: column; gap: 1rem;
+}
+.plan-card.plan-featured {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--bg-card) 90%, transparent);
+}
+.plan-card-badge {
+  position: absolute; top: -1px; right: 1.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 0.25rem 0.625rem;
+  background: var(--accent); color: var(--bg);
+  border-radius: 0 0 4px 4px;
+}
+.plan-name {
+  font-family: var(--font-mono);
+  font-size: 0.875rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--fg-70);
+}
+.plan-price { display: flex; align-items: baseline; gap: 0.25rem; }
+.plan-price-amount {
+  font-size: 2.25rem; font-weight: 700; letter-spacing: -0.04em; font-family: var(--font-mono);
+}
+.plan-price-period { font-size: 0.875rem; color: var(--fg-60); }
+.plan-credits {
+  font-family: var(--font-mono); font-size: 0.875rem; color: var(--accent); font-weight: 600;
+}
+.plan-features {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 0.5rem; flex: 1;
+}
+.plan-features li {
+  font-size: 0.875rem; color: var(--fg-70);
+  display: flex; align-items: flex-start; gap: 0.5rem;
+}
+.plan-features li::before {
+  content: "—"; color: var(--fg-30); flex-shrink: 0; font-family: var(--font-mono);
+}
+.plan-cta {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0.625rem 1rem;
+  border: 1px solid var(--fg-20);
+  border-radius: 4px;
+  font-size: 0.875rem; font-weight: 500;
+  color: var(--fg);
+  transition: all 0.2s;
+}
+.plan-cta:hover { border-color: var(--fg); }
+.plan-card.plan-featured .plan-cta {
+  background: var(--fg); color: var(--bg); border-color: var(--fg);
+}
+.plan-card.plan-featured .plan-cta:hover { background: var(--fg-90); }
+
+/* Credit usage table */
+.credit-table {
+  width: 100%; border-collapse: collapse; font-size: 0.875rem; margin: 1.5rem 0;
+}
+.credit-table th {
+  font-family: var(--font-mono);
+  font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--fg-60); text-align: left;
+  padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--fg-10);
+}
+.credit-table td {
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--fg-10);
+  color: var(--fg-80);
+}
+.credit-table tr:last-child td { border-bottom: none; }
+.credit-table .mono { font-family: var(--font-mono); }
+.credit-table .accent { color: var(--accent); font-weight: 600; }
+
+/* Top-up pack cards */
+.pack-grid { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.pack-card {
+  flex: 1; min-width: 110px;
+  padding: 1.25rem 1rem;
+  border: 1px solid var(--fg-10);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  display: flex; flex-direction: column; align-items: center; gap: 0.375rem;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+.pack-card:hover { border-color: var(--accent); }
+.pack-credits {
+  font-family: var(--font-mono); font-size: 1.375rem; font-weight: 700; letter-spacing: -0.03em;
+}
+.pack-price { font-family: var(--font-mono); font-size: 0.9375rem; color: var(--accent); font-weight: 600; }
+.pack-per { font-size: 0.75rem; color: var(--fg-50); }
+
+/* Model cards (homepage + pricing) */
+.models-section {
+  padding: 4rem 2rem;
+  border-top: 1px solid var(--fg-10);
+}
+.models-section-inner { max-width: 72rem; margin: 0 auto; }
+.models-header { margin-bottom: 2.5rem; }
+.models-header h2 {
+  font-size: clamp(1.5rem, 3vw, 1.875rem);
+  font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.5rem;
+}
+.models-header p { color: var(--fg-60); max-width: 36rem; }
+.model-grid {
+  display: grid; grid-template-columns: 1fr; gap: 0.25rem;
+}
+@media (min-width: 640px) { .model-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1024px) { .model-grid { grid-template-columns: repeat(4, 1fr); } }
+.model-card {
+  padding: 1.25rem;
+  border: 1px solid var(--fg-10);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  display: flex; flex-direction: column; gap: 0.5rem;
+  transition: background 0.2s;
+}
+.model-card:hover { background: var(--bg-card); }
+.model-provider {
+  font-family: var(--font-mono); font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--fg-50);
+}
+.model-name { font-size: 0.9375rem; font-weight: 600; letter-spacing: -0.01em; }
+.model-cost { font-family: var(--font-mono); font-size: 0.875rem; color: var(--accent); font-weight: 600; }
+.model-note { font-size: 0.8125rem; color: var(--fg-60); line-height: 1.45; }
 `;
 
 // ── Rendering ───────────────────────────────────────────────
@@ -1288,6 +1453,215 @@ function renderTrailsIndex(): string {
   return `<article class="article container">${header}${body}</article>`;
 }
 
+function renderModelsSection(): string {
+  return `<section class="models-section">
+    <div class="models-section-inner">
+      <div class="models-header">
+        <h2>Any model. Your choice.</h2>
+        <p>Gemini Flash for scale, Sonnet for depth. Credits convert directly to LLM cost — you decide how to spend them.</p>
+      </div>
+      <div class="model-grid">
+        <div class="model-card">
+          <div class="model-provider">Google</div>
+          <div class="model-name">Gemini 2.5 Flash</div>
+          <div class="model-cost">~0.1 credits / turn</div>
+          <div class="model-note">Default on all plans. ~1 000 chat turns per 100 credits.</div>
+        </div>
+        <div class="model-card">
+          <div class="model-provider">Google</div>
+          <div class="model-name">Gemini 2.5 Pro</div>
+          <div class="model-cost">~0.4 credits / turn</div>
+          <div class="model-note">More reasoning depth — same provider, 4× credit cost.</div>
+        </div>
+        <div class="model-card">
+          <div class="model-provider">Anthropic</div>
+          <div class="model-name">Claude Haiku 4.5</div>
+          <div class="model-cost">~1.5 credits / turn</div>
+          <div class="model-note">Fast Anthropic model for structured extraction tasks.</div>
+        </div>
+        <div class="model-card">
+          <div class="model-provider">Anthropic</div>
+          <div class="model-name">Claude Sonnet 4.6</div>
+          <div class="model-cost">~6 credits / turn</div>
+          <div class="model-note">Premium. Best citation quality and reasoning depth.</div>
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function renderPricingPage(): string {
+  return `<main class="pricing-page">
+    <div class="pricing-hero">
+      <div class="pricing-hero-inner">
+        <p class="pricing-eyebrow">Pricing</p>
+        <h1>Simple, transparent pricing.</h1>
+        <p class="pricing-hero-lead">Credits are your LLM budget. Every plan includes a monthly allowance — top up when you need more, credits never expire.</p>
+      </div>
+    </div>
+
+    <section class="pricing-section">
+      <div class="pricing-section-inner">
+        <div class="plan-grid">
+          <div class="plan-card">
+            <div class="plan-name">Hobby</div>
+            <div class="plan-price"><span class="plan-price-amount">Free</span></div>
+            <div class="plan-credits">100 credits / month</div>
+            <ul class="plan-features">
+              <li>1 Trail, 500 Neurons max</li>
+              <li>100 source documents</li>
+              <li>PDF + Markdown connectors</li>
+              <li>Community support</li>
+            </ul>
+            <a href="#" class="plan-cta">Get started free</a>
+          </div>
+
+          <div class="plan-card">
+            <div class="plan-name">Starter</div>
+            <div class="plan-price">
+              <span class="plan-price-amount">€29</span>
+              <span class="plan-price-period">/ mo</span>
+            </div>
+            <div class="plan-credits">400 credits / month</div>
+            <ul class="plan-features">
+              <li>3 Trails, 5 000 Neurons / Trail</li>
+              <li>2 000 sources per Trail</li>
+              <li>5 connectors incl. DOCX + Image</li>
+              <li>48h email support</li>
+            </ul>
+            <a href="#" class="plan-cta">Start Starter</a>
+          </div>
+
+          <div class="plan-card plan-featured">
+            <div class="plan-card-badge">Most popular</div>
+            <div class="plan-name">Pro</div>
+            <div class="plan-price">
+              <span class="plan-price-amount">€149</span>
+              <span class="plan-price-period">/ mo</span>
+            </div>
+            <div class="plan-credits">2 000 credits / month</div>
+            <ul class="plan-features">
+              <li>10 Trails, 25 000 Neurons / Trail</li>
+              <li>10 000 sources per Trail</li>
+              <li>8 connectors + API access</li>
+              <li>Priority support (24h)</li>
+            </ul>
+            <a href="#" class="plan-cta">Start Pro</a>
+          </div>
+
+          <div class="plan-card">
+            <div class="plan-name">Business</div>
+            <div class="plan-price">
+              <span class="plan-price-amount">€499</span>
+              <span class="plan-price-period">/ mo</span>
+            </div>
+            <div class="plan-credits">10 000 credits / month</div>
+            <ul class="plan-features">
+              <li>Unlimited Trails, 100 000 Neurons / Trail</li>
+              <li>50 000 sources per Trail</li>
+              <li>All connectors + dedicated Slack</li>
+              <li>Dedicated node, 99.5% SLA</li>
+            </ul>
+            <a href="#" class="plan-cta">Start Business</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="pricing-section">
+      <div class="pricing-section-inner">
+        <h2>What is a credit?</h2>
+        <p class="pricing-section-sub">1 credit = €0.01 of measured LLM computation — the actual cost reported by the provider, not an estimate from token counts. You see the same number we see.</p>
+        <table class="credit-table">
+          <thead>
+            <tr>
+              <th>Operation</th>
+              <th>Model</th>
+              <th>Typical cost</th>
+              <th>≈ Credits</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>10-page PDF ingest</td>
+              <td class="mono">Gemini Flash</td>
+              <td>€0.01</td>
+              <td class="accent mono">1</td>
+            </tr>
+            <tr>
+              <td>50-page PDF ingest</td>
+              <td class="mono">Gemini Flash</td>
+              <td>€0.05</td>
+              <td class="accent mono">5</td>
+            </tr>
+            <tr>
+              <td>200-page book ingest</td>
+              <td class="mono">Gemini Flash</td>
+              <td>€0.20</td>
+              <td class="accent mono">20</td>
+            </tr>
+            <tr>
+              <td>10-page PDF ingest</td>
+              <td class="mono">Claude Sonnet</td>
+              <td>€0.30</td>
+              <td class="accent mono">30</td>
+            </tr>
+            <tr>
+              <td>Chat turn</td>
+              <td class="mono">Gemini Flash</td>
+              <td>€0.001</td>
+              <td class="accent mono">~0.1</td>
+            </tr>
+            <tr>
+              <td>Chat turn (premium)</td>
+              <td class="mono">Claude Sonnet</td>
+              <td>€0.06</td>
+              <td class="accent mono">~6</td>
+            </tr>
+          </tbody>
+        </table>
+        <p style="font-size:0.875rem;color:var(--fg-60);margin-top:1rem">Lint, tag extraction, translation and other background maintenance features do not consume credits — always included.</p>
+      </div>
+    </section>
+
+    <section class="pricing-section">
+      <div class="pricing-section-inner">
+        <h2>Top-up packs</h2>
+        <p class="pricing-section-sub">Credits never expire. Buy once, spend whenever you need. Larger packs have a lower per-credit price.</p>
+        <div class="pack-grid">
+          <div class="pack-card">
+            <div class="pack-credits">100</div>
+            <div class="pack-price">€5</div>
+            <div class="pack-per">€0.050 / credit</div>
+          </div>
+          <div class="pack-card">
+            <div class="pack-credits">200</div>
+            <div class="pack-price">€9</div>
+            <div class="pack-per">€0.045 / credit</div>
+          </div>
+          <div class="pack-card">
+            <div class="pack-credits">500</div>
+            <div class="pack-price">€19</div>
+            <div class="pack-per">€0.038 / credit</div>
+          </div>
+          <div class="pack-card">
+            <div class="pack-credits">1 000</div>
+            <div class="pack-price">€35</div>
+            <div class="pack-per">€0.035 / credit</div>
+          </div>
+          <div class="pack-card">
+            <div class="pack-credits">2 000</div>
+            <div class="pack-price">€60</div>
+            <div class="pack-per">€0.030 / credit</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    ${renderModelsSection()}
+  </main>`;
+}
+
 // ── Global data ─────────────────────────────────────────────
 
 const siteTitle = String(global.siteTitle ?? "trail");
@@ -1517,11 +1891,22 @@ const homeHtml = home
 
 const homeTitle = home ? String(home.data.title ?? siteTitle) : siteTitle;
 const homeDesc = home ? String(home.data.metaDescription ?? siteDescription) : siteDescription;
-write("index.html", layout(homeTitle, homeHtml, homeDesc));
+write("index.html", layout(homeTitle, homeHtml + renderModelsSection(), homeDesc));
+
+// Pricing page (F156 credits model — data-driven from feature spec, not CMS content)
+write(
+  "pricing/index.html",
+  layout(
+    "Pricing",
+    renderPricingPage(),
+    "Simple, transparent pricing. Credits are your LLM budget — choose a plan and top up as needed. Credits never expire.",
+  ),
+);
 
 // Other pages (non-home)
 for (const page of pages) {
   if (page.slug === "home") continue;
+  if (page.slug === "pricing") continue; // rendered above from F156 spec data
   const blocksHtml = renderBlocks(page.data.sections);
   const bodyHtml = renderContent(page.data.content);
   const hasLongForm = !!bodyHtml;
