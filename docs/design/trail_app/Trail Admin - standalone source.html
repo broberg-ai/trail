@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Trail — Admin redesign</title>
+<link rel="stylesheet" href="src/styles.css" />
+<link rel="icon" type="image/svg+xml" href="uploads/trail-logo.svg" />
+</head>
+<body>
+<div id="root"></div>
+
+<template id="__bundler_thumbnail" data-bg-color="#FAF9F5">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <!-- Trail mark, scaled up — three concentric circles -->
+    <g transform="translate(600 400)">
+      <circle cx="0" cy="0" r="170" fill="none" stroke="#1A1715" stroke-width="6" />
+      <circle cx="0" cy="0" r="108" fill="none" stroke="#E8A87C" stroke-width="3" opacity="0.55" />
+      <circle cx="0" cy="0" r="42" fill="#E8A87C" />
+    </g>
+    <!-- wordmark -->
+    <text x="600" y="650" text-anchor="middle"
+      font-family="ui-monospace, 'SF Mono', Menlo, monospace"
+      font-size="44" font-weight="600" letter-spacing="-0.02em"
+      fill="#1A1715">trail</text>
+    <text x="600" y="690" text-anchor="middle"
+      font-family="ui-monospace, 'SF Mono', Menlo, monospace"
+      font-size="22" fill="rgba(26,23,21,.55)">admin</text>
+  </svg>
+</template>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="src/data.js"></script>
+<script type="text/babel" src="src/tweaks-panel.jsx"></script>
+<script type="text/babel" src="src/icons.jsx"></script>
+<script type="text/babel" src="src/login.jsx"></script>
+<script type="text/babel" src="src/tenant-switcher.jsx"></script>
+<script type="text/babel" src="src/user-menu.jsx"></script>
+<script type="text/babel" src="src/command-palette.jsx"></script>
+<script type="text/babel" src="src/top-nav.jsx"></script>
+<script type="text/babel" src="src/home.jsx"></script>
+<script type="text/babel" src="src/trail-sidebar.jsx"></script>
+<script type="text/babel" src="src/manage-tenants.jsx"></script>
+<script type="text/babel" src="src/user-settings.jsx"></script>
+<script type="text/babel" src="src/app.jsx"></script>
+
+<script type="text/babel">
+  // Wait for all Babel scripts to mount, then render.
+  function mount() {
+    if (!window.TrailApp) { setTimeout(mount, 30); return; }
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<window.TrailApp />);
+  }
+  mount();
+</script>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Trail — Redesign spec</title>
+<link rel="stylesheet" href="src/styles.css" />
+<link rel="icon" type="image/svg+xml" href="uploads/trail-logo.svg" />
+<style>
+  /* Spec page overrides — canvas sits on warm gray, but each artboard
+     supplies its own theme. */
+  html, body, #root { overflow: visible; background: #f0eee9; }
+  /* Inside design canvas, themed frames need their vars cascade-isolated. */
+  [data-theme="dark"] { color-scheme: dark; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="src/data.js"></script>
+<script type="text/babel" src="src/design-canvas.jsx"></script>
+<script type="text/babel" src="src/icons.jsx"></script>
+<script type="text/babel" src="src/spec-frame.jsx"></script>
+<script type="text/babel" src="src/spec-frames-1.jsx"></script>
+<script type="text/babel" src="src/spec-frames-2.jsx"></script>
+<script type="text/babel" src="src/spec-frames-3.jsx"></script>
+<script type="text/babel" src="src/spec-frames-4.jsx"></script>
+<script type="text/babel" src="src/spec-frames-5.jsx"></script>
+
+<script type="text/babel" data-presets="env,react">
+  function SpecCanvas() {
+    return (
+      <DesignCanvas>
+        <DCSection id="login" title="01 — Login flow" subtitle="Branded sign-in page · cold + dark + mobile variants">
+          <DCArtboard id="login-light" label="A · Light" width={880} height={620}>
+            <window.LoginFrame theme="light" />
+          </DCArtboard>
+          <DCArtboard id="login-dark" label="B · Dark" width={880} height={620}>
+            <window.LoginFrame theme="dark" />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="topbar" title="02 — Top-nav chrome" subtitle="Before / After · clustering + Cmd-K">
+          <DCArtboard id="topbar-before" label="A · Before" width={1360} height={240}>
+            <window.TopBarBeforeFrame theme="light" />
+          </DCArtboard>
+          <DCArtboard id="topbar-after" label="B · After" width={1360} height={280}>
+            <window.TopBarAfterFrame theme="light" />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="tenant" title="03 — Tenant switcher" subtitle="New component · the most-asked-for change">
+          <DCArtboard id="tenant-light" label="A · Light" width={960} height={660}>
+            <window.TenantSwitcherFrame theme="light" />
+          </DCArtboard>
+          <DCArtboard id="tenant-dark" label="B · Dark" width={960} height={660}>
+            <window.TenantSwitcherFrame theme="dark" />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="user" title="04 — User menu" subtitle="Relocates personal prefs from the top-bar">
+          <DCArtboard id="user-light" label="A · Light" width={940} height={620}>
+            <window.UserMenuFrame theme="light" />
+          </DCArtboard>
+          <DCArtboard id="user-dark" label="B · Dark" width={940} height={620}>
+            <window.UserMenuFrame theme="dark" />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="palette" title="05 — Command palette" subtitle="Cmd-K · the big leverage point">
+          <DCArtboard id="palette-light" label="A · Light" width={1100} height={620}>
+            <window.PaletteFrame theme="light" />
+          </DCArtboard>
+          <DCArtboard id="palette-dark" label="B · Dark" width={1100} height={620}>
+            <window.PaletteFrame theme="dark" />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="empty" title="06 — Empty states" subtitle="No-trails · no-neurons · no-tenants">
+          <DCArtboard id="empty-light" label="A · Light" width={1360} height={500}>
+            <window.EmptyStatesFrame theme="light" />
+          </DCArtboard>
+          <DCArtboard id="empty-dark" label="B · Dark" width={1360} height={500}>
+            <window.EmptyStatesFrame theme="dark" />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="mobile" title="07 — Mobile (≤720px)" subtitle="Bottom sheets · collapsed chrome · same card">
+          <DCArtboard id="mobile-light" label="A · Light" width={1260} height={800}>
+            <window.MobileFrame theme="light" />
+          </DCArtboard>
+          <DCArtboard id="mobile-dark" label="B · Dark" width={1260} height={800}>
+            <window.MobileFrame theme="dark" />
+          </DCArtboard>
+        </DCSection>
+        <DCSection id="inner-trail" title="08 — Inner-trail nav" subtitle="Sidebar replaces the 11-tab horizontal strip">
+          <DCArtboard id="inner-light" label="A · Light" width={1300} height={620}>
+            <window.InnerTrailFrame theme="light" />
+          </DCArtboard>
+          <DCArtboard id="inner-dark" label="B · Dark" width={1300} height={620}>
+            <window.InnerTrailFrame theme="dark" />
+          </DCArtboard>
+        </DCSection>
+        <DCSection id="manage-tenants" title="09 — Manage Tenants" subtitle="From the tenant switcher footer">
+          <DCArtboard id="mt-light" label="A · Light" width={1300} height={660}>
+            <window.ManageTenantsFrame theme="light" />
+          </DCArtboard>
+          <DCArtboard id="mt-dark" label="B · Dark" width={1300} height={660}>
+            <window.ManageTenantsFrame theme="dark" />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="settings" title="10 — User Settings" subtitle="From the user-menu → Settings link">
+          <DCArtboard id="set-light" label="A · Light" width={1140} height={680}>
+            <window.UserSettingsFrame theme="light" />
+          </DCArtboard>
+          <DCArtboard id="set-dark" label="B · Dark" width={1140} height={680}>
+            <window.UserSettingsFrame theme="dark" />
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+    );
+  }
+
+  function mount() {
+    if (!window.DesignCanvas || !window.LoginFrame || !window.TopBarBeforeFrame || !window.MobileFrame || !window.InnerTrailFrame || !window.ManageTenantsFrame || !window.UserSettingsFrame) {
+      setTimeout(mount, 30); return;
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<SpecCanvas />);
+  }
+  mount();
+</script>
+</body>
+</html>
