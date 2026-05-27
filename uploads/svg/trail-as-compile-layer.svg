@@ -1,0 +1,52 @@
+<svg viewBox="0 0 920 440" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Convergence: Trail sits as the compile layer between retrieve at scale (RAG/FTS5) and act at the top (skills, agents, MCP).">
+  <!-- Title -->
+  <text x="460" y="36" font-family="monospace" font-size="14" fill="currentColor" text-anchor="middle" opacity="0.6" letter-spacing="1.5">WHERE TRAIL SITS IN A CONVERGED KNOWLEDGE OS</text>
+
+  <!-- TOP layer: Act -->
+  <rect x="120" y="70" width="680" height="80" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.55"/>
+  <text x="460" y="98" font-family="monospace" font-size="13" fill="currentColor" text-anchor="middle" font-weight="bold" letter-spacing="0.8">ACT</text>
+  <text x="460" y="118" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.55">agents · skills · cron jobs · MCP clients</text>
+  <text x="460" y="138" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.7" font-style="italic">reads Trail as persistent memory · writes back as queue candidates</text>
+
+  <!-- Down arrow act → compile -->
+  <g stroke="currentColor" stroke-width="1.2" fill="none" opacity="0.5">
+    <line x1="460" y1="155" x2="460" y2="185"/>
+    <polyline points="454,177 460,185 466,177"/>
+  </g>
+  <text x="475" y="175" font-family="monospace" font-size="10" fill="currentColor" opacity="0.55">queries</text>
+
+  <!-- MIDDLE layer: Compile (Trail) — highlighted -->
+  <rect x="60" y="195" width="800" height="100" fill="none" stroke="#e8a87c" stroke-width="1.8"/>
+  <text x="460" y="222" font-family="monospace" font-size="14" fill="#e8a87c" text-anchor="middle" font-weight="bold" letter-spacing="0.8">COMPILE — Trail</text>
+  <text x="460" y="244" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.6">three-layer Neuron trails · schema-governed · queue-mediated</text>
+
+  <!-- Three layer hint inside middle box -->
+  <g font-family="monospace" font-size="10" fill="currentColor" opacity="0.55">
+    <text x="120" y="278" text-anchor="start">raw/ — sources, immutable</text>
+    <text x="460" y="278" text-anchor="middle">neuron/ — compiled pages, cross-linked</text>
+    <text x="800" y="278" text-anchor="end">_schema.md — rules</text>
+  </g>
+
+  <!-- Down arrow compile → retrieve -->
+  <g stroke="currentColor" stroke-width="1.2" fill="none" opacity="0.5">
+    <line x1="460" y1="300" x2="460" y2="330"/>
+    <polyline points="454,322 460,330 466,322"/>
+  </g>
+  <text x="475" y="320" font-family="monospace" font-size="10" fill="currentColor" opacity="0.55">backed by</text>
+
+  <!-- BOTTOM layer: Retrieve -->
+  <rect x="120" y="340" width="680" height="80" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.55"/>
+  <text x="460" y="368" font-family="monospace" font-size="13" fill="currentColor" text-anchor="middle" font-weight="bold" letter-spacing="0.8">RETRIEVE</text>
+  <text x="460" y="388" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.55">FTS5 today · vector layer when scale demands it · same Neurons</text>
+  <text x="460" y="408" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.7" font-style="italic">scales the corpus, doesn't replace the compile step</text>
+
+  <!-- Side annotation: convergence note -->
+  <g font-family="monospace" font-size="10" fill="currentColor" opacity="0.5">
+    <text x="30" y="252">retrieve+</text>
+    <text x="30" y="266">compile</text>
+  </g>
+  <g font-family="monospace" font-size="10" fill="currentColor" opacity="0.5">
+    <text x="890" y="252" text-anchor="end">compile+</text>
+    <text x="890" y="266" text-anchor="end">act</text>
+  </g>
+</svg>

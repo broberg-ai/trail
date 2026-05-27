@@ -6,12 +6,10 @@
 
 - [Knowledge Infrastructure for the AI Era — trail](https://www.trailmem.com/): Trail is a knowledge infrastructure engine that turns your sources into a persistent, compounding Neuron-graph — maintained by an LLM on your behalf. Realizing Vannevar Bush
 - [#accumulation — trail](https://www.trailmem.com/tags/accumulation/): Content tagged accumulation.
-- [#agent-memory — trail](https://www.trailmem.com/tags/agent-memory/): Content tagged agent-memory.
 - [#architecture — trail](https://www.trailmem.com/tags/architecture/): Content tagged architecture.
 - [#associative-structures — trail](https://www.trailmem.com/tags/associative-structures/): Content tagged associative-structures.
 - [#comparison — trail](https://www.trailmem.com/tags/comparison/): Content tagged comparison.
 - [#compile-time — trail](https://www.trailmem.com/tags/compile-time/): Content tagged compile-time.
-- [#convergence — trail](https://www.trailmem.com/tags/convergence/): Content tagged convergence.
 - [#curation — trail](https://www.trailmem.com/tags/curation/): Content tagged curation.
 - [#decision-making — trail](https://www.trailmem.com/tags/decision-making/): Content tagged decision-making.
 - [#engineering-note — trail](https://www.trailmem.com/tags/engineering-note/): Content tagged engineering-note.
@@ -57,7 +55,6 @@
 - [Research — trail](https://www.trailmem.com/trails/research/): Deep dives into adjacent systems, benchmarks, and comparisons — from MemPalace and Mem0 to Karpathy's LLM Wiki and the long tail of RAG variants.
 - [Niklas Luhmann's Zettelkasten Has Been Waiting Seventy Years for the LLM](https://www.trailmem.com/trails/research/niklas-luhmann-zettelkasten-llm-wiki/): Luhmann produced 90,000 cards and 500-plus books with a method that has worked for seven decades — but most of his time went into bookkeeping that does not directly contribute to thinking. LLM Neuron trails are the first plausible automation of exactly that bookkeeping. Trail is what it looks like as hosted infrastructure.
 - [Scaling Trail from 200 to 100,000 Neurons: An Engineering Note](https://www.trailmem.com/trails/research/scaling-trail-from-200-to-100000-neurons/): A compile-time knowledge engine has three workloads that fight for compute — ingest, lint, and the curation queue. Each one breaks at a different corpus size, for different reasons, and requires a different fix. This is the long-form companion to Work That Fits in a Night: the full accounting of where Trail's bottlenecks are, when they hit, and what a deployment looks like at 200, 8,000, 25,000, and 100,000 Neurons.
-- [Three architectures of agent memory — and why Trail picked Compile](https://www.trailmem.com/trails/research/three-architectures-of-agent-memory/): Karpathy, Tan, and Liu all start from the same diagnosis — your agent is a retriever, not a thinker. They reach three different architectures: retrieve (RAG), compile (LLM Wiki), and act (Fat Skills / GBrain). Trail picked Compile, deliberately. This is what we accept and what we believe is converging.
 - [Trail and NotebookLM: Same Ethos, Different Artifact](https://www.trailmem.com/trails/research/trail-and-notebooklm/): NotebookLM proved source-grounded ingest-time tools can ship to millions. Trail shares that ethos and diverges on one question: what the system leaves behind.
 - [As We May Think](https://www.trailmem.com/trails/the-1945-concept/): In July 1945, an American engineer named Vannevar Bush sketched a machine that would change how humanity thinks about knowledge. He called it the memex. Eighty-one years later, we are finally building it.
 
