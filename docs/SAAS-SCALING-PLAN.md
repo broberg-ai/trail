@@ -335,7 +335,7 @@ Crossing triggers tier upgrades.
 **Infrastructure:** Shared Fly.io Machine (shared-cpu-1x, 1GB RAM). Up to 200 Hobby tenants. Aggressive quotas.
 
 **Limits:**
-- 1 Trail per account, 500 Neurons max, 100 sources
+- 1 Trail per account, 50 Neurons max, 25 sources
 - 1K queries/month, 2 connectors (PDF, Markdown)
 - No widget, no API beyond MCP, no custom subdomain
 - Community support
@@ -345,7 +345,7 @@ Crossing triggers tier upgrades.
 **Infrastructure:** Shared Fly.io Machine (performance-2x, 4GB RAM). Up to 50 Starter tenants. Per-tenant quotas.
 
 **Limits:**
-- 3 Trails per account, 5K Neurons/Trail, 2K sources/Trail
+- 5 Trails per account, 200 Neurons/Trail, 100 sources/Trail
 - 10K queries/month, 5 connectors (PDF, MD, DOCX, Image, HTML)
 - Widget on 1 domain, MCP access
 - `<tenant>.trailmem.com` subdomain
@@ -356,7 +356,7 @@ Crossing triggers tier upgrades.
 **Infrastructure:** Shared Fly.io Machine (performance-4x, 8GB RAM). Up to 15 Pro tenants. Reserved CPU per tenant.
 
 **Limits:**
-- 10 Trails per account, 25K Neurons/Trail, 10K sources/Trail
+- 20 Trails per account, 1K Neurons/Trail, 500 sources/Trail
 - 50K queries/month, 8 connectors (all Phase 1+2 except Slack/Notion)
 - Widget on 5 domains + customization
 - API (100 req/min), custom subdomain
@@ -367,7 +367,7 @@ Crossing triggers tier upgrades.
 **Infrastructure:** Dedicated Fly.io Machine (performance-8x, 16GB RAM). One tenant. Dedicated volume.
 
 **Limits:**
-- Unlimited Trails, 100K Neurons/Trail, 50K sources/Trail
+- 100 Trails, 5K Neurons/Trail, 1K sources/Trail
 - 500K queries/month, all connectors including Slack/Notion
 - Unlimited widget domains, full API
 - Custom subdomain + CNAME
@@ -414,10 +414,10 @@ Metered aligns incentives — Broberg.ai earns more when tenant uses Trail more.
 
 | Tier | Price/mo | Credits/mo (F156) | Trails | Neurons/Trail | Sources/Trail | Queries/mo | Connectors | Node shape |
 |------|----------|------:|--------|---------------|---------------|------------|------------|------------|
-| **Hobby** | Free | 100 | 1 | 500 | 100 | 1K | 2 | Shared |
-| **Starter** | €29 | 400 | 3 | 5K | 2K | 10K | 5 | Shared |
-| **Pro** | €149 | 2 000 | 10 | 25K | 10K | 50K | 8 | Shared (premium) |
-| **Business** | €499 | 10 000 | ∞ | 100K | 50K | 500K | All | Single dedicated |
+| **Hobby** | Free | 100 | 1 | 50 | 25 | 1K | 2 | Shared |
+| **Starter** | €29 | 400 | 5 | 200 | 100 | 10K | 5 | Shared |
+| **Pro** | €149 | 2 000 | 20 | 1K | 500 | 50K | 8 | Shared (premium) |
+| **Business** | €499 | 10 000 | 100 | 5K | 1K | 500K | All | Single dedicated |
 | **Enterprise (flat)** | €25K-150K/yr | contract | ∞ | ∞ | ∞ | ∞ | All + custom | Multiple |
 | **Enterprise (metered)** | €2-5K/mo + usage | metered | ∞ | metered | metered | metered | All + custom | Multiple |
 
@@ -672,7 +672,7 @@ Phase 1 completes before any paid tier. Critical path:
 
 1. **Currency:** EUR primary vs USD vs dual-display. Recommend EUR primary with USD shown for international.
 2. **Annual discount:** 17% vs 20%. Pick one, lock.
-3. **Hobby limits:** 500 Neurons aggressive vs 1000 Neurons but no MCP. Pick based on signal value.
+3. **Hobby limits:** 50 Neurons / 25 sources — intentionally tight. Sweet spot is 100–1 000; Hobby is a taste, not a full deployment.
 4. **Enterprise floor (flat):** €25K vs €30K vs €50K. Recommend €30K.
 5. **Custom domain:** Recommend Pro=`<tenant>.trailmem.com`, Business=CNAME, Enterprise=wildcard.
 6. **Reseller margin:** 20% default. Could be 25-30% for volume or Solution Partners.

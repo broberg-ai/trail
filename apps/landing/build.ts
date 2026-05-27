@@ -1508,8 +1508,8 @@ function renderPricingPage(): string {
             <div class="plan-price"><span class="plan-price-amount">Free</span></div>
             <div class="plan-credits">100 credits / month</div>
             <ul class="plan-features">
-              <li>1 Trail, 500 Neurons max</li>
-              <li>100 source documents</li>
+              <li>1 Trail, 50 Neurons max</li>
+              <li>25 source documents</li>
               <li>PDF + Markdown connectors</li>
               <li>Community support</li>
             </ul>
@@ -1524,8 +1524,8 @@ function renderPricingPage(): string {
             </div>
             <div class="plan-credits">400 credits / month</div>
             <ul class="plan-features">
-              <li>3 Trails, 5 000 Neurons / Trail</li>
-              <li>2 000 sources per Trail</li>
+              <li>5 Trails, 200 Neurons / Trail</li>
+              <li>100 sources per Trail</li>
               <li>5 connectors incl. DOCX + Image</li>
               <li>48h email support</li>
             </ul>
@@ -1541,8 +1541,8 @@ function renderPricingPage(): string {
             </div>
             <div class="plan-credits">2 000 credits / month</div>
             <ul class="plan-features">
-              <li>10 Trails, 25 000 Neurons / Trail</li>
-              <li>10 000 sources per Trail</li>
+              <li>20 Trails, 1 000 Neurons / Trail</li>
+              <li>500 sources per Trail</li>
               <li>8 connectors + API access</li>
               <li>Priority support (24h)</li>
             </ul>
@@ -1557,8 +1557,8 @@ function renderPricingPage(): string {
             </div>
             <div class="plan-credits">10 000 credits / month</div>
             <ul class="plan-features">
-              <li>Unlimited Trails, 100 000 Neurons / Trail</li>
-              <li>50 000 sources per Trail</li>
+              <li>100 Trails, 5 000 Neurons / Trail</li>
+              <li>1 000 sources per Trail</li>
               <li>All connectors + dedicated Slack</li>
               <li>Dedicated node, 99.5% SLA</li>
             </ul>
