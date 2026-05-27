@@ -1,0 +1,68 @@
+<svg viewBox="0 0 920 460" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Three architectures of agent memory: Retrieve (RAG), Compile (LLM Wiki — Trail's lane), Act (Fat Skills). Each with its trade-off.">
+  <!-- Title -->
+  <text x="460" y="36" font-family="monospace" font-size="14" fill="currentColor" text-anchor="middle" opacity="0.6" letter-spacing="1.5">THREE ARCHITECTURES OF AGENT MEMORY</text>
+
+  <!-- LEFT column: Retrieve (RAG) -->
+  <rect x="30" y="70" width="280" height="320" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.6"/>
+  <text x="170" y="98" font-family="monospace" font-size="13" fill="currentColor" text-anchor="middle" font-weight="bold" letter-spacing="0.8">RETRIEVE</text>
+  <text x="170" y="116" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.55">RAG · vector store · top-k</text>
+
+  <text x="170" y="148" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.7" letter-spacing="0.5">SCALE</text>
+  <text x="170" y="168" font-family="monospace" font-size="13" fill="currentColor" text-anchor="middle">200K+ documents</text>
+
+  <text x="170" y="200" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.7" letter-spacing="0.5">SHIPS IN</text>
+  <text x="170" y="220" font-family="monospace" font-size="13" fill="currentColor" text-anchor="middle">a weekend</text>
+
+  <text x="170" y="252" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.7" letter-spacing="0.5">FAILS AT</text>
+  <g font-family="monospace" font-size="12" fill="currentColor" opacity="0.8">
+    <text x="55" y="276">· chunking destroys context</text>
+    <text x="55" y="296">· re-derives every query</text>
+    <text x="55" y="316">· never compounds</text>
+  </g>
+
+  <text x="170" y="360" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.55" font-style="italic">a retriever, not a thinker</text>
+
+  <!-- MIDDLE column: Compile (Trail's lane — highlighted) -->
+  <rect x="320" y="70" width="280" height="320" fill="none" stroke="#e8a87c" stroke-width="1.8"/>
+  <text x="460" y="98" font-family="monospace" font-size="13" fill="#e8a87c" text-anchor="middle" font-weight="bold" letter-spacing="0.8">COMPILE</text>
+  <text x="460" y="116" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.55">LLM Wiki · Neuron trails · this is Trail</text>
+
+  <text x="460" y="148" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.7" letter-spacing="0.5">SCALE</text>
+  <text x="460" y="168" font-family="monospace" font-size="13" fill="currentColor" text-anchor="middle">~1,000 sources</text>
+
+  <text x="460" y="200" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.7" letter-spacing="0.5">SHIPS IN</text>
+  <text x="460" y="220" font-family="monospace" font-size="13" fill="currentColor" text-anchor="middle">weeks</text>
+
+  <text x="460" y="252" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.7" letter-spacing="0.5">WINS AT</text>
+  <g font-family="monospace" font-size="12" fill="currentColor" opacity="0.85">
+    <text x="345" y="276">· depth + cross-reference</text>
+    <text x="345" y="296">· 100th query &gt; 1st query</text>
+    <text x="345" y="316">· knowledge compounds</text>
+  </g>
+
+  <text x="460" y="360" font-family="monospace" font-size="11" fill="#e8a87c" text-anchor="middle" font-style="italic">a thinker, paid for at write-time</text>
+
+  <!-- RIGHT column: Act (Fat Skills / GBrain) -->
+  <rect x="610" y="70" width="280" height="320" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.6"/>
+  <text x="750" y="98" font-family="monospace" font-size="13" fill="currentColor" text-anchor="middle" font-weight="bold" letter-spacing="0.8">ACT</text>
+  <text x="750" y="116" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.55">Fat Skills · GBrain · cron jobs</text>
+
+  <text x="750" y="148" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.7" letter-spacing="0.5">SCALE</text>
+  <text x="750" y="168" font-family="monospace" font-size="13" fill="currentColor" text-anchor="middle">17K+ pages, single user</text>
+
+  <text x="750" y="200" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.7" letter-spacing="0.5">SHIPS IN</text>
+  <text x="750" y="220" font-family="monospace" font-size="13" fill="currentColor" text-anchor="middle">months</text>
+
+  <text x="750" y="252" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.7" letter-spacing="0.5">REQUIRES</text>
+  <g font-family="monospace" font-size="12" fill="currentColor" opacity="0.8">
+    <text x="635" y="276">· skill authoring</text>
+    <text x="635" y="296">· cron infrastructure</text>
+    <text x="635" y="316">· evals + tests</text>
+  </g>
+
+  <text x="750" y="360" font-family="monospace" font-size="11" fill="currentColor" text-anchor="middle" opacity="0.55" font-style="italic">does, not just knows</text>
+
+  <!-- Bottom caption -->
+  <text x="460" y="420" font-family="monospace" font-size="12" fill="currentColor" text-anchor="middle" opacity="0.55" letter-spacing="0.4">No architecture wins everywhere. The question is which problem you actually have.</text>
+  <text x="460" y="440" font-family="monospace" font-size="12" fill="currentColor" text-anchor="middle" opacity="0.55" letter-spacing="0.4">Trail picked the middle column on purpose — for a specific reason.</text>
+</svg>
