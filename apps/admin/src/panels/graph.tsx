@@ -523,13 +523,22 @@ export function GraphPanel() {
           const regionMaxX = mnX + Math.min(BUCKETS, bx + 2) * cellW;
           const regionMinY = mnY + Math.max(0, by - 1) * cellH;
           const regionMaxY = mnY + Math.min(BUCKETS, by + 2) * cellH;
-          const cx = ((regionMinX + regionMaxX) / 2 - mnX) / (mxX - mnX);
-          const cy = ((regionMinY + regionMaxY) / 2 - mnY) / (mxY - mnY);
+          // Sigma 2 camera state uses graph (world) coords for x/y, not
+          // normalized 0..1. Set cluster centre directly — the centre
+          // of the densest 3×3 region in the FA2 layout's coord space.
+          // (Earlier version normalized → camera landed near origin
+          // regardless of where the cluster sat → graph looked centred
+          // on the canvas but the cluster was off-screen.)
+          const cx = (regionMinX + regionMaxX) / 2;
+          const cy = (regionMinY + regionMaxY) / 2;
+          // ratio = fraction of the full graph extent visible.
+          // regionSpan is the region's size relative to the full extent;
+          // multiply by 1.2 for padding so labels at the edge don't crop.
           const regionSpan = Math.max(
             (regionMaxX - regionMinX) / (mxX - mnX),
             (regionMaxY - regionMinY) / (mxY - mnY),
           );
-          const ratio = Math.max(0.4, Math.min(1.15, regionSpan * 1.2));
+          const ratio = Math.max(0.3, Math.min(1.0, regionSpan * 1.2));
           camera.setState({ x: cx, y: cy, ratio, angle: 0 });
         };
         fitToCameraRef.current = fitToDensest;
