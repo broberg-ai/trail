@@ -255,12 +255,16 @@ authRoutes.post('/switch-tenant', async (c) => {
   return c.json({ ok: true, slug: target.slug });
 });
 
-// F186 follow-up — admin-only bearer registration. Replaces the
-// flyctl-secrets-per-slug dance. Caller must be signed in AS an
-// operator-role user (matching env TRAIL_ADMIN_OPERATOR_EMAIL — or any
-// signed-in user when that env is unset, for bootstrap). POST with
-// { tenantSlug, bearer } to register or rotate the bearer for one
-// tenant. The proxy reads it on the next request — no redeploy.
+/**
+ * F186 follow-up — admin-only bearer registration. Replaces the
+ * flyctl-secrets-per-slug dance. Hard-gated: requires
+ * TRAIL_ADMIN_OPERATOR_EMAIL to be set AND match the caller's email.
+ * Default-deny when unset — bootstrap must explicitly opt-in by
+ * setting the env-var BEFORE the first call. (Earlier draft allowed
+ * any signed-in user when unset; that was a privilege-escalation
+ * bug — any tenant member could rotate any other tenant's bearer.
+ * Buddy flag #420.)
+ */
 authRoutes.post('/admin/set-bearer', async (c) => {
   const sessionId = getCookie(c, COOKIE_NAME);
   if (!sessionId) return c.json({ error: 'not signed in' }, 401);
@@ -272,11 +276,19 @@ authRoutes.post('/admin/set-bearer', async (c) => {
     where: eq(schema.controlUsers.id, session.userId),
   });
   if (!user) return c.json({ error: 'user not found' }, 401);
-  // Operator gate — if TRAIL_ADMIN_OPERATOR_EMAIL is set, restrict to
-  // that email; otherwise allow any signed-in user (single-tenant
-  // bootstrap workflow).
-  const opEmail = process.env.TRAIL_ADMIN_OPERATOR_EMAIL?.toLowerCase();
-  if (opEmail && user.email.toLowerCase() !== opEmail) {
+
+  const opEmail = process.env.TRAIL_ADMIN_OPERATOR_EMAIL?.toLowerCase().trim();
+  if (!opEmail) {
+    return c.json(
+      {
+        error:
+          'set-bearer disabled: TRAIL_ADMIN_OPERATOR_EMAIL is not set on the server. ' +
+          'Operator must configure that secret before this endpoint can be used.',
+      },
+      503,
+    );
+  }
+  if (user.email.toLowerCase() !== opEmail) {
     return c.json({ error: 'operator-only endpoint' }, 403);
   }
 
@@ -300,6 +312,54 @@ authRoutes.post('/admin/set-bearer', async (c) => {
     .run();
 
   return c.json({ ok: true, tenantSlug });
+});
+
+/**
+ * F186 follow-up — operator-only diagnostics. Returns the bearer-state
+ * for every active tenant_engines row (presence only, never the value
+ * itself) so the operator can verify the post-migration backfill
+ * actually populated DB. Buddy flag #421 — earlier attempts to verify
+ * via flyctl ssh sqlite3 failed because sqlite3 isn't on the image.
+ */
+authRoutes.get('/admin/diagnostics', async (c) => {
+  const sessionId = getCookie(c, COOKIE_NAME);
+  if (!sessionId) return c.json({ error: 'not signed in' }, 401);
+  const session = await db.query.sessions.findFirst({
+    where: and(eq(schema.sessions.id, sessionId), gt(schema.sessions.expiresAt, nowIso())),
+  });
+  if (!session) return c.json({ error: 'session expired' }, 401);
+  const user = await db.query.controlUsers.findFirst({
+    where: eq(schema.controlUsers.id, session.userId),
+  });
+  if (!user) return c.json({ error: 'user not found' }, 401);
+
+  const opEmail = process.env.TRAIL_ADMIN_OPERATOR_EMAIL?.toLowerCase().trim();
+  if (!opEmail) return c.json({ error: 'diagnostics disabled: TRAIL_ADMIN_OPERATOR_EMAIL unset' }, 503);
+  if (user.email.toLowerCase() !== opEmail) return c.json({ error: 'operator-only endpoint' }, 403);
+
+  const tenants = await db
+    .select({
+      slug: schema.controlTenants.slug,
+      tenantId: schema.tenantEngines.tenantId,
+      engineUrl: schema.tenantEngines.engineUrl,
+      bearer: schema.tenantEngines.bearer,
+      retiredAt: schema.tenantEngines.retiredAt,
+    })
+    .from(schema.tenantEngines)
+    .innerJoin(schema.controlTenants, eq(schema.controlTenants.id, schema.tenantEngines.tenantId))
+    .all();
+
+  return c.json({
+    tenants: tenants.map((row) => ({
+      slug: row.slug,
+      engineUrl: row.engineUrl,
+      retired: !!row.retiredAt,
+      bearerInDb: !!row.bearer,
+      bearerInEnv: !!process.env[`TRAIL_ADMIN_PROXY_BEARER_${row.slug.toUpperCase().replace(/-/g, '_')}`],
+    })),
+    operatorEmail: opEmail,
+    schemaHasBearer: true, // if we got here, the typed schema agrees the column exists
+  });
 });
 
 authRoutes.post('/logout', async (c) => {
