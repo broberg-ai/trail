@@ -517,10 +517,20 @@ export function GraphPanel() {
             return;
           }
           // dd.x and dd.y are in Sigma's framed-graph coord system —
-          // the exact frame the camera state operates in. Setting
-          // camera position to these coords puts the node at viewport
-          // centre regardless of the FA2 layout's actual scale.
-          camera.setState({ x: dd.x, y: dd.y, ratio: 0.5, angle: 0 });
+          // setting camera to those coords puts the node at the
+          // geometric viewport centre. But the canvas isn't fully
+          // unobstructed: the Filtrér/Populære floating boxes occupy
+          // ~380px on the right side. To put Sanne at the centre of
+          // the VISIBLE area (not the canvas geometric centre), shift
+          // camera-x RIGHT by half the obstruction fraction —
+          // increasing camera.x makes the look-at point move right, so
+          // the actual graph content (Sanne) shifts LEFT in viewport.
+          const ratio = 0.5;
+          const container = containerRef.current;
+          const containerW = container?.clientWidth ?? 1400;
+          const RIGHT_OBSTRUCTION_PX = 380;
+          const xShift = (RIGHT_OBSTRUCTION_PX / containerW / 2) * ratio;
+          camera.setState({ x: dd.x + xShift, y: dd.y, ratio, angle: 0 });
         };
         fitToCameraRef.current = fitToOverview;
 
