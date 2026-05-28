@@ -69,6 +69,43 @@ export class ApiError extends Error {
   }
 }
 
+// ── Identity / tenants (admin-server, not engine) ───────────────
+
+export interface AuthTenant {
+  id: string;
+  slug: string;
+  name: string;
+  language: string;
+  plan: string | null;
+  active: boolean;
+}
+
+export interface AuthMe {
+  user: { id: string; email: string; name: string | null; onboarded: boolean };
+  organizationId: string;
+  tenant: { id: string; slug: string; name: string; language: string; plan: string | null } | null;
+  tenants: AuthTenant[];
+  engineUrl: string | null;
+}
+
+/** Fetch the user + their full tenant list from admin-server. */
+export function fetchAuthMe(): Promise<AuthMe> {
+  return api('/api/auth/me');
+}
+
+/** Switch the active tenant; cookie-based, takes effect on next request. */
+export function switchTenant(slug: string): Promise<{ ok: true; slug: string }> {
+  return api('/api/auth/switch-tenant', {
+    method: 'POST',
+    body: JSON.stringify({ slug }),
+  });
+}
+
+/** Sign out — clears the session cookie on admin-server. */
+export function signOut(): Promise<{ ok: true }> {
+  return api('/api/auth/logout', { method: 'POST' });
+}
+
 // ── Resources ────────────────────────────────────────────────────
 
 export function listKnowledgeBases(): Promise<KnowledgeBase[]> {

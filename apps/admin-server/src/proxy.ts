@@ -46,11 +46,24 @@ async function resolveSession(c: Context): Promise<ResolvedRoute | null> {
   });
   if (!user) return null;
 
-  // Phase 1B: pick the user's first tenant (one tenant per org). Phase 2
-  // will support tenant-switcher; for now pick first non-archived.
-  const tenant = await db.query.controlTenants.findFirst({
-    where: eq(schema.controlTenants.organizationId, user.organizationId),
-  });
+  // F186 — read active-tenant cookie set by POST /api/auth/switch-tenant.
+  // Falls back to first tenant in the org if unset (first-login default).
+  // Validates the cookie's slug belongs to the user's org so a tampered
+  // cookie value can't escape the user's tenant set.
+  const activeSlug = getCookie(c, 'trail-active-tenant');
+  let tenant = activeSlug
+    ? await db.query.controlTenants.findFirst({
+        where: and(
+          eq(schema.controlTenants.slug, activeSlug),
+          eq(schema.controlTenants.organizationId, user.organizationId),
+        ),
+      })
+    : null;
+  if (!tenant) {
+    tenant = await db.query.controlTenants.findFirst({
+      where: eq(schema.controlTenants.organizationId, user.organizationId),
+    });
+  }
   if (!tenant) return null;
 
   const eng = await db.query.tenantEngines.findFirst({

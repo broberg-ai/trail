@@ -168,21 +168,25 @@ authRoutes.get('/me', async (c) => {
     return c.json({ error: 'user not found' }, 401);
   }
 
-  // Resolve the user's primary tenant (Phase 1B: one tenant per user
-  // via control_tenants.organization_id = user.organization_id).
-  // Phase 2 will support multi-tenant users; Phase 1 picks the first.
+  // F186 — user can belong to multiple tenants via the same organization.
+  // Return the full list so the SPA's TenantSwitcher can render every
+  // tenant the user has access to, plus mark the currently-active one.
+  // Active tenant is read from the `trail-active-tenant` cookie (set by
+  // POST /api/auth/switch-tenant); falls back to the first row if unset.
   const tenants = await db
     .select()
     .from(schema.controlTenants)
     .where(eq(schema.controlTenants.organizationId, user.organizationId))
     .all();
-  const primary = tenants[0];
+
+  const activeSlugCookie = getCookie(c, 'trail-active-tenant');
+  const active = (activeSlugCookie && tenants.find((t) => t.slug === activeSlugCookie)) || tenants[0];
 
   let engineUrl: string | null = null;
-  if (primary) {
+  if (active) {
     const eng = await db.query.tenantEngines.findFirst({
       where: and(
-        eq(schema.tenantEngines.tenantId, primary.id),
+        eq(schema.tenantEngines.tenantId, active.id),
         isNull(schema.tenantEngines.retiredAt),
       ),
     });
@@ -192,11 +196,63 @@ authRoutes.get('/me', async (c) => {
   return c.json({
     user: { id: user.id, email: user.email, name: user.name, onboarded: user.onboarded },
     organizationId: user.organizationId,
-    tenant: primary
-      ? { id: primary.id, slug: primary.slug, name: primary.name, language: primary.language }
+    tenant: active
+      ? { id: active.id, slug: active.slug, name: active.name, language: active.language, plan: (active as { plan?: string }).plan ?? null }
       : null,
+    tenants: tenants.map((t) => ({
+      id: t.id,
+      slug: t.slug,
+      name: t.name,
+      language: t.language,
+      plan: (t as { plan?: string }).plan ?? null,
+      active: active?.id === t.id,
+    })),
     engineUrl,
   });
+});
+
+// F186 — switch the active tenant for this session. Cookie-based, so
+// no migration. Validates that the user actually has access to the
+// target tenant (= belongs to the same organization) before setting.
+authRoutes.post('/switch-tenant', async (c) => {
+  const sessionId = getCookie(c, COOKIE_NAME);
+  if (!sessionId) return c.json({ error: 'not signed in' }, 401);
+
+  const session = await db.query.sessions.findFirst({
+    where: and(
+      eq(schema.sessions.id, sessionId),
+      gt(schema.sessions.expiresAt, nowIso()),
+    ),
+  });
+  if (!session) return c.json({ error: 'session expired' }, 401);
+
+  const user = await db.query.controlUsers.findFirst({
+    where: eq(schema.controlUsers.id, session.userId),
+  });
+  if (!user) return c.json({ error: 'user not found' }, 401);
+
+  let body: { slug?: string } = {};
+  try { body = await c.req.json(); } catch { /* fallthrough */ }
+  const slug = body.slug?.trim();
+  if (!slug) return c.json({ error: 'slug required' }, 400);
+
+  const target = await db.query.controlTenants.findFirst({
+    where: and(
+      eq(schema.controlTenants.slug, slug),
+      eq(schema.controlTenants.organizationId, user.organizationId),
+    ),
+  });
+  if (!target) return c.json({ error: 'tenant not found or access denied' }, 404);
+
+  setCookie(c, 'trail-active-tenant', target.slug, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'Lax',
+    path: '/',
+    maxAge: SESSION_TTL_DAYS * 24 * 60 * 60,
+  });
+
+  return c.json({ ok: true, slug: target.slug });
 });
 
 authRoutes.post('/logout', async (c) => {
