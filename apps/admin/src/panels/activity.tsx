@@ -11,7 +11,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { listActivity, type ActivityRow } from '../api';
-import { useLocale } from '../lib/i18n';
+import { useLocale, t } from '../lib/i18n';
 import { CenteredLoader } from '../components/centered-loader';
 
 type TimeframeId = 'all' | 'today' | '7d' | '30d';
@@ -134,15 +134,15 @@ export function ActivityPanel() {
   if (!filtered) return <CenteredLoader />;
 
   return (
-    <div class="p-6 max-w-5xl mx-auto">
+    <div class="page-shell">
       <div class="mb-4 flex items-baseline justify-between">
-        <h1 class="text-xl font-semibold">Activity</h1>
+        <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 32px; letter-spacing: -0.015em; line-height: 1.15; margin: 0;">{t('activityPanel.title')}</h1>
         <button
           type="button"
           class="text-[11px] font-mono text-[color:var(--color-fg-muted)] hover:text-[color:var(--color-fg)]"
           onClick={() => void fetchFirstPage()}
         >
-          ↻ refresh
+          {t('activityPanel.refresh')}
         </button>
       </div>
 
@@ -298,7 +298,7 @@ function GroupFilter({
           class="absolute left-0 top-full mt-1 z-20 w-[180px] rounded-md border border-[color:var(--color-border-strong)] bg-[color:var(--color-bg-card)] shadow-2xl"
           role="listbox"
         >
-          <DropdownItem active={value === ''} onClick={() => select('')} label="All groups" />
+          <DropdownItem active={value === ''} onClick={() => select('')} label={t('activityPanel.allGroups')} />
           <div class="border-t border-[color:var(--color-border)] my-1" />
           {KIND_GROUPS.map((g) => (
             <DropdownItem

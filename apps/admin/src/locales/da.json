@@ -6,7 +6,7 @@
     "manage": "Administrér tenants…"
   },
   "userMenu": {
-    "settings": "Account Preferences",
+    "settings": "Konto Præferencer",
     "preferences": "præferencer",
     "theme": "Tema",
     "themeLight": "Lyst",
@@ -76,19 +76,28 @@
     "actionNewNeuron": "Opret neuron",
     "actionOpenChat": "Åbn chat",
     "actionUpload": "Upload kilde…",
-    "actionSettings": "Account Preferences",
+    "actionSettings": "Konto Præferencer",
     "comingSoon": "Kommer snart"
   },
   "accountPrefs": {
-    "heading": "Account Preferences",
+    "heading": "Konto Præferencer",
     "subtitle": "Personlige præferencer der følger dig på tværs af tenants. Tenant-specifikke indstillinger (plan, API-nøgler, backup) finder du under Administrér tenants.",
     "sections": {
       "profile": "Profil",
+      "login": "Login-metoder",
       "preferences": "Præferencer",
       "notifications": "Notifikationer",
       "sessions": "Sessions",
       "developer": "Udvikler",
       "danger": "Farezone"
+    },
+    "loginMethods": {
+      "heading": "Sådan logger du ind",
+      "subtitle": "Du kan logge ind med email-link OG/ELLER en tilknyttet Google- eller GitHub-konto. Alle fører dig ind på samme konto.",
+      "emailLink": "Email-link",
+      "alwaysActive": "Altid aktiv",
+      "linkAccount": "Knyt konto",
+      "remove": "Fjern"
     }
   },
   "manageTenants": {
@@ -106,6 +115,41 @@
     "comingSoon": "Kommer snart"
   },
   "comingSoonToast": "Kommer snart — F186 follow-up.",
+  "chatPanel": {
+    "newChat": "Ny chat",
+    "newChatCta": "+ Ny chat",
+    "groupToday": "I dag",
+    "groupYesterday": "I går",
+    "groupThisWeek": "Denne uge",
+    "groupEarlier": "Tidligere"
+  },
+  "searchPanel": {
+    "title": "Søg",
+    "subtitle": "Fuldtekst-søgning i neuroner og kilder på denne Trail.",
+    "placeholder": "Søg i neuroner og kilder…",
+    "searching": "Søger…",
+    "empty": "Skriv for at søge — matcher i neuron-titler + brødtekst, kildens filnavn + indhold, og indekserede passager.",
+    "tagsLabel": "MÆRKER"
+  },
+  "upload": {
+    "dropzonePrompt": "Slip filer hvor som helst, eller klik for at vælge",
+    "dropzoneTypes": ".md · .pdf · .docx · .pptx · .txt · .html · .csv · billeder",
+    "windowOverlay": "Slip filer for at uploade",
+    "windowOverlayHint": "Hele vinduet er et drop-mål"
+  },
+  "activityPanel": {
+    "title": "Aktivitet",
+    "refresh": "↻ opdatér",
+    "allGroups": "Alle grupper"
+  },
+  "pathLabel": {
+    "neurons": "neuroner",
+    "queries": "forespørgsler",
+    "sources": "kilder",
+    "images": "billeder",
+    "attachments": "vedhæftninger",
+    "wiki": "wiki"
+  },
   "nav": {
     "neurons": "Neuroner",
     "graph": "Graf",

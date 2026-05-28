@@ -83,9 +83,9 @@ export function SearchPanel() {
   return (
     <div class="page-shell">
       <header class="mb-6">
-        <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 32px; letter-spacing: -0.015em; line-height: 1.15; margin: 0 0 6px;">Search</h1>
+        <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 32px; letter-spacing: -0.015em; line-height: 1.15; margin: 0 0 6px;">{t('searchPanel.title')}</h1>
         <p class="text-[color:var(--color-fg-muted)] text-sm">
-          Full-text search across Neurons and Sources in this Trail.
+          {t('searchPanel.subtitle')}
         </p>
       </header>
 
@@ -93,7 +93,7 @@ export function SearchPanel() {
         <input
           type="search"
           autoFocus
-          placeholder="Search Neurons and Sources…"
+          placeholder={t('searchPanel.placeholder')}
           value={input}
           onInput={(e) => setInput((e.currentTarget as HTMLInputElement).value)}
           class="w-full rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)]/80 px-4 py-3 pr-10 text-base focus:outline-none focus:border-[color:var(--color-accent)] transition"
@@ -127,7 +127,7 @@ export function SearchPanel() {
       {!input.trim() ? (
         <EmptyHint />
       ) : loading && !results ? (
-        <div class="loading-delayed text-[color:var(--color-fg-muted)] text-sm">Searching…</div>
+        <div class="loading-delayed text-[color:var(--color-fg-muted)] text-sm">{t('searchPanel.searching')}</div>
       ) : results ? (
         <Results kbId={kbId} results={results} query={input.trim()} />
       ) : null}
@@ -374,7 +374,7 @@ function Snippet({ html }: { html: string }) {
 function EmptyHint() {
   return (
     <div class="text-center py-16 text-[color:var(--color-fg-subtle)] text-sm">
-      Type to search — matches in Neuron titles + bodies, Source filenames + content, and indexed passages.
+      {t('searchPanel.empty')}
     </div>
   );
 }

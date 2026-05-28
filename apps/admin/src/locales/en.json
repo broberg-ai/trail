@@ -84,11 +84,20 @@
     "subtitle": "Personal preferences that follow you across tenants. Tenant-specific settings (plan, API keys, backup) live under Manage tenants.",
     "sections": {
       "profile": "Profile",
+      "login": "Login methods",
       "preferences": "Preferences",
       "notifications": "Notifications",
       "sessions": "Sessions",
       "developer": "Developer",
       "danger": "Danger"
+    },
+    "loginMethods": {
+      "heading": "How you sign in",
+      "subtitle": "You can sign in with a magic email-link AND/OR a linked Google or GitHub account. All routes you to the same user.",
+      "emailLink": "Email-link",
+      "alwaysActive": "Always active",
+      "linkAccount": "Link account",
+      "remove": "Remove"
     }
   },
   "manageTenants": {
@@ -106,6 +115,41 @@
     "comingSoon": "Coming soon"
   },
   "comingSoonToast": "Coming soon — F186 follow-up.",
+  "chatPanel": {
+    "newChat": "New chat",
+    "newChatCta": "+ New chat",
+    "groupToday": "Today",
+    "groupYesterday": "Yesterday",
+    "groupThisWeek": "This week",
+    "groupEarlier": "Earlier"
+  },
+  "searchPanel": {
+    "title": "Search",
+    "subtitle": "Full-text search across Neurons and Sources in this Trail.",
+    "placeholder": "Search Neurons and Sources…",
+    "searching": "Searching…",
+    "empty": "Type to search — matches in Neuron titles + bodies, Source filenames + content, and indexed passages.",
+    "tagsLabel": "TAGS"
+  },
+  "upload": {
+    "dropzonePrompt": "Drop files anywhere, or click to browse",
+    "dropzoneTypes": ".md · .pdf · .docx · .pptx · .txt · .html · .csv · images",
+    "windowOverlay": "Drop files to upload",
+    "windowOverlayHint": "The whole window is a drop target"
+  },
+  "activityPanel": {
+    "title": "Activity",
+    "refresh": "↻ refresh",
+    "allGroups": "All groups"
+  },
+  "pathLabel": {
+    "neurons": "neurons",
+    "queries": "queries",
+    "sources": "sources",
+    "images": "images",
+    "attachments": "attachments",
+    "wiki": "wiki"
+  },
   "nav": {
     "neurons": "Neurons",
     "graph": "Graph",

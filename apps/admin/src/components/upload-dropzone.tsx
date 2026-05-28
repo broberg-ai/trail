@@ -232,9 +232,9 @@ export function UploadDropzone({
         }}
         class="cursor-pointer rounded-md border-2 border-dashed border-[color:var(--color-border)] hover:border-[color:var(--color-border-strong)] bg-[color:var(--color-bg-card)]/40 px-6 py-8 text-center transition"
       >
-        <div class="font-medium text-sm">Drop files anywhere, or click to browse</div>
+        <div class="font-medium text-sm">{t('upload.dropzonePrompt')}</div>
         <div class="text-[11px] font-mono text-[color:var(--color-fg-subtle)] mt-1">
-          .md · .pdf · .docx · .pptx · .txt · .html · .csv · images
+          {t('upload.dropzoneTypes')}
         </div>
         <input
           ref={inputRef}
@@ -292,9 +292,9 @@ export function UploadDropzone({
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-[color:var(--color-accent)]">
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
             </svg>
-            <div class="text-base font-medium">Drop files to upload</div>
+            <div class="text-base font-medium">{t('upload.windowOverlay')}</div>
             <div class="text-xs font-mono text-[color:var(--color-fg-subtle)]">
-              The whole window is a drop target
+              {t('upload.windowOverlayHint')}
             </div>
           </div>
         </div>

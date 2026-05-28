@@ -126,6 +126,15 @@ function turnFromRow(row: ChatTurnRow): LocalTurn {
 
 type DayGroup = 'Today' | 'Yesterday' | 'This week' | 'Earlier';
 
+function localizeDayGroup(g: DayGroup): string {
+  switch (g) {
+    case 'Today': return t('chatPanel.groupToday');
+    case 'Yesterday': return t('chatPanel.groupYesterday');
+    case 'This week': return t('chatPanel.groupThisWeek');
+    case 'Earlier': return t('chatPanel.groupEarlier');
+  }
+}
+
 function groupSessionByDay(updatedAt: string, now: Date): DayGroup {
   const u = new Date(updatedAt);
   const dayMs = 24 * 60 * 60 * 1000;
@@ -478,7 +487,7 @@ export function ChatPanel() {
               ☰ sessions
             </button>
             <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 24px; letter-spacing: -0.015em; line-height: 1.15;">
-              {activeSession?.title ?? 'New chat'}
+              {activeSession?.title ?? t('chatPanel.newChat')}
             </h1>
             <AudienceSelector value={audience} onChange={onAudienceChange} />
           </header>
@@ -740,7 +749,7 @@ function Sidebar({
           onClick={onNew}
           class="mb-4 px-3 py-2 rounded-md border border-[color:var(--color-border-strong)] hover:bg-[color:var(--color-bg-card)] text-sm font-medium transition text-left"
         >
-          + New chat
+          {t('chatPanel.newChatCta')}
         </button>
         <div class="flex-1 overflow-y-auto space-y-4">
           {groupedSessions === null ? (
@@ -753,7 +762,7 @@ function Sidebar({
             groupedSessions.map((group) => (
               <div key={group.label}>
                 <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-1">
-                  {group.label}
+                  {localizeDayGroup(group.label)}
                 </div>
                 <ul class="space-y-1">
                   {group.sessions.map((s) => (

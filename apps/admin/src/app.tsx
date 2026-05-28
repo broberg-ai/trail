@@ -33,6 +33,28 @@ export function App({ children }: { children: ComponentChildren }) {
   const kbId = path.match(/^\/kb\/([^/]+)/)?.[1];
   const kb = useKb(kbId ?? '');
 
+  // F186 — persist the last-visited KB so global routes (/glossary,
+  // /jobs, /activity, /settings, /tenants) can still render the
+  // sidebar with KB-scoped links pointing at the most recent trail.
+  useEffect(() => {
+    if (kbId) {
+      try { localStorage.setItem('trail.admin.lastKbId', kbId); } catch { /* no storage */ }
+    }
+  }, [kbId]);
+
+  // Sidebar shown on every route except the bare-chrome ones — Home
+  // (/), /tenants, /settings show their own layout, every other route
+  // gets the inner-trail sidebar so the curator never loses their
+  // navigation context.
+  const lastKbId = (() => {
+    if (kbId) return kbId;
+    try { return localStorage.getItem('trail.admin.lastKbId') ?? null; } catch { return null; }
+  })();
+  // Show sidebar everywhere except Home + Login. /settings, /tenants,
+  // /glossary, /jobs, /activity all get sidebar with KB-scoped links
+  // pointing at lastKbId (or the URL's kbId when scoped).
+  const showSidebar = !!lastKbId && path !== '/' && path !== '/login';
+
   // Ambient route signal
   useEffect(() => {
     const next = routeFromPath(path);
@@ -82,18 +104,16 @@ export function App({ children }: { children: ComponentChildren }) {
       });
   }, []);
 
-  const inTrail = !!kbId;
-
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <canvas ref={canvasRef} id="trail-graph" aria-hidden="true" />
 
       {me ? <TopNav me={me} onOpenPalette={() => setPaletteOpen(true)} /> : null}
       {me ? <ResumableUploadsBanner /> : null}
 
       {me ? (
-        <main style={{ position: 'relative', zIndex: 10, flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {inTrail ? <TrailSidebar kbId={kbId!} /> : null}
+        <main style={{ position: 'relative', zIndex: 10, flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+          {showSidebar ? <TrailSidebar kbId={lastKbId!} urlHasKbId={!!kbId} /> : null}
           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', position: 'relative' }}>
             {children}
           </div>

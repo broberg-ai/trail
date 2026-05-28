@@ -193,8 +193,8 @@ export function CostPanel() {
     <div class="page-shell space-y-6">
       {/* Header with window switcher + shadow-pill + CSV export */}
       <div class="flex items-center justify-between">
-        <h1 class="text-xl font-semibold">
-          {kb?.name ?? kbId} — {t('nav.cost')}
+        <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 32px; letter-spacing: -0.015em; line-height: 1.15; margin: 0;">
+          {t('nav.cost')}
         </h1>
         <div class="flex items-center gap-2">
           {WINDOWS.map((w) => (

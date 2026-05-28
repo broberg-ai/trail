@@ -73,9 +73,14 @@ function footerItems(kbId: string): SidebarItem[] {
 
 export interface TrailSidebarProps {
   kbId: string;
+  /** True when the current URL is `/kb/<kbId>/...`; false when we're
+   *  on a global route (`/glossary`, `/jobs`, /settings, etc.) and the
+   *  kbId is a fallback from localStorage. Used to suppress the
+   *  KB-active-state dot in the header. */
+  urlHasKbId?: boolean;
 }
 
-export function TrailSidebar({ kbId }: TrailSidebarProps) {
+export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
   const { path, route } = useLocation();
   const kb = useKb(kbId);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -166,7 +171,7 @@ export function TrailSidebar({ kbId }: TrailSidebarProps) {
                     width: 5,
                     height: 5,
                     borderRadius: '50%',
-                    background: 'var(--color-success)',
+                    background: urlHasKbId ? 'var(--color-success)' : 'var(--color-fg-subtle)',
                   }}
                 />
                 <span>{kbId}</span>
@@ -197,8 +202,11 @@ export function TrailSidebar({ kbId }: TrailSidebarProps) {
         )}
       </div>
 
-      {/* Groups */}
-      <nav class="scroll-y" style={{ flex: 1, padding: '8px 8px 0' }}>
+      {/* Groups — minHeight:0 so the flex child can actually shrink and
+          scroll-y kicks in. Without it the nav's natural content height
+          pushes the footer off-screen (Christian flagged this with the
+          11-item KB list). */}
+      <nav class="scroll-y" style={{ flex: 1, padding: '8px 8px 0', minHeight: 0 }}>
         {groups.map((grp) => (
           <div key={grp.labelKey} style={{ marginBottom: 14 }}>
             {!collapsed ? (

@@ -79,9 +79,9 @@ export function QualityComparePanel() {
         </span>
       </div>
 
-      <h1 class="text-xl font-semibold">
+      <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 32px; letter-spacing: -0.015em; line-height: 1.15; margin: 0;">
         {t('quality.title')}
-        <span class="ml-2 text-sm font-normal text-[color:var(--color-fg-muted)]">
+        <span class="ml-2 text-sm font-normal text-[color:var(--color-fg-muted)]" style="font-family: var(--font-sans);">
           {t(
             data.runs.length === 1 ? 'quality.runsAgainstSource_one' : 'quality.runsAgainstSource_other',
             { n: data.runs.length },
