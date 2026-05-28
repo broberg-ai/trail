@@ -7,6 +7,8 @@ import { invalidateKbs } from '../lib/kb-cache';
 import { t, useLocale, getLocale } from '../lib/i18n';
 import { CenteredLoader } from '../components/centered-loader';
 import { NewTrailModal } from '../components/new-trail-modal';
+import { EmptyState } from '../components/ui/empty-state';
+import { Icons } from '../components/ui/icons';
 
 export function KnowledgeBasesPanel() {
   useLocale();
@@ -87,21 +89,24 @@ export function KnowledgeBasesPanel() {
 
   if (!kbs.length) {
     return (
-      <div class="page-shell text-center">
-        <h1 class="text-2xl font-semibold mb-2">{t('kbs.title')}</h1>
-        <p class="text-[color:var(--color-fg-muted)] mb-6">{t('kbs.empty')}</p>
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          class="shrink-0 px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider rounded-md border border-[color:var(--color-border-strong)] hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-accent)] transition"
-        >
-          + {t('kbs.newTrail.button')}
-        </button>
-        <NewTrailModal
-          open={modalOpen}
-          onClose={() => setModalOpen(false)}
-          onCreated={onCreated}
+      <div style={{ position: 'relative', padding: '60px 28px 40px', maxWidth: 1200, margin: '0 auto' }}>
+        <div class="constellation" style={{ opacity: 0.5 }} />
+        <PageHeader
+          title={t('kbs.title')}
+          subtitle={t('kbs.totalNeurons', { n: '0' })}
+          ctaLabel={t('kbs.newTrail.button')}
+          onCta={() => setModalOpen(true)}
         />
+        <EmptyState
+          inline
+          icon={<Icons.Network size={28} />}
+          title={t('empty.noTrailsTitle')}
+          body={t('empty.noTrailsBody')}
+          ctaIcon={<Icons.Plus size={14} />}
+          ctaLabel={t('empty.noTrailsCTA')}
+          onCta={() => setModalOpen(true)}
+        />
+        <NewTrailModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={onCreated} />
       </div>
     );
   }
@@ -118,71 +123,163 @@ export function KnowledgeBasesPanel() {
   const formattedTotal = totalNeurons.toLocaleString(locale === 'da' ? 'da-DK' : 'en-US');
 
   return (
-    <div class="page-shell">
-      <header class="mb-8 flex items-start justify-between gap-4">
-        <div>
-          <h1 class="text-2xl font-semibold tracking-tight mb-1">{t('kbs.title')}</h1>
-          <p class="text-sm text-[color:var(--color-fg-muted)]">
-            {t('kbs.totalNeurons', { n: formattedTotal })}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          class="shrink-0 px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider rounded-md border border-[color:var(--color-border-strong)] hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-accent)] transition"
-        >
-          + {t('kbs.newTrail.button')}
-        </button>
-      </header>
-      <ul class="space-y-2">
+    <div style={{ position: 'relative', padding: '60px 28px 40px', maxWidth: 1200, margin: '0 auto' }}>
+      <div class="constellation" style={{ opacity: 0.5 }} />
+      <PageHeader
+        title={t('kbs.title')}
+        subtitle={t('kbs.totalNeurons', { n: formattedTotal })}
+        ctaLabel={t('kbs.newTrail.button')}
+        onCta={() => setModalOpen(true)}
+      />
+
+      <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {kbs.map((kb) => {
-          // The LIST_SQL endpoint returns a pendingCandidateCount field the
-          // shared KnowledgeBase type doesn't declare; read it defensively.
           const pending = (kb as KnowledgeBase & { pendingCandidateCount?: number })
             .pendingCandidateCount ?? 0;
           return (
-            <li
+            <a
               key={kb.id}
-              class="border border-[color:var(--color-border)] rounded-md bg-[color:var(--color-bg-card)]/80 hover:border-[color:var(--color-border-strong)] transition"
+              href={`/kb/${kb.slug}/neurons`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 16,
+                padding: '18px 24px',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid var(--color-border)',
+                background: 'var(--color-bg-card)',
+                textDecoration: 'none',
+                color: 'var(--color-fg)',
+                transition: 'all var(--dur) var(--ease)',
+              }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget as HTMLAnchorElement;
+                el.style.borderColor = 'var(--color-border-strong)';
+                el.style.transform = 'translateY(-1px)';
+                el.style.boxShadow = 'var(--shadow-md)';
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget as HTMLAnchorElement;
+                el.style.borderColor = 'var(--color-border)';
+                el.style.transform = 'translateY(0)';
+                el.style.boxShadow = 'none';
+              }}
             >
-              <div class="px-4 py-3">
-                <div class="flex items-baseline justify-between gap-4">
-                  <a
-                    href={`/kb/${kb.slug}/neurons`}
-                    class="min-w-0 flex-1 hover:opacity-90 transition"
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 500 }}>{kb.name}</div>
+                {kb.description ? (
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: 'var(--color-fg-muted)',
+                      marginTop: 4,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                    }}
                   >
-                    <div class="font-medium">{kb.name}</div>
-                    {kb.description ? (
-                      <p class="text-sm text-[color:var(--color-fg-muted)] mt-0.5 line-clamp-2">
-                        {kb.description}
-                      </p>
-                    ) : null}
-                  </a>
-                  <div class="flex items-center gap-3 shrink-0">
-                    {pending > 0 ? (
-                      <span
-                        class="inline-flex items-center justify-center min-w-[1.5rem] h-[1.5rem] px-2 rounded-full text-[11px] font-mono font-semibold bg-[color:var(--color-accent)] text-[color:var(--color-accent-fg)]"
-                        title={t('kbs.pendingBadge', { n: pending })}
-                        aria-label={t('kbs.pendingBadge', { n: pending })}
-                      >
-                        {pending}
-                      </span>
-                    ) : null}
-                    <code class="text-xs text-[color:var(--color-fg-subtle)] font-mono">
-                      {kb.slug}
-                    </code>
+                    {kb.description}
                   </div>
-                </div>
+                ) : null}
               </div>
-            </li>
+              {pending > 0 ? (
+                <span
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: 999,
+                    background: 'var(--color-accent)',
+                    color: 'var(--color-accent-fg)',
+                    fontSize: 11,
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 600,
+                  }}
+                  title={t('kbs.pendingBadge', { n: pending })}
+                >
+                  {pending}
+                </span>
+              ) : null}
+              <span
+                class="mono"
+                style={{
+                  fontSize: 11,
+                  color: 'var(--color-fg-subtle)',
+                  minWidth: 120,
+                  textAlign: 'right',
+                }}
+              >
+                {kb.slug}
+              </span>
+            </a>
           );
         })}
-      </ul>
+      </div>
+
       <NewTrailModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onCreated={onCreated}
       />
+    </div>
+  );
+}
+
+function PageHeader({
+  title,
+  subtitle,
+  ctaLabel,
+  onCta,
+}: {
+  title: string;
+  subtitle?: string;
+  ctaLabel?: string;
+  onCta?: () => void;
+}) {
+  return (
+    <div
+      style={{
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'space-between',
+        gap: 24,
+        marginBottom: 32,
+      }}
+    >
+      <div>
+        <h1
+          style={{
+            margin: 0,
+            fontFamily: 'var(--font-serif)',
+            fontWeight: 400,
+            fontSize: 32,
+            letterSpacing: '-0.015em',
+          }}
+        >
+          {title}
+        </h1>
+        {subtitle ? (
+          <div
+            class="mono"
+            style={{
+              marginTop: 6,
+              fontSize: 12,
+              color: 'var(--color-fg-muted)',
+            }}
+          >
+            {subtitle}
+          </div>
+        ) : null}
+      </div>
+      {ctaLabel ? (
+        <button type="button" class="btn btn-primary" onClick={onCta} style={{ flex: '0 0 auto' }}>
+          <Icons.Plus size={13} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            {ctaLabel}
+          </span>
+        </button>
+      ) : null}
     </div>
   );
 }

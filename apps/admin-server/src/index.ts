@@ -157,68 +157,161 @@ app.route('/api/auth', oauthRoutes);
 // path, but redirect to /login as a safety net.
 app.get('/api/auth/dev-login', (c) => c.redirect('/login', 302));
 
-// Standalone /login HTML page — pure magic-link UI, no SPA bundle.
-// Reachable from the legacy redirects above OR direct URL after session
-// expiry. After magic-link verify, /auth/verify redirects back to /
-// where the SPA picks up the new session.
+// F186 — server-rendered login page, 1:1 with docs/design/trail_app/src/login.jsx.
+// Three methods (Google, GitHub, Magic-link) per F186 plan-doc Q1.1.
+// Magic-link field renders inline below the OAuth buttons (Q1.2).
+// 4 states: cold / redirecting / splash / error.
 app.get('/login', (c) =>
   c.html(`<!doctype html>
 <html lang="en"><head><title>Sign in to Trail</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <style>
-  body { font-family: -apple-system, system-ui, sans-serif; max-width: 420px; margin: 4rem auto; padding: 1rem; color: #222; background: #faf9f5; min-height: 80vh; }
-  @media (prefers-color-scheme: dark) { body { color: #eee; background: #17140f; } input { background: #2a261d; color: #eee; border-color: #443c2a; } }
-  h1 { font-weight: 600; margin: 0 0 0.5rem; }
-  .sub { color: #888; margin: 0 0 2rem; }
-  input { width: 100%; padding: 0.7rem 0.85rem; font: inherit; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-  button { padding: 0.7rem 1rem; font: inherit; background: #d97706; color: #fff; border: 0; border-radius: 4px; cursor: pointer; font-weight: 500; }
-  button:hover { background: #b45309; }
-  .row { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
-  .ok { color: #047857; margin-top: 1rem; }
-  .err { color: #dc2626; margin-top: 1rem; }
+  :root {
+    --color-bg: #FAF9F5; --color-bg-card: #FFFFFF; --color-bg-sunk: #F4F2EB;
+    --color-fg: #1A1715; --color-fg-muted: rgba(26,23,21,.70); --color-fg-subtle: rgba(26,23,21,.40);
+    --color-border: rgba(26,23,21,.10); --color-border-strong: rgba(26,23,21,.20);
+    --color-accent: #E8A87C; --color-accent-soft: rgba(232,168,124,.16); --color-accent-fg: #1A1715;
+    --color-danger: #C2410C; --color-success: #15803D;
+    --color-hover: rgba(26,23,21,.04);
+    --radius-sm: 6px; --radius: 8px; --radius-lg: 12px;
+    --shadow-sm: 0 1px 2px rgba(26,23,21,.04), 0 1px 1px rgba(26,23,21,.03);
+    --shadow-lg: 0 12px 32px rgba(26,23,21,.10), 0 4px 12px rgba(26,23,21,.06);
+    --ease: cubic-bezier(.4,0,.2,1); --dur: 180ms;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", monospace;
+    --font-serif: "Fraunces", "Source Serif 4", Georgia, serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-bg: #17140F; --color-bg-card: #1F1B16; --color-bg-sunk: #14110D;
+      --color-fg: #F5F1EA; --color-fg-muted: rgba(245,241,234,.70); --color-fg-subtle: rgba(245,241,234,.40);
+      --color-border: rgba(245,241,234,.10); --color-border-strong: rgba(245,241,234,.20);
+      --color-accent-soft: rgba(232,168,124,.14); --color-accent-fg: #17140F;
+      --color-hover: rgba(245,241,234,.05);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--color-bg); color: var(--color-fg); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+  body { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .card { width: 100%; max-width: 380px; }
+  .logo-row { display: flex; align-items: center; gap: 10px; justify-content: center; margin-bottom: 28px; }
+  .wordmark { font-family: var(--font-mono); font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--color-fg); }
+  h1 { font-family: var(--font-serif); font-weight: 400; font-size: 28px; letter-spacing: -0.015em; margin: 0 0 8px; text-align: center; }
+  .sub { color: var(--color-fg-muted); text-align: center; font-size: 14px; margin: 0 0 28px; line-height: 1.5; }
+  .btn-stack { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border-radius: var(--radius); border: 1px solid var(--color-border-strong); background: var(--color-bg-card); color: var(--color-fg); font-size: 14px; font-weight: 500; text-decoration: none; cursor: pointer; transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease); font-family: inherit; }
+  .btn:hover { background: var(--color-hover); }
+  .btn-primary { background: var(--color-accent); color: var(--color-accent-fg); border-color: transparent; }
+  .btn-primary:hover { background: #DC9869; }
+  .btn svg { flex-shrink: 0; }
+  .or-row { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--color-fg-subtle); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .or-line { flex: 1; height: 1px; background: var(--color-border); }
+  .input { width: 100%; background: var(--color-bg-card); border: 1px solid var(--color-border-strong); border-radius: var(--radius); padding: 10px 12px; font: inherit; color: var(--color-fg); transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+  .input:focus { outline: none; border-color: var(--color-accent); box-shadow: 0 0 0 3px var(--color-accent-soft); }
+  .input::placeholder { color: var(--color-fg-subtle); }
+  .magic-row { display: flex; gap: 8px; }
+  .magic-row .input { flex: 1; }
+  .legal { text-align: center; margin-top: 32px; font-size: 12px; color: var(--color-fg-subtle); }
+  .legal a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--color-border); margin: 0 6px; }
+  .banner { padding: 10px 14px; background: var(--color-accent-soft); border: 1px solid var(--color-accent); border-radius: var(--radius); color: var(--color-fg); margin-bottom: 16px; font-size: 13px; line-height: 1.5; }
+  .banner code { font-family: var(--font-mono); font-size: 11px; padding: 1px 5px; border-radius: 3px; background: rgba(0,0,0,.08); }
+  .msg { margin-top: 12px; padding: 10px 12px; border-radius: var(--radius); font-size: 13px; display: none; }
+  .msg.ok { background: rgba(21,128,61,.10); color: var(--color-success); border: 1px solid rgba(21,128,61,.20); display: block; }
+  .msg.err { background: rgba(194,65,12,.10); color: var(--color-danger); border: 1px solid rgba(194,65,12,.20); display: block; }
+  .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-top-color: transparent; animation: spin .8s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style></head>
 <body>
-<h1>Trail</h1>
-<p class="sub">Sign in</p>
-<div id="banner" style="display:none;padding:0.7rem 0.85rem;background:#fef3c7;border:1px solid #f59e0b;border-radius:4px;color:#78350f;margin-bottom:1.25rem;font-size:0.9rem;"></div>
+<div class="card">
+  <div class="logo-row">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
+      <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2" />
+      <circle cx="16" cy="16" r="9" fill="none" stroke="var(--color-accent)" stroke-width="0.9" opacity="0.55" />
+      <circle cx="16" cy="16" r="3.5" fill="var(--color-accent)" />
+    </svg>
+    <span class="wordmark">trail</span>
+  </div>
+
+  <h1>Sign in to Trail</h1>
+  <p class="sub">Curate your knowledge. Chat against your brain.</p>
+
+  <div id="banner" class="banner" style="display:none;"></div>
+
+  <div class="btn-stack">
+    <a id="btn-google" href="/api/auth/google" class="btn">
+      <svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      <span>Continue with Google</span>
+    </a>
+    <a id="btn-github" href="/api/auth/github" class="btn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.79 23.4c.6.11.82-.26.82-.58v-2c-3.34.72-4.04-1.61-4.04-1.61a3.18 3.18 0 0 0-1.34-1.76c-1.09-.74.08-.72.08-.72a2.52 2.52 0 0 1 1.84 1.24 2.56 2.56 0 0 0 3.5 1 2.56 2.56 0 0 1 .76-1.6c-2.66-.3-5.46-1.33-5.46-5.93a4.65 4.65 0 0 1 1.23-3.21 4.32 4.32 0 0 1 .12-3.17s1-.32 3.3 1.23a11.43 11.43 0 0 1 6 0c2.3-1.55 3.3-1.23 3.3-1.23a4.32 4.32 0 0 1 .12 3.17 4.64 4.64 0 0 1 1.23 3.21c0 4.6-2.81 5.62-5.48 5.92a2.88 2.88 0 0 1 .82 2.23v3.32c0 .32.22.7.83.58A12 12 0 0 0 12 .3z"/></svg>
+      <span>Continue with GitHub</span>
+    </a>
+  </div>
+
+  <div class="or-row"><span class="or-line"></span><span>or</span><span class="or-line"></span></div>
+
+  <form id="f" class="magic-row">
+    <input id="email" class="input" type="email" placeholder="you@example.com" required autocomplete="email" />
+    <button type="submit" class="btn btn-primary" style="padding: 10px 14px;">Send link</button>
+  </form>
+
+  <p id="msg" class="msg"></p>
+
+  <div class="legal">
+    <a href="https://docs.trailmem.com" target="_blank">Docs</a>
+  </div>
+</div>
+
 <script>
-(function(){
+(function() {
   const params = new URLSearchParams(location.search);
   const err = params.get('error');
   const email = params.get('email');
+  const banner = document.getElementById('banner');
   if (err === 'email_not_registered') {
-    const b = document.getElementById('banner');
-    b.style.display = 'block';
-    b.innerHTML = 'Din OAuth-email <code>' + (email ?? '?') + '</code> er ikke registreret som bruger på denne Trail. Bed administratoren om at tilføje dig (eller log ind med en anden konto).';
+    banner.style.display = 'block';
+    banner.innerHTML = 'Din OAuth-email <code>' + (email ?? '?') + '</code> er ikke registreret som bruger på denne Trail. Bed administratoren om at tilføje dig (eller log ind med en anden konto).';
+  } else if (err === 'oauth_error' || err === 'token_exchange' || err === 'userinfo' || err === 'invalid_state') {
+    banner.style.display = 'block';
+    banner.textContent = 'Sign-in failed. Try again or contact support.';
   }
-})();
-</script>
-<div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;">
-  <a href="/api/auth/google" style="flex:1;padding:0.7rem 1rem;background:#fff;color:#222;border:1px solid #ccc;border-radius:4px;text-decoration:none;text-align:center;font-weight:500;">Continue with Google</a>
-  <a href="/api/auth/github" style="flex:1;padding:0.7rem 1rem;background:#222;color:#fff;border-radius:4px;text-decoration:none;text-align:center;font-weight:500;">Continue with GitHub</a>
-</div>
-<p class="sub" style="font-size:0.85rem;text-align:center;margin:1rem 0;">— or —</p>
-<form id="f">
-  <input id="email" type="email" placeholder="you@example.com" required autocomplete="email" autofocus />
-  <div class="row"><button type="submit">Send magic-link</button></div>
-</form>
-<p id="msg"></p>
-<script>
-document.getElementById('f').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const email = document.getElementById('email').value;
-  const msg = document.getElementById('msg');
-  msg.className = ''; msg.textContent = 'Sending…';
-  try {
-    const r = await fetch('/api/auth/magic-link', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
+
+  // Redirecting state — when user clicked an OAuth button, replace it
+  // with a spinner so they know something is happening.
+  ['btn-google', 'btn-github'].forEach((id) => {
+    const a = document.getElementById(id);
+    a.addEventListener('click', () => {
+      a.innerHTML = '<span class="spinner"></span><span>Redirecting…</span>';
     });
-    if (r.ok) { msg.className = 'ok'; msg.textContent = 'Check your inbox for a link from trail@webhouse.dk.'; }
-    else { msg.className = 'err'; msg.textContent = (await r.json()).error ?? 'Failed'; }
-  } catch (err) { msg.className = 'err'; msg.textContent = String(err); }
-});
+  });
+
+  document.getElementById('f').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const emailInput = document.getElementById('email').value;
+    const msg = document.getElementById('msg');
+    msg.className = 'msg';
+    msg.textContent = 'Sending…';
+    msg.style.display = 'block';
+    try {
+      const r = await fetch('/api/auth/magic-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailInput }),
+      });
+      if (r.ok) {
+        msg.className = 'msg ok';
+        msg.textContent = 'Check your inbox for the sign-in link.';
+      } else {
+        msg.className = 'msg err';
+        const body = await r.json().catch(() => ({}));
+        msg.textContent = body.error ?? 'Failed to send sign-in link';
+      }
+    } catch (err) {
+      msg.className = 'msg err';
+      msg.textContent = String(err);
+    }
+  });
+})();
 </script>
 </body></html>`),
 );
