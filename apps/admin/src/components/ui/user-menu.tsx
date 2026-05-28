@@ -5,6 +5,7 @@ import { Sheet } from './sheet';
 import { Icons } from './icons';
 import { t, useLocale, setLocale, type Locale } from '../../lib/i18n';
 import { getTheme, toggleTheme, onThemeChange, type Theme } from '../../theme';
+import { ambientEnabled } from '../../lib/ambient-store';
 
 /**
  * F186 — UserMenu pill at the top-right. Identity header + Settings link
@@ -205,6 +206,23 @@ function Body({
           <div class="segmented">
             <button aria-pressed={locale === 'en'} onClick={() => setLocale('en' as Locale)}>EN</button>
             <button aria-pressed={locale === 'da'} onClick={() => setLocale('da' as Locale)}>DA</button>
+          </div>
+        </PrefRow>
+
+        <PrefRow label={t('userMenu.ambient')}>
+          <div class="segmented">
+            <button
+              aria-pressed={!ambientEnabled.value}
+              onClick={() => { ambientEnabled.value = false; }}
+            >
+              {t('userMenu.ambientOff')}
+            </button>
+            <button
+              aria-pressed={ambientEnabled.value}
+              onClick={() => { ambientEnabled.value = true; }}
+            >
+              {t('userMenu.ambientOn')}
+            </button>
           </div>
         </PrefRow>
       </div>

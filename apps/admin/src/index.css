@@ -128,8 +128,13 @@ body {
  * Queue, Neurons, Sources, etc. never jumps horizontally.
  */
 .page-shell {
+  /* F186 — left-aligned so every panel's left edge sits at the same
+     padding offset from the sidebar's right edge. Christian flagged
+     centred panels drifting to the right on wide viewports while the
+     /kb panels stayed flush left. max-width still bounds the right
+     edge so long lines don't run on forever. */
   max-width: 72rem;
-  margin: 0 auto;
+  margin: 0;
   padding: 2rem 1.5rem 4rem;
   position: relative;
   z-index: 1;

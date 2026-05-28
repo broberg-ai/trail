@@ -12,6 +12,9 @@
     "themeLight": "Light",
     "themeDark": "Dark",
     "language": "Language",
+    "ambient": "Ambient",
+    "ambientOff": "Off",
+    "ambientOn": "On",
     "signOut": "Sign out"
   },
   "sidebar": {
@@ -293,6 +296,7 @@
     "cancel": "Cancel",
     "save": "Save",
     "close": "Close",
+    "expand": "Expand",
     "confirm": "Confirm",
     "delete": "Delete",
     "retry": "Retry",

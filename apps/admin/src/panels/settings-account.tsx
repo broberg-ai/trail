@@ -3,6 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { fetchAuthMe, type AuthMe } from '../api';
 import { useLocale, getLocale, t, setLocale, type Locale } from '../lib/i18n';
 import { getTheme, toggleTheme, onThemeChange, type Theme } from '../theme';
+import { ambientEnabled } from '../lib/ambient-store';
 import { Icons } from '../components/ui/icons';
 import { CenteredLoader } from '../components/centered-loader';
 
@@ -40,7 +41,7 @@ export function SettingsAccountPanel() {
   const isDa = getLocale() === 'da';
 
   return (
-    <div style={{ position: 'relative', maxWidth: 760, margin: '0 auto', padding: '48px 32px 80px' }}>
+    <div class="page-shell" style={{ position: 'relative', maxWidth: 760, marginLeft: 0 }}>
       <div class="constellation" style={{ opacity: 0.35 }} />
 
       <header style={{ position: 'relative', marginBottom: 40 }}>
@@ -323,6 +324,12 @@ function PreferencesSection() {
         <div class="segmented">
           <button aria-pressed={locale === 'en'} onClick={() => setLocale('en' as Locale)}>EN</button>
           <button aria-pressed={locale === 'da'} onClick={() => setLocale('da' as Locale)}>DA</button>
+        </div>
+      </Field>
+      <Field label={t('userMenu.ambient')} hint={getLocale() === 'da' ? 'Afspil ambient-loops mens du arbejder. Kun mens fanen er aktiv.' : 'Play ambient loops while you work. Only while the tab is active.'}>
+        <div class="segmented">
+          <button aria-pressed={!ambientEnabled.value} onClick={() => { ambientEnabled.value = false; }}>{t('userMenu.ambientOff')}</button>
+          <button aria-pressed={ambientEnabled.value} onClick={() => { ambientEnabled.value = true; }}>{t('userMenu.ambientOn')}</button>
         </div>
       </Field>
     </Section>

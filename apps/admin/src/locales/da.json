@@ -12,6 +12,9 @@
     "themeLight": "Lyst",
     "themeDark": "Mørkt",
     "language": "Sprog",
+    "ambient": "Ambient",
+    "ambientOff": "Fra",
+    "ambientOn": "Til",
     "signOut": "Log ud"
   },
   "sidebar": {
@@ -293,6 +296,7 @@
     "cancel": "Annullér",
     "save": "Gem",
     "close": "Luk",
+    "expand": "Udvid",
     "confirm": "Bekræft",
     "delete": "Slet",
     "retry": "Prøv igen",

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { Modal, ModalButton } from '../components/modal';
 import { useRoute } from 'preact-iso';
 import type { KnowledgeBase } from '@trail/shared';
 import { INGEST_MODELS, CHAT_MODELS, type IngestModel, type ChatModel } from '@trail/shared';
@@ -603,41 +604,23 @@ export function SettingsTrailPanel() {
             </p>
           </div>
 
-          <label class="block mb-2">
-            <span class="text-sm font-medium">{t('settings.trail.personas.toolLabel')}</span>
-            <span class="ml-2 text-[11px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)]">
-              audience: tool
-            </span>
-          </label>
-          <textarea
+          <PersonaEditor
+            label={t('settings.trail.personas.toolLabel')}
+            audience="tool"
             value={chatPersonaTool}
-            onInput={(e) => setChatPersonaTool((e.target as HTMLTextAreaElement).value)}
+            onChange={setChatPersonaTool}
             placeholder={t('settings.trail.personas.toolPlaceholder')}
-            maxLength={4000}
-            rows={4}
-            class="w-full px-3 py-2 rounded-md border border-[color:var(--color-border)] bg-transparent text-sm font-mono leading-relaxed resize-y focus:outline-none focus:border-[color:var(--color-accent)] transition"
+            hint={t('settings.trail.personas.toolHint')}
           />
-          <p class="mt-1 mb-4 text-[11px] text-[color:var(--color-fg-subtle)]">
-            {t('settings.trail.personas.toolHint')}
-          </p>
 
-          <label class="block mb-2">
-            <span class="text-sm font-medium">{t('settings.trail.personas.publicLabel')}</span>
-            <span class="ml-2 text-[11px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)]">
-              audience: public
-            </span>
-          </label>
-          <textarea
+          <PersonaEditor
+            label={t('settings.trail.personas.publicLabel')}
+            audience="public"
             value={chatPersonaPublic}
-            onInput={(e) => setChatPersonaPublic((e.target as HTMLTextAreaElement).value)}
+            onChange={setChatPersonaPublic}
             placeholder={t('settings.trail.personas.publicPlaceholder')}
-            maxLength={4000}
-            rows={5}
-            class="w-full px-3 py-2 rounded-md border border-[color:var(--color-border)] bg-transparent text-sm font-mono leading-relaxed resize-y focus:outline-none focus:border-[color:var(--color-accent)] transition"
+            hint={t('settings.trail.personas.publicHint')}
           />
-          <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)]">
-            {t('settings.trail.personas.publicHint')}
-          </p>
         </section>
 
         <div class="pt-4 border-t border-[color:var(--color-border)]">
@@ -718,4 +701,101 @@ function magnitude(absSec: number): string {
   if (absSec < 3600) return `${Math.round(absSec / 60)}m`;
   if (absSec < 86_400) return `${Math.round(absSec / 3600)}h`;
   return `${Math.round(absSec / 86_400)}d`;
+}
+
+/**
+ * F186 follow-up — persona editor with inline + full-screen modes.
+ * The inline textarea shows 12 rows by default so most personas fit
+ * without scrolling (Christian: "skal være store nok til at vise mindst
+ * 80% af indholdet"). An expand button opens the same content in a
+ * fullscreen modal where the whole persona can be edited without
+ * scroll-juggling against the rest of the form.
+ */
+function PersonaEditor({
+  label,
+  audience,
+  value,
+  onChange,
+  placeholder,
+  hint,
+}: {
+  label: string;
+  audience: 'tool' | 'public';
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  hint: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [draft, setDraft] = useState(value);
+  // Keep the modal in sync if the underlying value changes while closed
+  useEffect(() => {
+    if (!expanded) setDraft(value);
+  }, [value, expanded]);
+
+  return (
+    <div class="mb-6">
+      <div class="flex items-center justify-between mb-2">
+        <label class="block">
+          <span class="text-sm font-medium">{label}</span>
+          <span class="ml-2 text-[11px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)]">
+            audience: {audience}
+          </span>
+        </label>
+        <button
+          type="button"
+          onClick={() => { setDraft(value); setExpanded(true); }}
+          class="text-[11px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] hover:text-[color:var(--color-fg)] transition inline-flex items-center gap-1"
+          title={t('common.expand') === 'common.expand' ? 'Expand' : t('common.expand')}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 3 21 3 21 9" />
+            <polyline points="9 21 3 21 3 15" />
+            <line x1="21" y1="3" x2="14" y2="10" />
+            <line x1="3" y1="21" x2="10" y2="14" />
+          </svg>
+          <span>{t('common.expand') === 'common.expand' ? 'Expand' : t('common.expand')}</span>
+        </button>
+      </div>
+      <textarea
+        value={value}
+        onInput={(e) => onChange((e.target as HTMLTextAreaElement).value)}
+        placeholder={placeholder}
+        maxLength={4000}
+        rows={12}
+        class="w-full px-3 py-2 rounded-md border border-[color:var(--color-border)] bg-transparent text-sm font-mono leading-relaxed resize-y focus:outline-none focus:border-[color:var(--color-accent)] transition"
+      />
+      <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)]">{hint}</p>
+
+      <Modal
+        open={expanded}
+        onClose={() => setExpanded(false)}
+        title={label}
+        maxWidth="lg"
+        footer={
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <ModalButton onClick={() => setExpanded(false)} variant="secondary">
+              {t('common.cancel') === 'common.cancel' ? 'Cancel' : t('common.cancel')}
+            </ModalButton>
+            <ModalButton onClick={() => { onChange(draft); setExpanded(false); }} variant="primary">
+              {t('common.save') === 'common.save' ? 'Save' : t('common.save')}
+            </ModalButton>
+          </div>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, height: 'calc(85vh - 200px)' }}>
+          <textarea
+            autoFocus
+            value={draft}
+            onInput={(e) => setDraft((e.target as HTMLTextAreaElement).value)}
+            placeholder={placeholder}
+            maxLength={4000}
+            class="w-full px-3 py-2 rounded-md border border-[color:var(--color-border)] bg-transparent text-sm font-mono leading-relaxed focus:outline-none focus:border-[color:var(--color-accent)] transition"
+            style={{ flex: 1, resize: 'none' }}
+          />
+          <p class="text-[11px] text-[color:var(--color-fg-subtle)]">{hint}</p>
+        </div>
+      </Modal>
+    </div>
+  );
 }
