@@ -57,10 +57,10 @@ export function SettingsAccountPanel() {
           {isDa ? 'Indstillinger' : 'Settings'}
         </div>
         <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 32, letterSpacing: '-0.015em' }}>
-          {t('settings.heading')}
+          {t('accountPrefs.heading')}
         </h1>
         <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--color-fg-muted)', maxWidth: 540, lineHeight: 1.55 }}>
-          {t('settings.subtitle')}
+          {t('accountPrefs.subtitle')}
         </p>
       </header>
 
@@ -96,7 +96,7 @@ export function SettingsAccountPanel() {
               onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = 'var(--color-fg)')}
               onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = 'var(--color-fg-muted)')}
             >
-              {t(`settings.sections.${id}`)}
+              {t(`accountPrefs.sections.${id}`)}
             </a>
           ))}
         </nav>
@@ -124,7 +124,7 @@ function ProfileSection({ me }: { me: AuthMe }) {
   const [displayName, setDisplayName] = useState(me.user.name ?? '');
   const initials = initialsOf(me.user.name, me.user.email);
   return (
-    <Section id="profile" title={t('settings.sections.profile')} subtitle={isDa ? 'Sådan vises du for andre i tenants du deler' : 'How you appear to other members in shared tenants'}>
+    <Section id="profile" title={t('accountPrefs.sections.profile')} subtitle={isDa ? 'Sådan vises du for andre i tenants du deler' : 'How you appear to other members in shared tenants'}>
       <Field label={isDa ? 'Avatar' : 'Avatar'} hint={isDa ? 'Genereres fra dine initialer. Upload kommer senere.' : 'Generated from your initials. Photo upload coming later.'}>
         <span class="avatar lg">{initials}</span>
       </Field>
@@ -163,7 +163,7 @@ function PreferencesSection() {
   return (
     <Section
       id="preferences"
-      title={t('settings.sections.preferences')}
+      title={t('accountPrefs.sections.preferences')}
       subtitle={getLocale() === 'da' ? 'Tema og sprog. Synkroniseret med kontroller i bruger-menuen.' : 'Theme and language. Synced with the user-menu controls.'}
     >
       <Field label={t('userMenu.theme')}>
@@ -190,7 +190,7 @@ function NotificationsSection() {
   return (
     <Section
       id="notifications"
-      title={t('settings.sections.notifications')}
+      title={t('accountPrefs.sections.notifications')}
       subtitle={isDa ? 'Hvornår Trail rækker ud. (Coming soon — backend ikke wired endnu.)' : 'When Trail reaches out. (Coming soon — backend not wired yet.)'}
     >
       <Field label={isDa ? 'Daglig opsummering' : 'Digest'}>
@@ -214,7 +214,7 @@ function SessionsSection({ isDa }: { isDa: boolean }) {
   return (
     <Section
       id="sessions"
-      title={t('settings.sections.sessions')}
+      title={t('accountPrefs.sections.sessions')}
       subtitle={isDa ? 'Steder du er logget ind. (Coming soon — backend ikke wired endnu.)' : 'Where you’re signed in. (Coming soon.)'}
     >
       <div
@@ -315,7 +315,7 @@ function DangerSection({ isDa }: { isDa: boolean }) {
   return (
     <Section
       id="danger"
-      title={t('settings.sections.danger')}
+      title={t('accountPrefs.sections.danger')}
       subtitle={isDa ? 'Permanente handlinger. Kan ikke fortrydes uden support.' : 'Permanent actions. Cannot be undone without support intervention.'}
     >
       <div

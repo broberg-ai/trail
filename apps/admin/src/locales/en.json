@@ -79,7 +79,7 @@
     "actionSettings": "Account Preferences",
     "comingSoon": "Coming soon"
   },
-  "settings": {
+  "accountPrefs": {
     "heading": "Account Preferences",
     "subtitle": "Personal preferences that follow you across tenants. Tenant-specific settings (plan, API keys, backup) live under Manage tenants.",
     "sections": {

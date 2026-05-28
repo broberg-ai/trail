@@ -79,7 +79,7 @@
     "actionSettings": "Account Preferences",
     "comingSoon": "Kommer snart"
   },
-  "settings": {
+  "accountPrefs": {
     "heading": "Account Preferences",
     "subtitle": "Personlige præferencer der følger dig på tværs af tenants. Tenant-specifikke indstillinger (plan, API-nøgler, backup) finder du under Administrér tenants.",
     "sections": {
