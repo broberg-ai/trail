@@ -481,60 +481,46 @@ export function GraphPanel() {
           },
         });
 
-        // F186 — auto-zoom to the densest cluster ON EVERY MOUNT.
-        // Christian explicitly wants the graph to land at this state on
-        // initial load. Saved camera is ONLY restored when the user
-        // bounced through a wiki-reader within the last 5 minutes (to
-        // preserve back-button-restores-pan UX); otherwise we re-zoom.
+        // F186 — auto-center on the KB's overview/index node ON EVERY
+        // MOUNT (unless a fresh saved camera takes precedence). For
+        // Sanne's KB the overview is the highest-usageWeight hub —
+        // the big purple "Sanne" node (sanne_00000001.md).
+        //
+        // Earlier attempts hand-rolled the bbox normalization, which
+        // didn't match Sigma's own framed-graph coord system. The
+        // canonical Sigma 2 API is `getNodeDisplayData(id)` which
+        // returns the node's position in the same coord frame the
+        // camera operates in — set camera state to those coords and
+        // the node lands at the viewport centre, full stop.
         const camera = renderer.getCamera();
-        // Center on the KB's overview/index node — the single most-
-        // referenced hub. For Sanne's KB this is the big purple "Sanne"
-        // node (sanne_00000001.md). Sigma normalizes the full graph
-        // bbox to [0,1] so we have to use ALL nodes (including parked
-        // orphan-hubs + isolated nodes) for the normalization frame,
-        // then find the overview's normalized position within it.
-        const fitToOverview = () => {
-          let mnX = Infinity, mxX = -Infinity, mnY = Infinity, mxY = -Infinity;
-          let overviewId: string | null = null;
-          let overviewScore = -Infinity;
-          let overviewX = 0;
-          let overviewY = 0;
-          graph.forEachNode((id, attrs) => {
-            if (typeof attrs.x !== 'number' || typeof attrs.y !== 'number') return;
-            if (attrs.x < mnX) mnX = attrs.x;
-            if (attrs.x > mxX) mxX = attrs.x;
-            if (attrs.y < mnY) mnY = attrs.y;
-            if (attrs.y > mxY) mxY = attrs.y;
-            // Skip orphan hubs (the parked-above-cluster ones) as
-            // overview candidates — they're forced into the layout, not
-            // genuine index nodes.
+        const findOverviewId = (): string | null => {
+          let bestId: string | null = null;
+          let bestScore = -Infinity;
+          graph.forEachNode((id) => {
             if (orphanHubIds.includes(id)) return;
             const node = nodeLookup.current.get(id);
             if (!node) return;
-            // Score = usageWeight (backlink-derived popularity) +
-            // bonus for explicit hub flag. The overview is the most-
-            // referenced + structurally-central node.
             const score = (node.usageWeight ?? 0) + (node.hub ? 0.5 : 0);
-            if (score > overviewScore) {
-              overviewScore = score;
-              overviewId = id;
-              overviewX = attrs.x;
-              overviewY = attrs.y;
-            }
+            if (score > bestScore) { bestScore = score; bestId = id; }
           });
-          if (!overviewId || !Number.isFinite(mnX) || mxX <= mnX || mxY <= mnY) {
+          return bestId;
+        };
+        const fitToOverview = () => {
+          const overviewId = findOverviewId();
+          if (!overviewId) {
             camera.setState({ x: 0.5, y: 0.5, ratio: 1.15, angle: 0 });
             return;
           }
-          // Normalize the overview's position into Sigma's [0,1] camera
-          // frame — same denominator Sigma uses to lay out the renderer.
-          const cx = (overviewX - mnX) / (mxX - mnX);
-          const cy = (overviewY - mnY) / (mxY - mnY);
-          // Zoom in enough to fill viewport with the surrounding cluster
-          // but not so far that labels crop. 0.55 = roughly half the
-          // graph's natural extent visible — empirically matches the
-          // "all cluster + breathing room" target Christian sketched.
-          camera.setState({ x: cx, y: cy, ratio: 0.55, angle: 0 });
+          const dd = renderer.getNodeDisplayData(overviewId);
+          if (!dd) {
+            camera.setState({ x: 0.5, y: 0.5, ratio: 1.15, angle: 0 });
+            return;
+          }
+          // dd.x and dd.y are in Sigma's framed-graph coord system —
+          // the exact frame the camera state operates in. Setting
+          // camera position to these coords puts the node at viewport
+          // centre regardless of the FA2 layout's actual scale.
+          camera.setState({ x: dd.x, y: dd.y, ratio: 0.5, angle: 0 });
         };
         fitToCameraRef.current = fitToOverview;
 
@@ -546,7 +532,14 @@ export function GraphPanel() {
         if (savedCamera && savedFresh) {
           camera.setState(savedCamera);
         } else {
-          fitToOverview();
+          // Defer to after Sigma's first render — the constructor schedules
+          // an initial camera fit that overrides any synchronous setState.
+          // requestAnimationFrame fires after Sigma's first paint, so our
+          // overview-center wins. Explicit refresh() guarantees redraw.
+          requestAnimationFrame(() => {
+            fitToOverview();
+            renderer.refresh();
+          });
         }
 
         renderer.on('clickNode', ({ node }) => {
