@@ -487,56 +487,56 @@ export function GraphPanel() {
         // bounced through a wiki-reader within the last 5 minutes (to
         // preserve back-button-restores-pan UX); otherwise we re-zoom.
         const camera = renderer.getCamera();
-        const fitToDensest = () => {
+        // Center on the KB's overview/index node — the single most-
+        // referenced hub. For Sanne's KB this is the big purple "Sanne"
+        // node (sanne_00000001.md). Sigma normalizes the full graph
+        // bbox to [0,1] so we have to use ALL nodes (including parked
+        // orphan-hubs + isolated nodes) for the normalization frame,
+        // then find the overview's normalized position within it.
+        const fitToOverview = () => {
           let mnX = Infinity, mxX = -Infinity, mnY = Infinity, mxY = -Infinity;
-          const positions: Array<{ x: number; y: number }> = [];
+          let overviewId: string | null = null;
+          let overviewScore = -Infinity;
+          let overviewX = 0;
+          let overviewY = 0;
           graph.forEachNode((id, attrs) => {
+            if (typeof attrs.x !== 'number' || typeof attrs.y !== 'number') return;
+            if (attrs.x < mnX) mnX = attrs.x;
+            if (attrs.x > mxX) mxX = attrs.x;
+            if (attrs.y < mnY) mnY = attrs.y;
+            if (attrs.y > mxY) mxY = attrs.y;
+            // Skip orphan hubs (the parked-above-cluster ones) as
+            // overview candidates — they're forced into the layout, not
+            // genuine index nodes.
             if (orphanHubIds.includes(id)) return;
-            if (typeof attrs.x === 'number' && typeof attrs.y === 'number') {
-              positions.push({ x: attrs.x, y: attrs.y });
-              if (attrs.x < mnX) mnX = attrs.x;
-              if (attrs.x > mxX) mxX = attrs.x;
-              if (attrs.y < mnY) mnY = attrs.y;
-              if (attrs.y > mxY) mxY = attrs.y;
+            const node = nodeLookup.current.get(id);
+            if (!node) return;
+            // Score = usageWeight (backlink-derived popularity) +
+            // bonus for explicit hub flag. The overview is the most-
+            // referenced + structurally-central node.
+            const score = (node.usageWeight ?? 0) + (node.hub ? 0.5 : 0);
+            if (score > overviewScore) {
+              overviewScore = score;
+              overviewId = id;
+              overviewX = attrs.x;
+              overviewY = attrs.y;
             }
           });
-          if (positions.length === 0 || !Number.isFinite(mnX) || !Number.isFinite(mxX) || mxX <= mnX || mxY <= mnY) {
+          if (!overviewId || !Number.isFinite(mnX) || mxX <= mnX || mxY <= mnY) {
             camera.setState({ x: 0.5, y: 0.5, ratio: 1.15, angle: 0 });
             return;
           }
-          const BUCKETS = 12;
-          const cellW = (mxX - mnX) / BUCKETS;
-          const cellH = (mxY - mnY) / BUCKETS;
-          const counts = new Map<string, number>();
-          for (const p of positions) {
-            const bx = Math.min(BUCKETS - 1, Math.floor((p.x - mnX) / cellW));
-            const by = Math.min(BUCKETS - 1, Math.floor((p.y - mnY) / cellH));
-            counts.set(`${bx},${by}`, (counts.get(`${bx},${by}`) ?? 0) + 1);
-          }
-          let bestKey = '';
-          let bestCount = 0;
-          for (const [k, c] of counts) {
-            if (c > bestCount) { bestCount = c; bestKey = k; }
-          }
-          const [bx, by] = bestKey.split(',').map(Number) as [number, number];
-          const regionMinX = mnX + Math.max(0, bx - 1) * cellW;
-          const regionMaxX = mnX + Math.min(BUCKETS, bx + 2) * cellW;
-          const regionMinY = mnY + Math.max(0, by - 1) * cellH;
-          const regionMaxY = mnY + Math.min(BUCKETS, by + 2) * cellH;
-          // Sigma 2 normalizes the layout into a [0,1] camera coord
-          // system at render time. Set camera position in that
-          // normalized frame — graph-coord experiments broke the
-          // render entirely. Ratio < 1 = more zoom.
-          const cx = ((regionMinX + regionMaxX) / 2 - mnX) / (mxX - mnX);
-          const cy = ((regionMinY + regionMaxY) / 2 - mnY) / (mxY - mnY);
-          const regionSpan = Math.max(
-            (regionMaxX - regionMinX) / (mxX - mnX),
-            (regionMaxY - regionMinY) / (mxY - mnY),
-          );
-          const ratio = Math.max(0.4, Math.min(1.15, regionSpan * 1.2));
-          camera.setState({ x: cx, y: cy, ratio, angle: 0 });
+          // Normalize the overview's position into Sigma's [0,1] camera
+          // frame — same denominator Sigma uses to lay out the renderer.
+          const cx = (overviewX - mnX) / (mxX - mnX);
+          const cy = (overviewY - mnY) / (mxY - mnY);
+          // Zoom in enough to fill viewport with the surrounding cluster
+          // but not so far that labels crop. 0.55 = roughly half the
+          // graph's natural extent visible — empirically matches the
+          // "all cluster + breathing room" target Christian sketched.
+          camera.setState({ x: cx, y: cy, ratio: 0.55, angle: 0 });
         };
-        fitToCameraRef.current = fitToDensest;
+        fitToCameraRef.current = fitToOverview;
 
         const savedCamera = loadCamera(kbId);
         const savedFresh =
@@ -546,7 +546,7 @@ export function GraphPanel() {
         if (savedCamera && savedFresh) {
           camera.setState(savedCamera);
         } else {
-          fitToDensest();
+          fitToOverview();
         }
 
         renderer.on('clickNode', ({ node }) => {
