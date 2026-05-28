@@ -234,7 +234,7 @@ function ReaderView() {
 
       {pages && !d ? (
         <div class="text-center py-16">
-          <h1 class="text-2xl font-semibold mb-2">Neuron not found</h1>
+          <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 28px; letter-spacing: -0.015em; line-height: 1.15; margin: 0 0 8px;">{t('wikiReader.notFoundTitle')}</h1>
           <p class="text-[color:var(--color-fg-muted)] text-sm mb-6">
             No Neuron matches slug <code class="font-mono">{slug}</code> in this Trail.
           </p>
@@ -253,7 +253,7 @@ function ReaderView() {
             <div class="font-mono text-[11px] uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-1">
               {formatPathDisplay(d.path ?? '')}
             </div>
-            <h1 class="text-3xl font-semibold tracking-tight mb-2">
+            <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 32px; letter-spacing: -0.015em; line-height: 1.15; margin: 0 0 8px;">
               {d.title ?? d.filename}
             </h1>
             <div class="flex items-center gap-3 flex-wrap">

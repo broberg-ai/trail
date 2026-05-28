@@ -456,8 +456,11 @@ export function ChatPanel() {
   const oneTurnLeft = !!turnBudget && !atTurnLimit && turnBudget.used === turnBudget.limit - 1;
 
   return (
-    <div class="page-shell">
-      <div class="flex gap-6 min-h-[calc(100vh-10rem)]">
+    <div class="page-shell" style="padding-top: 1rem; padding-bottom: 1rem;">
+      {/* Chat lives inside the main flex column — use available height
+          rather than min-height so it fits without scrolling the outer
+          page. */}
+      <div class="flex gap-6" style="height: calc(100vh - 7.5rem);">
         <Sidebar
           sidebarOpen={sidebarOpen}
           onCloseMobile={() => setSidebarOpen(false)}
@@ -477,7 +480,7 @@ export function ChatPanel() {
         />
 
         <main class="flex-1 flex flex-col min-w-0">
-          <header class="mb-4 flex items-baseline gap-3 flex-wrap">
+          <header class="mb-2 flex items-baseline gap-3 flex-wrap">
             <button
               type="button"
               onClick={() => setSidebarOpen((v) => !v)}
@@ -492,7 +495,7 @@ export function ChatPanel() {
             <AudienceSelector value={audience} onChange={onAudienceChange} />
           </header>
 
-          <div ref={scrollRef} class="flex-1 overflow-y-auto space-y-6 pb-4">
+          <div ref={scrollRef} class="flex-1 overflow-y-auto space-y-4 pb-2">
             {turnsLoading ? (
               <CenteredLoader />
             ) : turns.length === 0 ? (
@@ -510,7 +513,7 @@ export function ChatPanel() {
           </div>
 
           <form
-            class="sticky bottom-0 bg-[color:var(--color-bg)]/90 backdrop-blur-sm pt-4 pb-6"
+            class="sticky bottom-0 bg-[color:var(--color-bg)]/90 backdrop-blur-sm pt-2 pb-2"
             onSubmit={(e) => {
               e.preventDefault();
               if (atTurnLimit) return;

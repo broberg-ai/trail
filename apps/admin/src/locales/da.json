@@ -142,6 +142,13 @@
     "refresh": "↻ opdatér",
     "allGroups": "Alle grupper"
   },
+  "notFound": {
+    "body": "Siden findes ikke.",
+    "backToTrails": "Tilbage til Trails"
+  },
+  "wikiReader": {
+    "notFoundTitle": "Neuron findes ikke"
+  },
   "pathLabel": {
     "neurons": "neuroner",
     "queries": "forespørgsler",

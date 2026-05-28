@@ -1,7 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
-import { fetchAuthMe, type AuthMe } from './api';
+import { fetchAuthMe, listKnowledgeBases, type AuthMe } from './api';
 import { mountConstellation } from './lib/constellation';
 import { TopNav } from './components/ui/top-nav';
 import { TrailSidebar } from './components/ui/trail-sidebar';
@@ -27,6 +27,9 @@ import { useLocale } from './lib/i18n';
 export function App({ children }: { children: ComponentChildren }) {
   useLocale(); // subscribe to locale changes so labels re-render
   const [me, setMe] = useState<AuthMe | null>(null);
+  const [bootstrappedKbId, setBootstrappedKbId] = useState<string | null>(() => {
+    try { return localStorage.getItem('trail.admin.lastKbId'); } catch { return null; }
+  });
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const { path, route } = useLocation();
@@ -42,17 +45,26 @@ export function App({ children }: { children: ComponentChildren }) {
     }
   }, [kbId]);
 
-  // Sidebar shown on every route except the bare-chrome ones — Home
-  // (/), /tenants, /settings show their own layout, every other route
-  // gets the inner-trail sidebar so the curator never loses their
-  // navigation context.
-  const lastKbId = (() => {
-    if (kbId) return kbId;
-    try { return localStorage.getItem('trail.admin.lastKbId') ?? null; } catch { return null; }
-  })();
-  // Show sidebar everywhere except Home + Login. /settings, /tenants,
-  // /glossary, /jobs, /activity all get sidebar with KB-scoped links
-  // pointing at lastKbId (or the URL's kbId when scoped).
+  // Bootstrap a "lastKbId" when the user hasn't visited a KB yet.
+  // Without this, /settings (or any global route) shows no sidebar on
+  // first sign-in because lastKbId in localStorage is null.
+  // Hit listKnowledgeBases once after /me lands and seed from the
+  // first entry — same KB the Cmd+K palette would have offered.
+  useEffect(() => {
+    if (!me || bootstrappedKbId) return;
+    listKnowledgeBases()
+      .then((kbs) => {
+        if (kbs.length === 0) return;
+        const first = kbs[0]!.slug;
+        try { localStorage.setItem('trail.admin.lastKbId', first); } catch { /* no storage */ }
+        setBootstrappedKbId(first);
+      })
+      .catch(() => { /* network/auth hiccup — sidebar stays hidden, not fatal */ });
+  }, [me, bootstrappedKbId]);
+
+  // Sidebar shown on every route except Home + Login. Resolution
+  // order: URL kbId > localStorage > bootstrapped first KB.
+  const lastKbId = kbId ?? bootstrappedKbId;
   const showSidebar = !!lastKbId && path !== '/' && path !== '/login';
 
   // Ambient route signal

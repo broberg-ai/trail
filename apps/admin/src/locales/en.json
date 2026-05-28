@@ -142,6 +142,13 @@
     "refresh": "↻ refresh",
     "allGroups": "All groups"
   },
+  "notFound": {
+    "body": "Page not found.",
+    "backToTrails": "Back to Trails"
+  },
+  "wikiReader": {
+    "notFoundTitle": "Neuron not found"
+  },
   "pathLabel": {
     "neurons": "neurons",
     "queries": "queries",

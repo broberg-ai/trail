@@ -458,17 +458,74 @@ export function GraphPanel() {
         });
 
         // F99 — camera state: restore from a previous visit, or
-        // centre-fit on first load. Sigma's default camera is
-        // {x:0.5, y:0.5, ratio:1} which IS centred but leaves nodes
-        // touching the viewport edge when the FA2 layout spreads to
-        // the corners. ratio=1.15 gives a breath of padding so labels
-        // don't get clipped at the frame.
+        // auto-zoom to the densest cluster on first load. Without
+        // this the camera defaults to centre-fit at ratio 1.15 which
+        // hides the connected core inside a sea of orphan hubs.
         const camera = renderer.getCamera();
         const savedCamera = loadCamera(kbId);
         if (savedCamera) {
           camera.setState(savedCamera);
         } else {
-          camera.setState({ x: 0.5, y: 0.5, ratio: 1.15, angle: 0 });
+          // Find the densest cluster by gridding nodes into ~12 buckets
+          // along each axis and locating the bucket with the most nodes.
+          // Then re-fit camera on the bbox of THAT bucket plus its
+          // immediate neighbours (3x3 region) so we don't crop too tight.
+          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+          const positions: Array<{ x: number; y: number }> = [];
+          graph.forEachNode((id, attrs) => {
+            if (orphanHubIds.includes(id)) return;
+            if (typeof attrs.x === 'number' && typeof attrs.y === 'number') {
+              positions.push({ x: attrs.x, y: attrs.y });
+              if (attrs.x < minX) minX = attrs.x;
+              if (attrs.x > maxX) maxX = attrs.x;
+              if (attrs.y < minY) minY = attrs.y;
+              if (attrs.y > maxY) maxY = attrs.y;
+            }
+          });
+
+          if (positions.length > 0 && Number.isFinite(minX) && Number.isFinite(maxX) && maxX > minX && maxY > minY) {
+            const BUCKETS = 12;
+            const cellW = (maxX - minX) / BUCKETS;
+            const cellH = (maxY - minY) / BUCKETS;
+            const counts = new Map<string, number>();
+            for (const p of positions) {
+              const bx = Math.min(BUCKETS - 1, Math.floor((p.x - minX) / cellW));
+              const by = Math.min(BUCKETS - 1, Math.floor((p.y - minY) / cellH));
+              const key = `${bx},${by}`;
+              counts.set(key, (counts.get(key) ?? 0) + 1);
+            }
+            // Find the densest bucket
+            let bestKey = '';
+            let bestCount = 0;
+            for (const [k, c] of counts) {
+              if (c > bestCount) { bestCount = c; bestKey = k; }
+            }
+            const [bx, by] = bestKey.split(',').map(Number) as [number, number];
+            // 3×3 region around densest bucket — pad so we don't crop
+            // labels at the edge of the visible area.
+            const regionMinX = minX + Math.max(0, bx - 1) * cellW;
+            const regionMaxX = minX + Math.min(BUCKETS, bx + 2) * cellW;
+            const regionMinY = minY + Math.max(0, by - 1) * cellH;
+            const regionMaxY = minY + Math.min(BUCKETS, by + 2) * cellH;
+
+            // Sigma's camera is normalized 0..1 over the graph extent.
+            // Translate world coords → normalized via the same bbox the
+            // layout was computed on.
+            const cx = ((regionMinX + regionMaxX) / 2 - minX) / (maxX - minX);
+            const cy = ((regionMinY + regionMaxY) / 2 - minY) / (maxY - minY);
+            // Ratio = how much of the full extent the region covers.
+            // Sigma's `ratio` is "1/zoom" — smaller = more zoom.
+            const regionSpan = Math.max(
+              (regionMaxX - regionMinX) / (maxX - minX),
+              (regionMaxY - regionMinY) / (maxY - minY),
+            );
+            // Don't zoom past 0.4 (the cluster fills ~40% of viewport)
+            // or under 1.15 (which is the default whole-graph fit).
+            const ratio = Math.max(0.4, Math.min(1.15, regionSpan * 1.2));
+            camera.setState({ x: cx, y: cy, ratio, angle: 0 });
+          } else {
+            camera.setState({ x: 0.5, y: 0.5, ratio: 1.15, angle: 0 });
+          }
         }
 
         renderer.on('clickNode', ({ node }) => {
