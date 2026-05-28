@@ -1,594 +1,444 @@
-import { useCallback, useEffect, useState } from 'preact/hooks';
-import {
-  api,
-  ApiError,
-  listApiKeys,
-  createApiKey,
-  revokeApiKey,
-  getBackupHealth,
-  type ApiKeyRow,
-  type ApiKeyCreated,
-  type BackupHealth,
-} from '../api';
-import { t, useLocale } from '../lib/i18n';
-import { formatLocaleDate } from '../lib/dates';
-import { ambientEnabled, ambientVolume } from '../lib/ambient-store';
-import { showClaimAnchors, setShowClaimAnchors } from '../lib/claim-anchors-pref';
+import type { JSX } from 'preact';
+import { useEffect, useState } from 'preact/hooks';
+import { fetchAuthMe, type AuthMe } from '../api';
+import { useLocale, getLocale, t, setLocale, type Locale } from '../lib/i18n';
+import { getTheme, toggleTheme, onThemeChange, type Theme } from '../theme';
+import { Icons } from '../components/ui/icons';
 import { CenteredLoader } from '../components/centered-loader';
-import { Modal, ModalButton } from '../components/modal';
-
-interface Me {
-  id: string;
-  email: string;
-  displayName: string;
-  tenantId: string;
-  tenantSlug: string;
-  tenantName: string;
-  tenantPlan: string;
-}
 
 /**
- * Account settings at `/settings`. Per-user and per-device configuration
- * that isn't Trail-scoped: who you are, which tenant, and device-local
- * preferences (currently ambient audio).
+ * F186 — Account Preferences. Ported from
+ * docs/design/trail_app/src/user-settings.jsx 1:1. Six sticky-nav
+ * sections per F186 Q10.1:
  *
- * Ambient lives here rather than in the header because F94 proved that
- * hover-popover sliders race badly. A settings row with an always-
- * visible slider is the right control weight for a setting that's used
- * rarely.
+ *   Profile        — Functional (display name editable; persist deferred)
+ *   Preferences    — Functional (theme/locale synced with user-menu)
+ *   Notifications  — Stub (toggles visible, no backend yet)
+ *   Sessions       — Stub (shows this device, sign-out-elsewhere disabled)
+ *   Developer      — "Coming Soon" F188 (user-level personal API keys)
+ *   Danger         — Stub with disabled "Delete account" button
+ *
+ * Per F186 plan-doc the route is /settings and the page is labelled
+ * "Account Preferences".
  */
 export function SettingsAccountPanel() {
   useLocale();
-  const [me, setMe] = useState<Me | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const enabled = ambientEnabled.value;
-  const volume = ambientVolume.value;
+  const [me, setMe] = useState<AuthMe | null>(null);
 
   useEffect(() => {
-    api<Me>('/api/v1/me')
-      .then(setMe)
-      .catch((err: ApiError) => setError(err.message));
+    fetchAuthMe().then(setMe).catch(() => setMe(null));
   }, []);
-
-  const handleSignOut = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-    } finally {
-      window.location.href = '/';
-    }
-  };
-
-  if (error) {
-    return (
-      <div class="page-shell">
-        <div class="border border-[color:var(--color-danger)]/30 bg-[color:var(--color-danger)]/5 rounded-md p-4 text-sm">
-          {error}
-        </div>
-      </div>
-    );
-  }
 
   if (!me) {
     return (
-      <div class="page-shell">
-        <CenteredLoader />
+      <div style={{ padding: 60 }}>
+        <CenteredLoader label="Loading…" />
       </div>
     );
   }
 
+  const isDa = getLocale() === 'da';
+
   return (
-    <div class="page-shell">
-      <header class="mb-6">
-        <h1 class="text-2xl font-semibold tracking-tight mb-1">
-          {t('settings.account.title')}
+    <div style={{ position: 'relative', maxWidth: 760, margin: '0 auto', padding: '48px 32px 80px' }}>
+      <div class="constellation" style={{ opacity: 0.35 }} />
+
+      <header style={{ position: 'relative', marginBottom: 40 }}>
+        <div
+          class="mono"
+          style={{
+            fontSize: 10.5,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: 'var(--color-fg-subtle)',
+            marginBottom: 8,
+          }}
+        >
+          {isDa ? 'Indstillinger' : 'Settings'}
+        </div>
+        <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 32, letterSpacing: '-0.015em' }}>
+          {t('settings.heading')}
         </h1>
-        <p class="text-[color:var(--color-fg-muted)] text-sm">
-          {t('settings.account.subtitle')}
+        <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--color-fg-muted)', maxWidth: 540, lineHeight: 1.55 }}>
+          {t('settings.subtitle')}
         </p>
       </header>
 
-      <div class="space-y-8 max-w-2xl">
-        <section>
-          <h2 class="text-sm font-medium mb-3">{t('settings.account.profile')}</h2>
-          <dl class="grid grid-cols-[140px_1fr] gap-y-2 text-sm">
-            <dt class="text-[color:var(--color-fg-subtle)]">{t('settings.account.name')}</dt>
-            <dd>{me.displayName || me.email}</dd>
-            <dt class="text-[color:var(--color-fg-subtle)]">{t('settings.account.email')}</dt>
-            <dd class="font-mono text-[13px]">{me.email}</dd>
-          </dl>
-        </section>
-
-        <section>
-          <h2 class="text-sm font-medium mb-3">{t('settings.account.tenant')}</h2>
-          <dl class="grid grid-cols-[140px_1fr] gap-y-2 text-sm">
-            <dt class="text-[color:var(--color-fg-subtle)]">{t('settings.account.tenantName')}</dt>
-            <dd>{me.tenantName}</dd>
-            <dt class="text-[color:var(--color-fg-subtle)]">{t('settings.account.tenantSlug')}</dt>
-            <dd class="font-mono text-[13px]">{me.tenantSlug}</dd>
-            <dt class="text-[color:var(--color-fg-subtle)]">{t('settings.account.plan')}</dt>
-            <dd>
-              <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono uppercase tracking-wider bg-[color:var(--color-bg-card)] border border-[color:var(--color-border)]">
-                {me.tenantPlan}
-              </span>
-            </dd>
-          </dl>
-        </section>
-
-        <section>
-          <h2 class="text-sm font-medium mb-3">{t('settings.account.ambient')}</h2>
-          <div class="space-y-3">
-            <label class="flex items-center gap-3 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={(e) => {
-                  ambientEnabled.value = (e.target as HTMLInputElement).checked;
-                }}
-                class="accent-[color:var(--color-accent)]"
-              />
-              <span class="text-sm">{t('settings.account.ambientEnabled')}</span>
-            </label>
-            <div class="flex items-center gap-3">
-              <label class="text-sm text-[color:var(--color-fg-muted)] w-[140px]">
-                {t('settings.account.ambientVolume')}
-              </label>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={1}
-                value={Math.round(volume * 100)}
-                onInput={(e) => {
-                  const v = Number((e.currentTarget as HTMLInputElement).value);
-                  ambientVolume.value = Math.max(0, Math.min(1, v / 100));
-                }}
-                disabled={!enabled}
-                class="flex-1 max-w-xs accent-[color:var(--color-accent)] disabled:opacity-50"
-              />
-              <span class="font-mono text-[11px] text-[color:var(--color-fg-subtle)] w-10 text-right">
-                {Math.round(volume * 100)}
-              </span>
-            </div>
-          </div>
-        </section>
-
-        <section class="pt-4 border-t border-[color:var(--color-border)]">
-          <h2 class="text-sm font-medium mb-1">{t('settings.account.display.title')}</h2>
-          <p class="text-xs text-[color:var(--color-fg-muted)] mb-3 max-w-md">
-            {t('settings.account.display.subtitle')}
-          </p>
-          <label class="flex items-start gap-3 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={showClaimAnchors.value}
-              onChange={(e) => setShowClaimAnchors((e.target as HTMLInputElement).checked)}
-              class="mt-0.5 accent-[color:var(--color-accent)]"
-            />
-            <span class="text-sm">
-              {t('settings.account.display.showClaimAnchors')}
-              <span class="block text-[11px] text-[color:var(--color-fg-subtle)] mt-0.5 max-w-md">
-                {t('settings.account.display.showClaimAnchorsHint')}
-              </span>
-            </span>
-          </label>
-        </section>
-
-        <ApiKeysSection />
-
-        <BackupHealthSection />
-
-        <section class="pt-4 border-t border-[color:var(--color-border)]">
-          <button
-            type="button"
-            onClick={() => void handleSignOut()}
-            class="px-4 py-2 rounded-md border border-[color:var(--color-border-strong)] text-sm hover:border-[color:var(--color-danger)] hover:text-[color:var(--color-danger)] transition"
-          >
-            {t('nav.signOut')}
-          </button>
-        </section>
+      {/* Sticky section nav */}
+      <div
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 5,
+          background: 'var(--color-bg)',
+          marginLeft: -32,
+          paddingLeft: 32,
+          marginRight: -32,
+          paddingRight: 32,
+          borderBottom: '1px solid var(--color-border)',
+        }}
+      >
+        <nav style={{ display: 'flex', gap: 4, overflowX: 'auto' }}>
+          {(['profile', 'preferences', 'notifications', 'sessions', 'developer', 'danger'] as const).map((id) => (
+            <a
+              key={id}
+              href={`#${id}`}
+              style={{
+                padding: '12px 10px',
+                fontSize: 12.5,
+                fontWeight: 400,
+                color: 'var(--color-fg-muted)',
+                borderBottom: '2px solid transparent',
+                marginBottom: -1,
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = 'var(--color-fg)')}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = 'var(--color-fg-muted)')}
+            >
+              {t(`settings.sections.${id}`)}
+            </a>
+          ))}
+        </nav>
       </div>
+
+      <ProfileSection me={me} />
+      <PreferencesSection />
+      <NotificationsSection />
+      <SessionsSection isDa={isDa} />
+      <DeveloperSection isDa={isDa} />
+      <DangerSection isDa={isDa} />
     </div>
   );
 }
 
-/**
- * F111.2 — API Keys section. Lists this user's non-revoked Bearer
- * tokens, lets them mint a new key (raw value shown ONCE in a modal
- * the curator must explicitly acknowledge), and revoke existing keys.
- *
- * Lives under Settings → Account because keys are per-user. When we
- * grow tenant-scoped service accounts the section moves to a tenant
- * settings panel; the surface is small enough that a redesign moving
- * it costs nothing.
- */
-function ApiKeysSection() {
-  const locale = useLocale();
-  const [keys, setKeys] = useState<ApiKeyRow[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createName, setCreateName] = useState('');
-  const [createBusy, setCreateBusy] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [revealKey, setRevealKey] = useState<ApiKeyCreated | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [copyFailed, setCopyFailed] = useState(false);
-  const [revokeTarget, setRevokeTarget] = useState<ApiKeyRow | null>(null);
-  const [revokeBusy, setRevokeBusy] = useState(false);
+// ─────────────────────────────────────────────────────────────────────
 
-  const refresh = useCallback(() => {
-    listApiKeys()
-      .then((rows) => {
-        setKeys(rows);
-        setLoadError(null);
-      })
-      .catch((err: ApiError) => {
-        setKeys([]);
-        setLoadError(err.message);
-      });
-  }, []);
+function initialsOf(name: string | null, email: string): string {
+  const src = (name && name.trim()) || email.split('@')[0] || '?';
+  return src.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
+}
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  const openCreate = () => {
-    setCreateName('');
-    setCreateError(null);
-    setCreateOpen(true);
-  };
-
-  const submitCreate = async () => {
-    const name = createName.trim();
-    if (!name) {
-      setCreateError(t('settings.account.apiKeys.nameRequired'));
-      return;
-    }
-    setCreateBusy(true);
-    setCreateError(null);
-    try {
-      const created = await createApiKey(name);
-      setCreateOpen(false);
-      setRevealKey(created);
-      setCopied(false);
-      setCopyFailed(false);
-      refresh();
-    } catch (err) {
-      setCreateError(err instanceof ApiError ? err.message : String(err));
-    } finally {
-      setCreateBusy(false);
-    }
-  };
-
-  const copyKey = async () => {
-    if (!revealKey) return;
-    try {
-      await navigator.clipboard.writeText(revealKey.key);
-      setCopyFailed(false);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard rejected (permissions denied, non-secure context,
-      // or browser restriction). Surface the failure so the curator
-      // knows to select-and-copy from the visible <code> block —
-      // silent failure here would mean someone could close the modal
-      // thinking the key was on their clipboard.
-      setCopied(false);
-      setCopyFailed(true);
-    }
-  };
-
-  const submitRevoke = async () => {
-    if (!revokeTarget) return;
-    setRevokeBusy(true);
-    try {
-      await revokeApiKey(revokeTarget.id);
-      setRevokeTarget(null);
-      refresh();
-    } catch (err) {
-      // Re-use the same error surface as the load error so curator
-      // sees something even if revoke fails.
-      setLoadError(err instanceof ApiError ? err.message : String(err));
-      setRevokeTarget(null);
-    } finally {
-      setRevokeBusy(false);
-    }
-  };
-
+function ProfileSection({ me }: { me: AuthMe }) {
+  const isDa = getLocale() === 'da';
+  const [displayName, setDisplayName] = useState(me.user.name ?? '');
+  const initials = initialsOf(me.user.name, me.user.email);
   return (
-    <section>
-      <h2 class="text-sm font-medium mb-1">{t('settings.account.apiKeys.title')}</h2>
-      <p class="text-xs text-[color:var(--color-fg-muted)] mb-3">
-        {t('settings.account.apiKeys.subtitle')}
-      </p>
-
-      {loadError ? (
-        <div class="mb-3 rounded-md border border-[color:var(--color-danger)]/30 bg-[color:var(--color-danger)]/5 px-3 py-2 text-xs">
-          {loadError}
-        </div>
-      ) : null}
-
-      {keys === null ? (
-        <div class="py-4">
-          <CenteredLoader />
-        </div>
-      ) : keys.length === 0 ? (
-        <p class="text-sm text-[color:var(--color-fg-muted)] mb-3">
-          {t('settings.account.apiKeys.empty')}
-        </p>
-      ) : (
-        <div class="border border-[color:var(--color-border)] rounded-md overflow-hidden mb-3">
-          <table class="w-full text-sm">
-            <thead class="bg-[color:var(--color-bg-card)]/60 text-[11px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)]">
-              <tr>
-                <th class="text-left px-3 py-2">{t('settings.account.apiKeys.colName')}</th>
-                <th class="text-left px-3 py-2">{t('settings.account.apiKeys.colLastUsed')}</th>
-                <th class="text-left px-3 py-2">{t('settings.account.apiKeys.colCreated')}</th>
-                <th class="px-3 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {keys.map((k) => (
-                <tr
-                  key={k.id}
-                  class="border-t border-[color:var(--color-border)]"
-                >
-                  <td class="px-3 py-2">{k.name}</td>
-                  <td class="px-3 py-2 text-[color:var(--color-fg-muted)] text-xs">
-                    {k.lastUsedAt ? formatLocaleDate(k.lastUsedAt, locale) : t('settings.account.apiKeys.neverUsed')}
-                  </td>
-                  <td class="px-3 py-2 text-[color:var(--color-fg-muted)] text-xs">
-                    {formatLocaleDate(k.createdAt, locale)}
-                  </td>
-                  <td class="px-3 py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => setRevokeTarget(k)}
-                      class="text-xs px-2 py-1 rounded border border-[color:var(--color-border-strong)] hover:border-[color:var(--color-danger)] hover:text-[color:var(--color-danger)] transition"
-                    >
-                      {t('settings.account.apiKeys.revoke')}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <button
-        type="button"
-        onClick={openCreate}
-        class="px-4 py-2 rounded-md bg-[color:var(--color-accent)] text-[color:var(--color-accent-fg)] font-medium text-sm hover:brightness-105 active:scale-[0.98] transition"
+    <Section id="profile" title={t('settings.sections.profile')} subtitle={isDa ? 'Sådan vises du for andre i tenants du deler' : 'How you appear to other members in shared tenants'}>
+      <Field label={isDa ? 'Avatar' : 'Avatar'} hint={isDa ? 'Genereres fra dine initialer. Upload kommer senere.' : 'Generated from your initials. Photo upload coming later.'}>
+        <span class="avatar lg">{initials}</span>
+      </Field>
+      <Field label={isDa ? 'Visningsnavn' : 'Display name'}>
+        <input class="input" value={displayName} onInput={(e) => setDisplayName((e.currentTarget as HTMLInputElement).value)} style={{ maxWidth: 320 }} />
+      </Field>
+      <Field
+        label={isDa ? 'E-mail' : 'Email'}
+        hint={isDa ? 'Fra Google/GitHub. For at ændre, log ind med en anden konto.' : 'From Google/GitHub. To change, sign in with a different account.'}
       >
-        {t('settings.account.apiKeys.create')}
-      </button>
-
-      <Modal
-        open={createOpen}
-        title={t('settings.account.apiKeys.createTitle')}
-        onClose={() => (createBusy ? null : setCreateOpen(false))}
-        footer={
-          <>
-            <ModalButton onClick={() => setCreateOpen(false)} disabled={createBusy}>
-              {t('common.cancel')}
-            </ModalButton>
-            <ModalButton
-              variant="primary"
-              onClick={() => void submitCreate()}
-              disabled={createBusy || !createName.trim()}
-            >
-              {createBusy ? '…' : t('settings.account.apiKeys.create')}
-            </ModalButton>
-          </>
-        }
-      >
-        <p class="text-sm text-[color:var(--color-fg-muted)] mb-3">
-          {t('settings.account.apiKeys.createHint')}
-        </p>
-        <input
-          type="text"
-          value={createName}
-          onInput={(e) => setCreateName((e.currentTarget as HTMLInputElement).value)}
-          placeholder={t('settings.account.apiKeys.namePlaceholder')}
-          class="w-full rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)]/80 px-3 py-2 text-sm focus:outline-none focus:border-[color:var(--color-accent)] transition"
-        />
-        {createError ? (
-          <div class="mt-2 text-xs text-[color:var(--color-danger)]">{createError}</div>
-        ) : null}
-      </Modal>
-
-      <Modal
-        open={revealKey !== null}
-        title={t('settings.account.apiKeys.revealTitle')}
-        onClose={() => setRevealKey(null)}
-        maxWidth="md"
-        footer={
-          <ModalButton variant="primary" onClick={() => setRevealKey(null)}>
-            {t('settings.account.apiKeys.acknowledge')}
-          </ModalButton>
-        }
-      >
-        <div class="rounded-md border border-[color:var(--color-warning)]/40 bg-[color:var(--color-warning)]/10 px-3 py-2 text-xs mb-3">
-          {t('settings.account.apiKeys.revealWarning')}
-        </div>
-        <div class="text-xs text-[color:var(--color-fg-muted)] mb-1">
-          {revealKey?.name}
-        </div>
-        <div class="flex items-center gap-2">
-          <code class="flex-1 font-mono text-[12px] bg-[color:var(--color-bg-card)] border border-[color:var(--color-border)] rounded px-3 py-2 break-all">
-            {revealKey?.key}
-          </code>
-          <button
-            type="button"
-            onClick={() => void copyKey()}
-            class="px-3 py-2 rounded-md text-xs border border-[color:var(--color-border-strong)] hover:bg-[color:var(--color-bg)] transition whitespace-nowrap"
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span class="mono" style={{ fontSize: 13 }}>{me.user.email}</span>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              padding: '2px 7px',
+              borderRadius: 999,
+              background: 'rgba(21,128,61,.10)',
+              color: 'var(--color-success)',
+              border: '1px solid rgba(21,128,61,.20)',
+            }}
           >
-            {copied ? t('common.copied') : t('common.copy')}
-          </button>
+            {isDa ? 'verificeret' : 'verified'}
+          </span>
         </div>
-        {copyFailed ? (
-          <div class="mt-2 text-xs text-[color:var(--color-danger)]">
-            {t('settings.account.apiKeys.copyFailed')}
-          </div>
-        ) : null}
-      </Modal>
-
-      <Modal
-        open={revokeTarget !== null}
-        title={t('settings.account.apiKeys.revokeTitle')}
-        onClose={() => (revokeBusy ? null : setRevokeTarget(null))}
-        footer={
-          <>
-            <ModalButton onClick={() => setRevokeTarget(null)} disabled={revokeBusy}>
-              {t('common.cancel')}
-            </ModalButton>
-            <ModalButton
-              variant="danger"
-              onClick={() => void submitRevoke()}
-              disabled={revokeBusy}
-            >
-              {revokeBusy ? '…' : t('settings.account.apiKeys.confirmRevoke')}
-            </ModalButton>
-          </>
-        }
-      >
-        <p class="text-sm">
-          {t('settings.account.apiKeys.revokeBody', { name: revokeTarget?.name ?? '' })}
-        </p>
-      </Modal>
-    </section>
+      </Field>
+    </Section>
   );
 }
 
-// Date formatting moved to lib/dates.ts so every panel honours the
-// Trail-locale (set via the header switcher) rather than navigator.language.
-
-/**
- * F153 Phase 4 — Read-only backup health card.
- *
- * Operator-level backup is a SaaS-wide concern, not per-tenant — see
- * the 2026-04-24 Phase 4 drop ruling in F153's plan-doc. This card
- * shows tenants "the backup pipeline is alive" without exposing
- * trigger controls (those stay owner-gated under /admin/backups).
- *
- * Renders even when not configured — the operator (Christian) needs
- * to SEE that state on prod, otherwise the card vanishes mysteriously
- * and "did anything ship?" becomes impossible to answer from the UI.
- * Hidden only when the fetch itself fails (auth gone, server down).
- */
-function BackupHealthSection() {
-  const [health, setHealth] = useState<BackupHealth | null>(null);
-  const [loadFailed, setLoadFailed] = useState(false);
-
-  useEffect(() => {
-    getBackupHealth()
-      .then(setHealth)
-      .catch(() => setLoadFailed(true));
-  }, []);
-
-  if (loadFailed || !health) return null;
-
-  // Unconfigured state — render the section so operator knows the
-  // system exists but isn't wired yet, with a one-line hint pointing
-  // at the env vars to set.
-  if (!health.configured) {
-    return (
-      <section class="pt-4 border-t border-[color:var(--color-border)]">
-        <h2 class="text-sm font-medium mb-1">{t('settings.account.backupHealth.title')}</h2>
-        <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-md mb-3">
-          {t('settings.account.backupHealth.subtitle')}
-        </p>
-        <div class="rounded-md border border-[color:var(--color-border)] p-3 text-[12px] max-w-2xl">
-          <div class="font-mono flex items-center gap-2">
-            <span
-              aria-hidden
-              style={{
-                display: 'inline-block',
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: 'var(--color-fg-subtle)',
-              }}
-            />
-            <span class="text-[color:var(--color-fg-muted)]">
-              {t('settings.account.backupHealth.notConfigured')}
-            </span>
-          </div>
-          <p class="mt-2 text-[11px] text-[color:var(--color-fg-subtle)]">
-            {t('settings.account.backupHealth.notConfiguredHint')}
-          </p>
-        </div>
-      </section>
-    );
-  }
-
-  const stateColor =
-    health.healthy === true
-      ? 'var(--color-success)'
-      : health.healthy === false
-        ? 'var(--color-danger)'
-        : 'var(--color-fg-subtle)';
-  const stateLabel =
-    health.healthy === true
-      ? t('settings.account.backupHealth.healthy')
-      : health.healthy === false
-        ? t('settings.account.backupHealth.stale')
-        : t('settings.account.backupHealth.unknown');
-
+function PreferencesSection() {
+  const locale = useLocale();
+  const [theme, setTheme] = useState<Theme>(getTheme());
+  useEffect(() => onThemeChange(setTheme), []);
   return (
-    <section class="pt-4 border-t border-[color:var(--color-border)]">
-      <h2 class="text-sm font-medium mb-1">{t('settings.account.backupHealth.title')}</h2>
-      <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-md mb-3">
-        {t('settings.account.backupHealth.subtitle')}
-      </p>
-      <div class="grid grid-cols-3 gap-3 max-w-2xl text-[12px]">
-        <div class="rounded-md border border-[color:var(--color-border)] p-3">
-          <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-1">
-            {t('settings.account.backupHealth.state')}
-          </div>
-          <div class="font-mono flex items-center gap-2">
-            <span
-              aria-hidden
-              style={{
-                display: 'inline-block',
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: stateColor,
-              }}
-            />
-            <span style={{ color: stateColor }}>{stateLabel}</span>
-          </div>
+    <Section
+      id="preferences"
+      title={t('settings.sections.preferences')}
+      subtitle={getLocale() === 'da' ? 'Tema og sprog. Synkroniseret med kontroller i bruger-menuen.' : 'Theme and language. Synced with the user-menu controls.'}
+    >
+      <Field label={t('userMenu.theme')}>
+        <div class="segmented">
+          <button aria-pressed={theme === 'light'} onClick={() => theme !== 'light' && toggleTheme()}>{t('userMenu.themeLight')}</button>
+          <button aria-pressed={theme === 'dark'} onClick={() => theme !== 'dark' && toggleTheme()}>{t('userMenu.themeDark')}</button>
         </div>
-        <div class="rounded-md border border-[color:var(--color-border)] p-3">
-          <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-1">
-            {t('settings.account.backupHealth.lastSuccess')}
-          </div>
-          <div class="font-mono">
-            {health.lastSuccess
-              ? formatRelativeShort(health.lastSuccess)
-              : t('settings.account.backupHealth.never')}
-          </div>
+      </Field>
+      <Field label={t('userMenu.language')}>
+        <div class="segmented">
+          <button aria-pressed={locale === 'en'} onClick={() => setLocale('en' as Locale)}>EN</button>
+          <button aria-pressed={locale === 'da'} onClick={() => setLocale('da' as Locale)}>DA</button>
         </div>
-        <div class="rounded-md border border-[color:var(--color-border)] p-3">
-          <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-1">
-            {t('settings.account.backupHealth.last30Days')}
+      </Field>
+    </Section>
+  );
+}
+
+function NotificationsSection() {
+  const isDa = getLocale() === 'da';
+  const [digest, setDigest] = useStored<'off' | 'daily' | 'weekly'>('trail.notify.digest', 'weekly');
+  const [approvals, setApprovals] = useStored('trail.notify.approvals', true);
+  const [lint, setLint] = useStored('trail.notify.lint', false);
+  return (
+    <Section
+      id="notifications"
+      title={t('settings.sections.notifications')}
+      subtitle={isDa ? 'Hvornår Trail rækker ud. (Coming soon — backend ikke wired endnu.)' : 'When Trail reaches out. (Coming soon — backend not wired yet.)'}
+    >
+      <Field label={isDa ? 'Daglig opsummering' : 'Digest'}>
+        <div class="segmented">
+          <button aria-pressed={digest === 'off'} onClick={() => setDigest('off')}>{isDa ? 'Fra' : 'Off'}</button>
+          <button aria-pressed={digest === 'daily'} onClick={() => setDigest('daily')}>{isDa ? 'Dagligt' : 'Daily'}</button>
+          <button aria-pressed={digest === 'weekly'} onClick={() => setDigest('weekly')}>{isDa ? 'Ugentligt' : 'Weekly'}</button>
+        </div>
+      </Field>
+      <Field label={isDa ? 'Kø-godkendelser' : 'Queue approvals'}>
+        <Toggle on={approvals} onChange={setApprovals} />
+      </Field>
+      <Field label={isDa ? 'Lint-fund' : 'Lint findings'}>
+        <Toggle on={lint} onChange={setLint} />
+      </Field>
+    </Section>
+  );
+}
+
+function SessionsSection({ isDa }: { isDa: boolean }) {
+  return (
+    <Section
+      id="sessions"
+      title={t('settings.sections.sessions')}
+      subtitle={isDa ? 'Steder du er logget ind. (Coming soon — backend ikke wired endnu.)' : 'Where you’re signed in. (Coming soon.)'}
+    >
+      <div
+        style={{
+          background: 'var(--color-bg-card)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-lg)',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <span
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              background: 'var(--color-accent-soft)',
+              color: 'var(--color-accent)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flex: '0 0 auto',
+            }}
+          >
+            <Icons.Monitor size={13} />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 500 }}>{isDa ? 'Denne enhed' : 'This device'}</span>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9.5,
+                  padding: '1px 6px',
+                  borderRadius: 3,
+                  background: 'var(--color-accent-soft)',
+                  color: 'var(--color-fg)',
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {isDa ? 'aktiv' : 'current'}
+              </span>
+            </div>
           </div>
-          <div class="font-mono">{health.last30Days}</div>
         </div>
       </div>
+      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          type="button"
+          class="btn"
+          disabled
+          style={{ color: 'var(--color-danger)', borderColor: 'var(--color-border-strong)', opacity: 0.5 }}
+          title={isDa ? 'Kommer snart — F186 follow-up' : 'Coming soon — F186 follow-up'}
+        >
+          {isDa ? 'Log ud alle andre sessions' : 'Sign out all other sessions'}
+        </button>
+      </div>
+    </Section>
+  );
+}
+
+function DeveloperSection({ isDa }: { isDa: boolean }) {
+  return (
+    <Section
+      id="developer"
+      title={isDa ? 'Personlige API-nøgler' : 'Personal API keys'}
+      subtitle={isDa ? 'Bearer tokens bundet til DIN bruger på tværs af tenants. (F188 — Coming soon.)' : 'Bearer tokens bound to YOUR user across tenants. (F188 — Coming soon.)'}
+    >
+      <div
+        style={{
+          background: 'var(--color-bg-card)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '32px 24px',
+          textAlign: 'center',
+        }}
+      >
+        <Icons.CreditCard size={28} style={{ color: 'var(--color-fg-subtle)', marginBottom: 12 }} />
+        <div style={{ fontFamily: 'var(--font-serif)', fontSize: 17, marginBottom: 6 }}>
+          {isDa ? 'Kommer snart' : 'Coming soon'}
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--color-fg-muted)', maxWidth: 380, margin: '0 auto', lineHeight: 1.5 }}>
+          {isDa
+            ? 'Personlige API-nøgler følger med F188. For tenant-niveau bearers, kontakt admin.'
+            : 'Personal API keys are tracked under F188. For tenant-level bearers, contact admin.'}
+        </div>
+        <button type="button" class="btn btn-primary" disabled style={{ marginTop: 16, opacity: 0.5 }}>
+          <Icons.Plus size={13} />
+          <span>{isDa ? 'Generér ny nøgle' : 'Generate new key'}</span>
+        </button>
+      </div>
+    </Section>
+  );
+}
+
+function DangerSection({ isDa }: { isDa: boolean }) {
+  return (
+    <Section
+      id="danger"
+      title={t('settings.sections.danger')}
+      subtitle={isDa ? 'Permanente handlinger. Kan ikke fortrydes uden support.' : 'Permanent actions. Cannot be undone without support intervention.'}
+    >
+      <div
+        style={{
+          background: 'var(--color-bg-card)',
+          border: '1px solid var(--color-border)',
+          borderLeft: '3px solid var(--color-danger)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '18px 20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 24,
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-danger)' }}>
+            {isDa ? 'Slet din bruger' : 'Delete your account'}
+          </div>
+          <div style={{ fontSize: 12.5, color: 'var(--color-fg-muted)', marginTop: 4, maxWidth: 460, lineHeight: 1.5 }}>
+            {isDa
+              ? 'Du forlader alle tenants du er medlem af. Tenants du ejer skal forfremmes til en anden ejer eller arkiveres først.'
+              : 'You leave every tenant you’re a member of. Tenants you own must be transferred to another owner or archived first.'}
+          </div>
+        </div>
+        <button
+          type="button"
+          class="btn"
+          disabled
+          style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)', opacity: 0.5, flex: '0 0 auto' }}
+          title={isDa ? 'Kommer snart — F186 follow-up' : 'Coming soon — F186 follow-up'}
+        >
+          {isDa ? 'Slet bruger…' : 'Delete account…'}
+        </button>
+      </div>
+    </Section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Helpers
+
+function Section({ id, title, subtitle, children }: { id: string; title: string; subtitle?: string; children: JSX.Element | JSX.Element[] }) {
+  return (
+    <section id={id} style={{ position: 'relative', paddingTop: 40, scrollMarginTop: 80 }}>
+      <h2 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 22, letterSpacing: '-0.01em' }}>{title}</h2>
+      {subtitle ? (
+        <p style={{ margin: '6px 0 24px', fontSize: 12.5, color: 'var(--color-fg-muted)', maxWidth: 520, lineHeight: 1.55 }}>{subtitle}</p>
+      ) : null}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>{children}</div>
     </section>
   );
 }
 
-function formatRelativeShort(iso: string): string {
-  const ms = Date.now() - Date.parse(iso);
-  if (!Number.isFinite(ms)) return iso;
-  const m = Math.round(ms / 60_000);
-  if (m < 1) return t('settings.account.backupHealth.justNow');
-  if (m < 60) return `${m} min`;
-  const h = Math.round(m / 60);
-  if (h < 48) return `${h} t`;
-  const d = Math.round(h / 24);
-  return `${d} d`;
+function Field({ label, hint, children }: { label: string; hint?: string; children: JSX.Element | JSX.Element[] }) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '180px 1fr',
+        gap: 24,
+        padding: '16px 0',
+        borderBottom: '1px solid var(--color-border)',
+        alignItems: 'flex-start',
+      }}
+    >
+      <div style={{ paddingTop: 4 }}>
+        <div style={{ fontSize: 13, fontWeight: 500 }}>{label}</div>
+        {hint ? <div style={{ fontSize: 11.5, color: 'var(--color-fg-subtle)', marginTop: 4, lineHeight: 1.5 }}>{hint}</div> : null}
+      </div>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!on)}
+      role="switch"
+      aria-checked={on}
+      style={{
+        position: 'relative',
+        width: 36,
+        height: 20,
+        borderRadius: 999,
+        background: on ? 'var(--color-accent)' : 'var(--color-bg-sunk)',
+        border: '1px solid ' + (on ? 'transparent' : 'var(--color-border-strong)'),
+        transition: 'background var(--dur) var(--ease)',
+        flex: '0 0 auto',
+        cursor: 'pointer',
+      }}
+    >
+      <span
+        style={{
+          position: 'absolute',
+          top: 1,
+          left: on ? 17 : 1,
+          width: 16,
+          height: 16,
+          borderRadius: '50%',
+          background: 'var(--color-bg-card)',
+          boxShadow: '0 1px 2px rgba(0,0,0,.18)',
+          transition: 'left var(--dur) var(--ease)',
+        }}
+      />
+    </button>
+  );
+}
+
+function useStored<T>(key: string, fallback: T): [T, (v: T) => void] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw == null ? fallback : (JSON.parse(raw) as T);
+    } catch {
+      return fallback;
+    }
+  });
+  function update(v: T) {
+    setValue(v);
+    try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* ignore */ }
+  }
+  return [value, update];
 }

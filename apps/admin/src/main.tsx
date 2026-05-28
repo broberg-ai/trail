@@ -14,6 +14,7 @@ import { WorkPanel } from './panels/work';
 import { PlayPanel } from './panels/play';
 import { SettingsTrailPanel } from './panels/settings-trail';
 import { SettingsAccountPanel } from './panels/settings-account';
+import { ManageTenantsPanel } from './panels/tenants';
 import { CostPanel } from './panels/cost';
 import { QualityComparePanel } from './panels/quality-compare';
 import { LinkReportPanel } from './panels/link-report';
@@ -51,6 +52,7 @@ function Main() {
           <Route path="/kb/:kbId/link-check" component={LinkReportPanel} />
           <Route path="/kb/:kbId/settings" component={SettingsTrailPanel} />
           <Route path="/settings" component={SettingsAccountPanel} />
+          <Route path="/tenants" component={ManageTenantsPanel} />
           <Route path="/glossary" component={GlossaryPanel} />
           <Route path="/jobs" component={JobsPanel} />
           <Route path="/activity" component={ActivityPanel} />
