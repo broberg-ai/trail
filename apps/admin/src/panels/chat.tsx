@@ -477,7 +477,7 @@ export function ChatPanel() {
             >
               ☰ sessions
             </button>
-            <h1 class="text-2xl font-semibold tracking-tight">
+            <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 24px; letter-spacing: -0.015em; line-height: 1.15;">
               {activeSession?.title ?? 'New chat'}
             </h1>
             <AudienceSelector value={audience} onChange={onAudienceChange} />

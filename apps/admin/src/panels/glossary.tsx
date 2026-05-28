@@ -25,7 +25,7 @@ export function GlossaryPanel() {
   return (
     <div class="page-shell">
       <header class="mb-8">
-        <h1 class="text-2xl font-semibold tracking-tight mb-1">{t('glossary.title')}</h1>
+        <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 32px; letter-spacing: -0.015em; line-height: 1.15; margin: 0 0 6px;">{t('glossary.title')}</h1>
         <p class="text-[color:var(--color-fg-muted)] text-sm">{t('glossary.subtitle')}</p>
       </header>
 

@@ -693,7 +693,7 @@ export function QueuePanel() {
   return (
     <div class="page-shell">
       <header class="mb-6">
-        <h1 class="text-2xl font-semibold tracking-tight mb-1">{t('queue.title')}</h1>
+        <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 32px; letter-spacing: -0.015em; line-height: 1.15; margin: 0 0 6px;">{t('queue.title')}</h1>
         <p class="text-[color:var(--color-fg-muted)] text-sm">
           {data ? (
             t(data.count === 1 ? 'queue.summary' : 'queue.summaryPlural', {

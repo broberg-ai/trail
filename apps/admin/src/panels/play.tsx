@@ -279,7 +279,7 @@ export function PlayPanel() {
   return (
     <div class="page-shell">
       <header class="mb-6">
-        <h1 class="text-2xl font-semibold tracking-tight mb-1">Play</h1>
+        <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 32px; letter-spacing: -0.015em; line-height: 1.15; margin: 0 0 6px;">Play</h1>
         <p class="text-[color:var(--color-fg-muted)] text-sm">
           Component sandbox — iterate on visual components without wiring them into live data.
           Not linked from the nav; type <code class="px-1 py-0.5 rounded bg-[color:var(--color-bg)] font-mono text-xs">/play</code> to reach it.
