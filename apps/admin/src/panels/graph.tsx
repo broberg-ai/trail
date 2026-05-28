@@ -33,6 +33,10 @@ interface CameraState {
   y: number;
   ratio: number;
   angle: number;
+  /** F186 — when the state was persisted. Restore only when fresh
+   *  (<5 min) so reopening the graph after a long detour goes back to
+   *  the auto-zoom default, not to a stale view. */
+  savedAt?: number;
 }
 
 /**
@@ -45,7 +49,8 @@ function cameraKey(kbId: string): string {
 }
 function saveCamera(kbId: string, cam: CameraState): void {
   try {
-    sessionStorage.setItem(cameraKey(kbId), JSON.stringify(cam));
+    const stamped = { ...cam, savedAt: Date.now() };
+    sessionStorage.setItem(cameraKey(kbId), JSON.stringify(stamped));
   } catch {
     // sessionStorage disabled (safari private mode) — fall through.
   }
@@ -134,6 +139,25 @@ export function GraphPanel() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sigmaRef = useRef<Sigma | null>(null);
   const graphRef = useRef<Graph | null>(null);
+  /** F186 — populated by the layout effect with a closure that re-runs
+   *  the densest-cluster zoom. Wired to the "Fit" button so the user
+   *  can re-centre after panning. */
+  const fitToCameraRef = useRef<(() => void) | null>(null);
+  /** F186 — collapse/expand state for the two floating panels on the
+   *  right (Filtrér + Populære Neuroner). Persisted to localStorage so
+   *  the choice survives reload. */
+  const [filterBoxOpen, setFilterBoxOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem('trail.admin.graph.filterBox') !== '0'; } catch { return true; }
+  });
+  const [hotBoxOpen, setHotBoxOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem('trail.admin.graph.hotBox') !== '0'; } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('trail.admin.graph.filterBox', filterBoxOpen ? '1' : '0'); } catch { /* no storage */ }
+  }, [filterBoxOpen]);
+  useEffect(() => {
+    try { localStorage.setItem('trail.admin.graph.hotBox', hotBoxOpen ? '1' : '0'); } catch { /* no storage */ }
+  }, [hotBoxOpen]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [nodeCount, setNodeCount] = useState(0);
@@ -457,75 +481,68 @@ export function GraphPanel() {
           },
         });
 
-        // F99 — camera state: restore from a previous visit, or
-        // auto-zoom to the densest cluster on first load. Without
-        // this the camera defaults to centre-fit at ratio 1.15 which
-        // hides the connected core inside a sea of orphan hubs.
+        // F186 — auto-zoom to the densest cluster ON EVERY MOUNT.
+        // Christian explicitly wants the graph to land at this state on
+        // initial load. Saved camera is ONLY restored when the user
+        // bounced through a wiki-reader within the last 5 minutes (to
+        // preserve back-button-restores-pan UX); otherwise we re-zoom.
         const camera = renderer.getCamera();
-        const savedCamera = loadCamera(kbId);
-        if (savedCamera) {
-          camera.setState(savedCamera);
-        } else {
-          // Find the densest cluster by gridding nodes into ~12 buckets
-          // along each axis and locating the bucket with the most nodes.
-          // Then re-fit camera on the bbox of THAT bucket plus its
-          // immediate neighbours (3x3 region) so we don't crop too tight.
-          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        const fitToDensest = () => {
+          let mnX = Infinity, mxX = -Infinity, mnY = Infinity, mxY = -Infinity;
           const positions: Array<{ x: number; y: number }> = [];
           graph.forEachNode((id, attrs) => {
             if (orphanHubIds.includes(id)) return;
             if (typeof attrs.x === 'number' && typeof attrs.y === 'number') {
               positions.push({ x: attrs.x, y: attrs.y });
-              if (attrs.x < minX) minX = attrs.x;
-              if (attrs.x > maxX) maxX = attrs.x;
-              if (attrs.y < minY) minY = attrs.y;
-              if (attrs.y > maxY) maxY = attrs.y;
+              if (attrs.x < mnX) mnX = attrs.x;
+              if (attrs.x > mxX) mxX = attrs.x;
+              if (attrs.y < mnY) mnY = attrs.y;
+              if (attrs.y > mxY) mxY = attrs.y;
             }
           });
-
-          if (positions.length > 0 && Number.isFinite(minX) && Number.isFinite(maxX) && maxX > minX && maxY > minY) {
-            const BUCKETS = 12;
-            const cellW = (maxX - minX) / BUCKETS;
-            const cellH = (maxY - minY) / BUCKETS;
-            const counts = new Map<string, number>();
-            for (const p of positions) {
-              const bx = Math.min(BUCKETS - 1, Math.floor((p.x - minX) / cellW));
-              const by = Math.min(BUCKETS - 1, Math.floor((p.y - minY) / cellH));
-              const key = `${bx},${by}`;
-              counts.set(key, (counts.get(key) ?? 0) + 1);
-            }
-            // Find the densest bucket
-            let bestKey = '';
-            let bestCount = 0;
-            for (const [k, c] of counts) {
-              if (c > bestCount) { bestCount = c; bestKey = k; }
-            }
-            const [bx, by] = bestKey.split(',').map(Number) as [number, number];
-            // 3×3 region around densest bucket — pad so we don't crop
-            // labels at the edge of the visible area.
-            const regionMinX = minX + Math.max(0, bx - 1) * cellW;
-            const regionMaxX = minX + Math.min(BUCKETS, bx + 2) * cellW;
-            const regionMinY = minY + Math.max(0, by - 1) * cellH;
-            const regionMaxY = minY + Math.min(BUCKETS, by + 2) * cellH;
-
-            // Sigma's camera is normalized 0..1 over the graph extent.
-            // Translate world coords → normalized via the same bbox the
-            // layout was computed on.
-            const cx = ((regionMinX + regionMaxX) / 2 - minX) / (maxX - minX);
-            const cy = ((regionMinY + regionMaxY) / 2 - minY) / (maxY - minY);
-            // Ratio = how much of the full extent the region covers.
-            // Sigma's `ratio` is "1/zoom" — smaller = more zoom.
-            const regionSpan = Math.max(
-              (regionMaxX - regionMinX) / (maxX - minX),
-              (regionMaxY - regionMinY) / (maxY - minY),
-            );
-            // Don't zoom past 0.4 (the cluster fills ~40% of viewport)
-            // or under 1.15 (which is the default whole-graph fit).
-            const ratio = Math.max(0.4, Math.min(1.15, regionSpan * 1.2));
-            camera.setState({ x: cx, y: cy, ratio, angle: 0 });
-          } else {
+          if (positions.length === 0 || !Number.isFinite(mnX) || !Number.isFinite(mxX) || mxX <= mnX || mxY <= mnY) {
             camera.setState({ x: 0.5, y: 0.5, ratio: 1.15, angle: 0 });
+            return;
           }
+          const BUCKETS = 12;
+          const cellW = (mxX - mnX) / BUCKETS;
+          const cellH = (mxY - mnY) / BUCKETS;
+          const counts = new Map<string, number>();
+          for (const p of positions) {
+            const bx = Math.min(BUCKETS - 1, Math.floor((p.x - mnX) / cellW));
+            const by = Math.min(BUCKETS - 1, Math.floor((p.y - mnY) / cellH));
+            counts.set(`${bx},${by}`, (counts.get(`${bx},${by}`) ?? 0) + 1);
+          }
+          let bestKey = '';
+          let bestCount = 0;
+          for (const [k, c] of counts) {
+            if (c > bestCount) { bestCount = c; bestKey = k; }
+          }
+          const [bx, by] = bestKey.split(',').map(Number) as [number, number];
+          const regionMinX = mnX + Math.max(0, bx - 1) * cellW;
+          const regionMaxX = mnX + Math.min(BUCKETS, bx + 2) * cellW;
+          const regionMinY = mnY + Math.max(0, by - 1) * cellH;
+          const regionMaxY = mnY + Math.min(BUCKETS, by + 2) * cellH;
+          const cx = ((regionMinX + regionMaxX) / 2 - mnX) / (mxX - mnX);
+          const cy = ((regionMinY + regionMaxY) / 2 - mnY) / (mxY - mnY);
+          const regionSpan = Math.max(
+            (regionMaxX - regionMinX) / (mxX - mnX),
+            (regionMaxY - regionMinY) / (mxY - mnY),
+          );
+          const ratio = Math.max(0.4, Math.min(1.15, regionSpan * 1.2));
+          camera.setState({ x: cx, y: cy, ratio, angle: 0 });
+        };
+        fitToCameraRef.current = fitToDensest;
+
+        const savedCamera = loadCamera(kbId);
+        const savedFresh =
+          savedCamera &&
+          typeof (savedCamera as { savedAt?: number }).savedAt === 'number' &&
+          Date.now() - ((savedCamera as { savedAt?: number }).savedAt ?? 0) < 5 * 60 * 1000;
+        if (savedCamera && savedFresh) {
+          camera.setState(savedCamera);
+        } else {
+          fitToDensest();
         }
 
         renderer.on('clickNode', ({ node }) => {
@@ -648,7 +665,45 @@ export function GraphPanel() {
 
       {/* Top-right floating search + meta panel */}
       <div class="absolute top-4 right-4 flex flex-col gap-2 z-10">
-        <div class="bg-[color:var(--color-bg-card)]/95 backdrop-blur-sm border border-[color:var(--color-border)] rounded-md p-3 shadow-lg min-w-[240px]">
+        {/* Fit-to-cluster button — always visible, lets the user re-zoom
+            after panning around. Christian's note: graph should land
+            centred on the densest cluster on every mount. */}
+        <div class="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => fitToCameraRef.current?.()}
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider rounded-md border border-[color:var(--color-border-strong)] bg-[color:var(--color-bg-card)]/95 backdrop-blur-sm hover:border-[color:var(--color-accent)] hover:text-[color:var(--color-accent)] transition"
+            title={t('graph.fitHint') === 'graph.fitHint' ? 'Centre on densest cluster' : t('graph.fitHint')}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="4 14 4 20 10 20" />
+              <polyline points="20 10 20 4 14 4" />
+              <line x1="4" y1="20" x2="11" y2="13" />
+              <line x1="20" y1="4" x2="13" y2="11" />
+            </svg>
+            <span>{t('graph.fit') === 'graph.fit' ? 'Fit' : t('graph.fit')}</span>
+          </button>
+        </div>
+
+        <div class="bg-[color:var(--color-bg-card)]/95 backdrop-blur-sm border border-[color:var(--color-border)] rounded-md shadow-lg min-w-[240px]">
+          <div class="flex items-center justify-between px-3 pt-3">
+            <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)]">
+              {t('graph.searchPlaceholder')}
+            </div>
+            <button
+              type="button"
+              onClick={() => setFilterBoxOpen((v) => !v)}
+              class="text-[color:var(--color-fg-subtle)] hover:text-[color:var(--color-fg)] transition"
+              aria-label={filterBoxOpen ? 'Collapse filter panel' : 'Expand filter panel'}
+              title={filterBoxOpen ? 'Collapse' : 'Expand'}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style={{ transform: filterBoxOpen ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 180ms var(--ease)' }}>
+                <polyline points="18 15 12 9 6 15" />
+              </svg>
+            </button>
+          </div>
+          {filterBoxOpen ? (
+          <div class="p-3 pt-2">
           <input
             type="text"
             value={search}
@@ -721,13 +776,30 @@ export function GraphPanel() {
               );
             })}
           </div>
+          </div>
+          ) : null}
         </div>
 
         {hotNodes.length > 0 ? (
-          <div class="bg-[color:var(--color-bg-card)]/95 backdrop-blur-sm border border-[color:var(--color-border)] rounded-md p-3 shadow-lg min-w-[240px]">
-            <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-2">
-              {t('graph.hotTitle')}
+          <div class="bg-[color:var(--color-bg-card)]/95 backdrop-blur-sm border border-[color:var(--color-border)] rounded-md shadow-lg min-w-[240px]">
+            <div class="flex items-center justify-between px-3 pt-3">
+              <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)]">
+                {t('graph.hotTitle')}
+              </div>
+              <button
+                type="button"
+                onClick={() => setHotBoxOpen((v) => !v)}
+                class="text-[color:var(--color-fg-subtle)] hover:text-[color:var(--color-fg)] transition"
+                aria-label={hotBoxOpen ? 'Collapse hot-nodes panel' : 'Expand hot-nodes panel'}
+                title={hotBoxOpen ? 'Collapse' : 'Expand'}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style={{ transform: hotBoxOpen ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 180ms var(--ease)' }}>
+                  <polyline points="18 15 12 9 6 15" />
+                </svg>
+              </button>
             </div>
+            {hotBoxOpen ? (
+            <div class="p-3 pt-2">
             <div class="space-y-1.5">
               {hotNodes.map((n) => {
                 const slug = n.filename.replace(/\.md$/i, '');
@@ -757,6 +829,8 @@ export function GraphPanel() {
                 );
               })}
             </div>
+            </div>
+            ) : null}
           </div>
         ) : null}
       </div>
