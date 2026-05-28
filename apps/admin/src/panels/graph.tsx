@@ -143,6 +143,12 @@ export function GraphPanel() {
    *  the densest-cluster zoom. Wired to the "Fit" button so the user
    *  can re-centre after panning. */
   const fitToCameraRef = useRef<(() => void) | null>(null);
+  /** F186 — refs to the two floating right-side panels so the
+   *  visible-area centering reads their ACTUAL widths instead of
+   *  hardcoding 380px. ResizeObserver below re-runs the fit on size
+   *  change (window resize, panel collapse, responsive breakpoint). */
+  const filterBoxRef = useRef<HTMLDivElement | null>(null);
+  const hotBoxRef = useRef<HTMLDivElement | null>(null);
   /** F186 — collapse/expand state for the two floating panels on the
    *  right (Filtrér + Populære Neuroner). Persisted to localStorage so
    *  the choice survives reload. */
@@ -518,18 +524,36 @@ export function GraphPanel() {
           }
           // dd.x and dd.y are in Sigma's framed-graph coord system —
           // setting camera to those coords puts the node at the
-          // geometric viewport centre. But the canvas isn't fully
-          // unobstructed: the Filtrér/Populære floating boxes occupy
-          // ~380px on the right side. To put Sanne at the centre of
-          // the VISIBLE area (not the canvas geometric centre), shift
-          // camera-x RIGHT by half the obstruction fraction —
-          // increasing camera.x makes the look-at point move right, so
-          // the actual graph content (Sanne) shifts LEFT in viewport.
+          // geometric viewport centre. But the right-side floating
+          // panels obstruct part of the canvas; to put the overview
+          // node at the centre of the VISIBLE area, shift camera-x
+          // RIGHT by half the obstruction width — increasing camera.x
+          // moves the look-at point right, so the graph content shifts
+          // LEFT in viewport.
           const ratio = 0.5;
           const container = containerRef.current;
-          const containerW = container?.clientWidth ?? 1400;
-          const RIGHT_OBSTRUCTION_PX = 380;
-          const xShift = (RIGHT_OBSTRUCTION_PX / containerW / 2) * ratio;
+          if (!container) {
+            // Layout not ready — set base centre and let the
+            // ResizeObserver re-run once dimensions are known.
+            camera.setState({ x: dd.x, y: dd.y, ratio, angle: 0 });
+            return;
+          }
+          const containerW = container.clientWidth;
+          if (containerW <= 0) {
+            camera.setState({ x: dd.x, y: dd.y, ratio, angle: 0 });
+            return;
+          }
+          // Read the actual rendered width of each panel from its ref.
+          // If a panel is unmounted (hot-nodes box only renders when
+          // hotNodes.length > 0) its width is 0 — that's correct.
+          // The panels sit at `right-4` (16px), so the obstruction is
+          // (panel-width + right-offset) and they stack vertically so
+          // we use the WIDER of the two as the canvas obstruction.
+          const filterW = filterBoxRef.current?.offsetWidth ?? 0;
+          const hotW = hotBoxRef.current?.offsetWidth ?? 0;
+          const RIGHT_OFFSET_PX = 16; // matches `right-4` Tailwind class
+          const obstructionPx = Math.max(filterW, hotW) + RIGHT_OFFSET_PX;
+          const xShift = (obstructionPx / containerW / 2) * ratio;
           camera.setState({ x: dd.x + xShift, y: dd.y, ratio, angle: 0 });
         };
         fitToCameraRef.current = fitToOverview;
@@ -626,6 +650,31 @@ export function GraphPanel() {
     sigmaRef.current?.refresh();
   }, [searchLower, activeCats, activeEdgeTypes]);
 
+  // F186 — re-centre when container or floating-panel widths change.
+  // Triggers on window resize, panel collapse/expand, sidebar
+  // collapse, responsive breakpoint. Debounced inside RAF so a stream
+  // of resize events coalesces into one camera setState per frame.
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return;
+    let raf: number | null = null;
+    const rerunFit = () => {
+      if (raf != null) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        raf = null;
+        fitToCameraRef.current?.();
+        sigmaRef.current?.refresh();
+      });
+    };
+    const observer = new ResizeObserver(rerunFit);
+    if (containerRef.current) observer.observe(containerRef.current);
+    if (filterBoxRef.current) observer.observe(filterBoxRef.current);
+    if (hotBoxRef.current) observer.observe(hotBoxRef.current);
+    return () => {
+      observer.disconnect();
+      if (raf != null) cancelAnimationFrame(raf);
+    };
+  }, [filterBoxOpen, hotBoxOpen, hotNodes.length]);
+
   // IMPORTANT: the container div MUST render on every path (even while
   // loading or in error/empty states) so `containerRef.current` is
   // populated by the time the useEffect runs. Rendering <CenteredLoader/>
@@ -695,7 +744,7 @@ export function GraphPanel() {
           </button>
         </div>
 
-        <div class="bg-[color:var(--color-bg-card)]/95 backdrop-blur-sm border border-[color:var(--color-border)] rounded-md shadow-lg min-w-[240px]">
+        <div ref={filterBoxRef} class="bg-[color:var(--color-bg-card)]/95 backdrop-blur-sm border border-[color:var(--color-border)] rounded-md shadow-lg min-w-[240px]">
           <div class="flex items-center justify-between px-3 pt-3">
             <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)]">
               {t('graph.searchPlaceholder')}
@@ -791,7 +840,7 @@ export function GraphPanel() {
         </div>
 
         {hotNodes.length > 0 ? (
-          <div class="bg-[color:var(--color-bg-card)]/95 backdrop-blur-sm border border-[color:var(--color-border)] rounded-md shadow-lg min-w-[240px]">
+          <div ref={hotBoxRef} class="bg-[color:var(--color-bg-card)]/95 backdrop-blur-sm border border-[color:var(--color-border)] rounded-md shadow-lg min-w-[240px]">
             <div class="flex items-center justify-between px-3 pt-3">
               <div class="text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)]">
                 {t('graph.hotTitle')}
