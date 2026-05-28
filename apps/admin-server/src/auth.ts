@@ -255,6 +255,53 @@ authRoutes.post('/switch-tenant', async (c) => {
   return c.json({ ok: true, slug: target.slug });
 });
 
+// F186 follow-up — admin-only bearer registration. Replaces the
+// flyctl-secrets-per-slug dance. Caller must be signed in AS an
+// operator-role user (matching env TRAIL_ADMIN_OPERATOR_EMAIL — or any
+// signed-in user when that env is unset, for bootstrap). POST with
+// { tenantSlug, bearer } to register or rotate the bearer for one
+// tenant. The proxy reads it on the next request — no redeploy.
+authRoutes.post('/admin/set-bearer', async (c) => {
+  const sessionId = getCookie(c, COOKIE_NAME);
+  if (!sessionId) return c.json({ error: 'not signed in' }, 401);
+  const session = await db.query.sessions.findFirst({
+    where: and(eq(schema.sessions.id, sessionId), gt(schema.sessions.expiresAt, nowIso())),
+  });
+  if (!session) return c.json({ error: 'session expired' }, 401);
+  const user = await db.query.controlUsers.findFirst({
+    where: eq(schema.controlUsers.id, session.userId),
+  });
+  if (!user) return c.json({ error: 'user not found' }, 401);
+  // Operator gate — if TRAIL_ADMIN_OPERATOR_EMAIL is set, restrict to
+  // that email; otherwise allow any signed-in user (single-tenant
+  // bootstrap workflow).
+  const opEmail = process.env.TRAIL_ADMIN_OPERATOR_EMAIL?.toLowerCase();
+  if (opEmail && user.email.toLowerCase() !== opEmail) {
+    return c.json({ error: 'operator-only endpoint' }, 403);
+  }
+
+  let body: { tenantSlug?: string; bearer?: string } = {};
+  try { body = await c.req.json(); } catch { /* fallthrough */ }
+  const tenantSlug = body.tenantSlug?.trim();
+  const bearer = body.bearer?.trim();
+  if (!tenantSlug || !bearer) {
+    return c.json({ error: 'tenantSlug and bearer required' }, 400);
+  }
+
+  const tenant = await db.query.controlTenants.findFirst({
+    where: eq(schema.controlTenants.slug, tenantSlug),
+  });
+  if (!tenant) return c.json({ error: 'tenant not found' }, 404);
+
+  await db
+    .update(schema.tenantEngines)
+    .set({ bearer })
+    .where(eq(schema.tenantEngines.tenantId, tenant.id))
+    .run();
+
+  return c.json({ ok: true, tenantSlug });
+});
+
 authRoutes.post('/logout', async (c) => {
   const sessionId = getCookie(c, COOKIE_NAME);
   if (sessionId) {

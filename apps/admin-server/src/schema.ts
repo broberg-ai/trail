@@ -69,6 +69,10 @@ export const tenantEngines = sqliteTable(
     provisionedAt: text('provisioned_at').notNull(),
     retiredAt: text('retired_at'),
     notes: text('notes'),
+    /** Bearer key admin-server forwards as Authorization when proxying
+     *  /api/v1/* to this engine. Set at provisioning time; migration
+     *  back-fills from legacy TRAIL_ADMIN_PROXY_BEARER_<SLUG> env-vars. */
+    bearer: text('bearer'),
   },
   (t) => ({
     engineIdx: index('idx_tenant_engines_engine').on(t.engineId, t.retiredAt),

@@ -74,13 +74,21 @@ async function resolveSession(c: Context): Promise<ResolvedRoute | null> {
   });
   if (!eng) return null;
 
-  // Bearer key — env-configured per slug. Set on Fly with:
-  //   fly secrets set TRAIL_ADMIN_PROXY_BEARER_SANNE_ANDERSEN=trail_...
-  const envKey = `TRAIL_ADMIN_PROXY_BEARER_${tenant.slug.toUpperCase().replace(/-/g, '_')}`;
-  const bearer = process.env[envKey];
+  // F186 follow-up — bearer comes from tenant_engines.bearer (DB).
+  // Provisioning persists it; migrations.ts backfills from any legacy
+  // TRAIL_ADMIN_PROXY_BEARER_<SLUG> env-var the first boot after
+  // upgrade. We keep an env-var fallback for the *current* boot in
+  // case migrations haven't run yet or the column is null in dev.
+  let bearer: string | null = eng.bearer ?? null;
   if (!bearer) {
-    console.warn(`[proxy] missing ${envKey} — /api/v1 calls for ${tenant.slug} will 401`);
-    return null;
+    const envKey = `TRAIL_ADMIN_PROXY_BEARER_${tenant.slug.toUpperCase().replace(/-/g, '_')}`;
+    bearer = process.env[envKey] ?? null;
+    if (!bearer) {
+      console.warn(
+        `[proxy] no bearer for ${tenant.slug} (tenant_engines.bearer null, ${envKey} unset) — /api/v1 calls will 401`,
+      );
+      return null;
+    }
   }
 
   return {

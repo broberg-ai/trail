@@ -89,4 +89,34 @@ export async function runMigrations(): Promise<void> {
   for (const sql of STATEMENTS) {
     await client.execute(sql);
   }
+  // F186 follow-up — bearer column on tenant_engines. We can't use
+  // IF NOT EXISTS on ALTER TABLE in SQLite, so probe pragma first.
+  const cols = await client.execute("PRAGMA table_info('tenant_engines')");
+  const hasBearer = cols.rows.some((r) => (r as { name?: string }).name === 'bearer');
+  if (!hasBearer) {
+    await client.execute('ALTER TABLE tenant_engines ADD COLUMN bearer TEXT');
+  }
+
+  // One-shot env-var backfill — old prod used TRAIL_ADMIN_PROXY_BEARER_<SLUG>
+  // env-vars on the trail-admin Fly app. Migrate every set value into the
+  // DB row so the env-var dance goes away. Idempotent: only writes when
+  // the row's bearer column is null AND the env-var is set.
+  const rows = await client.execute(
+    'SELECT te.tenant_id, ct.slug FROM tenant_engines te ' +
+      'JOIN control_tenants ct ON ct.id = te.tenant_id ' +
+      'WHERE te.bearer IS NULL AND te.retired_at IS NULL',
+  );
+  for (const row of rows.rows) {
+    const slug = (row as { slug?: string }).slug;
+    const tenantId = (row as { tenant_id?: string }).tenant_id;
+    if (!slug || !tenantId) continue;
+    const envKey = `TRAIL_ADMIN_PROXY_BEARER_${slug.toUpperCase().replace(/-/g, '_')}`;
+    const value = process.env[envKey];
+    if (!value) continue;
+    await client.execute({
+      sql: 'UPDATE tenant_engines SET bearer = ? WHERE tenant_id = ?',
+      args: [value, tenantId],
+    });
+    console.log(`[migrations] backfilled bearer for tenant ${slug} from ${envKey}`);
+  }
 }
