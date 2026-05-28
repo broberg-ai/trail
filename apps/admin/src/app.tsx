@@ -100,7 +100,7 @@ export function App({ children }: { children: ComponentChildren }) {
         </main>
       ) : null}
 
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} me={me} />
 
       <AmbientProvider />
       {me ? <ThinkingSubscriber /> : null}
