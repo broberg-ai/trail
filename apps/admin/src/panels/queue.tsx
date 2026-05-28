@@ -15,7 +15,7 @@ import {
 import { parseTags } from '../components/tag-chips';
 import type { Document } from '@trail/shared';
 import { rewriteWikiLinks } from '../lib/wiki-links';
-import { displayPath } from '../lib/display-path';
+import { formatPathDisplay } from '../lib/display-path';
 import { Modal, ModalButton } from '../components/modal';
 import { DynamicActionButtons } from '../components/dynamic-actions';
 import { CopyId } from '../components/copy-id';
@@ -1424,7 +1424,7 @@ function ExpandedContent({
           {meta.path ? (
             <>
               <dt class="text-[color:var(--color-fg-subtle)]">{t('queue.meta.path')}</dt>
-              <dd>{displayPath(meta.path)}</dd>
+              <dd>{formatPathDisplay(meta.path)}</dd>
             </>
           ) : null}
           {meta.targetDocumentId ? (

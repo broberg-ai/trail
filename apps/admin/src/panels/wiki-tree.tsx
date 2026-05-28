@@ -3,7 +3,7 @@ import { useRoute } from 'preact-iso';
 import type { Document } from '@trail/shared';
 import { formatSeqId } from '@trail/shared';
 import { listWikiPages, listTags, runLint, createNeuron, ApiError, type WikiSortOrder, type TagCount } from '../api';
-import { displayPath } from '../lib/display-path';
+import { formatPathDisplay } from '../lib/display-path';
 import { useKb } from '../lib/kb-cache';
 import { useKbEvents, onStreamOpen, onFocusRefresh, debounce } from '../lib/event-stream';
 import { t, useLocale } from '../lib/i18n';
@@ -326,7 +326,7 @@ export function WikiTreePanel() {
         {grouped?.map(([path, docs]) => (
           <section key={path}>
             <h2 class="font-mono text-[11px] uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-2">
-              {displayPath(path)}
+              {formatPathDisplay(path)}
             </h2>
             <ul class="space-y-1">
               {docs.map((doc) => {

@@ -14,7 +14,7 @@ import {
   ApiError,
 } from '../api';
 import { showJob } from '../lib/jobs-store';
-import { displayPath } from '../lib/display-path';
+import { formatPathDisplay } from '../lib/display-path';
 import { UploadDropzone } from '../components/upload-dropzone';
 import { ProcessingIndicator } from '../components/processing-indicator';
 import { Modal, ModalButton } from '../components/modal';
@@ -759,7 +759,7 @@ function SourceRow({
           </div>
           <div class="font-medium">{doc.title ?? doc.filename}</div>
           <div class="text-[11px] font-mono text-[color:var(--color-fg-subtle)] truncate">
-            {displayPath(doc.path)}{doc.filename}
+            {formatPathDisplay(doc.path)}{doc.filename}
           </div>
           {doc.status === 'failed' && doc.errorMessage ? (
             <div class="mt-2 space-y-2">

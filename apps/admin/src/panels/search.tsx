@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 import { searchKb, listTags, ApiError, type SearchResponse, type DocumentSearchHit, type ChunkSearchHit, type TagCount } from '../api';
-import { displayPath } from '../lib/display-path';
+import { formatPathDisplay } from '../lib/display-path';
 import { parseTags } from '../components/tag-chips';
 import { t } from '../lib/i18n';
 
@@ -306,7 +306,7 @@ function NeuronHit({ hit, kbId }: { hit: DocumentSearchHit; kbId: string }) {
         <div class="flex items-baseline justify-between gap-4 mb-1">
           <div class="font-medium truncate">{hit.title ?? slug}</div>
           <div class="text-[11px] font-mono text-[color:var(--color-fg-subtle)] shrink-0">
-            {displayPath(hit.path)}
+            {formatPathDisplay(hit.path)}
           </div>
         </div>
         <Snippet html={hit.highlight} />

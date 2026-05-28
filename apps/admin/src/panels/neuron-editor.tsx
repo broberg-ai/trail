@@ -10,7 +10,7 @@ import {
   ApiError,
 } from '../api';
 import { rewriteWikiLinks } from '../lib/wiki-links';
-import { displayPath } from '../lib/display-path';
+import { formatPathDisplay } from '../lib/display-path';
 import { t } from '../lib/i18n';
 import { TagChips, parseTags, serializeTags } from '../components/tag-chips';
 import { Modal, ModalButton } from '../components/modal';
@@ -214,7 +214,7 @@ export function NeuronEditorPanel() {
     <div class="page-shell">
       <header class="mb-4 flex items-baseline justify-between gap-4">
         <div class="font-mono text-[11px] uppercase tracking-wider text-[color:var(--color-fg-subtle)]">
-          {displayPath(d.path ?? '')} · v{loadedVersion ?? d.version}
+          {formatPathDisplay(d.path ?? '')} · v{loadedVersion ?? d.version}
         </div>
         <div class="flex items-center gap-2">
           <button

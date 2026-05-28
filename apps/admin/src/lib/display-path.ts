@@ -1,25 +1,22 @@
 import { t } from './i18n';
 
 /**
- * Storage is canonical `/neurons/...` now. This helper remains as a safety
- * shim for two edge cases:
- *  - legacy data that slipped in before the bootstrap rewrite ran
- *  - external ingest clients (buddy, CMS adapters) that haven't caught up to
- *    the namespace change yet
+ * Display-only path formatter. Storage is canonical `/neurons/...`;
+ * this helper:
+ *   1. rewrites legacy `/wiki/...` → `/neurons/...` (safety shim for
+ *      pre-bootstrap data and adapters that haven't caught up yet)
+ *   2. localizes well-known segment names (neurons, queries, sources,
+ *      images, attachments, wiki) for the active locale.
  *
- * For any `/neurons/...` input it's a no-op. For a stale `/wiki/...` it
- * rewrites to `/neurons/...` so the curator never sees the old prefix.
- *
- * F186 — additionally localizes well-known segment names (neurons, queries,
- * sources, images, attachments, wiki) so the path breadcrumb reads in the
- * curator's active locale (`/NEURONS/QUERIES/` → `/NEURONER/FORESPØRGSLER/`
- * when DA is on). The canonical storage path stays unchanged — this is a
- * display-only transform.
+ * Return value is for HUMAN display only — text nodes, tooltips,
+ * aria-labels. NEVER pass the return value into a navigation href, an
+ * API request URL, a localStorage key, or any other identifier that
+ * survives outside the render — the localized form ("/neuroner/…")
+ * doesn't exist on the server.
  */
-export function displayPath(p: string | null | undefined): string {
+export function formatPathDisplay(p: string | null | undefined): string {
   if (!p) return '';
   const normalized = p.replace(/^\/wiki(\/|$)/, '/neurons$1');
-  // Localize each segment when a translation key exists.
   return normalized
     .split('/')
     .map((seg) => {
@@ -29,3 +26,11 @@ export function displayPath(p: string | null | undefined): string {
     })
     .join('/');
 }
+
+/**
+ * @deprecated — renamed to formatPathDisplay() to make it obvious the
+ * return value is display-only. The old name implied path-normalisation
+ * which is misleading now that segments get localized. Use the new
+ * name; this alias stays for one release for backward-compat.
+ */
+export const displayPath = formatPathDisplay;

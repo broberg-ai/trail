@@ -196,13 +196,15 @@ function LoginMethodsSection({ me }: { me: AuthMe }) {
         name="Google"
         email={me.user.email}
         right={
-          <a
-            href="/api/auth/google"
+          <button
+            type="button"
             class="btn"
-            style={{ padding: '6px 12px', fontSize: 12.5, textDecoration: 'none' }}
+            disabled
+            style={{ padding: '6px 12px', fontSize: 12.5, opacity: 0.5, cursor: 'not-allowed' }}
+            title={t('comingSoonToast')}
           >
             {t('accountPrefs.loginMethods.linkAccount')}
-          </a>
+          </button>
         }
       />
       <LoginMethodRow
@@ -210,13 +212,15 @@ function LoginMethodsSection({ me }: { me: AuthMe }) {
         name="GitHub"
         email={me.user.email}
         right={
-          <a
-            href="/api/auth/github"
+          <button
+            type="button"
             class="btn"
-            style={{ padding: '6px 12px', fontSize: 12.5, textDecoration: 'none' }}
+            disabled
+            style={{ padding: '6px 12px', fontSize: 12.5, opacity: 0.5, cursor: 'not-allowed' }}
+            title={t('comingSoonToast')}
           >
             {t('accountPrefs.loginMethods.linkAccount')}
-          </a>
+          </button>
         }
       />
     </Section>

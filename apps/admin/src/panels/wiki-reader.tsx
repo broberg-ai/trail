@@ -25,7 +25,7 @@ import {
   type NeuronProvenance,
 } from '../api';
 import { rewriteWikiLinks } from '../lib/wiki-links';
-import { displayPath } from '../lib/display-path';
+import { formatPathDisplay } from '../lib/display-path';
 import { t } from '../lib/i18n';
 import { NeuronEditorPanel } from './neuron-editor';
 import { TagChips, parseTags } from '../components/tag-chips';
@@ -251,7 +251,7 @@ function ReaderView() {
         <article>
           <div class="mb-6">
             <div class="font-mono text-[11px] uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-1">
-              {displayPath(d.path ?? '')}
+              {formatPathDisplay(d.path ?? '')}
             </div>
             <h1 class="text-3xl font-semibold tracking-tight mb-2">
               {d.title ?? d.filename}
