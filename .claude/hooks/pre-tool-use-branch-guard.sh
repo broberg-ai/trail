@@ -9,7 +9,8 @@
 #   { tool_name: "Bash", tool_input: { command: "..." }, session_id: ... }
 #
 # Env:
-#   PROJECTS_SPAWNED_BRANCH — set by dispatch_card's buddy_payload.env.
+#   CARDMEM_SPAWNED_BRANCH — set by dispatch_card's buddy_payload.env.
+#     (legacy PROJECTS_SPAWNED_BRANCH honored as fallback for one release).
 #     If unset, this hook is a no-op (human cc workflow unchanged).
 #
 # Exit codes:
@@ -18,7 +19,8 @@
 
 # Early bail-out BEFORE any potentially-unset-var derefs, so non-spawned
 # sessions (the 99% case) never error even on a strict POSIX shell.
-if [ -z "${PROJECTS_SPAWNED_BRANCH:-}" ]; then
+SPAWNED_BRANCH="${CARDMEM_SPAWNED_BRANCH:-${PROJECTS_SPAWNED_BRANCH:-}}"
+if [ -z "$SPAWNED_BRANCH" ]; then
   exit 0
 fi
 
@@ -48,16 +50,16 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
 fi
 
 current=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-if [[ "$current" == "$PROJECTS_SPAWNED_BRANCH" ]]; then
+if [[ "$current" == "$SPAWNED_BRANCH" ]]; then
   # On the right branch, allow
   exit 0
 fi
 
 # Wrong branch — refuse with explicit instruction
 {
-  printf 'F035.4 branch-guard: this spawned cc session must operate on branch "%s".\n' "$PROJECTS_SPAWNED_BRANCH"
+  printf 'F035.4 branch-guard: this spawned cc session must operate on branch "%s".\n' "$SPAWNED_BRANCH"
   printf 'Current branch is "%s". Run:\n\n' "$current"
-  printf '    git checkout -b %s\n\n' "$PROJECTS_SPAWNED_BRANCH"
-  printf '(or `git checkout %s` if the branch already exists). Then retry the commit/push.\n' "$PROJECTS_SPAWNED_BRANCH"
+  printf '    git checkout -b %s\n\n' "$SPAWNED_BRANCH"
+  printf '(or `git checkout %s` if the branch already exists). Then retry the commit/push.\n' "$SPAWNED_BRANCH"
 } >&2
 exit 2

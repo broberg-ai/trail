@@ -1,11 +1,20 @@
 #!/usr/bin/env bash
-# F033.5 — shared helpers for the four cc-projects hooks.
+# F033.5 / F062 — shared helpers for the cardmem cc hooks.
 #
 # Each hook script sources this file. Centralises:
-#   - PROJECTS_MCP_URL (where to talk to the projects-server)
-#   - PROJECTS_MCP_KEY (optional Bearer for cloud mode)
+#   - CARDMEM_MCP_URL (where to talk to the cardmem server)
+#   - CARDMEM_MCP_KEY (optional Bearer for cloud mode)
 #   - call_mcp(toolname, jsonargs) — wraps a JSON-RPC tools/call + parses the
 #     SSE response back to a single JSON blob
+#
+# F062 — endpoint resolution is single-source-of-truth via .mcp.json:
+#   1. explicit env override (CARDMEM_MCP_URL / legacy PROJECTS_MCP_URL)
+#   2. .mcp.json in the repo (the SAME file the cc process uses to reach cloud)
+#   3. http://localhost:7474/mcp — only when no .mcp.json exists (local dev)
+# Pre-F062 the hooks fell back to localhost:7474 whenever the env var was
+# unset, so in cloud mode they hit a dead local endpoint, every MCP call
+# returned empty, and session-start.sh never registered a cc_sessions row —
+# breaking dispatch routing.
 #
 # Hooks fail gracefully: if the server is unreachable they exit 0 without
 # output so cc keeps working. Their value is real-time orientation, not
@@ -14,16 +23,40 @@
 set -u
 # Don't 'set -e' — we want the hooks to no-op on network failures, not abort cc.
 
-PROJECTS_MCP_URL="${PROJECTS_MCP_URL:-http://localhost:7474/mcp}"
-PROJECTS_MCP_KEY="${PROJECTS_MCP_KEY:-}"
-PROJECTS_HOOK_DEBUG="${PROJECTS_HOOK_DEBUG:-0}"
-PROJECTS_HOOK_LOG="${PROJECTS_HOOK_LOG:-$HOME/.claude/logs/projects-hooks.log}"
+# ── endpoint resolution ───────────────────────────────────────────────
+# Explicit env wins; legacy PROJECTS_* honored as fallback for one release.
+CARDMEM_MCP_URL="${CARDMEM_MCP_URL:-${PROJECTS_MCP_URL:-}}"
+CARDMEM_MCP_KEY="${CARDMEM_MCP_KEY:-${PROJECTS_MCP_KEY:-}}"
 
-mkdir -p "$(dirname "$PROJECTS_HOOK_LOG")" 2>/dev/null || true
+# If still unset, resolve from .mcp.json — the single source of truth the
+# cc process itself uses (mcpServers.cardmem.args carries the URL + Bearer).
+if [[ -z "$CARDMEM_MCP_URL" ]]; then
+  _mcp_json=""
+  _git_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  for _candidate in "${CLAUDE_PROJECT_DIR:-}/.mcp.json" "${_git_root}/.mcp.json" "./.mcp.json"; do
+    if [[ -n "$_candidate" && -f "$_candidate" ]]; then _mcp_json="$_candidate"; break; fi
+  done
+  if [[ -n "$_mcp_json" ]] && command -v jq >/dev/null 2>&1; then
+    # args: [ "-y", "mcp-remote", "<url>", "--header", "Authorization: Bearer <key>" ]
+    CARDMEM_MCP_URL="$(jq -r '.mcpServers.cardmem.args[]? | select(type=="string" and test("^https?://"))' "$_mcp_json" 2>/dev/null | head -1)"
+    _auth_arg="$(jq -r '.mcpServers.cardmem.args[]? | select(type=="string" and startswith("Authorization:"))' "$_mcp_json" 2>/dev/null | head -1)"
+    if [[ -n "$_auth_arg" ]]; then
+      CARDMEM_MCP_KEY="${_auth_arg#Authorization: Bearer }"
+    fi
+  fi
+fi
+
+# Final fallback: local dev server. Only reached when no .mcp.json resolved a URL.
+CARDMEM_MCP_URL="${CARDMEM_MCP_URL:-http://localhost:7474/mcp}"
+
+CARDMEM_HOOK_DEBUG="${CARDMEM_HOOK_DEBUG:-${PROJECTS_HOOK_DEBUG:-0}}"
+CARDMEM_HOOK_LOG="${CARDMEM_HOOK_LOG:-${PROJECTS_HOOK_LOG:-$HOME/.claude/logs/cardmem-hooks.log}}"
+
+mkdir -p "$(dirname "$CARDMEM_HOOK_LOG")" 2>/dev/null || true
 
 hook_log() {
-  if [[ "$PROJECTS_HOOK_DEBUG" == "1" ]]; then
-    printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*" >> "$PROJECTS_HOOK_LOG"
+  if [[ "$CARDMEM_HOOK_DEBUG" == "1" ]]; then
+    printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*" >> "$CARDMEM_HOOK_LOG"
   fi
 }
 
@@ -34,8 +67,8 @@ call_mcp() {
   local args_json="$2"
 
   local auth_header=()
-  if [[ -n "$PROJECTS_MCP_KEY" ]]; then
-    auth_header=(-H "Authorization: Bearer $PROJECTS_MCP_KEY")
+  if [[ -n "$CARDMEM_MCP_KEY" ]]; then
+    auth_header=(-H "Authorization: Bearer $CARDMEM_MCP_KEY")
   fi
 
   local body
@@ -49,7 +82,7 @@ call_mcp() {
   local response
   response=$(
     curl -s --max-time 4 \
-      -X POST "$PROJECTS_MCP_URL" \
+      -X POST "$CARDMEM_MCP_URL" \
       -H "Content-Type: application/json" \
       -H "Accept: application/json, text/event-stream" \
       "${auth_header[@]}" \
@@ -57,7 +90,7 @@ call_mcp() {
   )
 
   if [[ -z "$response" ]]; then
-    hook_log "call_mcp $tool_name: empty response (server unreachable?)"
+    hook_log "call_mcp $tool_name: empty response (server unreachable? url=$CARDMEM_MCP_URL)"
     return 1
   fi
 

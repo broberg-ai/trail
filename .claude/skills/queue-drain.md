@@ -96,6 +96,36 @@ The following are explicitly NOT allowed between a handoff and the next pickup:
 
 If you find yourself drafting a sentence that asks for confirmation between handoff-and-pickup, STOP. Delete it. Pick up the card instead. The PostToolUse hook will inject the system-reminder again if you somehow still drift.
 
+### A UI-origin Ready-flip dispatch is binding too — not just post-handoff (F066)
+
+The binding contract is **not** limited to the handoff→pickup loop. If you are
+idle and a buddy intercom arrives like:
+
+```
+[queue-drain] BINDING — card <slug> moved <from> → ready (moved by: UI)
+```
+
+that `moved by: UI` (or `system`) stamp means **a human flipped the card to
+Ready**. In queue-drain mode that IS the go — claim it **immediately**, in the
+same turn, no confirmation:
+
+```
+cardmem_pickup_card({ card_id_or_slug: '<id>' })
+```
+
+Do NOT hedge with "you control pickup" / "waiting for explicit go" / "I'll
+observe but not claim". The human flipping to Ready is the explicit go. A
+queue-drain session that leaves a UI-flipped Ready card sitting is in
+violation of this contract — it is the exact failure F066 exists to prevent.
+
+**Exception — agent-origin flips:** a message reading `moved by: agent` is FYI
+only, NOT a pickup trigger (it prevents agent→agent cascades). Only `UI` /
+`system` origin is binding.
+
+> If a prior instruction in this session told you to be cautious / not touch a
+> card (e.g. during a routing test), that instruction does NOT survive into a
+> real UI-origin BINDING dispatch. The contract wins.
+
 ### When the cloud-dispatched card is invalid (archived, stale, already-claimed)
 
 The cloud's queue-drain picker has a known bug where it can dispatch an archived/stale card. If `cardmem_pickup_card` on the dispatched id fails (or the get_card response shows `archived: true`), the fallback is:
