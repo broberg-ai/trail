@@ -83,6 +83,24 @@ const STATEMENTS = [
     user_agent TEXT
   )`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id, expires_at)`,
+
+  // F187 — tenant invitations. Org-scoped (one-user-one-org model);
+  // role is forward-compat metadata, not enforced. status: pending |
+  // accepted | revoked | expired.
+  `CREATE TABLE IF NOT EXISTS invitations (
+    id TEXT PRIMARY KEY NOT NULL,
+    organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'member',
+    invited_by_user_id TEXT NOT NULL REFERENCES control_users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL,
+    accepted_at TEXT,
+    accepted_user_id TEXT REFERENCES control_users(id) ON DELETE SET NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_invitations_org ON invitations(organization_id, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_invitations_email ON invitations(email)`,
 ];
 
 export async function runMigrations(): Promise<void> {

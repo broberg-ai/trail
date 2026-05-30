@@ -104,6 +104,37 @@ export const controlApiKeys = sqliteTable(
   }),
 );
 
+export const invitations = sqliteTable(
+  'invitations',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+    /** Forward-compat metadata — NOT enforced yet (no RBAC layer; F187 §Q3).
+     *  One of VALID_ROLES in invite.ts: owner | admin | member | service. */
+    role: text('role').notNull().default('member'),
+    invitedByUserId: text('invited_by_user_id')
+      .notNull()
+      .references(() => controlUsers.id, { onDelete: 'cascade' }),
+    /** pending | accepted | revoked | expired */
+    status: text('status').notNull().default('pending'),
+    createdAt: text('created_at')
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+    expiresAt: text('expires_at').notNull(),
+    acceptedAt: text('accepted_at'),
+    acceptedUserId: text('accepted_user_id').references(() => controlUsers.id, {
+      onDelete: 'set null',
+    }),
+  },
+  (t) => ({
+    orgIdx: index('idx_invitations_org').on(t.organizationId, t.status),
+    emailIdx: index('idx_invitations_email').on(t.email),
+  }),
+);
+
 export const magicLinks = sqliteTable(
   'magic_links',
   {

@@ -1,6 +1,16 @@
 import type { JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { fetchAuthMe, switchTenant, type AuthMe, type AuthTenant } from '../api';
+import {
+  fetchAuthMe,
+  switchTenant,
+  listInvitations,
+  createInvitation,
+  revokeInvitation,
+  type AuthMe,
+  type AuthTenant,
+  type Invitation,
+  type InvitationRole,
+} from '../api';
 import { useLocale, getLocale, t } from '../lib/i18n';
 import { Icons } from '../components/ui/icons';
 import { CenteredLoader } from '../components/centered-loader';
@@ -25,9 +35,17 @@ export function ManageTenantsPanel() {
   const [tab, setTab] = useState<'all' | 'owner' | 'invitations'>('all');
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+
+  function loadInvitations() {
+    listInvitations()
+      .then((r) => setInvitations(r.invitations))
+      .catch(() => setInvitations([]));
+  }
 
   useEffect(() => {
     fetchAuthMe().then(setMe).catch(() => setMe(null));
+    loadInvitations();
   }, []);
 
   if (!me) {
@@ -41,13 +59,15 @@ export function ManageTenantsPanel() {
   const isDa = getLocale() === 'da';
   const tenants = me.tenants;
 
-  function showComingSoon() {
-    setToast(t('comingSoonToast'));
+  function showToast(msg: string) {
+    setToast(msg);
     setTimeout(() => setToast(null), 1800);
   }
+  function showComingSoon() {
+    showToast(t('comingSoonToast'));
+  }
 
-  // Invitations stub list — empty for now.
-  const invitations: AuthTenant[] = [];
+  const pendingCount = invitations.filter((i) => i.status === 'pending').length;
 
   const filtered = tab === 'all' ? tenants : tab === 'owner' ? tenants : [];
 
@@ -110,7 +130,7 @@ export function ManageTenantsPanel() {
         <Stat label={t('manageTenants.statTotal')} value={tenants.length} />
         <Stat label={t('manageTenants.statOwned')} value={tenants.length} divider />
         <Stat label={t('manageTenants.statActive30d')} value="—" divider />
-        <Stat label={t('manageTenants.statPending')} value={invitations.length} highlight divider />
+        <Stat label={t('manageTenants.statPending')} value={pendingCount} highlight divider />
       </div>
 
       {/* Tabs */}
@@ -130,14 +150,18 @@ export function ManageTenantsPanel() {
           {t('manageTenants.tabYouManage')} <Num>{tenants.length}</Num>
         </Tab>
         <Tab active={tab === 'invitations'} onClick={() => setTab('invitations')}>
-          {t('manageTenants.tabInvitations')} <Num attention>{invitations.length}</Num>
+          {t('manageTenants.tabInvitations')} <Num attention>{pendingCount}</Num>
         </Tab>
       </div>
 
       {/* Body */}
       <div style={{ position: 'relative' }}>
         {tab === 'invitations' ? (
-          <InvitationsEmpty isDa={isDa} />
+          <InvitationsTab
+            invitations={invitations}
+            onChanged={loadInvitations}
+            onToast={showToast}
+          />
         ) : (
           <TenantsList
             items={filtered}
@@ -500,26 +524,263 @@ function TenantRow({
   );
 }
 
-function InvitationsEmpty({ isDa }: { isDa: boolean }) {
+const EMAIL_RE = /^[^@\s]+@[^@\s.]+\.[^@\s]+$/;
+
+function InvitationsTab({
+  invitations,
+  onChanged,
+  onToast,
+}: {
+  invitations: Invitation[];
+  onChanged: () => void;
+  onToast: (msg: string) => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<InvitationRole>('member');
+  const [sending, setSending] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  const emailValid = EMAIL_RE.test(email.trim());
+
+  async function send() {
+    const value = email.trim().toLowerCase();
+    if (!emailValid || sending) return;
+    setSending(true);
+    try {
+      const res = await createInvitation({ email: value, role });
+      onToast(t(res.action === 'reinvited' ? 'manageTenants.invite.resent' : 'manageTenants.invite.sent', { email: value }));
+      setEmail('');
+      onChanged();
+    } catch {
+      onToast(t('manageTenants.invite.error'));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function revoke(id: string) {
+    if (revokingId) return;
+    setRevokingId(id);
+    try {
+      await revokeInvitation(id);
+      onToast(t('manageTenants.invite.revoked'));
+      onChanged();
+    } catch {
+      onToast(t('manageTenants.invite.revokeError'));
+    } finally {
+      setRevokingId(null);
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* Invite form */}
+      <div
+        style={{
+          background: 'var(--color-bg-card)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-lg)',
+          padding: 20,
+        }}
+      >
+        <div style={{ fontFamily: 'var(--font-serif)', fontSize: 16, marginBottom: 2 }}>
+          {t('manageTenants.invite.formTitle')}
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--color-fg-muted)', marginBottom: 16 }}>
+          {t('manageTenants.invite.formHint')}
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 12 }}>
+          <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+            <input
+              class="input"
+              type="email"
+              inputMode="email"
+              autocomplete="off"
+              placeholder={t('manageTenants.invite.emailPlaceholder')}
+              value={email}
+              onInput={(e) => setEmail((e.target as HTMLInputElement).value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
+            />
+          </div>
+          <RolePicker value={role} onChange={setRole} />
+          <button
+            type="button"
+            class="btn btn-primary"
+            disabled={!emailValid || sending}
+            style={{ flex: '0 0 auto', opacity: !emailValid || sending ? 0.55 : 1 }}
+            onClick={send}
+          >
+            <Icons.Plus size={13} />
+            <span>{sending ? t('manageTenants.invite.sending') : t('manageTenants.invite.send')}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* List */}
+      {invitations.length === 0 ? (
+        <div
+          style={{
+            padding: '52px 24px',
+            textAlign: 'center',
+            background: 'var(--color-bg-card)',
+            border: '1px dashed var(--color-border-strong)',
+            borderRadius: 'var(--radius-lg)',
+          }}
+        >
+          <Icons.Inbox size={28} style={{ color: 'var(--color-fg-subtle)', marginBottom: 12 }} />
+          <div style={{ fontFamily: 'var(--font-serif)', fontSize: 17, marginBottom: 6 }}>
+            {t('manageTenants.invite.emptyTitle')}
+          </div>
+          <div style={{ fontSize: 12.5, color: 'var(--color-fg-muted)', maxWidth: 360, margin: '0 auto', lineHeight: 1.5 }}>
+            {t('manageTenants.invite.emptyBody')}
+          </div>
+        </div>
+      ) : (
+        <div
+          style={{
+            background: 'var(--color-bg-card)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-lg)',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 90px 130px 110px 90px',
+              padding: '10px 18px',
+              background: 'var(--color-bg-sunk)',
+              borderBottom: '1px solid var(--color-border)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: 'var(--color-fg-subtle)',
+              gap: 16,
+            }}
+          >
+            <div>{t('manageTenants.invite.colEmail')}</div>
+            <div>{t('manageTenants.invite.colRole')}</div>
+            <div>{t('manageTenants.invite.colInvitedBy')}</div>
+            <div>{t('manageTenants.invite.colStatus')}</div>
+            <div style={{ textAlign: 'right' }} />
+          </div>
+          {invitations.map((inv) => (
+            <div
+              key={inv.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 90px 130px 110px 90px',
+                padding: '13px 18px',
+                gap: 16,
+                alignItems: 'center',
+                borderBottom: '1px solid var(--color-border)',
+              }}
+            >
+              <div style={{ minWidth: 0, fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {inv.email}
+              </div>
+              <div style={{ fontSize: 12.5, color: 'var(--color-fg-muted)', textTransform: 'capitalize' }}>
+                {inv.role}
+              </div>
+              <div class="mono" style={{ fontSize: 11.5, color: 'var(--color-fg-subtle)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {inv.invitedBy ?? '—'}
+              </div>
+              <div>
+                <StatusBadge status={inv.status} />
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                {inv.status === 'pending' ? (
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-danger"
+                    disabled={revokingId === inv.id}
+                    style={{ fontSize: 11.5, padding: '4px 10px' }}
+                    onClick={() => revoke(inv.id)}
+                  >
+                    {revokingId === inv.id ? t('manageTenants.invite.revoking') : t('manageTenants.invite.revoke')}
+                  </button>
+                ) : (
+                  <span class="mono" style={{ fontSize: 11, color: 'var(--color-fg-subtle)' }}>—</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RolePicker({ value, onChange }: { value: InvitationRole; onChange: (r: InvitationRole) => void }) {
+  const opts: { id: InvitationRole; label: string }[] = [
+    { id: 'member', label: t('manageTenants.invite.roleMember') },
+    { id: 'admin', label: t('manageTenants.invite.roleAdmin') },
+  ];
   return (
     <div
+      role="radiogroup"
+      aria-label={t('manageTenants.invite.roleLabel')}
       style={{
-        padding: '60px 24px',
-        textAlign: 'center',
-        background: 'var(--color-bg-card)',
-        border: '1px dashed var(--color-border-strong)',
-        borderRadius: 'var(--radius-lg)',
+        display: 'inline-flex',
+        flex: '0 0 auto',
+        border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius)',
+        overflow: 'hidden',
+        background: 'var(--color-bg-sunk)',
       }}
     >
-      <Icons.Inbox size={28} style={{ color: 'var(--color-fg-subtle)', marginBottom: 12 }} />
-      <div style={{ fontFamily: 'var(--font-serif)', fontSize: 17, marginBottom: 6 }}>
-        {isDa ? 'Ingen afventende invitationer' : 'No pending invitations'}
-      </div>
-      <div style={{ fontSize: 12.5, color: 'var(--color-fg-muted)', maxWidth: 360, margin: '0 auto', lineHeight: 1.5 }}>
-        {isDa
-          ? 'Når nogen inviterer dig til en tenant, vises det her. Selve flow’et kommer i F187.'
-          : 'Invitations to other tenants will appear here. The flow ships in F187.'}
-      </div>
+      {opts.map((o, i) => {
+        const active = value === o.id;
+        return (
+          <button
+            key={o.id}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(o.id)}
+            style={{
+              padding: '8px 14px',
+              fontSize: 12.5,
+              fontWeight: active ? 600 : 400,
+              border: 'none',
+              borderLeft: i > 0 ? '1px solid var(--color-border)' : 'none',
+              background: active ? 'var(--color-bg-card)' : 'transparent',
+              color: active ? 'var(--color-fg)' : 'var(--color-fg-muted)',
+              cursor: 'pointer',
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status: Invitation['status'] }) {
+  const map: Record<Invitation['status'], { bg: string; fg: string; key: string }> = {
+    pending: { bg: 'var(--color-accent-soft)', fg: 'var(--color-fg)', key: 'manageTenants.invite.statusPending' },
+    accepted: { bg: 'rgba(21,128,61,0.14)', fg: 'var(--color-success)', key: 'manageTenants.invite.statusAccepted' },
+    revoked: { bg: 'var(--color-bg-sunk)', fg: 'var(--color-fg-subtle)', key: 'manageTenants.invite.statusRevoked' },
+    expired: { bg: 'var(--color-bg-sunk)', fg: 'var(--color-fg-subtle)', key: 'manageTenants.invite.statusExpired' },
+  };
+  const s = map[status];
+  return (
+    <span
+      style={{
+        fontFamily: 'var(--font-mono)',
+        fontSize: 9.5,
+        padding: '2px 8px',
+        borderRadius: 999,
+        background: s.bg,
+        color: s.fg,
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        border: '1px solid var(--color-border)',
+      }}
+    >
+      {t(s.key)}
+    </span>
   );
 }

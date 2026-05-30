@@ -106,6 +106,45 @@ export function signOut(): Promise<{ ok: true }> {
   return api('/api/auth/logout', { method: 'POST' });
 }
 
+// ── Invitations (F187) ───────────────────────────────────────────
+
+export type InvitationRole = 'owner' | 'admin' | 'member' | 'service';
+export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
+
+export interface Invitation {
+  id: string;
+  email: string;
+  role: InvitationRole;
+  status: InvitationStatus;
+  invitedBy: string | null;
+  createdAt: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+}
+
+/** List the org's invitations (pending first, then most recent). */
+export function listInvitations(): Promise<{ invitations: Invitation[] }> {
+  return api('/api/control/invitations');
+}
+
+/** Send an invite — creates/refreshes a pending invitation + magic-link email. */
+export function createInvitation(body: {
+  email: string;
+  role: InvitationRole;
+}): Promise<{ ok: true; action: 'created' | 'reinvited'; invitationId: string }> {
+  return api('/api/control/invite', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/** Revoke a pending invitation. */
+export function revokeInvitation(id: string): Promise<{ ok: true; id: string }> {
+  return api(`/api/control/invitations/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
 // ── Resources ────────────────────────────────────────────────────
 
 export function listKnowledgeBases(): Promise<KnowledgeBase[]> {

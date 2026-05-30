@@ -124,6 +124,24 @@ authRoutes.get('/verify', async (c) => {
       .where(eq(schema.controlUsers.id, link.userId))
       .run();
   }
+
+  // F187 — consuming an invite link accepts the matching pending
+  // invitation (org + email). Reuses the existing verify flow; there
+  // is no separate /accept route.
+  if (user && link.intent === 'invite') {
+    await db
+      .update(schema.invitations)
+      .set({ status: 'accepted', acceptedAt: used, acceptedUserId: user.id })
+      .where(
+        and(
+          eq(schema.invitations.organizationId, user.organizationId),
+          eq(schema.invitations.email, user.email),
+          eq(schema.invitations.status, 'pending'),
+        ),
+      )
+      .run();
+  }
+
   const redirectTo = '/';
 
   setCookie(c, COOKIE_NAME, sessionId, {
