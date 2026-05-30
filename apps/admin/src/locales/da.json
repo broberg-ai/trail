@@ -101,6 +101,33 @@
       "alwaysActive": "Altid aktiv",
       "linkAccount": "Knyt konto",
       "remove": "Fjern"
+    },
+    "developer": {
+      "subtitle": "Personlige bearer-tokens der kalder Trail-API'et som dig, afgrænset til din aktive tenant.",
+      "generate": "Generér ny nøgle",
+      "empty": "Ingen API-nøgler endnu. Generér én for at kalde Trail-API'et som dig selv.",
+      "colName": "Navn",
+      "colPrefix": "Nøgle",
+      "colCreated": "Oprettet",
+      "colLastUsed": "Senest brugt",
+      "neverUsed": "Aldrig",
+      "revoke": "Tilbagekald",
+      "revoking": "Tilbagekalder…",
+      "revokeError": "Kunne ikke tilbagekalde nøgle",
+      "loadError": "Kunne ikke hente nøgler",
+      "modalTitle": "Generér API-nøgle",
+      "nameLabel": "Nøglenavn",
+      "namePlaceholder": "fx CI-pipeline, laptop-CLI",
+      "nameRequired": "Giv nøglen et navn",
+      "create": "Generér",
+      "creating": "Genererer…",
+      "createError": "Kunne ikke generere nøgle",
+      "revealTitle": "Kopiér din nøgle nu",
+      "revealWarning": "Dette er eneste gang hele nøglen vises. Gem den et sikkert sted — du kan ikke se den igen.",
+      "usageHint": "Brug den som bearer-token: Authorization: Bearer <nøgle>",
+      "copy": "Kopiér",
+      "copied": "Kopieret",
+      "done": "Færdig"
     }
   },
   "manageTenants": {

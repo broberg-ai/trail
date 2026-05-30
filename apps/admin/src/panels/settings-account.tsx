@@ -1,11 +1,19 @@
 import type { JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { fetchAuthMe, type AuthMe } from '../api';
+import {
+  fetchAuthMe,
+  listApiKeys,
+  createApiKey,
+  revokeApiKey,
+  type AuthMe,
+  type ApiKey,
+} from '../api';
 import { useLocale, getLocale, t, setLocale, type Locale } from '../lib/i18n';
 import { getTheme, toggleTheme, onThemeChange, type Theme } from '../theme';
 import { ambientEnabled } from '../lib/ambient-store';
 import { Icons } from '../components/ui/icons';
 import { CenteredLoader } from '../components/centered-loader';
+import { Modal, ModalButton } from '../components/modal';
 
 /**
  * F186 — Account Preferences. Ported from
@@ -108,7 +116,7 @@ export function SettingsAccountPanel() {
       <PreferencesSection />
       <NotificationsSection />
       <SessionsSection isDa={isDa} />
-      <DeveloperSection isDa={isDa} />
+      <DeveloperSection />
       <DangerSection isDa={isDa} />
     </div>
   );
@@ -431,37 +439,242 @@ function SessionsSection({ isDa }: { isDa: boolean }) {
   );
 }
 
-function DeveloperSection({ isDa }: { isDa: boolean }) {
+function DeveloperSection() {
+  const [keys, setKeys] = useState<ApiKey[]>([]);
+  const [loadErr, setLoadErr] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  function load() {
+    listApiKeys()
+      .then((r) => { setKeys(r.keys); setLoadErr(false); })
+      .catch(() => setLoadErr(true));
+  }
+  useEffect(() => { load(); }, []);
+
+  async function revoke(id: string) {
+    if (revokingId) return;
+    setRevokingId(id);
+    try {
+      await revokeApiKey(id);
+      load();
+    } catch {
+      setLoadErr(true);
+    } finally {
+      setRevokingId(null);
+    }
+  }
+
   return (
     <Section
       id="developer"
-      title={isDa ? 'Personlige API-nøgler' : 'Personal API keys'}
-      subtitle={isDa ? 'Bearer tokens bundet til DIN bruger på tværs af tenants. (F188 — Coming soon.)' : 'Bearer tokens bound to YOUR user across tenants. (F188 — Coming soon.)'}
+      title={t('accountPrefs.sections.developer')}
+      subtitle={t('accountPrefs.developer.subtitle')}
     >
-      <div
-        style={{
-          background: 'var(--color-bg-card)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '32px 24px',
-          textAlign: 'center',
-        }}
-      >
-        <Icons.CreditCard size={28} style={{ color: 'var(--color-fg-subtle)', marginBottom: 12 }} />
-        <div style={{ fontFamily: 'var(--font-serif)', fontSize: 17, marginBottom: 6 }}>
-          {isDa ? 'Kommer snart' : 'Coming soon'}
-        </div>
-        <div style={{ fontSize: 12.5, color: 'var(--color-fg-muted)', maxWidth: 380, margin: '0 auto', lineHeight: 1.5 }}>
-          {isDa
-            ? 'Personlige API-nøgler følger med F188. For tenant-niveau bearers, kontakt admin.'
-            : 'Personal API keys are tracked under F188. For tenant-level bearers, contact admin.'}
-        </div>
-        <button type="button" class="btn btn-primary" disabled style={{ marginTop: 16, opacity: 0.5 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <button type="button" class="btn btn-primary" onClick={() => setModalOpen(true)}>
           <Icons.Plus size={13} />
-          <span>{isDa ? 'Generér ny nøgle' : 'Generate new key'}</span>
+          <span>{t('accountPrefs.developer.generate')}</span>
         </button>
       </div>
+
+      {keys.length === 0 ? (
+        <div
+          style={{
+            padding: '40px 24px',
+            textAlign: 'center',
+            background: 'var(--color-bg-card)',
+            border: '1px dashed var(--color-border-strong)',
+            borderRadius: 'var(--radius-lg)',
+            fontSize: 12.5,
+            color: 'var(--color-fg-muted)',
+            lineHeight: 1.5,
+          }}
+        >
+          {loadErr ? t('accountPrefs.developer.loadError') : t('accountPrefs.developer.empty')}
+        </div>
+      ) : (
+        <div
+          style={{
+            background: 'var(--color-bg-card)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-lg)',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 150px 110px 110px 90px',
+              padding: '10px 16px',
+              background: 'var(--color-bg-sunk)',
+              borderBottom: '1px solid var(--color-border)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: 'var(--color-fg-subtle)',
+              gap: 12,
+            }}
+          >
+            <div>{t('accountPrefs.developer.colName')}</div>
+            <div>{t('accountPrefs.developer.colPrefix')}</div>
+            <div>{t('accountPrefs.developer.colCreated')}</div>
+            <div>{t('accountPrefs.developer.colLastUsed')}</div>
+            <div style={{ textAlign: 'right' }} />
+          </div>
+          {keys.map((k) => (
+            <div
+              key={k.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 150px 110px 110px 90px',
+                padding: '12px 16px',
+                gap: 12,
+                alignItems: 'center',
+                borderBottom: '1px solid var(--color-border)',
+              }}
+            >
+              <div style={{ fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.name}</div>
+              <div class="mono" style={{ fontSize: 11.5, color: 'var(--color-fg-muted)' }}>{k.prefix}…</div>
+              <div class="mono" style={{ fontSize: 11, color: 'var(--color-fg-subtle)' }}>{formatDate(k.createdAt)}</div>
+              <div class="mono" style={{ fontSize: 11, color: 'var(--color-fg-subtle)' }}>
+                {k.lastUsedAt ? formatDate(k.lastUsedAt) : t('accountPrefs.developer.neverUsed')}
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-danger"
+                  disabled={revokingId === k.id}
+                  style={{ fontSize: 11.5, padding: '4px 10px' }}
+                  onClick={() => revoke(k.id)}
+                >
+                  {revokingId === k.id ? t('accountPrefs.developer.revoking') : t('accountPrefs.developer.revoke')}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <GenerateKeyModal
+        open={modalOpen}
+        onClose={() => { setModalOpen(false); load(); }}
+      />
     </Section>
+  );
+}
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString(getLocale() === 'da' ? 'da-DK' : 'en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  });
+}
+
+function GenerateKeyModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [name, setName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [rawKey, setRawKey] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  function reset() {
+    setName(''); setCreating(false); setErr(null); setRawKey(null); setCopied(false);
+  }
+  function close() { reset(); onClose(); }
+
+  async function create() {
+    const value = name.trim();
+    if (!value) { setErr(t('accountPrefs.developer.nameRequired')); return; }
+    if (creating) return;
+    setCreating(true); setErr(null);
+    try {
+      const res = await createApiKey(value);
+      setRawKey(res.key);
+    } catch {
+      setErr(t('accountPrefs.developer.createError'));
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function copy() {
+    if (!rawKey) return;
+    try {
+      await navigator.clipboard.writeText(rawKey);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* clipboard blocked — user can select manually */ }
+  }
+
+  return (
+    <Modal
+      open={open}
+      title={rawKey ? t('accountPrefs.developer.revealTitle') : t('accountPrefs.developer.modalTitle')}
+      onClose={close}
+      footer={
+        rawKey ? (
+          <ModalButton variant="primary" onClick={close}>{t('accountPrefs.developer.done')}</ModalButton>
+        ) : (
+          <>
+            <ModalButton variant="secondary" onClick={close}>{t('common.cancel')}</ModalButton>
+            <ModalButton variant="primary" onClick={create} disabled={creating || !name.trim()}>
+              {creating ? t('accountPrefs.developer.creating') : t('accountPrefs.developer.create')}
+            </ModalButton>
+          </>
+        )
+      }
+    >
+      {rawKey ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ margin: 0, fontSize: 12.5, color: 'var(--color-fg-muted)', lineHeight: 1.5 }}>
+            {t('accountPrefs.developer.revealWarning')}
+          </p>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+            <code
+              style={{
+                flex: 1,
+                minWidth: 0,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 12,
+                padding: '10px 12px',
+                background: 'var(--color-bg-sunk)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius)',
+                wordBreak: 'break-all',
+                userSelect: 'all',
+              }}
+            >
+              {rawKey}
+            </code>
+            <button type="button" class="btn btn-ghost" style={{ flex: '0 0 auto', border: '1px solid var(--color-border-strong)' }} onClick={copy}>
+              {copied ? t('accountPrefs.developer.copied') : t('accountPrefs.developer.copy')}
+            </button>
+          </div>
+          <p class="mono" style={{ margin: 0, fontSize: 11, color: 'var(--color-fg-subtle)' }}>
+            {t('accountPrefs.developer.usageHint')}
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label style={{ fontSize: 12.5, color: 'var(--color-fg-muted)' }}>
+            {t('accountPrefs.developer.nameLabel')}
+          </label>
+          <input
+            class="input"
+            type="text"
+            autocomplete="off"
+            placeholder={t('accountPrefs.developer.namePlaceholder')}
+            value={name}
+            onInput={(e) => { setName((e.target as HTMLInputElement).value); setErr(null); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') create(); }}
+          />
+          {err ? <div style={{ fontSize: 12, color: 'var(--color-danger)' }}>{err}</div> : null}
+        </div>
+      )}
+    </Modal>
   );
 }
 

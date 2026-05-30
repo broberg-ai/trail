@@ -145,6 +145,36 @@ export function revokeInvitation(id: string): Promise<{ ok: true; id: string }> 
   });
 }
 
+// ── Personal API keys (F188) ─────────────────────────────────────
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  prefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+/** List the user's non-revoked personal API keys. */
+export function listApiKeys(): Promise<{ keys: ApiKey[] }> {
+  return api('/api/control/api-keys');
+}
+
+/** Create a key — the raw `key` is returned ONCE and never again. */
+export function createApiKey(name: string): Promise<{ id: string; name: string; prefix: string; key: string }> {
+  return api('/api/control/api-keys', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+}
+
+/** Revoke a personal API key. */
+export function revokeApiKey(id: string): Promise<{ ok: true; id: string }> {
+  return api(`/api/control/api-keys/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
 // ── Resources ────────────────────────────────────────────────────
 
 export function listKnowledgeBases(): Promise<KnowledgeBase[]> {
@@ -1376,39 +1406,6 @@ export function dismissLinkFinding(id: string): Promise<{ dismissed: true }> {
 
 export function reopenLinkFinding(id: string): Promise<{ reopened: true }> {
   return api(`/api/v1/link-check/${encodeURIComponent(id)}/reopen`, { method: 'POST' });
-}
-
-// ── F111.2 — Per-user API keys (Bearer tokens for integrations) ──────────
-
-/** Row returned by GET /api-keys (raw key never included). */
-export interface ApiKeyRow {
-  id: string;
-  name: string;
-  lastUsedAt: string | null;
-  createdAt: string;
-}
-
-/** Response from POST /api-keys — raw key included EXACTLY ONCE. */
-export interface ApiKeyCreated {
-  id: string;
-  name: string;
-  /** Raw `trail_<64hex>` token. Show to curator once; we only store the SHA-256 hash. */
-  key: string;
-}
-
-export function listApiKeys(): Promise<ApiKeyRow[]> {
-  return api('/api/v1/api-keys');
-}
-
-export function createApiKey(name: string): Promise<ApiKeyCreated> {
-  return api('/api/v1/api-keys', {
-    method: 'POST',
-    body: JSON.stringify({ name }),
-  });
-}
-
-export function revokeApiKey(id: string): Promise<{ ok: true }> {
-  return api(`/api/v1/api-keys/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 // ── F176 Lint cadence ──────────────────────────────────────────────

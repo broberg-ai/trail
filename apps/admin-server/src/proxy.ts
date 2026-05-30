@@ -2,6 +2,7 @@ import type { Context, Next } from 'hono';
 import { eq, and, isNull, gt } from 'drizzle-orm';
 import { getCookie } from 'hono/cookie';
 import { db, schema } from './db.js';
+import { hashApiKey } from './keys.js';
 
 /**
  * F33 Phase 1B.3 — reverse-proxy /api/v1/* from admin to the user's engine.
@@ -100,6 +101,58 @@ async function resolveSession(c: Context): Promise<ResolvedRoute | null> {
 }
 
 /**
+ * F188 — resolve a personal API key bearer (`Authorization: Bearer
+ * trail_<key>`) the same way `resolveSession` resolves a cookie. The key
+ * is bound to a specific tenant at creation, so we route to THAT tenant's
+ * engine. Stamps last_used_at best-effort. Returns null when no/invalid
+ * key — the caller then falls back to the cookie path.
+ */
+async function resolveApiKey(c: Context): Promise<ResolvedRoute | null> {
+  const authHeader = c.req.header('authorization');
+  if (!authHeader?.toLowerCase().startsWith('bearer ')) return null;
+  const presented = authHeader.slice(7).trim();
+  if (!presented.startsWith('trail_')) return null;
+
+  const keyHash = hashApiKey(presented);
+  const key = await db.query.controlApiKeys.findFirst({
+    where: and(
+      eq(schema.controlApiKeys.keyHash, keyHash),
+      isNull(schema.controlApiKeys.revokedAt),
+    ),
+  });
+  if (!key) return null;
+
+  const tenant = await db.query.controlTenants.findFirst({
+    where: eq(schema.controlTenants.id, key.tenantId),
+  });
+  if (!tenant) return null;
+
+  const eng = await db.query.tenantEngines.findFirst({
+    where: and(
+      eq(schema.tenantEngines.tenantId, tenant.id),
+      isNull(schema.tenantEngines.retiredAt),
+    ),
+  });
+  const bearer = eng?.bearer ?? null;
+  if (!eng || !bearer) return null;
+
+  // Best-effort last_used_at — never block the request on it.
+  void db
+    .update(schema.controlApiKeys)
+    .set({ lastUsedAt: new Date().toISOString() })
+    .where(eq(schema.controlApiKeys.id, key.id))
+    .run()
+    .catch(() => {});
+
+  return {
+    userId: key.userId,
+    tenantSlug: tenant.slug,
+    engineUrl: eng.engineUrl,
+    bearer,
+  };
+}
+
+/**
  * Forwards `/api/v1/*` to the engine for the user's tenant. Streams
  * request + response bodies (handles upload of large files, SSE
  * streams, etc.). Drops admin's session cookie from the outbound
@@ -113,7 +166,8 @@ export async function proxyToEngine(c: Context, next: Next): Promise<Response | 
     return next();
   }
 
-  const route = await resolveSession(c);
+  // Session cookie (admin UI) OR personal API key (F188, headless callers).
+  const route = (await resolveSession(c)) ?? (await resolveApiKey(c));
   if (!route) {
     return c.json({ error: 'not signed in or no tenant route' }, 401);
   }

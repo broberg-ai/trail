@@ -101,6 +101,33 @@
       "alwaysActive": "Always active",
       "linkAccount": "Link account",
       "remove": "Remove"
+    },
+    "developer": {
+      "subtitle": "Personal bearer tokens that call the Trail API as you, scoped to your active tenant.",
+      "generate": "Generate new key",
+      "empty": "No API keys yet. Generate one to call the Trail API as yourself.",
+      "colName": "Name",
+      "colPrefix": "Key",
+      "colCreated": "Created",
+      "colLastUsed": "Last used",
+      "neverUsed": "Never",
+      "revoke": "Revoke",
+      "revoking": "Revoking…",
+      "revokeError": "Couldn't revoke key",
+      "loadError": "Couldn't load keys",
+      "modalTitle": "Generate API key",
+      "nameLabel": "Key name",
+      "namePlaceholder": "e.g. CI pipeline, laptop CLI",
+      "nameRequired": "Give the key a name",
+      "create": "Generate",
+      "creating": "Generating…",
+      "createError": "Couldn't generate key",
+      "revealTitle": "Copy your key now",
+      "revealWarning": "This is the only time the full key is shown. Store it somewhere safe — you won't be able to see it again.",
+      "usageHint": "Use it as a bearer token: Authorization: Bearer <key>",
+      "copy": "Copy",
+      "copied": "Copied",
+      "done": "Done"
     }
   },
   "manageTenants": {

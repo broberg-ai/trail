@@ -9,6 +9,7 @@ import { runMigrations } from './migrations.js';
 import { authRoutes } from './auth.js';
 import { oauthRoutes } from './oauth.js';
 import { inviteRoutes } from './invite.js';
+import { apiKeyRoutes } from './keys.js';
 import { proxyToEngine } from './proxy.js';
 
 async function logoutHandler(c: Context): Promise<Response> {
@@ -74,6 +75,9 @@ app.get('/logout', logoutHandler);
 // Invite — operator UI for adding teammates. POST endpoint mounted at
 // /api/control/invite + HTML form at /invite. Both auth-gated.
 app.route('/api/control', inviteRoutes);
+
+// F188 — personal API keys. /api/control/api-keys (GET/POST/DELETE).
+app.route('/api/control', apiKeyRoutes);
 
 app.get('/invite', (c) => {
   const sessionId = (c.req.header('Cookie') ?? '').match(/(?:^|; )trail-session=([^;]+)/)?.[1];
