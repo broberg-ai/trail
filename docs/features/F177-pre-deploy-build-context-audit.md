@@ -134,7 +134,7 @@ Lokalt kan curator også køre `pnpm verify:dockerignore` ad hoc (f.eks. som del
 
 ## Non-Goals
 
-- **Ikke runtime-image-inspection**. F177 verificerer source-state pre-build, ikke binary efter `docker build`. Hvis nogen runtime-strenger forventer en fil der mangler kun fordi af logic-fejl (f.eks. dynamic `require` med bad path), fanges det ikke her.
+- **Ikke runtime-image-inspection**. F177 verificerer source-state pre-build, ikke binary efter `docker build`. Hvis nogen runtime-strenge forventer en fil der mangler kun fordi af logic-fejl (f.eks. dynamic `require` med bad path), fanges det ikke her.
 - **Ikke automatisk fix.** F177 advarer + foreslår; ændrer aldrig `.dockerignore` eller Dockerfile selv. Fixet kræver stadig curator-tænkning (skal patterns ankres? skal filer renames? er der en tredje vej?).
 - **Ikke security-scanning.** F177 tjekker IKKE om `.env`-filer, secrets eller credentials utilsigtet bliver copied. Det er separat F-feature (tag fx `F178 — Secret-leakage detection in build context`).
 - **Ikke multi-platform validation.** F177 tjekker logical glob-match, ikke arch-specifikke binary issues.
