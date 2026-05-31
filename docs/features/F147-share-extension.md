@@ -27,18 +27,6 @@ Tre komponenter:
 
 ### iOS Share Extension Arkitektur
 
-```
-apps/ios-share-extension/
-├── ShareExtension/
-│   ├── Info.plist              # NSExtension: NSExtensionActivationRule
-│   ├── ShareViewController.swift    # UI: KB selector, preview, tags
-│   ├── ShareViewModel.swift         # Upload logic, auth via App Group
-│   └── Assets.xcassets/             # Extension icon (29pt, 58pt, 87pt)
-├── Shared/
-│   └── TrailConfig.swift            # App Group shared defaults (server URL, token)
-└── Package.swift
-```
-
 **Flow:**
 1. Brugeren trykker "Del" i Fotos/Safari/Instagram/etc.
 2. "Trail Clipper" vises i share sheet (hvis installeret)
@@ -69,18 +57,7 @@ Når et billede uploades via share extension:
 
 ### Android Share Extension
 
-Tilsvarende arkitektur med Kotlin:
-
-```
-apps/android-share-extension/
-├── app/
-│   ├── src/main/
-│   │   ├── AndroidManifest.xml      # <intent-filter> ACTION_SEND
-│   │   ├── kotlin/.../ShareActivity.kt
-│   │   └── res/
-│   └── build.gradle.kts
-└── gradle/
-```
+Tilsvarende arkitektur med Kotlin.
 
 ## Technical Design
 
@@ -99,72 +76,9 @@ Den eksisterende upload-endpoint (`POST /api/v1/knowledge-bases/:kbId/documents/
 }
 ```
 
-### iOS: App Group deling
-
-```swift
-// Shared/TrailConfig.swift
-import Foundation
-
-public struct TrailConfig {
-    static let appGroup = "group.com.broberg.trail"
-    static let defaults = UserDefaults(suiteName: appGroup)!
-
-    public static var serverUrl: String? {
-        get { defaults.string(forKey: "serverUrl") }
-        set { defaults.set(newValue, forKey: "serverUrl") }
-    }
-
-    public static var token: String? {
-        get { defaults.string(forKey: "token") }
-        set { defaults.set(newValue, forKey: "token") }
-    }
-}
-```
-
-Hoved-appen (når den bygges) skriver credentials til App Group. Extensionen læser dem.
-
-### iOS: ShareViewController
-
-```swift
-import UIKit
-import Social
-import MobileCoreServices
-import UniformTypeIdentifiers
-
-class ShareViewController: SLComposeServiceViewController {
-    var selectedKbId: String?
-    var tags: String = ""
-
-    override func isContentValid() -> Bool {
-        return TrailConfig.serverUrl != nil && TrailConfig.token != nil
-    }
-
-    override func didSelectPost() {
-        guard let item = extensionContext?.inputItems.first as? NSExtensionItem,
-              let attachments = item.attachments else {
-            completeRequest()
-            return
-        }
-
-        // Extract content from attachments (URL, text, image)
-        extractAndUpload(attachments)
-    }
-
-    private func extractAndUpload(_ attachments: [NSItemProvider]) {
-        // 1. Try URL
-        // 2. Try text
-        // 3. Try image → upload to vision pipeline
-        // 4. POST to Trail API
-        // 5. completeRequest()
-    }
-}
-```
-
 ### Vision Pipeline Integration
 
-Den eksisterende vision backend (`apps/server/src/services/vision.ts`) kan genbruges direkte. Billeder fra share extension uploades som normale billed-sources og trigger den samme pipeline som PDF-billeder.
-
-**Forskellen:** Share extension uploader billeder direkte (ikke som del af PDF), så vi skal sikre at `processImageAsync` (eller tilsvarende) findes. I dag håndterer upload-routen kun tekst-filer synkront og PDF/DOCX/PPTX/XLSX async. Billeder lander som `status='pending'` uden videre behandling.
+Den eksisterende vision backend (`apps/server/src/services/vision.ts`) kan genbruges direkte. Billeder fra share extension uploades som normale billed-kilder og trigger den samme pipeline som PDF-billeder.
 
 **Fix nødvendig:** Tilføj `processImageAsync` i upload-routen der:
 1. Sender billedet til vision backend
@@ -173,68 +87,7 @@ Den eksisterende vision backend (`apps/server/src/services/vision.ts`) kan genbr
 
 ### Connector
 
-Tilføj `share-extension` til `packages/shared/src/connectors.ts`:
-
-```typescript
-'share-extension': {
-  label: 'Share Extension',
-  status: 'live',
-  hint: 'Content shared from iOS or Android share sheet — text, links, or images from any app.',
-},
-```
-
-## Impact Analysis
-
-### Files affected
-
-**Created:**
-- `apps/ios-share-extension/` — hele iOS share extension projektet
-- `apps/android-share-extension/` — hele Android share extension projektet
-
-**Modified:**
-- `apps/server/src/routes/uploads.ts` — tilføj `processImageAsync` for billed-upload med vision
-- `packages/shared/src/connectors.ts` — tilføj `share-extension` connector
-
-### Downstream dependents
-
-`apps/server/src/routes/uploads.ts` — ingen direkte downstream dependents. Det er en leaf route.
-
-`packages/shared/src/connectors.ts` — importeret af:
-- `apps/admin/src/` (queue filter, neuron reader attribution) — unaffected, ny connector vises automatisk
-- `packages/core/src/queue/candidates.ts` (`stampConnector`) — unaffected, håndterer nye ids automatisk
-
-### Blast radius
-
-- **Upload route ændring:** `processImageAsync` er additiv — påvirker ikke eksisterende PDF/DOCX/tekst-pipelines
-- **Connector tilføjelse:** Ingen breaking changes — nye connectors er altid additive
-- **App Group:** Kræver at hoved-appen (når den bygges) deler samme App Group ID. Ikke et problem i dag da der ikke er nogen iOS app endnu.
-
-### Breaking changes
-
-Ingen.
-
-### Test plan
-
-- [ ] TypeScript compiles: `pnpm typecheck`
-- [ ] Billed-upload med vision: upload et billede via curl med `metadata.connector=share-extension` → verificer at content indeholder vision-beskrivelse
-- [ ] Connector vises i admin queue filter
-- [ ] iOS share extension: test med tekst, URL og billede fra share sheet
-- [ ] Android share extension: test med tekst og billede
-
-## Implementation Steps
-
-1. **Server: billed-upload med vision** — tilføj `processImageAsync` i `uploads.ts` der sender billeder til vision backend og gemmer beskrivelsen som content
-2. **Server: connector** — tilføj `share-extension` til `connectors.ts`
-3. **iOS: share extension** — Swift/SwiftUI projekt med ShareViewController, App Group config, upload logic
-4. **iOS: test** — build til simulator, test share sheet med tekst, URL og billeder
-5. **Android: share extension** — Kotlin projekt med ShareActivity, upload logic
-6. **Android: test** — build til emulator, test share sheet
-
-## Dependencies
-
-- F111 (Web Clipper) — allerede shipped, deler samme upload-endpoint
-- Vision backend (`apps/server/src/services/vision.ts`) — allerede eksisterende
-- Ingen nye server-endpoints nødvendige
+Tilføj `share-extension` til `packages/shared/src/connectors.ts`.
 
 ## Effort Estimate
 
