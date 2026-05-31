@@ -12,7 +12,7 @@
   "dependencies": {
     "@preact/signals": "^2.9.0",
     "@trail/shared": "workspace:*",
-    "@upmetrics/sdk": "^0.1.0",
+    "@upmetrics/sdk": "^0.1.1",
     "graphology": "^0.26.0",
     "graphology-layout-forceatlas2": "^0.10.1",
     "marked": "^15.0.0",
