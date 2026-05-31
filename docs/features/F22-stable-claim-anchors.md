@@ -12,7 +12,7 @@ Karpathy's model har ikke dette problem fordi hans wiki er file-baseret med Git 
 
 Under compile fasen parser compileren hver produceret wiki-side og identificerer individuelle claims (typisk: hvert afsnit, hver liste-item, hver definition). Hvert claim får en stabil anchor baseret på en hash af claim-indholdets **kerne** (første 50 chars normalized) — ikke den fulde tekst, så små formulæringsændringer ikke ændrer hashen.
 
-Anchors embeddes i markdown som `{#claim-abc123}` og renderes som HTML `id="claim-abc123"`. Eksterne links kan pege på `#claim-abc123` og vil stadig virke efter re-compilation så længe claim-kernen er den samme.
+Anchors embedses i markdown som `{#claim-abc123}` og renderes som HTML `id="claim-abc123"`. Eksterne links kan pege på `#claim-abc123` og vil stadig virke efter re-compilation så længe claim-kernen er den samme.
 
 ## Technical Design
 
