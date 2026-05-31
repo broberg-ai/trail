@@ -517,4 +517,4 @@ Ingen ikke-additive ændringer. Subscription-priser forbliver de samme. LLM-omko
 - Phase 3 alerts + soft enforce: 1-2 dage
 - Phase 4 hard enforce + operator UI: 2 dage
 
-Kritisk: landed FØR M8 (se Rollout). Efter M8 kræves phased enforcement; landet for sent = vi subsidiserer LLM-cost for alt for længe.
+Kritisk: landet FØR M8 (se Rollout). Efter M8 kræves phased enforcement; landet for sent = vi subsidiserer LLM-cost for alt for længe.
