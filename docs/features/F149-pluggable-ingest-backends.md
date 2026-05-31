@@ -545,7 +545,7 @@ Kun ingest-pathet flyttes; chat-pathet er uændret.
 2. **Fase 1b — Migration 0014 + schema**: Tilføj kolonnerne. Verifikations-script kører `pragma_table_info`-probe.
 3. **Fase 1c — verify-backend-claude.ts**: scripted probe. Commit fase 1 hvis grøn.
 4. **Fase 2a — Faktorér `CandidateQueueAPI` ud af `apps/mcp/src/index.ts`**: flyt search/read/write-handlers til `packages/core/src/ingest/candidate-api.ts`. Både MCP-server OG OpenRouterBackend importerer herfra. Sandhed ét sted.
-5. **Fase 2b — OpenRouterBackend (in-process)**: port model-lab's `openrouter.ts` + `runner.ts` + `two-pass.ts` + `tools.ts`. Tool-call-loop kalder `CandidateQueueAPI` direkte (ikke MCP). Kør ingest af F149-plan-doc'en mod development-tester-KB → valide Neuroner uden manual intervention.
+5. **Fase 2b — OpenRouterBackend (in-process)**: port model-lab's `openrouter.ts` + `runner.ts` + `two-pass.ts` + `tools.ts`. Tool-call-loop kalder `CandidateQueueAPI` direkte (ikke MCP). Kør ingest af F149-plan-doc'en mod development-tester-KB → valide Neuroner uden manuel intervention.
 6. **Fase 2c — Chain + runWithFallback**: default-chains + fallback-loop. Tilføj `model_trail`-persistens på `ingest_jobs`.
 7. **Fase 2d — trial-fallback scripts**: mock 429 + context-limit. Assert chain fortsætter korrekt.
 8. **Fase 2e — tenant_secrets + libsodium encryption**: `crypto_secretbox` seal/unseal. Migration inkluderet. Round-trip-test.
@@ -563,7 +563,7 @@ Kun ingest-pathet flyttes; chat-pathet er uændret.
 - **F140 Hierarchical Schemas** — schema-block skal inject'es i OpenRouter-prompt identisk med claude-cli.
 - **F143 Persistent Ingest Queue** — F149 arver kø-semantikken; én job ad gangen pr. KB uanset backend.
 - **F148 Link Integrity** — link-checker skal virke uanset backend; test i regression.
-- **Model-lab** (`apps/model-lab/src/server/`) — kildekoden vi løfter OpenRouter-pathet fra.
+- **Model-lab** (`apps/model-lab/src/server/`) — kildekoden vi løfter OpenRouter-pathen fra.
 
 ## Open Questions
 
