@@ -1,8 +1,8 @@
 # F146 — Local-first native app + CRDT sync
 
 > "Built on CRDTs. Your knowledge graph lives locally for zero-latency access, syncing securely to the cloud when connected."
-
-Trail as a native desktop app (Mac / Windows / Linux) that runs the full engine locally, syncs to the cloud via CRDT, and — crucially — owns its own compute so `claude -p` subprocess ingest stays legal and cost-controlled at scale. The cloud remains the source of truth for retrieval + chat + cross-device sync; the local app is the power-user tier that lets a curator drop 500 PDFs on a Saturday and wake Monday to a compiled KB without blowing through API quotas. Tier: Enterprise. Effort: 3-4 weeks.
+>
+> Trail as a native desktop app (Mac / Windows / Linux) that runs the full engine locally, syncs to the cloud via CRDT, and — crucially — owns its own compute so `claude -p` subprocess ingest stays legal and cost-controlled at scale. The cloud remains the source of truth for retrieval + chat + cross-device sync; the local app is the power-user tier that lets a curator drop 500 PDFs on a Saturday and wake Monday to a compiled KB without blowing through API quotas. Tier: Enterprise. Effort: 3-4 weeks.
 
 ## Why this matters
 
@@ -85,33 +85,6 @@ need this" explainer — not fail silently.
 
 ### Architecture sketch
 
-```
-┌──────────────────── native app (Mac/Win/Linux) ────────────────────┐
-│                                                                    │
-│  ┌─ Preact UI (same as apps/admin) ─┐   ┌─ bun engine ───────────┐ │
-│  │                                  │   │                        │ │
-│  │  Queue / Neurons / Chat / ...    │◄──►  @libsql/client (SQLite)│ │
-│  │                                  │   │                        │ │
-│  └──────────────────────────────────┘   │  claude -p subprocess  │ │
-│                                         │  (F06 ingest path)     │ │
-│                                         └─────────┬──────────────┘ │
-│                                                   │                │
-│                                         ┌─────────▼──────────────┐ │
-│                                         │  CRDT sync worker      │ │
-│                                         │  (Yjs, streaming)      │ │
-│                                         └─────────┬──────────────┘ │
-└────────────────────────────────────────────────────┼───────────────┘
-                                                     │
-                                            TLS / WebSocket
-                                                     │
-┌────────────────────────────────────────────────────▼───────────────┐
-│  cloud engine (Fly.io arn)                                         │
-│                                                                    │
-│  CRDT relay  ↔  libSQL per-tenant DB  ↔  chat / search / widget    │
-│                                                                    │
-└────────────────────────────────────────────────────────────────────┘
-```
-
 The engine code is unchanged between native and cloud — same bun process, same tables, same HTTP routes. The differences are:
 
 1. **How ingest runs**: native spawns `claude -p` (F06 codepath); cloud calls the Anthropic Messages API (F14 adapter already supports both).
@@ -124,136 +97,6 @@ The engine code is unchanged between native and cloud — same bun process, same
 - **Granularity**: one Yjs document per KB. KBs are the natural sync boundary (tenant isolation + cross-tenant knowledge stays separate).
 - **What lives in the CRDT**: `wiki_events` (the append-only log), `queue_candidates` (pending work), and a projection of `documents` derived from events. The FTS index (`documents_fts`) is local-only — rebuilt from the CRDT state on sync, not synced itself.
 - **What does NOT live in the CRDT**: access tokens, tenant config, storage-adapter state. Those are cloud-authoritative. The native app reads them on login, caches for offline, never writes them.
-
-## Interface
-
-### Native app surface
-
-- Same Preact UI as `apps/admin` — shared components
-- Local SQLite via `@libsql/client`
-- `claude -p` subprocess for ingest
-- CRDT sync worker (Yjs, WSS to cloud relay)
-
-### Cloud relay
-
-- WSS endpoint for CRDT sync
-- Per-tenant DB (libSQL)
-- Merged view of all devices' contributions
-
-### Install flow
-
-1. Detect `claude -p` availability
-2. If missing/unauthenticated → link to Anthropic subscription page
-3. On first launch → login to Trail cloud → sync existing KBs
-4. Ready for local ingest
-
-## Rollout
-
-This is a Phase 3 feature — not landing before multi-tenant cloud, billing, and F37 (Sanne onboarding) are live. Rough ordering once the gate opens:
-
-1. **Spike**: 2-3 day exploration — pick Electron vs Tauri by actually packaging the bun engine into both and comparing binary size + startup time. Deliverable: a spike PR (kept on a branch, not merged) that launches Trail admin in a native window on Mac.
-2. **Sync protocol proof**: Yjs encoder around wiki_events + a minimal WSS relay on cloud. Two native instances converging on the same KB. Deliverable: a 10-line script that shows `wiki_events.count` matching on both sides after a disconnect+reconnect.
-3. **Ingest mode routing**: per-tenant flag on the Settings panel. Local spawns claude -p; cloud routes via API. Deliverable: end-to-end ingest working in both modes, user toggling between them.
-4. **CRDT-aware queue**: pending candidates need to converge. Two native instances approving the same candidate must land a single "ingested" event, not duplicate. Deliverable: concurrent-approve test passes.
-5. **Ship to enterprise tier**: gated by plan, opt-in install. First user: FysioDK (large protocol library).
-
-Estimated total effort: 3-4 weeks of focused work, distributed across a few months given dependencies.
-
-## Success Criteria
-
-- Native app launches on Mac with full Trail admin UI in a window
-- Local ingest via `claude -p` compiles a 10-source batch without API calls
-- CRDT sync: two native instances editing same KB converge without conflicts
-- Cloud retrieval sees merged state from all devices
-- Install flow detects missing `claude -p` and guides user to Anthropic subscription
-- Enterprise plan gating: native app only available to Business/Enterprise tenants
-
-## Impact Analysis
-
-### Files created (new)
-- `apps/native/package.json` (Electron/Tauri shell)
-- `apps/native/src/main.ts` (native entry point)
-- `apps/native/src/crdt-sync.ts` (Yjs sync worker)
-- `apps/server/src/services/crdt-encoder.ts` (wiki_events → Yjs encoding)
-- `apps/server/src/routes/crdt-relay.ts` (WSS relay endpoint)
-- Spike branch: packaging proof for Electron + Tauri
-
-### Files modified
-- `apps/server/src/services/ingest.ts` — ingest mode routing (local vs API)
-- `apps/server/src/index.ts` — CRDT relay wiring
-- `apps/admin/src/panels/settings-trail.tsx` — ingest mode toggle
-- `packages/shared/src/types.ts` — native app feature flags
-
-### Downstream dependents
-`apps/server/src/services/ingest.ts` is imported by 7 files:
-- `apps/server/src/routes/uploads.ts` (1 ref) — calls triggerIngest, unaffected
-- `apps/server/src/routes/documents.ts` (1 ref) — calls triggerIngest for reingest, unaffected
-- `apps/server/src/routes/ingest.ts` (1 ref) — calls triggerIngest, unaffected
-- `apps/server/src/app.ts` (1 ref) — mounts ingest routes, unaffected
-- `apps/server/src/index.ts` (2 refs) — imports recoverIngestJobs + zombie-ingest, unaffected
-- `docs/features/F26-html-web-clipper-ingest.md` (1 ref) — documentation, no code impact
-
-### Blast radius
-
-High. This is a new product tier with its own binary, sync protocol, and deployment model. However:
-- Cloud engine is unchanged — native is additive
-- CRDT sync is isolated to native ↔ cloud path
-- Plan-tier gating ensures only opted-in tenants use native
-
-### Breaking changes
-
-None — all changes are additive. Cloud-only tenants are unaffected.
-
-### Test plan
-
-- [ ] TypeScript compiles: `pnpm typecheck`
-- [ ] Native app launches on Mac with Trail admin UI
-- [ ] Local ingest via `claude -p` compiles 10 sources
-- [ ] CRDT sync: two instances converge after disconnect+reconnect
-- [ ] `wiki_events.count` matches on both sides after sync
-- [ ] Cloud retrieval sees merged state
-- [ ] Install flow detects missing `claude -p` → shows guide
-- [ ] Concurrent approve: two instances → single "ingested" event
-- [ ] Enterprise plan gating: native app unavailable to Hobby/Pro tenants
-- [ ] Regression: cloud-only ingest works unchanged
-
-## Implementation Steps
-
-1. **Spike**: Package bun engine into Electron + Tauri. Compare binary size + startup time. Decide on shell.
-2. **Native shell setup**: `apps/native/` with Preact UI, local SQLite, `claude -p` subprocess.
-3. **CRDT encoder**: Yjs wrapper around wiki_events + queue_candidates.
-4. **WSS relay**: Cloud endpoint for CRDT sync streaming.
-5. **Ingest mode routing**: per-tenant flag, local vs API path.
-6. **CRDT-aware queue**: concurrent-approve convergence.
-7. **Install flow**: `claude -p` detection + Anthropic subscription guide.
-8. **Plan-tier gating**: Business/Enterprise only.
-9. **Testing**: two-instance convergence, bulk ingest, offline access.
-10. **Ship**: opt-in for FysioDK (first enterprise user).
-
-## Dependencies
-
-- **F40.2** (multi-tenant cloud) — each tenant's CRDT relay needs its own per-tenant DB. No point building F146 until the cloud is multi-tenant.
-- **F42** (pluggable storage) — native app uses local disk, cloud uses R2/Tigris, both behind the same adapter.
-- **F14** (multi-provider LLM adapter) — already handles claude -p vs API, no new work.
-- **F16** (wiki_events) — the CRDT substrate. Already built. The F146 encoder wraps it.
-
-## Open Questions
-
-- Should the native app also spawn its own MCP server for local `cc` sessions writing into it? (Probably yes — same behaviour as today's dev setup.)
-- Tauri's WebView embedding on Linux is less mature than Electron's Chromium — are we OK with a reduced-platform launch (Mac + Win native, Linux via AppImage using Electron)?
-- Plan-tier gating: should "bulk import" UX nudge cloud users toward the native app, or should we leave discovery organic?
-
-## Related Features
-
-- **F40** — Multi-tenancy (prerequisite for CRDT relay)
-- **F42** — Pluggable storage (local disk vs cloud adapter)
-- **F14** — Multi-provider LLM adapter (claude -p vs API routing)
-- **F16** — Wiki events (CRDT substrate)
-- **F76** — Real-time collaboration (CRDT enables it architecturally)
-- **F82** — Custom LLM providers (local app can point at Ollama/LM Studio)
-- **F74/F75** — Time-travel / undo-redo (CRDT provides history)
-- **F13** — LocalStorage adapter (orthogonal — native owns full SQLite)
-- **F111** — Web clipper (ingestion connector, cloud-side)
 
 ## Effort Estimate
 
