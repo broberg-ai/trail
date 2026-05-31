@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { integer, real, sqliteTable, text, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
+import { integer, real, sqliteTable, text, uniqueIndex, index, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 // ── Tenants (Phase 1 has one, Phase 2 has many) ───────────────────────────────
 
@@ -192,6 +192,15 @@ export const documents = sqliteTable(
     // separately-labelled "Curator's reflection" section so the LLM
     // can distinguish it from the Neuron's own content.
     userNoteShare: integer('user_note_share', { mode: 'boolean' }).notNull().default(false),
+    // F182 — Memory Lifecycle. Per-Neuron confidence in [0,1] (default 0.7),
+    // recomputed nightly by the decay job from recency × source-strength ×
+    // (1 - contradiction) + reinforcement boost. `confidenceLastRecomputedAt`
+    // is epoch-ms of the last decay pass (NULL = never recomputed).
+    // `supersededByNeuronId` points at the newer Neuron that replaced this one
+    // (F137 `supersedes` edge); the old Neuron is preserved, never deleted.
+    confidence: real('confidence').notNull().default(0.7),
+    confidenceLastRecomputedAt: integer('confidence_last_recomputed_at'),
+    supersededByNeuronId: text('superseded_by_neuron_id').references((): AnySQLiteColumn => documents.id),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
     updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
   },
@@ -206,6 +215,30 @@ export const documents = sqliteTable(
     index('idx_docs_work_assignee').on(table.knowledgeBaseId, table.workAssignee),
     uniqueIndex('idx_docs_kb_seq').on(table.knowledgeBaseId, table.seq),
     index('idx_docs_ingest_job').on(table.ingestJobId),
+  ],
+);
+
+// ── Confidence signals (F182 — reinforcement-event log) ───────────────────────
+// Append-only log of events that strengthen/weaken a Neuron's confidence. The
+// nightly decay job (F182.3) reads the last 90d of signals per Neuron. Text FKs
+// to documents.id (NOT integer — the F182 plan-doc's generic INTEGER ids don't
+// match this schema's text uuids).
+
+export const confidenceSignals = sqliteTable(
+  'confidence_signals',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    neuronId: text('neuron_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+    signalType: text('signal_type', {
+      enum: ['cite', 'access', 'curator-pin', 'chat-cite', 'contradiction'],
+    }).notNull(),
+    weight: real('weight').notNull(),
+    sourceNeuronId: text('source_neuron_id').references((): AnySQLiteColumn => documents.id),
+    recordedAt: integer('recorded_at').notNull(),
+    metadata: text('metadata'),
+  },
+  (table) => [
+    index('idx_confidence_signals_neuron').on(table.neuronId, table.recordedAt),
   ],
 );
 
