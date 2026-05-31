@@ -554,46 +554,41 @@ async function runJob(
 
 A new source has been added: ${sFilename} at path ${sSourcePath}.
 
-Your job is to ingest this source into the wiki. Follow these steps exactly:
+Your job is to ingest this source into the wiki. Work through these 9 steps IN ORDER — do not skip or merge any:
 
-1. Call \`read\` with path=${sSourcePath} to read the new source.
+1. READ THE SOURCE. Call \`read\` with path=${sSourcePath}.
 
-2. Call \`search\` with mode="list" and kind="wiki" to see the current wiki structure.
+2. SURVEY & DELIBERATE. Call \`search\` with mode="list" and kind="wiki" to see the current structure, then \`read\` path="/neurons/overview.md" for the current wiki state. Before writing anything, identify the source's 2-5 key takeaways and how each relates to existing Neurons. If the source is genuinely ambiguous about a fact, record it as an open question inside the source-summary (step 3) rather than guessing — this is an autonomous ingest, so there is no one to ask.
 
-3. Call \`read\` with path="/neurons/overview.md" to understand the current wiki state.
+3. SOURCE SUMMARY. Call \`write\` with command="create", path="/neurons/sources/", title=${sSummaryTitle}, content that includes:
+   - YAML frontmatter: title, \`type: source\`, tags (array), date (${today}), sources ([${sFilename}])
+   - Key takeaways and findings; important quotes or data points.
 
-4. Create a source summary page:
-   Call \`write\` with command="create", path="/neurons/sources/", title=${sSummaryTitle}, and content that includes:
-   - YAML frontmatter with title, tags (array), date (${today}), sources ([${sFilename}])
-   - Key takeaways and findings
-   - Important quotes or data points
+4. UPDATE AFFECTED WIKI PAGES. For each KEY CONCEPT found (aim for 2-5):
+   - If a concept page already exists (from step 2's listing): \`read\` it, then \`write\` with command="str_replace" to integrate new information. Use the full path (e.g. "/neurons/concepts/concept-name.md") as the title parameter. CRITICAL: preserve existing frontmatter but ADD ${sFilename} to its \`sources: [...]\` array (de-dup if already listed). If the page has no \`sources\` field yet, insert one listing ${sFilename}.
+   - If it doesn't exist: \`write\` with command="create", path="/neurons/concepts/", and full content INCLUDING frontmatter with \`type: concept\` and \`sources: [${sFilename}]\`.
 
-5. For each KEY CONCEPT found in the source (aim for 2-5 concepts):
-   - Check if a concept page already exists (you saw the wiki listing in step 2).
-   - If it exists: \`read\` it, then \`write\` with command="str_replace" to integrate new information. Use the full path (e.g. "/neurons/concepts/concept-name.md") as the title parameter. CRITICAL: preserve existing frontmatter but ADD ${sFilename} to its \`sources: [...]\` array (de-dup if already listed). If the page has no \`sources\` field yet, insert one listing ${sFilename}.
-   - If it doesn't exist: \`write\` with command="create", path="/neurons/concepts/", and full content INCLUDING frontmatter with \`sources: [${sFilename}]\`.
+5. CREATE NEW ENTITY PAGES. For each KEY ENTITY (person, organization, tool) found:
+   - Same pattern under /neurons/entities/ with \`type: entity\` in frontmatter. The \`sources\` rule applies — every entity page MUST list ${sFilename} in its \`sources: [...]\`.
 
-6. For each KEY ENTITY (person, organization, tool) found:
-   - Same pattern under /neurons/entities/. Same \`sources\` frontmatter rule applies — every entity page MUST list ${sFilename} in its \`sources: [...]\`.
-
-7. Maintain the glossary (F102):
+6. UPDATE THE GLOSSARY (F102):
    - Call \`read\` with path="/neurons/glossary.md" to see the current vocabulary. This Neuron collects DOMAIN-SPECIFIC fagtermer drawn from Sources — starts empty, grows as Sources are ingested.
    - If this source INTRODUCES or clearly REFINES 1–3 domain-specific terms that belong in a glossary (not casual mentions — terms that have a defined meaning the reader would want to look up), add or update them:
      * For a new term: \`write\` with command="str_replace", title="/neurons/glossary.md" — append a new \`## <Term>\\n\\n<1–3 sentence definition drawn from this source>\\n\` section. Place it alphabetically if possible.
      * For an existing term whose definition this source sharpens or extends: \`write\` str_replace the existing definition block with a revised version. Preserve the heading.
    - If the source introduces no glossary-worthy terms, SKIP this step. Glossary entries are for durable fagtermer, not one-off vocabulary.
 
-8. Update the overview page:
-   \`write\` with command="str_replace", title="/neurons/overview.md" — reflect the new knowledge and link to the new pages.
+7. UPDATE THE OVERVIEW. \`write\` with command="str_replace", title="/neurons/overview.md" — reflect the new knowledge and link to the new pages. Skip only if the source genuinely doesn't shift the big picture.
 
-9. Log the ingest:
-   \`write\` with command="append", title="/neurons/log.md", content:
+8. LOG THE INGEST. \`write\` with command="append", title="/neurons/log.md", content (keep this exact greppable heading format):
 
    ## [${today}] ingest | ${sLogHeading}
    - Summary: (1-2 sentences)
    - Pages created: (list)
    - Pages updated: (list)
    - Contradictions: (any found, or "None")
+
+9. CONFIRM FRONTMATTER COMPLETENESS. Before you finish, verify EVERY page you created or updated this ingest has complete YAML frontmatter with all five fields: title, type, sources, tags, date. A page missing any of them is a bug — fix it with a \`str_replace\` before stopping. (\`type\` is one of: source / concept / entity / glossary, matching the page's /neurons/ subdirectory.)
 
 IMPORTANT RULES:
 
@@ -620,7 +615,7 @@ GENERAL
   * \`[[target|caused-by]]\` — causal dependency
   Bare \`[[target]]\` (no edge-type) means a plain citation/reference. Use typed edges sparingly — only when the relation is semantically load-bearing, not just "I mentioned this page."
 - ALL pages you create or update under /neurons/concepts/, /neurons/entities/, or /neurons/sources/ MUST have a \`sources: [...]\` field in their YAML frontmatter listing every Source filename the page draws claims from. The orphan-detector flags pages missing this field, so a missing \`sources\` list is a bug, not a shortcut. When updating an existing page, merge — don't replace — its existing sources array.
-- Required frontmatter fields on every page: title, tags, date, sources.
+- Required frontmatter fields on every page: title, type, tags, date, sources.
 - Do NOT create pages for trivial concepts. Focus on the 2-5 most important ones.
 - If the source is very short or trivial, just create the summary and update overview/log.
 - You do not need to pass knowledge_base to tool calls — the default KB is already set.`;
