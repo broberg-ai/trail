@@ -358,7 +358,7 @@ Med ovenstående rates og F179's hybrid path:
 
 - Sanne (Pro, 2,000 credits/mo) onboarder hele sit 25-års materiale på Flash inde i ÉN månedlig grant. Plads til 1,880 credits af løbende drift bagefter.
 - Hobby-tier (100 credits/mo) dækker 1,400+ ingest-runs på Flash + cache + Batch. Free tier er reelt useful, ikke kun acquisition-pad.
-- Business-tier ($499/mo, 10,000 credits) onboardning af multi-tenant fleet er kommercielt levedygtigt fordi cost-per-source er ned på "rounding error"-niveau.
+- Business-tier ($499/mo, 10,000 credits) onboarding af multi-tenant fleet er kommercielt levedygtigt fordi cost-per-source er ned på "rounding error"-niveau.
 
 ### Rate-drift CI-guard
 
