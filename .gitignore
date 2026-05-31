@@ -156,6 +156,9 @@ data/
 .env
 .env.*
 !.env.example
+# Upmetrics browser DSN is PUBLIC (ships in the JS bundle) — committed as the
+# single build-time source for VITE_UPMETRICS_DSN. Not a secret.
+!apps/admin/.env.production
 
 # F94 ambient audio — source MP3s are mastering inputs only, not shipped.
 # scripts/process-ambient.sh converts these to apps/admin/public/ambient/*.opus

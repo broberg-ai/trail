@@ -11,6 +11,18 @@ import { oauthRoutes } from './oauth.js';
 import { inviteRoutes } from './invite.js';
 import { apiKeyRoutes } from './keys.js';
 import { proxyToEngine } from './proxy.js';
+import { init as upInit, captureException } from '@upmetrics/sdk';
+
+// Upmetrics fleet-dogfooding — server-side error capture for app.trailmem.com.
+// DSN set as a fly secret (UPMETRICS_DSN). No-op when unset (e.g. local dev).
+if (process.env.UPMETRICS_DSN) {
+  upInit({
+    dsn: process.env.UPMETRICS_DSN,
+    environment: process.env.NODE_ENV,
+    release: 'trail-admin-server',
+    autoInstrument: false,
+  });
+}
 
 async function logoutHandler(c: Context): Promise<Response> {
   const sessionId = (c.req.header('Cookie') ?? '').match(/(?:^|; )trail-session=([^;]+)/)?.[1];
@@ -41,6 +53,11 @@ console.log(`[admin-server] control.db migrations applied`);
 
 const app = new Hono();
 app.use('*', logger());
+// Upmetrics — capture unhandled route errors, then preserve Hono's default 500.
+app.onError((err, c) => {
+  captureException(err, { request: { url: c.req.url, method: c.req.method } });
+  return c.text('Internal Server Error', 500);
+});
 
 app.get('/api/health', async (c) => {
   let dbStatus: 'ok' | 'error' = 'ok';

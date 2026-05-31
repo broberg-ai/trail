@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import { captureException } from '@upmetrics/sdk';
 import type { TrailDatabase } from '@trail/db';
 import type { TenantPool } from './lib/tenant-pool.js';
 import { healthRoutes } from './routes/health.js';
@@ -184,6 +185,13 @@ export function createApp(trail: TrailDatabase, tenantPool: TenantPool): Hono<Ap
   app.route('/api/v1', jobRoutes);
   // F97 — activity log read API (paginated audit timeline).
   app.route('/api/v1', activityRoutes);
+
+  // Upmetrics — capture unhandled route errors (no-op unless UPMETRICS_DSN was
+  // set at boot in index.ts), then preserve Hono's default 500 response.
+  app.onError((err, c) => {
+    captureException(err, { request: { url: c.req.url, method: c.req.method } });
+    return c.text('Internal Server Error', 500);
+  });
 
   return app;
 }

@@ -24,7 +24,16 @@ import { ImagesPanel } from './panels/images';
 import { NotFound } from './panels/not-found';
 import { initTheme } from './theme';
 import { ensureAnchorMarkedExtensions } from './lib/markdown';
+import { init as initUpmetrics } from '@upmetrics/sdk';
 import './index.css';
+
+// Upmetrics fleet-dogfooding — browser telemetry (auto-instruments
+// window.onerror / unhandledrejection / failed-fetch). DSN is PUBLIC and
+// inlined at build time from apps/admin/.env.production. No-op when unset.
+const upmetricsDsn = import.meta.env.VITE_UPMETRICS_DSN;
+if (upmetricsDsn) {
+  initUpmetrics({ dsn: upmetricsDsn, environment: import.meta.env.MODE, release: 'trail-admin' });
+}
 
 // Apply persisted theme before first paint so we never flash the wrong palette.
 initTheme();

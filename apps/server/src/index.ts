@@ -25,6 +25,19 @@ import { startUploadSessionGc } from './services/upload-session-gc.js';
 import { initJobRunner } from './services/jobs/runner.js';
 import { noopHandler } from './services/jobs/handlers/noop.js';
 import { visionRerunHandler } from './services/jobs/handlers/vision-rerun.js';
+import { init as upInit } from '@upmetrics/sdk';
+
+// Upmetrics fleet-dogfooding — server-side error capture for every engine
+// (engine-001 … N). DSN set as a fly secret (UPMETRICS_DSN). No-op when unset
+// (local dev). captureException is wired into the Hono onError in app.ts.
+if (process.env.UPMETRICS_DSN) {
+  upInit({
+    dsn: process.env.UPMETRICS_DSN,
+    environment: process.env.NODE_ENV,
+    release: 'trail-engine',
+    autoInstrument: false,
+  });
+}
 
 const PORT = Number(process.env.PORT ?? 3031);
 

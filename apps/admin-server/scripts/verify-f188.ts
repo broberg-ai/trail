@@ -126,7 +126,7 @@ async function run() {
   globalThis.fetch = realFetch;
   assert(r4.status === 200, `proxied request authorized via key (got ${r4.status})`);
   assert(forwardedAuth === `Bearer ${ENGINE_BEARER}`, 'proxy forwards the per-tenant engine bearer, not the personal key');
-  assert(!!forwardedUrl && forwardedUrl.includes('engine-001.trailmem.com'), 'routed to the key\'s bound engine');
+  assert(!!forwardedUrl && (forwardedUrl as string).includes('engine-001.trailmem.com'), 'routed to the key\'s bound engine');
   const afterUse = await db.query.controlApiKeys.findFirst({ where: (k, { eq }) => eq(k.id, b2.id!) });
   assert(!!afterUse?.lastUsedAt, 'last_used_at stamped after a proxied request');
 
