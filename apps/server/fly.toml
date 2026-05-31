@@ -20,11 +20,8 @@ primary_region = "arn"
 
 [env]
   TRAIL_DATA_DIR = "/data"
-  # Upmetrics fleet telemetry — PUBLIC DSN (Sentry-style), so it lives in
-  # committed [env], not a secret. Single source: every engine deployed from
-  # this config (engine-001 … N, incl. F169-spawned) auto-reports to the
-  # upmetrics 'trail' project with release 'trail-engine'. No-op if removed.
-  UPMETRICS_DSN = "https://473187ffbb6aa1bee4eb3d60e469f525@upmetrics.org/trail"
+  # Upmetrics DSN is NOT here — single source is packages/shared/src/upmetrics.ts,
+  # compiled into the engine binary so every engine auto-reports with zero config.
   # Phase 1A: hard-coded to Sanne. Phase 1B replaces with per-request
   # tenant resolution and this line goes away.
   TRAIL_DB_PATH = "/data/sanne-andersen/trail.db"

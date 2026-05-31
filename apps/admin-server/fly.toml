@@ -9,9 +9,6 @@ primary_region = "arn"
 
 [env]
   TRAIL_DATA_DIR = "/data"
-  # Upmetrics telemetry — PUBLIC DSN (Sentry-style), committed [env] not a
-  # secret. Release 'trail-admin-server'. Single source for app.trailmem.com.
-  UPMETRICS_DSN = "https://473187ffbb6aa1bee4eb3d60e469f525@upmetrics.org/trail"
 
 [http_service]
   internal_port = 8081

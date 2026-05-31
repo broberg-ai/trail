@@ -26,21 +26,23 @@ import { initJobRunner } from './services/jobs/runner.js';
 import { noopHandler } from './services/jobs/handlers/noop.js';
 import { visionRerunHandler } from './services/jobs/handlers/vision-rerun.js';
 import { init as upInit, setTag } from '@upmetrics/sdk';
+import { UPMETRICS_DSN } from '@trail/shared';
 
 // Upmetrics fleet-dogfooding — server-side error capture for every engine
-// (engine-001 … N). DSN comes from fly.toml [env] UPMETRICS_DSN. No-op when
-// unset (local dev). captureException is wired into the Hono onError in app.ts.
-// Per-engine identity via setTag('server', …) so engine-001 vs engine-002 are
-// distinguishable under the shared 'trail-engine' release (upmetrics #1955).
-if (process.env.UPMETRICS_DSN) {
+// (engine-001 … N). DSN is the single source from @trail/shared, compiled in,
+// so every engine — incl. F169-spawned ones — auto-reports with zero config.
+// Gated on FLY_APP_NAME so it only runs on Fly. captureException is wired into
+// the Hono onError in app.ts. Per-engine identity via setTag('server', …) so
+// engine-001 vs engine-002 are distinguishable under the shared release.
+if (process.env.FLY_APP_NAME) {
   upInit({
-    dsn: process.env.UPMETRICS_DSN,
+    dsn: UPMETRICS_DSN,
     environment: process.env.NODE_ENV,
     release: 'trail-engine',
     autoInstrument: false,
   });
-  setTag('server', process.env.FLY_APP_NAME ?? 'local');
-  setTag('machine', process.env.FLY_MACHINE_ID ?? 'local');
+  setTag('server', process.env.FLY_APP_NAME);
+  setTag('machine', process.env.FLY_MACHINE_ID ?? 'unknown');
 }
 
 const PORT = Number(process.env.PORT ?? 3031);

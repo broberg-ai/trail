@@ -25,14 +25,15 @@ import { NotFound } from './panels/not-found';
 import { initTheme } from './theme';
 import { ensureAnchorMarkedExtensions } from './lib/markdown';
 import { init as initUpmetrics } from '@upmetrics/sdk';
+import { UPMETRICS_DSN } from '@trail/shared';
 import './index.css';
 
 // Upmetrics fleet-dogfooding — browser telemetry (auto-instruments
-// window.onerror / unhandledrejection / failed-fetch). DSN is PUBLIC and
-// inlined at build time from apps/admin/.env.production. No-op when unset.
-const upmetricsDsn = import.meta.env.VITE_UPMETRICS_DSN;
-if (upmetricsDsn) {
-  initUpmetrics({ dsn: upmetricsDsn, environment: import.meta.env.MODE, release: 'trail-admin' });
+// window.onerror / unhandledrejection / failed-fetch). DSN is the single
+// source from @trail/shared (compiled in). Only in production builds, so dev
+// (`vite dev`) doesn't ship telemetry.
+if (import.meta.env.PROD) {
+  initUpmetrics({ dsn: UPMETRICS_DSN, environment: import.meta.env.MODE, release: 'trail-admin' });
 }
 
 // Apply persisted theme before first paint so we never flash the wrong palette.

@@ -12,18 +12,20 @@ import { inviteRoutes } from './invite.js';
 import { apiKeyRoutes } from './keys.js';
 import { proxyToEngine } from './proxy.js';
 import { init as upInit, captureException, setTag } from '@upmetrics/sdk';
+import { UPMETRICS_DSN } from '@trail/shared';
 
 // Upmetrics fleet-dogfooding — server-side error capture for app.trailmem.com.
-// DSN comes from fly.toml [env] UPMETRICS_DSN. No-op when unset (local dev).
-if (process.env.UPMETRICS_DSN) {
+// DSN is the single source from @trail/shared (compiled in). Gated on
+// FLY_APP_NAME so it only runs on Fly (prod), never in local dev.
+if (process.env.FLY_APP_NAME) {
   upInit({
-    dsn: process.env.UPMETRICS_DSN,
+    dsn: UPMETRICS_DSN,
     environment: process.env.NODE_ENV,
     release: 'trail-admin-server',
     autoInstrument: false,
   });
-  setTag('server', process.env.FLY_APP_NAME ?? 'local');
-  setTag('machine', process.env.FLY_MACHINE_ID ?? 'local');
+  setTag('server', process.env.FLY_APP_NAME);
+  setTag('machine', process.env.FLY_MACHINE_ID ?? 'unknown');
 }
 
 async function logoutHandler(c: Context): Promise<Response> {
