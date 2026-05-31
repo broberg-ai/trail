@@ -180,7 +180,7 @@ None — all changes are additive.
 4. Update chat panel in `apps/admin/src/components/chat-panel.tsx` for solo-mode auto-approve.
 5. Update re-ingest button in `apps/admin/src/components/re-ingest-button.tsx` for solo-mode skip modal.
 6. Add mode-toggle + audit link to admin Settings panel.
-7. Update lint scheduler in `apps/server/src/services/lint-scheduler.ts` to disable scheduled scans for solo-mode.
+7. Update lint scheduler in `apps/admin/src/services/lint-scheduler.ts` to disable scheduled scans for solo-mode.
 8. Add API-level enforcement for Free-tier (no Curator mode switch).
 9. Test: verify solo-mode and curator-mode behaviors end-to-end.
 
