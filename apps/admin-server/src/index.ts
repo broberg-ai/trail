@@ -11,10 +11,10 @@ import { oauthRoutes } from './oauth.js';
 import { inviteRoutes } from './invite.js';
 import { apiKeyRoutes } from './keys.js';
 import { proxyToEngine } from './proxy.js';
-import { init as upInit, captureException } from '@upmetrics/sdk';
+import { init as upInit, captureException, setTag } from '@upmetrics/sdk';
 
 // Upmetrics fleet-dogfooding — server-side error capture for app.trailmem.com.
-// DSN set as a fly secret (UPMETRICS_DSN). No-op when unset (e.g. local dev).
+// DSN comes from fly.toml [env] UPMETRICS_DSN. No-op when unset (local dev).
 if (process.env.UPMETRICS_DSN) {
   upInit({
     dsn: process.env.UPMETRICS_DSN,
@@ -22,6 +22,8 @@ if (process.env.UPMETRICS_DSN) {
     release: 'trail-admin-server',
     autoInstrument: false,
   });
+  setTag('server', process.env.FLY_APP_NAME ?? 'local');
+  setTag('machine', process.env.FLY_MACHINE_ID ?? 'local');
 }
 
 async function logoutHandler(c: Context): Promise<Response> {
