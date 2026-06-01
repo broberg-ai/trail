@@ -27,6 +27,7 @@
     "neurons": "Neuroner",
     "glossary": "Ordliste",
     "graph": "Graf",
+    "memoryHealth": "Hukommelses-sundhed",
     "queue": "Kø",
     "work": "Arbejde",
     "jobs": "Jobs",
@@ -834,7 +835,9 @@
     "mhReplacedBy": "erstattet af",
     "mhCount": "{n} Neuroner",
     "mhBucket": "{lo}–{hi}",
-    "mhPinnedBadge": "fastgjort"
+    "mhPinnedBadge": "fastgjort",
+    "mhSave": "Gem",
+    "mhReset": "Nulstil"
   },
   "settings": {
     "savedToast": "Gemt.",

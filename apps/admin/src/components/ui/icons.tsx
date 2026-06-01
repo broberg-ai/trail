@@ -123,6 +123,11 @@ export const Icons = {
       <path d="M5 16v-3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3M12 8v3" />
     </SVG>
   ),
+  Activity: (p: IconProps) => (
+    <SVG {...p}>
+      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+    </SVG>
+  ),
   Inbox: (p: IconProps) => (
     <SVG {...p}>
       <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />

@@ -38,9 +38,9 @@ import { and, eq, gte } from 'drizzle-orm';
 import { deriveType } from '@trail/shared';
 import {
   computeConfidence,
-  DEFAULT_DECAY_RATES,
   type ConfidenceSignalInput,
 } from './confidence.js';
+import { loadDecayRates } from './tenant-settings.js';
 
 const SCHEDULE_HOURS = Number(process.env.TRAIL_DECAY_SCHEDULE_HOURS ?? 24);
 const INITIAL_DELAY_MS =
@@ -76,6 +76,10 @@ export async function runDecayPass(
   const windowStart = now - WINDOW_DAYS * DAY_MS;
   let recomputed = 0;
   let updated = 0;
+
+  // F182.7 — per-tenant τ overrides from tenants.settings_json (Memory Health
+  // sliders), merged over DEFAULT_DECAY_RATES. Loaded once per pass.
+  const decayRates = await loadDecayRates(trail);
 
   const kbs = await trail.db.select({ id: knowledgeBases.id }).from(knowledgeBases).all();
 
@@ -135,9 +139,9 @@ export async function runDecayPass(
             createdAt: parseCreatedAt(n.createdAt),
             signals,
             contradictionCount,
-            // Per-type τ overrides (F182.7 Memory Health sliders) will be threaded
-            // in here once a tenant-settings store exists; defaults until then.
-            decayRates: DEFAULT_DECAY_RATES,
+            // F182.7 — per-tenant τ overrides (Memory Health sliders), merged
+            // over DEFAULT_DECAY_RATES in loadDecayRates above.
+            decayRates,
             now,
           });
       recomputed++;

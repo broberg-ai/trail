@@ -260,6 +260,13 @@
       "when": 1780300000000,
       "tag": "0036_curator_pin_exemption",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1780300100000,
+      "tag": "0037_tenant_settings_json",
+      "breakpoints": true
     }
   ]
 }

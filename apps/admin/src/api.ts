@@ -284,6 +284,57 @@ export function pinNeuronConfidence(
   });
 }
 
+// ── F182.7 Memory Health ────────────────────────────────────────────────────
+
+export interface DecayingNeuron {
+  id: string;
+  filename: string;
+  title: string | null;
+  path: string;
+  confidence: number;
+  lastRecomputedAt: number | null;
+}
+
+export interface SupersededChain {
+  id: string;
+  filename: string;
+  title: string | null;
+  path: string;
+  replacementId: string | null;
+  replacementFilename: string | null;
+  replacementTitle: string | null;
+}
+
+export interface MemoryHealthData {
+  /** 5 buckets: [0,0.2) … [0.8,1.0]. */
+  histogram: number[];
+  decaying: DecayingNeuron[];
+  superseded: SupersededChain[];
+}
+
+/** Per-Neuron-type decay rate (τ, days). */
+export type DecayRates = Record<string, number>;
+
+export interface DecayRatesResponse {
+  rates: DecayRates;
+  defaults: DecayRates;
+}
+
+export function getMemoryHealth(kbId: string): Promise<MemoryHealthData> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/memory-health`);
+}
+
+export function getDecayRates(): Promise<DecayRatesResponse> {
+  return api('/api/v1/memory-health/decay-rates');
+}
+
+export function saveDecayRates(rates: DecayRates): Promise<DecayRatesResponse> {
+  return api('/api/v1/memory-health/decay-rates', {
+    method: 'PUT',
+    body: JSON.stringify({ rates }),
+  });
+}
+
 export function listQueue(filter: QueueFilter = {}): Promise<QueueListResponse> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(filter)) {

@@ -27,6 +27,7 @@
     "neurons": "Neurons",
     "glossary": "Glossary",
     "graph": "Graph",
+    "memoryHealth": "Memory Health",
     "queue": "Queue",
     "work": "Work",
     "jobs": "Jobs",
@@ -834,7 +835,9 @@
     "mhReplacedBy": "replaced by",
     "mhCount": "{n} Neurons",
     "mhBucket": "{lo}–{hi}",
-    "mhPinnedBadge": "pinned"
+    "mhPinnedBadge": "pinned",
+    "mhSave": "Save",
+    "mhReset": "Reset"
   },
   "settings": {
     "savedToast": "Saved.",

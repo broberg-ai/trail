@@ -42,6 +42,7 @@ function buildGroups(kbId: string): SidebarGroup[] {
         { id: 'neurons', path: `/kb/${kbId}/neurons`, labelKey: 'sidebar.neurons', icon: 'FileText' },
         { id: 'glossary', path: `/glossary`, labelKey: 'sidebar.glossary', icon: 'FileText' },
         { id: 'graph', path: `/kb/${kbId}/graph`, labelKey: 'sidebar.graph', icon: 'Network' },
+        { id: 'memory-health', path: `/kb/${kbId}/memory-health`, labelKey: 'sidebar.memoryHealth', icon: 'Activity' },
       ],
     },
     {

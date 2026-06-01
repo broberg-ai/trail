@@ -8,6 +8,10 @@ export const tenants = sqliteTable('tenants', {
   slug: text('slug').notNull().unique(),
   name: text('name').notNull(),
   plan: text('plan', { enum: ['hobby', 'pro', 'business', 'enterprise'] }).notNull().default('hobby'),
+  // F182.7 — per-tenant settings JSON. Currently holds `decayRates`
+  // (per-Neuron-type τ overrides consumed by the F182.3 decay job); the single
+  // source the Memory Health decay-rate sliders write to. NULL = use defaults.
+  settingsJson: text('settings_json'),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
 
