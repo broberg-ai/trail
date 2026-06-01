@@ -32,6 +32,7 @@ import {
 } from '@trail/shared';
 import type { CandidateApprovedEvent } from '@trail/shared';
 import { broadcaster } from './broadcast.js';
+import { recordReinforcement } from './reinforcement.js';
 
 export { VALID_EDGE_TYPES, type EdgeType, type WikiLinkMatch };
 
@@ -213,6 +214,11 @@ export async function extractBacklinksForDoc(
   docId: string,
   pool?: WikiNeuronRef[],
   language?: string,
+  // F182.4 — when true, each newly-inserted link records a 'cite'
+  // reinforcement on its target. Only the candidate_approved event path
+  // passes true; the boot backfill leaves it false so a restart doesn't
+  // re-mint cites for links that already exist.
+  recordCites = false,
 ): Promise<number> {
   const doc = await trail.db
     .select({
@@ -257,7 +263,17 @@ export async function extractBacklinksForDoc(
   let inserted = 0;
   for (const { targetId, linkText, edgeType } of resolved) {
     const ok = await insertBacklink(trail, doc, targetId, linkText, edgeType);
-    if (ok) inserted += 1;
+    if (ok) {
+      inserted += 1;
+      if (recordCites) {
+        recordReinforcement(trail, {
+          neuronId: targetId,
+          signalType: 'cite',
+          sourceNeuronId: doc.id,
+          metadata: { edgeType },
+        });
+      }
+    }
   }
   return inserted;
 }
@@ -333,7 +349,8 @@ export function startBacklinkExtractor(trail: TrailDatabase): () => void {
 
 async function run(trail: TrailDatabase, event: CandidateApprovedEvent): Promise<void> {
   if (!event.documentId) return;
-  const inserted = await extractBacklinksForDoc(trail, event.documentId);
+  // recordCites=true: this is a genuine ingest/approval event, not a boot sweep.
+  const inserted = await extractBacklinksForDoc(trail, event.documentId, undefined, undefined, true);
   if (inserted > 0) {
     console.log(
       `[backlink-extractor] ${event.documentId.slice(0, 8)}…: +${inserted} backlink${inserted === 1 ? '' : 's'}`,

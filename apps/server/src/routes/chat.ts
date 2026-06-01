@@ -19,6 +19,7 @@ import {
   rewriteWikiLinks,
 } from '@trail/shared';
 import { recordAccess } from '../services/access-tracker.js';
+import { recordReinforcement } from '../services/reinforcement.js';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runChat, buildSystemPrompt, type PriorTurn } from '../services/chat/index.js';
@@ -278,6 +279,16 @@ chatRoutes.post('/chat', async (c) => {
       result.backendUsed,
       result.modelUsed,
     );
+    // F182.4 — the Neurons cited in a delivered answer are a reinforcement
+    // signal distinct from the retrieval-time 'access' read (plan-doc open
+    // question 6). Fire-and-forget; citations are deduped by documentId in
+    // retrieveContext, so one chat-cite per Neuron per answer.
+    for (const cite of citations) {
+      recordReinforcement(trail, {
+        neuronId: cite.documentId,
+        signalType: 'chat-cite',
+      });
+    }
     // F156 Phase 1 — surface where this session sits relative to its
     // turn-cap so the UI can show the soft warning at N-1 and the
     // hard "start ny chat" prompt at N. Counted AFTER the persist

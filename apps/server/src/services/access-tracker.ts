@@ -22,6 +22,7 @@
  */
 import { knowledgeBases, documentAccess, type TrailDatabase } from '@trail/db';
 import { eq } from 'drizzle-orm';
+import { recordReinforcement } from './reinforcement.js';
 
 export type AccessSource =
   | 'chat'
@@ -100,6 +101,15 @@ export function recordAccess(trail: TrailDatabase, args: RecordAccessArgs): void
           actorKind: args.actorKind,
         })
         .run();
+
+      // F182.4 — a tracked read is a reinforcement signal. Mirrors the
+      // access-write gate (track_access toggle, non-system actor) so the
+      // two telemetry streams stay consistent.
+      recordReinforcement(trail, {
+        neuronId: args.documentId,
+        signalType: 'access',
+        metadata: { source: args.source },
+      });
     } catch (err) {
       // Telemetry is never worth crashing a request path for. Log the
       // first-line cause so the pattern is visible if something breaks
