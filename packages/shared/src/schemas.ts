@@ -207,6 +207,10 @@ export const QueueCandidateKindEnum = z.enum([
   'version-conflict',
   'source-retraction',
   'scheduled-recompile',
+  // F182.5 — auto-supersession: a contradiction past the confidence threshold
+  // proposes replacing an older Neuron with a newer one. Carries
+  // targetNeuronId + replacementNeuronId + autoSupersede in metadata.
+  'supersede',
 ]);
 
 // Every curator decision maps to exactly one CandidateEffectKind. The engine
@@ -226,6 +230,9 @@ export const CandidateEffectKindEnum = z.enum([
   'flag-source',
   'refresh-from-source',
   'mark-still-relevant',
+  // F182.5 — resolve a supersede candidate: mark the older Neuron superseded
+  // by the newer one (supersedes edge + superseded_by_neuron_id), old preserved.
+  'supersede',
   // Orphan-Neuron recovery: LLM infers which Sources the Neuron's claims
   // most likely came from and patches the Neuron's frontmatter `sources:
   // [...]` so the reference-extractor can populate document_references on

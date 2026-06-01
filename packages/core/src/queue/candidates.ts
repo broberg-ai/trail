@@ -4,10 +4,12 @@ import {
   queueCandidates,
   documents,
   wikiEvents,
+  wikiBacklinks,
   knowledgeBases,
   schema,
   type TrailDatabase,
 } from '@trail/db';
+import { logActivity } from '../activity.js';
 import type {
   CreateQueueCandidate,
   ResolveCandidatePayload,
@@ -399,12 +401,16 @@ export async function createCandidate(
   );
 
   if (shouldAutoApprove(candidate)) {
+    // F182.5 — a supersede candidate carries no 'approve' action (its effect
+    // is 'supersede'); auto-approval resolves that action instead. Everything
+    // else uses the legacy default 'approve' action.
+    const autoActionId = candidate.kind === 'supersede' ? 'supersede' : 'approve';
     const approval = await resolveCandidate(
       trail,
       tenantId,
       id,
       actor,
-      { actionId: 'approve', path: '/neurons/auto/' },
+      { actionId: autoActionId, path: '/neurons/auto/' },
       { auto: true },
     );
     return { candidate, approval };
@@ -600,6 +606,8 @@ export async function resolveCandidate(
       return executeFlagSource(trail, candidate, action, actor, ctx);
     case 'mark-still-relevant':
       return executeMarkStillRelevant(trail, candidate, action, actor, ctx);
+    case 'supersede':
+      return executeSupersede(trail, candidate, action, actor, ctx);
     case 'auto-link-sources':
       return executeAutoLinkSources(trail, candidate, action, payload, actor, ctx);
     case 'merge-into-new':
@@ -994,6 +1002,105 @@ async function executeRetireNeuron(
   });
 }
 
+// ── Effect: supersede ──────────────────────────────────────────────
+// F182.5 — resolve a supersede candidate from contradiction-lint. Marks the
+// older Neuron (args.documentId) as superseded by the newer one
+// (args.replacementNeuronId): inserts a `supersedes` wiki_backlinks edge
+// (new → old), sets old.superseded_by_neuron_id, and logs the supersession.
+// The old Neuron is PRESERVED (never deleted/archived) per the F182 non-goal —
+// decay-aware reader/chat (F182.6) deemphasises it; the version stays for diff.
+
+async function executeSupersede(
+  trail: TrailDatabase,
+  candidate: QueueCandidate,
+  action: CandidateAction,
+  actor: Actor,
+  ctx: CommitContext,
+): Promise<ResolutionResult> {
+  const oldId = asString(action.args?.documentId);
+  const newId = asString(action.args?.replacementNeuronId);
+  if (!oldId || !newId) {
+    throw new Error(
+      `supersede action missing args.documentId/replacementNeuronId on ${candidate.id}`,
+    );
+  }
+  if (oldId === newId) {
+    throw new Error(`supersede: a Neuron cannot supersede itself (${oldId})`);
+  }
+
+  const result = await trail.db.transaction(async (tx) => {
+    // Both Neurons must exist in this tenant. Load the old one for its KB;
+    // the new one just needs to exist.
+    const oldDoc = await tx
+      .select({ id: documents.id, knowledgeBaseId: documents.knowledgeBaseId })
+      .from(documents)
+      .where(and(eq(documents.id, oldId), eq(documents.tenantId, candidate.tenantId)))
+      .get();
+    if (!oldDoc) throw new Error(`supersede: superseded Neuron not found: ${oldId}`);
+    const newDoc = await tx
+      .select({ id: documents.id })
+      .from(documents)
+      .where(and(eq(documents.id, newId), eq(documents.tenantId, candidate.tenantId)))
+      .get();
+    if (!newDoc) throw new Error(`supersede: replacement Neuron not found: ${newId}`);
+
+    // Mark the old Neuron superseded — preserved, not deleted.
+    await tx
+      .update(documents)
+      .set({ supersededByNeuronId: newId, updatedAt: ctx.now })
+      .where(eq(documents.id, oldId))
+      .run();
+
+    // Typed `supersedes` edge (F137), new → old. Idempotent on the unique
+    // (from,to,linkText) triple — a re-resolve of the same pair is a no-op.
+    try {
+      await tx
+        .insert(wikiBacklinks)
+        .values({
+          id: `bl_${crypto.randomUUID().slice(0, 12)}`,
+          tenantId: candidate.tenantId,
+          knowledgeBaseId: oldDoc.knowledgeBaseId,
+          fromDocumentId: newId,
+          toDocumentId: oldId,
+          linkText: '[superseded]',
+          edgeType: 'supersedes',
+        })
+        .run();
+    } catch {
+      // Unique-index violation = edge already exists; supersession is idempotent.
+    }
+
+    await finaliseApproved(tx, candidate.id, actor, oldId, action.id, ctx);
+    return {
+      candidateId: candidate.id,
+      actionId: action.id,
+      effect: action.effect,
+      documentId: oldId,
+      wikiEventId: null as string | null,
+      autoApproved: ctx.auto,
+      status: 'approved' as const,
+      knowledgeBaseId: oldDoc.knowledgeBaseId,
+    };
+  });
+
+  // Audit log AFTER the tx commits — logActivity wants a TrailDatabase
+  // (trail.db), not the tx handle, and it's best-effort (swallows errors).
+  await logActivity(trail, {
+    tenantId: candidate.tenantId,
+    knowledgeBaseId: result.knowledgeBaseId,
+    actorId: actor.kind === 'user' ? actor.id : null,
+    actorKind: actor.kind,
+    kind: 'neuron.superseded',
+    subjectType: 'document',
+    subjectId: oldId,
+    summary: `Superseded by ${newId}`,
+    metadata: { replacementNeuronId: newId, auto: ctx.auto },
+  });
+
+  const { knowledgeBaseId: _kbId, ...resolution } = result;
+  return resolution;
+}
+
 // ── Effect: flag-source ────────────────────────────────────────────
 // Marks a Source document as untrustworthy. Doesn't touch any Neuron;
 // the curator has simply told us "this source is the one in the wrong,
@@ -1362,7 +1469,13 @@ async function finaliseApproved(
     .update(queueCandidates)
     .set({
       status: 'approved',
-      reviewedBy: actor.id,
+      // reviewedBy is an FK to users.id (FKs are enforced in prod, see
+      // libsql-adapter). Synthetic pipeline actors ('system:…', 'mcp:…') have
+      // no users row, so store null for non-human actors — autoApprovedAt is
+      // the signal that a policy, not a person, resolved it. F182.5: the
+      // supersession-lint actor is the first system actor to auto-approve and
+      // reach this finalizer.
+      reviewedBy: actor.kind === 'user' ? actor.id : null,
       reviewedAt: ctx.now,
       autoApprovedAt: ctx.auto ? ctx.now : null,
       resultingDocumentId,
@@ -1425,7 +1538,7 @@ function inferConnectorFromKind(
   if (kind === 'chat-answer') return 'chat';
   if (kind === 'user-correction') return 'curator';
   if (kind === 'ingest-summary' || kind === 'ingest-page-update') return 'upload';
-  if (kind === 'cross-ref-suggestion' || kind === 'contradiction-alert' || kind === 'gap-detection' || kind === 'reader-feedback') return 'lint';
+  if (kind === 'cross-ref-suggestion' || kind === 'contradiction-alert' || kind === 'gap-detection' || kind === 'reader-feedback' || kind === 'supersede') return 'lint';
   if (kind === 'source-retraction' || kind === 'scheduled-recompile' || kind === 'version-conflict') return 'pipeline';
   return 'api';
 }

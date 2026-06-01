@@ -45,6 +45,17 @@ const TRUSTED_KINDS: QueueCandidateKind[] = [
 
 const DEFAULT_THRESHOLD = 0.8;
 
+/** Read the F182.5 `autoSupersede` flag out of a candidate's metadata JSON. */
+function autoSupersedeFlag(candidate: QueueCandidate): boolean {
+  if (!candidate.metadata) return false;
+  try {
+    const m = JSON.parse(candidate.metadata) as { autoSupersede?: boolean };
+    return m?.autoSupersede === true;
+  } catch {
+    return false;
+  }
+}
+
 function threshold(): number {
   const raw = process.env.TRAIL_AUTO_APPROVE_THRESHOLD;
   if (!raw) return DEFAULT_THRESHOLD;
@@ -56,6 +67,16 @@ function threshold(): number {
 export function shouldAutoApprove(candidate: QueueCandidate): boolean {
   // Humans never auto-approve. If a curator wants a page in, they click it.
   if (candidate.createdBy) return false;
+
+  // F182.5 — a supersede candidate is high-impact (it retires an existing
+  // claim), so it auto-approves ONLY when the supersession formula already
+  // decided both conditions hold (|Δconfidence| > 0.25 AND newer source-count
+  // ≥ older), recorded as metadata.autoSupersede. Otherwise it's a
+  // pending-supersession the curator must adjudicate. Not added to
+  // TRUSTED_KINDS — we never blanket-trust a destructive effect.
+  if (candidate.kind === 'supersede') {
+    return autoSupersedeFlag(candidate) === true;
+  }
 
   // Axis 1: trusted pipelines skip the threshold entirely.
   if (TRUSTED_KINDS.includes(candidate.kind)) return true;

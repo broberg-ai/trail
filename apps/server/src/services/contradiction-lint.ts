@@ -32,6 +32,7 @@ import {
 import type { CandidateApprovedEvent } from '@trail/shared';
 import { broadcaster } from './broadcast.js';
 import { spawnClaude, extractAssistantText } from './claude.js';
+import { decideSupersession } from './supersession.js';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? '';
 const BACKEND = process.env.TRAIL_CONTRADICTION_BACKEND ?? (ANTHROPIC_API_KEY ? 'api' : 'cli');
@@ -251,6 +252,81 @@ async function runForEvent(
     if (existingFp) continue;
 
     try {
+      // F182.5 — if one side dominates on confidence + source-count, emit a
+      // 'supersede' candidate (auto-approves via metadata.autoSupersede)
+      // INSTEAD of the contradiction-alert. When neither dominates,
+      // decideSupersession returns null and we fall through to the normal
+      // curator-review alert below.
+      const newId = (f.details as { newDocumentId?: string }).newDocumentId ?? doc.id;
+      const existingId = (f.details as { existingDocumentId?: string }).existingDocumentId;
+      const decision = existingId
+        ? await decideSupersession(trail, doc.tenantId, newId, existingId)
+        : null;
+
+      if (decision) {
+        const { candidate, approval } = await createCandidate(
+          trail,
+          doc.tenantId,
+          {
+            knowledgeBaseId: doc.knowledgeBaseId,
+            kind: 'supersede',
+            title: f.title,
+            content: f.content,
+            metadata: JSON.stringify({
+              op: 'supersede',
+              source: 'supersession-lint',
+              lintFingerprint: f.fingerprint,
+              targetNeuronId: decision.targetNeuronId,
+              replacementNeuronId: decision.replacementNeuronId,
+              confidenceDelta: decision.confidenceDelta,
+              autoSupersede: true,
+              ...f.details,
+            }),
+            confidence: decision.replacementConfidence,
+            actions: [
+              {
+                id: 'supersede',
+                effect: 'supersede',
+                args: {
+                  documentId: decision.targetNeuronId,
+                  replacementNeuronId: decision.replacementNeuronId,
+                },
+                label: { en: 'Supersede' },
+                explanation: {
+                  en: `Mark the older Neuron superseded by the newer one (Δconfidence ${decision.confidenceDelta.toFixed(2)}). The old page is preserved, not deleted.`,
+                },
+              },
+            ],
+          },
+          { id: 'system:supersession-lint', kind: 'system' },
+        );
+        broadcaster.emit({
+          type: 'candidate_created',
+          tenantId: candidate.tenantId,
+          kbId: candidate.knowledgeBaseId,
+          candidateId: candidate.id,
+          kind: candidate.kind,
+          title: candidate.title,
+          status: approval ? 'approved' : 'pending',
+          autoApproved: !!approval,
+          confidence: candidate.confidence,
+          createdBy: candidate.createdBy,
+        });
+        if (approval) {
+          broadcaster.emit({
+            type: 'candidate_resolved',
+            tenantId: candidate.tenantId,
+            kbId: candidate.knowledgeBaseId,
+            candidateId: candidate.id,
+            actionId: approval.actionId,
+            effect: approval.effect,
+            documentId: approval.documentId,
+            autoApproved: true,
+          });
+        }
+        continue;
+      }
+
       const { candidate, approval } = await createCandidate(
         trail,
         doc.tenantId,

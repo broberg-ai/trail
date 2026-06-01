@@ -44,6 +44,7 @@ export type ActivityKind =
   | 'neuron.edited'
   | 'neuron.archived'
   | 'neuron.restored'
+  | 'neuron.superseded'
   | 'lint.scheduled'
   | 'lint.completed'
   | 'connector.recommendation_generated';

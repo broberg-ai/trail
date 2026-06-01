@@ -425,6 +425,7 @@ export const queueCandidates = sqliteTable(
         'version-conflict',
         'source-retraction',
         'scheduled-recompile',
+        'supersede',
       ],
     }).notNull(),
     title: text('title').notNull(),
