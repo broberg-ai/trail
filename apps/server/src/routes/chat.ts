@@ -20,6 +20,7 @@ import {
 } from '@trail/shared';
 import { recordAccess } from '../services/access-tracker.js';
 import { recordReinforcement } from '../services/reinforcement.js';
+import { loadNeuronConfidence, isChatVisible, confidenceOf } from '../services/chat-confidence.js';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runChat, buildSystemPrompt, type PriorTurn } from '../services/chat/index.js';
@@ -591,9 +592,23 @@ async function retrieveContext(
     const fadedHeuristicIds = await listFadedHeuristicIds(trail, kbId, tenantId);
 
     const chunkHits = await trail.searchChunks(ftsQuery, kbId, tenantId, PER_KB_CHUNKS);
+    const docHits = await trail.searchDocuments(ftsQuery, kbId, tenantId, PER_KB_DOCS);
+
+    // F182.6 — decay-aware retrieval. Load confidence + pin + supersede state
+    // for every candidate Neuron, then hide superseded ones and low-confidence
+    // ones (<CHAT_HIDE_BELOW, unless curator-pinned), and rank surviving docs by
+    // confidence DESC so fresher/stronger knowledge leads the context
+    // (deemphasising the 0.3-0.5 band rather than dropping it). Generalises the
+    // F139 faded-heuristic exclusion to all Neuron types.
+    const confMap = await loadNeuronConfidence(trail, tenantId, [
+      ...chunkHits.map((h) => h.documentId),
+      ...docHits.map((h) => h.id),
+    ]);
+
     for (const hit of chunkHits) {
       if (totalChars >= MAX_CHARS) break;
       if (fadedHeuristicIds.has(hit.documentId)) continue;
+      if (!isChatVisible(confMap.get(hit.documentId))) continue;
       const header = hit.headerBreadcrumb ? `[${hit.headerBreadcrumb}] ` : '';
       // F22 leak-prevention: claim-anchor markers must NEVER reach the
       // chat-LLM — if they do, the model can echo them into the
@@ -619,10 +634,10 @@ async function retrieveContext(
       }
     }
 
-    const docHits = await trail.searchDocuments(ftsQuery, kbId, tenantId, PER_KB_DOCS);
-    for (const hit of docHits) {
-      if (hit.kind !== 'wiki') continue;
-      if (fadedHeuristicIds.has(hit.id)) continue;
+    const rankedDocs = docHits
+      .filter((h) => h.kind === 'wiki' && !fadedHeuristicIds.has(h.id) && isChatVisible(confMap.get(h.id)))
+      .sort((a, b) => confidenceOf(confMap, b.id) - confidenceOf(confMap, a.id));
+    for (const hit of rankedDocs) {
       if (totalChars >= MAX_CHARS) break;
       if (!seen.has(hit.id)) {
         seen.add(hit.id);
