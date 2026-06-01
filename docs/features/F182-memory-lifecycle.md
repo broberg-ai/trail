@@ -262,9 +262,10 @@ Design:
 - The decay job short-circuits pinned Neurons: `if (pinned) confidence = 1.0` and
   skips the formula (still stamps `confidence_last_recomputed_at`). A pinned Neuron
   never decays, never drops below the chat/visibility thresholds, regardless of age.
-- A pin/unpin endpoint (`PATCH …/neurons/:id/pin`) flips the flag and records a
+- A pin/unpin endpoint (`POST /documents/:docId/pin`) flips the flag and records a
   `curator-pin` row in `confidence_signals` as an **audit trail** (who/when) — the
-  enum value stays, but it no longer drives the score.
+  enum value stays at weight 0, so it no longer drives the score (excluded from the
+  reinforcement boost in `confidence.ts`, preventing a leak after unpin).
 - Unpinning returns the Neuron to the normal formula on the next decay pass.
 
 Precedent: **F139** already takes `pinned` to override heuristic decay
@@ -276,7 +277,7 @@ decay-job exemption + verify) those UIs call.
 
 ## Status
 
-**Phase 1 shipped (F182.1–F182.4), Phase 2 in progress.** F-number reserved + interim plan-doc captured 2026-05-05 per CLAUDE.md hard rule. Implementation date: TBD by Christian.
+**All stories shipped to Review (F182.1–F182.8), 2026-06-01.** Phase 1 (data model, formula, decay job, signal wiring) + Phase 2 (curator-pin exemption, supersession, decay-aware chat/reader/graph, Memory Health tab) complete, each with a `bun run` runtime probe. Backend script-verified; SPA rendering pending a browser review pass. F-number + interim plan-doc captured 2026-05-05 per CLAUDE.md hard rule.
 
 The architectural shape is clear, but the formula tuning will require ground-truth queries against a real KB to validate. Sanne's KB once populated is the ideal first test bed.
 
