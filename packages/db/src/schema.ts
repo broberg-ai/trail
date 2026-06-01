@@ -201,6 +201,15 @@ export const documents = sqliteTable(
     confidence: real('confidence').notNull().default(0.7),
     confidenceLastRecomputedAt: integer('confidence_last_recomputed_at'),
     supersededByNeuronId: text('superseded_by_neuron_id').references((): AnySQLiteColumn => documents.id),
+    // F182.8 — curator-pin as decay EXEMPTION. A pinned Neuron's confidence is
+    // held at 1.0 and never decays (Newton's laws don't get less true with age);
+    // the decay job short-circuits the formula when this is set. A persistent
+    // state set by a human, NOT a decaying signal. `confidence_signals` still
+    // gets a `curator-pin` audit row on pin/unpin (who/when), but it doesn't
+    // drive the score. Unpinning returns the Neuron to the formula next pass.
+    confidencePinned: integer('confidence_pinned', { mode: 'boolean' }).notNull().default(false),
+    confidencePinnedAt: integer('confidence_pinned_at'),
+    confidencePinnedBy: text('confidence_pinned_by'),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
     updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
   },

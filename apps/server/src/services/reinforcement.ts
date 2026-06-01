@@ -30,11 +30,14 @@ import { confidenceSignals, type TrailDatabase } from '@trail/db';
 
 export type ReinforcementSignalType = 'cite' | 'access' | 'curator-pin' | 'chat-cite';
 
-/** Default per-type weights (plan-doc open question 6). */
+/** Default per-type weights (plan-doc open question 6). 'curator-pin' is 0:
+ *  F182.8 reframed pin as a decay EXEMPTION (documents.confidence_pinned), so a
+ *  curator-pin row is audit-only (who/when) and is excluded from the boost in
+ *  confidence.ts — a non-zero weight here would leak into the score after unpin. */
 export const REINFORCEMENT_WEIGHTS: Record<ReinforcementSignalType, number> = {
   cite: 0.1,
   access: 0.1,
-  'curator-pin': 0.3,
+  'curator-pin': 0,
   'chat-cite': 0.05,
 };
 

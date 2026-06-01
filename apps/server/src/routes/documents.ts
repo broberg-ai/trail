@@ -21,6 +21,7 @@ import {
 import { triggerIngest } from '../services/ingest.js';
 import { storage, sourcePath } from '../lib/storage.js';
 import { recordAccess } from '../services/access-tracker.js';
+import { recordReinforcement } from '../services/reinforcement.js';
 import { isNull } from 'drizzle-orm';
 import { createVisionBackend, getActiveVisionModel } from '../services/vision.js';
 import { getJobRunner } from '../services/jobs/runner.js';
@@ -500,6 +501,67 @@ documentRoutes.post('/documents/:docId/restore', async (c) => {
     .run();
 
   return c.json({ id: docId, archived: false, status: 'ready' });
+});
+
+/**
+ * F182.8 — curator-pin a Neuron as decay-EXEMPT (or unpin it). A pinned
+ * Neuron's confidence is held at 1.0 and the nightly decay job skips the
+ * formula for it, so a timeless fact never decays out of visibility with age.
+ * Body: { pinned: boolean }. Pinning sets confidence=1.0 immediately (so the
+ * UI reflects it without waiting for the nightly pass) and stamps who/when;
+ * unpinning clears the flag and leaves confidence for the next pass to
+ * recompute. Either way a `curator-pin` audit row lands in confidence_signals.
+ */
+documentRoutes.post('/documents/:docId/pin', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const user = getUser(c);
+  const docId = c.req.param('docId');
+
+  const body = await c.req.json().catch(() => ({}));
+  const pinned = body?.pinned === true;
+
+  const doc = await trail.db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(and(eq(documents.id, docId), eq(documents.tenantId, tenant.id)))
+    .get();
+  if (!doc) return c.json({ error: 'Document not found' }, 404);
+
+  const now = Date.now();
+  await trail.db
+    .update(documents)
+    .set(
+      pinned
+        ? {
+            confidencePinned: true,
+            confidencePinnedAt: now,
+            confidencePinnedBy: user.id,
+            // Reflect the exemption immediately; the decay job would set the
+            // same value on its next pass.
+            confidence: 1,
+            confidenceLastRecomputedAt: now,
+            updatedAt: new Date().toISOString(),
+          }
+        : {
+            confidencePinned: false,
+            confidencePinnedAt: null,
+            confidencePinnedBy: null,
+            updatedAt: new Date().toISOString(),
+          },
+    )
+    .where(eq(documents.id, docId))
+    .run();
+
+  // Audit trail (who/when). Weight 0 — excluded from the reinforcement boost
+  // in confidence.ts; the exemption is driven by confidence_pinned, not this.
+  recordReinforcement(trail, {
+    neuronId: docId,
+    signalType: 'curator-pin',
+    metadata: { pinned, by: user.id },
+  });
+
+  return c.json({ id: docId, confidencePinned: pinned });
 });
 
 /**

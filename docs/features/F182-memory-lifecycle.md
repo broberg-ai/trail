@@ -237,9 +237,46 @@ Per CLAUDE.md verification rule: this script is the F47-style runtime probe. Typ
 
 Phase 1 + Phase 2 combined: **7-10 days** of focused engineering. Phase 1 (formula + decay job + signal wiring) is the bulk; Phase 2 (supersession + admin UI) is smaller but UI-heavy.
 
+## Curator-pin as decay EXEMPTION (F182.8) — design refinement 2026-06-01
+
+Open questions 5 and 6(c) mention "curator can pin to override decay" and the
+F182.4 task reserved a `curator-pin` reinforcement weight (0.3). Implementation
+review (2026-06-01, with Christian) found that modelling a pin as a *reinforcement
+boost* is the wrong mechanism, and the canonical counter-example is **Isaac
+Newton**:
+
+> Newton's laws are ~340 years old. With τ=365d, `recency = exp(−124000/365) ≈ 0`.
+> Even the full +0.3 boost lands confidence at ~0.3 — barely visible — for a fact
+> that is *100% true*. A boost only floors the value; it does not make a timeless
+> fact timeless. Some facts never get too old, and the decay model must be able to
+> say so.
+
+**Therefore curator-pin is a decay EXEMPTION, not a reinforcement signal.** When a
+curator pins a Neuron they are asserting human judgment that overrides the
+automatic formula entirely: *"I vouch for this, indefinitely."*
+
+Design:
+
+- New `documents.confidence_pinned` (boolean, default false) + `confidence_pinned_at`
+  (epoch ms) + `confidence_pinned_by` (user id). A *state*, not a decaying event.
+- The decay job short-circuits pinned Neurons: `if (pinned) confidence = 1.0` and
+  skips the formula (still stamps `confidence_last_recomputed_at`). A pinned Neuron
+  never decays, never drops below the chat/visibility thresholds, regardless of age.
+- A pin/unpin endpoint (`PATCH …/neurons/:id/pin`) flips the flag and records a
+  `curator-pin` row in `confidence_signals` as an **audit trail** (who/when) — the
+  enum value stays, but it no longer drives the score.
+- Unpinning returns the Neuron to the normal formula on the next decay pass.
+
+Precedent: **F139** already takes `pinned` to override heuristic decay
+(commit `e319d33`); F182.8 generalises that override to all Neuron types.
+
+The pin/unpin *button* lives in the reader confidence-chip (F182.6) and the Memory
+Health tab (F182.7); F182.8 ships the backend primitive (column + endpoint +
+decay-job exemption + verify) those UIs call.
+
 ## Status
 
-**Planned, deferred to post-Sanne-launch Phase 2.** F-number reserved + interim plan-doc captured 2026-05-05 per CLAUDE.md hard rule. Implementation date: TBD by Christian.
+**Phase 1 shipped (F182.1–F182.4), Phase 2 in progress.** F-number reserved + interim plan-doc captured 2026-05-05 per CLAUDE.md hard rule. Implementation date: TBD by Christian.
 
 The architectural shape is clear, but the formula tuning will require ground-truth queries against a real KB to validate. Sanne's KB once populated is the ideal first test bed.
 

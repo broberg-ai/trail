@@ -88,6 +88,7 @@ export async function runDecayPass(
         createdAt: documents.createdAt,
         confidence: documents.confidence,
         lastRecomputedAt: documents.confidenceLastRecomputedAt,
+        pinned: documents.confidencePinned,
       })
       .from(documents)
       .where(
@@ -124,16 +125,21 @@ export async function runDecayPass(
       }));
       const contradictionCount = signals.filter((s) => s.signalType === 'contradiction').length;
 
-      const confidence = computeConfidence({
-        type: deriveType(neuronPath(n.path, n.filename)),
-        createdAt: parseCreatedAt(n.createdAt),
-        signals,
-        contradictionCount,
-        // Per-type τ overrides (F182.7 Memory Health sliders) will be threaded
-        // in here once a tenant-settings store exists; defaults until then.
-        decayRates: DEFAULT_DECAY_RATES,
-        now,
-      });
+      // F182.8 — a curator-pinned Neuron is decay-EXEMPT: human judgment
+      // overrides the formula entirely and holds confidence at 1.0, so a
+      // timeless fact (Newton's laws) never decays out of visibility with age.
+      const confidence = n.pinned
+        ? 1
+        : computeConfidence({
+            type: deriveType(neuronPath(n.path, n.filename)),
+            createdAt: parseCreatedAt(n.createdAt),
+            signals,
+            contradictionCount,
+            // Per-type τ overrides (F182.7 Memory Health sliders) will be threaded
+            // in here once a tenant-settings store exists; defaults until then.
+            decayRates: DEFAULT_DECAY_RATES,
+            now,
+          });
       recomputed++;
 
       // Write only when the value actually moved (or never recomputed) — see

@@ -71,13 +71,16 @@ export function countDistinctSources(signals: ConfidenceSignalInput[]): number {
   return ids.size;
 }
 
-/** Recency-weighted sum of reinforcement signals (cite/access/chat-cite/pin) in
+/** Recency-weighted sum of reinforcement signals (cite/access/chat-cite) in
  *  the last 90 days, capped. Contradictions are excluded here — they enter via
- *  contradictionFactor, not as a positive boost. */
+ *  contradictionFactor, not as a positive boost. F182.8: 'curator-pin' is also
+ *  excluded — it's an audit-only record of a pin/unpin action (the exemption is
+ *  driven by documents.confidence_pinned in the decay job), so a lingering pin
+ *  signal must not leak a boost into a Neuron's score after it's unpinned. */
 export function computeReinforcementBoost(signals: ConfidenceSignalInput[], now: number): number {
   let boost = 0;
   for (const s of signals) {
-    if (s.signalType === 'contradiction') continue;
+    if (s.signalType === 'contradiction' || s.signalType === 'curator-pin') continue;
     const ageDays = (now - s.recordedAt) / DAY_MS;
     if (ageDays < 0 || ageDays > REINFORCEMENT_WINDOW_DAYS) continue;
     boost += s.weight * Math.exp(-ageDays / REINFORCEMENT_RECENCY_TAU_DAYS);
