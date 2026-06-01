@@ -20,6 +20,7 @@ import {
   getNeuronProvenance,
   saveNeuronEdit,
   updateUserNote,
+  pinNeuronConfidence,
   NeuronEditConflictError,
   ApiError,
   type NeuronProvenance,
@@ -322,6 +323,15 @@ function ReaderView() {
                   }}
                 />
               ) : null}
+              {/* F182.6 — live confidence chip + curator-pin toggle +
+                  superseded badge. Non-heuristic Neurons get their lifecycle
+                  state here; heuristics keep their F139 badge/PinButton above. */}
+              {provenance && !isHeuristicPath(d.path) ? (
+                <ConfidenceControl
+                  provenance={provenance}
+                  onChanged={(patch) => setProvenance((p) => (p ? { ...p, ...patch } : p))}
+                />
+              ) : null}
             </div>
             {provenance?.connector ? (
               <div class="mt-3 flex items-center gap-2 text-[11px] font-mono text-[color:var(--color-fg-subtle)] flex-wrap">
@@ -464,6 +474,82 @@ function PinButton({
         }
       >
         {saving ? t('heuristic.pinSaving') : pinned ? t('heuristic.unpinAction') : t('heuristic.pinAction')}
+      </button>
+      {error ? (
+        <span class="text-[10px] font-mono text-[color:var(--color-danger)]">{error}</span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * F182.6 — live-confidence control for the Neuron reader header.
+ *
+ * Renders the decay-job-maintained confidence as a colour-coded chip, a
+ * curator-pin toggle (F182.8 — exempts the Neuron from decay, holding it at
+ * 1.0), and a "Superseded" badge when a newer Neuron has replaced this one
+ * (F182.5). Distinct from the F139 PinButton above, which pins heuristic
+ * frontmatter; this drives the `documents.confidence_pinned` column via the
+ * pin endpoint. Optimistic toggle with loading + error feedback.
+ */
+function ConfidenceControl({
+  provenance,
+  onChanged,
+}: {
+  provenance: NeuronProvenance;
+  onChanged: (patch: Partial<NeuronProvenance>) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const pinned = provenance.confidencePinned;
+  const superseded = provenance.supersededByNeuronId != null;
+  // Pinned Neurons are held at 1.0 by the decay job; show that, not the stale
+  // pre-pin value, so the chip matches reality the instant you pin.
+  const shownConfidence = pinned ? 1 : provenance.liveConfidence;
+
+  async function handleToggle() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    const next = !pinned;
+    try {
+      await pinNeuronConfidence(provenance.documentId, next);
+      onChanged({ confidencePinned: next, liveConfidence: next ? 1 : provenance.liveConfidence });
+    } catch {
+      setError(t('lifecycle.pinError'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div class="inline-flex items-center gap-2">
+      <span title={t('lifecycle.confidenceHint', { n: (shownConfidence ?? 0).toFixed(2) })}>
+        <ConfidencePill confidence={shownConfidence} />
+      </span>
+      {superseded ? (
+        <span
+          title={t('lifecycle.supersededHint')}
+          class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider border bg-[color:var(--color-fg-subtle)]/10 border-[color:var(--color-fg-subtle)]/30 text-[color:var(--color-fg-subtle)] line-through"
+        >
+          {t('lifecycle.superseded')}
+        </span>
+      ) : null}
+      <button
+        type="button"
+        onClick={handleToggle}
+        disabled={busy}
+        title={pinned ? t('lifecycle.pinnedHint') : t('lifecycle.pinHint')}
+        aria-pressed={pinned}
+        class={
+          'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider border transition active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed ' +
+          (pinned
+            ? 'border-[color:var(--color-accent)]/40 text-[color:var(--color-accent)] bg-[color:var(--color-accent)]/10 hover:bg-[color:var(--color-accent)]/20'
+            : 'border-[color:var(--color-border)] text-[color:var(--color-fg-muted)] hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-fg)]')
+        }
+      >
+        <span aria-hidden="true">📌</span>
+        {busy ? t('lifecycle.pinning') : pinned ? t('lifecycle.pinnedLabel') : t('lifecycle.pin')}
       </button>
       {error ? (
         <span class="text-[10px] font-mono text-[color:var(--color-danger)]">{error}</span>

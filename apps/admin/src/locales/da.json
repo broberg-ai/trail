@@ -810,6 +810,32 @@
     "pinSaving": "Gemmer…",
     "pinError": "Gem fejlede"
   },
+  "lifecycle": {
+    "confidenceHint": "Aktuel tillid ({n}). Falder med alderen medmindre den forstærkes eller fastgøres; under 0.3 skjules en Neuron fra chat.",
+    "pin": "Fastgør",
+    "unpin": "Løsgør",
+    "pinning": "Gemmer…",
+    "pinnedLabel": "Fastgjort",
+    "pinnedHint": "Fastgjort — tillid holdes på 1.0, fritaget for forfald. Nogle fakta bliver aldrig gamle.",
+    "pinHint": "Fastgør for at fritage denne Neuron fra forfald (holdes på fuld tillid).",
+    "superseded": "Erstattet",
+    "supersededHint": "Erstattet af en nyere Neuron via auto-supersession. Bevaret for historik; nedtonet i chat og grafen.",
+    "pinError": "Kunne ikke ændre fastgørelse",
+    "memoryHealth": "Hukommelses-sundhed",
+    "mhSubtitle": "Tillids-livscyklus på tværs af denne Trail — fordeling, Neuroner i forfald, supersession-kæder og forfaldsrater pr. type.",
+    "mhDistribution": "Tillids-fordeling",
+    "mhDecaying": "I forfald",
+    "mhSuperseded": "Erstattede",
+    "mhDecayRates": "Forfaldsrater (τ, dage)",
+    "mhDecayRatesHint": "Retention pr. Neuron-type (halveringstid-agtig). Højere τ = langsommere forfald. Standardværdier vist; redigering pr. tenant kommer.",
+    "mhNoDecaying": "Ingen Neuroner i forfald — alt er friskt eller fastgjort.",
+    "mhNoSuperseded": "Ingen erstattede Neuroner endnu.",
+    "mhDecayingHint": "Tillid under 0.5 og ingen forstærkning i 30 dage. Fastgør for at beholde, eller lad den falme fra chat.",
+    "mhReplacedBy": "erstattet af",
+    "mhCount": "{n} Neuroner",
+    "mhBucket": "{lo}–{hi}",
+    "mhPinnedBadge": "fastgjort"
+  },
   "settings": {
     "savedToast": "Gemt.",
     "trail": {

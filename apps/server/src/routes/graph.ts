@@ -120,6 +120,11 @@ graphRoutes.get('/knowledge-bases/:kbId/graph', async (c) => {
       content: documents.content,
       workStatus: documents.workStatus,
       workKind: documents.workKind,
+      // F182.6 — confidence drives node opacity; pinned never dims; superseded
+      // nodes render deemphasised (replaced by a newer Neuron).
+      confidence: documents.confidence,
+      confidencePinned: documents.confidencePinned,
+      supersededByNeuronId: documents.supersededByNeuronId,
       backlinkCount: sql<number>`(
         SELECT COUNT(*) FROM ${wikiBacklinks}
         WHERE ${wikiBacklinks.toDocumentId} = ${documents.id}
@@ -254,6 +259,12 @@ graphRoutes.get('/knowledge-bases/:kbId/graph', async (c) => {
       kind: r.kind,
       workStatus: r.workStatus,
       workKind: r.workKind,
+      // F182.6 — lifecycle state for confidence-aware rendering: node opacity
+      // scales with confidence, pinned nodes never dim, superseded nodes are
+      // deemphasised (they've been replaced by a newer Neuron).
+      confidence: r.confidence,
+      confidencePinned: r.confidencePinned,
+      superseded: r.supersededByNeuronId != null,
     };
   });
 

@@ -257,10 +257,31 @@ export interface NeuronProvenance {
   createdAt: string;
   actorKind: 'user' | 'llm' | 'system' | null;
   actorId: string | null;
+  /**
+   * F182.6 — LIVE lifecycle state (distinct from `confidence` above, which is
+   * the write-time candidate score). `liveConfidence` is the decay-job-
+   * maintained value; `confidencePinned` exempts it from decay (held at 1.0);
+   * `supersededByNeuronId` points at the newer Neuron that replaced this one.
+   */
+  liveConfidence: number | null;
+  confidencePinned: boolean;
+  confidenceLastRecomputedAt: number | null;
+  supersededByNeuronId: string | null;
 }
 
 export function getNeuronProvenance(docId: string): Promise<NeuronProvenance> {
   return api(`/api/v1/documents/${encodeURIComponent(docId)}/provenance`);
+}
+
+/** F182.8 — pin/unpin a Neuron's confidence (decay exemption). */
+export function pinNeuronConfidence(
+  docId: string,
+  pinned: boolean,
+): Promise<{ id: string; confidencePinned: boolean }> {
+  return api(`/api/v1/documents/${encodeURIComponent(docId)}/pin`, {
+    method: 'POST',
+    body: JSON.stringify({ pinned }),
+  });
 }
 
 export function listQueue(filter: QueueFilter = {}): Promise<QueueListResponse> {
@@ -395,6 +416,12 @@ export interface GraphNode {
   kind?: 'wiki' | 'work';
   workStatus?: WorkStatus | null;
   workKind?: WorkKind | null;
+  /** F182.6 — lifecycle state for confidence-aware rendering: node opacity
+   *  scales with `confidence`; `confidencePinned` nodes never dim; `superseded`
+   *  nodes render deemphasised (replaced by a newer Neuron). */
+  confidence?: number;
+  confidencePinned?: boolean;
+  superseded?: boolean;
 }
 /** F137 — the closed set of edge types the LLM can emit via `[[target|type]]`
  *  syntax. Mirrors `VALID_EDGE_TYPES` on the server-side extractor. */

@@ -89,6 +89,40 @@ function categoryOf(node: GraphNode): NodeCategory {
   return 'neuron';
 }
 
+/** Parse a `#rgb`/`#rrggbb` hex to [r,g,b]; null if unparseable. */
+function hexToRgb(hex: string): [number, number, number] | null {
+  const h = hex.replace('#', '').trim();
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  if (full.length !== 6) return null;
+  const n = Number.parseInt(full, 16);
+  if (Number.isNaN(n)) return null;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** Blend `hex` toward `bg` by factor `t` (0 = unchanged, 1 = fully bg). */
+function blendToward(hex: string, bg: string, t: number): string {
+  const a = hexToRgb(hex);
+  const b = hexToRgb(bg);
+  if (!a || !b) return hex;
+  const k = Math.max(0, Math.min(1, t));
+  const mix = a.map((c, i) => Math.round(c + (b[i]! - c) * k));
+  return `#${mix.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * F182.6 — node opacity from confidence. Returns a blend-toward-bg factor:
+ * higher confidence → less dimming. Pinned Neurons never dim; superseded ones
+ * recede strongly; unknown confidence (work nodes / pre-decay) stays full.
+ */
+function confidenceDimFactor(node: GraphNode): number {
+  if (node.confidencePinned) return 0;
+  if (node.superseded) return 0.78;
+  if (typeof node.confidence !== 'number') return 0;
+  // opacity = 0.35 + 0.65*confidence → dim = 1 - opacity, clamped.
+  const opacity = 0.35 + 0.65 * Math.max(0, Math.min(1, node.confidence));
+  return 1 - opacity;
+}
+
 /**
  * F137 — palette for typed edges. Edges inherit `cites` (the default)
  * when `edgeType` is null or unknown, so the palette key set is also
@@ -244,6 +278,7 @@ export function GraphPanel() {
         workInProgress: '#fbbf24',
         workBlocked: '#f87171',
         workDone: '#6b7280',
+        bg: '#18181b',
       };
     }
     const style = getComputedStyle(document.documentElement);
@@ -273,6 +308,9 @@ export function GraphPanel() {
       workInProgress: '#fbbf24',
       workBlocked: '#f87171',
       workDone: '#6b7280',
+      // F182.6 — node dimming blends toward the canvas background so
+      // low-confidence Neurons recede without changing hue.
+      bg: style.getPropertyValue('--color-bg').trim() || '#18181b',
     };
   }, []);
 
@@ -328,6 +366,13 @@ export function GraphPanel() {
             color = colours.orphan;
           } else {
             color = colours.accent;
+          }
+          // F182.6 — dim by confidence (blend toward canvas bg). Work nodes
+          // keep their status hue at full strength (confidence is a knowledge-
+          // Neuron concept); only wiki nodes recede as they decay.
+          if (n.kind !== 'work') {
+            const dim = confidenceDimFactor(n);
+            if (dim > 0) color = blendToward(color, colours.bg, dim);
           }
           // F141 — scale UP from baseline using usage weight. We pick
           // `1 + w*0.8` (range [1.0, 1.8]) not trail-optimizer's

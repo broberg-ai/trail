@@ -170,7 +170,18 @@ documentRoutes.get('/documents/:docId/provenance', async (c) => {
   const docId = c.req.param('docId');
 
   const doc = await trail.db
-    .select({ id: documents.id, createdAt: documents.createdAt, userId: documents.userId })
+    .select({
+      id: documents.id,
+      createdAt: documents.createdAt,
+      userId: documents.userId,
+      // F182 — live lifecycle state (distinct from the write-time candidate
+      // confidence below): the decay-job-maintained score, pin exemption, and
+      // supersession pointer the reader renders.
+      liveConfidence: documents.confidence,
+      confidencePinned: documents.confidencePinned,
+      confidenceLastRecomputedAt: documents.confidenceLastRecomputedAt,
+      supersededByNeuronId: documents.supersededByNeuronId,
+    })
     .from(documents)
     .where(and(eq(documents.id, docId), eq(documents.tenantId, tenant.id)))
     .get();
@@ -233,6 +244,11 @@ documentRoutes.get('/documents/:docId/provenance', async (c) => {
     createdAt: firstEvent?.createdAt ?? doc.createdAt,
     actorKind: firstEvent?.actorKind ?? null,
     actorId: firstEvent?.actorId ?? doc.userId,
+    // F182.6 — live lifecycle state for the reader chip + pin toggle + badge.
+    liveConfidence: doc.liveConfidence,
+    confidencePinned: doc.confidencePinned,
+    confidenceLastRecomputedAt: doc.confidenceLastRecomputedAt,
+    supersededByNeuronId: doc.supersededByNeuronId,
   });
 });
 

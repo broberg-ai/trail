@@ -810,6 +810,32 @@
     "pinSaving": "Saving…",
     "pinError": "Save failed"
   },
+  "lifecycle": {
+    "confidenceHint": "Live confidence ({n}). Decays with age unless reinforced or pinned; below 0.3 a Neuron is hidden from chat.",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "pinning": "Saving…",
+    "pinnedLabel": "Pinned",
+    "pinnedHint": "Pinned — confidence held at 1.0, exempt from decay. Some facts never get old.",
+    "pinHint": "Pin to exempt this Neuron from decay (held at full confidence).",
+    "superseded": "Superseded",
+    "supersededHint": "Replaced by a newer Neuron via auto-supersession. Preserved for history; deemphasised in chat and the graph.",
+    "pinError": "Could not change pin state",
+    "memoryHealth": "Memory Health",
+    "mhSubtitle": "Confidence lifecycle across this Trail — distribution, decaying Neurons, supersession chains, and per-type decay rates.",
+    "mhDistribution": "Confidence distribution",
+    "mhDecaying": "Decaying",
+    "mhSuperseded": "Superseded",
+    "mhDecayRates": "Decay rates (τ, days)",
+    "mhDecayRatesHint": "Half-life-style retention per Neuron type. Higher τ = slower decay. Defaults shown; editing per-tenant is coming.",
+    "mhNoDecaying": "No decaying Neurons — everything is fresh or pinned.",
+    "mhNoSuperseded": "No superseded Neurons yet.",
+    "mhDecayingHint": "Confidence below 0.5 and no reinforcement in 30 days. Pin to keep, or let it fade from chat.",
+    "mhReplacedBy": "replaced by",
+    "mhCount": "{n} Neurons",
+    "mhBucket": "{lo}–{hi}",
+    "mhPinnedBadge": "pinned"
+  },
   "settings": {
     "savedToast": "Saved.",
     "trail": {
