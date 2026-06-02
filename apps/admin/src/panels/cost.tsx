@@ -16,6 +16,8 @@ import {
   type CostSortOrder,
   type CreditsResponse,
   type FxRate,
+  getUpmetricsCost,
+  type UpmetricsCostSummary,
 } from '../api';
 import { formatCostForLocale } from '../lib/currency';
 import { CenteredLoader } from '../components/centered-loader';
@@ -69,6 +71,10 @@ export function CostPanel() {
     }
   });
   const [summary, setSummary] = useState<CostSummary | null>(null);
+  // F190.5 — per-tenant discrete-LLM cost (chat/vision/helpers via ai-sdk →
+  // upmetrics). Monthly, KB-scoped, server-side filtered to this tenant. null =
+  // no upmetrics key / no data → overlay omitted.
+  const [upm, setUpm] = useState<UpmetricsCostSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [fxRate, setFxRate] = useState<FxRate | null>(null);
@@ -123,6 +129,14 @@ export function CostPanel() {
         setLoading(false);
       });
   }, [kbId, window, includeShadow]);
+
+  // F190.5 — discrete-LLM cost overlay (monthly, KB-scoped). Silent on failure.
+  useEffect(() => {
+    if (!kbId) return;
+    getUpmetricsCost(kbId, 'month')
+      .then((r) => setUpm(r.summary))
+      .catch(() => setUpm(null));
+  }, [kbId]);
 
   // Persist shadow-toggle across page reloads.
   useEffect(() => {
@@ -278,6 +292,38 @@ export function CostPanel() {
           </div>
         </div>
       </div>
+
+      {/* F190.5 — discrete-LLM cost (chat/vision/helpers via ai-sdk → upmetrics),
+          scoped server-side to this tenant + KB. Separate from the ingest cost
+          above (which lives in ingest_jobs.cost_cents). Omitted when no upmetrics
+          key is set or no calls yet. */}
+      {upm && upm.runCount > 0 ? (
+        <div class="p-3 rounded border border-[color:var(--color-border)] bg-[color:var(--color-bg-subtle)]">
+          <div class="flex items-center justify-between mb-1">
+            <div class="text-xs text-[color:var(--color-fg-muted)]">
+              {locale === 'da' ? 'LLM-kald (chat / vision / hjælpere)' : 'LLM calls (chat / vision / helpers)'}
+            </div>
+            <div class="text-[10px] font-mono text-[color:var(--color-fg-subtle)]">
+              via upmetrics · {locale === 'da' ? 'denne måned' : 'this month'}
+            </div>
+          </div>
+          <div class="text-2xl font-mono">{fmt(upm.totalMicroUsd / 10_000)}</div>
+          <div class="text-xs text-[color:var(--color-fg-muted)] mt-1">
+            {upm.runCount} {locale === 'da' ? 'kald' : 'calls'}
+            {upm.metered.freeRunCount > 0
+              ? ` · ${upm.metered.freeRunCount} ${locale === 'da' ? 'gratis (Max)' : 'free (Max)'}`
+              : ''}
+            {upm.byCapability.length > 0
+              ? ` · ${upm.byCapability.map((c) => c.key).slice(0, 3).join(', ')}`
+              : ''}
+          </div>
+          <div class="text-[10px] text-[color:var(--color-fg-subtle)] mt-1 italic">
+            {locale === 'da'
+              ? 'Diskrete LLM-kald — adskilt fra ingest-cost ovenfor.'
+              : 'Discrete LLM calls — separate from ingest cost above.'}
+          </div>
+        </div>
+      ) : null}
 
       {/* Daily bar-chart */}
       <div>

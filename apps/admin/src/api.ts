@@ -1332,6 +1332,31 @@ export function costCsvUrl(kbId: string, windowDays = 30): string {
   return `/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/cost.csv?window=${windowDays}`;
 }
 
+// F190.5 — per-tenant discrete-LLM cost from upmetrics (the ai-sdk-routed calls:
+// chat/vision/helpers), shown alongside the internal ingest cost. Server-side
+// scoped to the authenticated tenant (leak-safe). `summary` is null when no
+// upmetrics key is configured or the fetch failed → the panel omits the overlay.
+export interface UpmetricsCostSummary {
+  generatedAt: string;
+  window: { from: string; to: string };
+  totalMicroUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  runCount: number;
+  metered: { meteredMicroUsd: number; freeRunCount: number };
+  byModel: Array<{ key: string; microUsd: number; runCount: number }>;
+  byCapability: Array<{ key: string; microUsd: number; runCount: number }>;
+}
+
+export function getUpmetricsCost(
+  kbId: string,
+  window: 'day' | 'week' | 'month' = 'month',
+): Promise<{ summary: UpmetricsCostSummary | null }> {
+  return api<{ summary: UpmetricsCostSummary | null }>(
+    `/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/cost/upmetrics?window=${window}`,
+  );
+}
+
 export type CostSourceSort = 'cost' | 'jobs' | 'filename' | 'title' | 'recent';
 export type CostSortOrder = 'asc' | 'desc';
 

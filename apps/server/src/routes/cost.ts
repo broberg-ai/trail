@@ -28,6 +28,7 @@ import {
   type SourceSortKey,
   type SortOrder,
 } from '../services/cost-aggregator.js';
+import { getUpmetricsCostForTenant, type CostWindow } from '../services/upmetrics-cost.js';
 
 export const costRoutes = new Hono();
 
@@ -51,6 +52,24 @@ costRoutes.get('/knowledge-bases/:kbId/cost', async (c) => {
   const includeShadow = c.req.query('shadow') === '1';
   const summary = await getCostSummary(trail, tenant.id, kbId, window, includeShadow);
   return c.json(summary);
+});
+
+/**
+ * F190.5 — per-tenant discrete-LLM cost from upmetrics (the ai-sdk-routed
+ * calls), shown alongside the internal ingest cost. LEAK-SAFE: scoped to the
+ * AUTHENTICATED tenant (never a client-supplied tenant) + the resolved KB.
+ * Returns `{ summary: null }` when no upmetrics key is configured or the fetch
+ * fails — the panel then omits the overlay.
+ */
+costRoutes.get('/knowledge-bases/:kbId/cost/upmetrics', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
+  if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
+  const w = c.req.query('window');
+  const window: CostWindow = w === 'day' || w === 'week' ? w : 'month';
+  const summary = await getUpmetricsCostForTenant(tenant.id, kbId, window);
+  return c.json({ summary });
 });
 
 const SORT_KEYS = new Set(['cost', 'jobs', 'filename', 'title', 'recent']);
