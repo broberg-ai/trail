@@ -36,7 +36,7 @@
  */
 import { documents, type TrailDatabase } from '@trail/db';
 import { and, eq, inArray } from 'drizzle-orm';
-import { spawnClaude, extractAssistantText } from './claude.js';
+import { ai } from '../lib/ai.js';
 
 const MODEL = process.env.TRAIL_AUTOLINK_MODEL ?? 'claude-haiku-4-5-20251001';
 const TIMEOUT_MS = Number(process.env.TRAIL_AUTOLINK_TIMEOUT_MS ?? 60_000);
@@ -71,21 +71,14 @@ export async function proposeSourcesForOrphan(
   const valid = new Set(candidates.map((s) => s.filename));
 
   try {
-    const raw = await spawnClaude(
-      [
-        '-p',
-        prompt,
-        '--dangerously-skip-permissions',
-        '--max-turns',
-        '1',
-        '--output-format',
-        'json',
-        '--model',
-        MODEL,
-      ],
-      { timeoutMs: TIMEOUT_MS },
-    );
-    const text = extractAssistantText(raw).trim();
+    const res = await ai.chat({
+      messages: [{ role: 'user', content: prompt }],
+      override: { provider: 'anthropic', model: MODEL, transport: 'http' },
+      fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
+      maxTokens: 1024,
+      purpose: 'source-inferer',
+    });
+    const text = res.text.trim();
     const json = text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
     const parsed = JSON.parse(json) as unknown;
 

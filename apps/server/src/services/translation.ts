@@ -29,7 +29,7 @@
  *     framing around it (summaries, "A claim in X appears to conflict…")
  *     flows into the target language.
  */
-import { spawnClaude, extractAssistantText } from './claude.js';
+import { ai } from '../lib/ai.js';
 import {
   getCandidate,
   persistActionTranslation,
@@ -261,21 +261,15 @@ ${missing.title !== null ? '  "title": "<translated>",\n' : ''}${missing.content
 Input:
 ${JSON.stringify(input, null, 2)}`;
 
-  const args = [
-    '-p',
-    prompt,
-    '--dangerously-skip-permissions',
-    '--max-turns',
-    '1',
-    '--output-format',
-    'json',
-    '--model',
-    CHAT_MODEL,
-  ];
-
   try {
-    const raw = await spawnClaude(args, { timeoutMs: TRANSLATE_TIMEOUT_MS });
-    const text = extractAssistantText(raw).trim();
+    const res = await ai.chat({
+      messages: [{ role: 'user', content: prompt }],
+      override: { provider: 'anthropic', model: CHAT_MODEL, transport: 'http' },
+      fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
+      maxTokens: 4000,
+      purpose: 'translation',
+    });
+    const text = res.text.trim();
     const json = text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
     const parsed = JSON.parse(json) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;

@@ -31,7 +31,7 @@ import {
 } from '@trail/core';
 import type { CandidateApprovedEvent } from '@trail/shared';
 import { broadcaster } from './broadcast.js';
-import { spawnClaude, extractAssistantText } from './claude.js';
+import { ai } from '../lib/ai.js';
 import { decideSupersession } from './supersession.js';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? '';
@@ -83,7 +83,35 @@ Rules:
  * pass) can reuse the same configuration as the reactive subscriber.
  */
 export function makeContradictionChecker(): ContradictionChecker {
-  return BACKEND === 'api' ? makeAnthropicChecker() : makeCliChecker();
+  // F190.2 — single discrete call through @broberg/ai-sdk (anthropic-direct
+  // primary, openrouter fallback, transport:http). Replaces the prior
+  // BACKEND-switched claude-cli + direct-Anthropic-fetch checkers.
+  return async (newContent, existingContent): Promise<LlmContradictionResult> => {
+    const userContent = [
+      '## New passage',
+      newContent.slice(0, 4000),
+      '',
+      '## Existing passage',
+      existingContent.slice(0, 4000),
+    ].join('\n');
+    try {
+      const res = await ai.chat({
+        system: PROMPT,
+        messages: [{ role: 'user', content: userContent }],
+        override: { provider: 'anthropic', model: MODEL, transport: 'http' },
+        fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
+        maxTokens: 300,
+        purpose: 'contradiction-lint',
+      });
+      const json = res.text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
+      const parsed = JSON.parse(json) as LlmContradictionResult;
+      if (typeof parsed.contradicts !== 'boolean') return { contradicts: false };
+      return parsed;
+    } catch {
+      // Malformed / call failed → "no signal" so the next pair gets evaluated.
+      return { contradicts: false };
+    }
+  };
 }
 
 export function startContradictionLint(trail: TrailDatabase): () => void {
@@ -475,97 +503,6 @@ async function hasExistingFingerprint(
   return !!row;
 }
 
-function makeCliChecker(): ContradictionChecker {
-  return async (newContent, existingContent): Promise<LlmContradictionResult> => {
-    const prompt = [
-      PROMPT,
-      '',
-      '## New passage',
-      newContent.slice(0, 4000),
-      '',
-      '## Existing passage',
-      existingContent.slice(0, 4000),
-    ].join('\n');
-
-    const args = [
-      '-p',
-      prompt,
-      '--dangerously-skip-permissions',
-      '--max-turns',
-      '1',
-      '--output-format',
-      'json',
-      '--model',
-      MODEL,
-    ];
-
-    try {
-      const raw = await spawnClaude(args, { timeoutMs: CLI_TIMEOUT_MS });
-      const text = extractAssistantText(raw).trim();
-      const json = text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
-      const parsed = JSON.parse(json) as LlmContradictionResult;
-      if (typeof parsed.contradicts !== 'boolean') {
-        return { contradicts: false };
-      }
-      return parsed;
-    } catch {
-      return { contradicts: false };
-    }
-  };
-}
-
-function makeAnthropicChecker(): ContradictionChecker {
-  return async (newContent, existingContent): Promise<LlmContradictionResult> => {
-    const body = {
-      model: MODEL,
-      max_tokens: 300,
-      system: PROMPT,
-      messages: [
-        {
-          role: 'user' as const,
-          content: [
-            '## New passage',
-            newContent.slice(0, 4000),
-            '',
-            '## Existing passage',
-            existingContent.slice(0, 4000),
-          ].join('\n'),
-        },
-      ],
-    };
-
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      throw new Error(`Anthropic API ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    }
-
-    const data = (await res.json()) as { content: Array<{ type: string; text: string }> };
-    const text = data.content
-      .filter((c) => c.type === 'text')
-      .map((c) => c.text)
-      .join('')
-      .trim();
-
-    // Model sometimes wraps its answer in code fences; strip them before parse.
-    const json = text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
-    try {
-      const parsed = JSON.parse(json) as LlmContradictionResult;
-      if (typeof parsed.contradicts !== 'boolean') {
-        throw new Error('missing contradicts:boolean');
-      }
-      return parsed;
-    } catch {
-      // Malformed → treat as "no signal" so the next pair gets evaluated.
-      return { contradicts: false };
-    }
-  };
-}
+// F190.2 — makeCliChecker (claude-cli) + makeAnthropicChecker (direct fetch)
+// removed; makeContradictionChecker above now issues one discrete call through
+// @broberg/ai-sdk (anthropic-direct → openrouter fallback).

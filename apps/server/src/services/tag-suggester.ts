@@ -18,7 +18,7 @@
 
 import type { TrailDatabase } from '@trail/db';
 import { canonicaliseTagString, parseTags } from '@trail/shared';
-import { spawnClaude, extractAssistantText } from './claude.js';
+import { ai } from '../lib/ai.js';
 import { listKbTags } from './tag-aggregate.js';
 
 const MODEL = process.env.TAG_SUGGEST_MODEL ?? 'claude-haiku-4-5-20251001';
@@ -57,20 +57,14 @@ export async function suggestTagsForNeuron(
 
   const prompt = buildPrompt(title, content, existingTags);
   try {
-    const raw = await spawnClaude(
-      [
-        '-p',
-        prompt,
-        '--model',
-        MODEL,
-        '--output-format',
-        'json',
-        '--max-turns',
-        '1',
-      ],
-      { timeoutMs: TIMEOUT_MS },
-    );
-    const text = extractAssistantText(raw).trim();
+    const res = await ai.chat({
+      messages: [{ role: 'user', content: prompt }],
+      override: { provider: 'anthropic', model: MODEL, transport: 'http' },
+      fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
+      maxTokens: 512,
+      purpose: 'tag-suggester',
+    });
+    const text = res.text.trim();
     return parseSuggestion(text);
   } catch (err) {
     console.error('[tag-suggester] LLM call failed:', err instanceof Error ? err.message : err);

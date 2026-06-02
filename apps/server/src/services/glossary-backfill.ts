@@ -20,7 +20,7 @@
 import { documents, type TrailDatabase } from '@trail/db';
 import { and, asc, eq } from 'drizzle-orm';
 import { createCandidate } from '@trail/core';
-import { spawnClaude, extractAssistantText } from './claude.js';
+import { ai } from '../lib/ai.js';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? '';
 const BACKEND = process.env.TRAIL_GLOSSARY_BACKFILL_BACKEND ?? (ANTHROPIC_API_KEY ? 'api' : 'cli');
@@ -203,7 +203,7 @@ interface LlmEntry {
 }
 
 function parseEntries(raw: string, knownSlugs: Set<string>): LlmEntry[] {
-  const text = extractAssistantText(raw).trim();
+  const text = raw.trim();
   const json = text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
   try {
     const parsed = JSON.parse(json) as {
@@ -280,63 +280,19 @@ function buildGlossaryContent(entries: LlmEntry[], lang: 'en' | 'da'): string {
 }
 
 async function callLlm(prompt: string): Promise<string> {
-  if (BACKEND === 'api') {
-    return callAnthropicApi(prompt);
-  }
-  return callCli(prompt);
-}
-
-async function callCli(prompt: string): Promise<string> {
-  // `--tools ""` is the correct flag to disable every tool (vs.
-  // --allowedTools/--disallowedTools which operate on a whitelist/
-  // blacklist of allowed tools the CLI still enumerates in its
-  // system prompt). Combined with --system-prompt we strip the entire
-  // default harness: Haiku sees only our instruction + material, no
-  // tool definitions, no CLAUDE.md, no env info. Otherwise --max-turns
-  // 1 immediately trips on tool_use because the default system prompt
-  // invites the model to Read/Bash its way around the data.
-  const args = [
-    '-p',
-    prompt,
-    '--tools',
-    '',
-    '--system-prompt',
-    'You generate JSON responses for an API. Never call tools. Respond with only the requested JSON object.',
-    '--max-turns',
-    '1',
-    '--output-format',
-    'json',
-    '--model',
-    MODEL,
-  ];
-  return spawnClaude(args, { timeoutMs: CLI_TIMEOUT_MS });
-}
-
-async function callAnthropicApi(prompt: string): Promise<string> {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 4000,
-      messages: [{ role: 'user', content: prompt }],
-    }),
+  // F190.2 — one discrete call through @broberg/ai-sdk (anthropic-direct →
+  // openrouter fallback, transport:http). The system prompt strips any tool
+  // harness so the model returns only the requested JSON. Returns the model's
+  // text directly — parseEntries no longer routes through extractAssistantText.
+  const res = await ai.chat({
+    system: 'You generate JSON responses for an API. Never call tools. Respond with only the requested JSON object.',
+    messages: [{ role: 'user', content: prompt }],
+    override: { provider: 'anthropic', model: MODEL, transport: 'http' },
+    fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
+    maxTokens: 4000,
+    purpose: 'glossary-backfill',
   });
-  if (!res.ok) {
-    throw new Error(`Anthropic API ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  }
-  const data = (await res.json()) as { content: Array<{ type: string; text: string }> };
-  const text = data.content
-    .filter((c) => c.type === 'text')
-    .map((c) => c.text)
-    .join('');
-  // extractAssistantText expects CLI-shape JSON; wrap the API text so
-  // the shared parser downstream reads it uniformly.
-  return JSON.stringify({ result: text });
+  return res.text;
 }
 
 async function writeGlossaryUpdate(
