@@ -1,14 +1,10 @@
 /**
- * F190.3 — chat backend on @broberg/ai-sdk. ⚠️ DORMANT / NOT WIRED.
+ * F190.3 — chat backend on @broberg/ai-sdk. WIRED (live in runChat).
  *
- * BLOCKED on an @broberg/ai-sdk tool-loop gap (flagged 2026-06-02): SDK@0.2.0
- * cannot serialize a tool-result turn back to the provider — `toOpenAIMessage`
- * drops assistant `tool_calls`, and the anthropic mapping drops assistant
- * `tool_use` + maps `role:"tool"` to a plain user message (no `tool_result`
- * block). A caller-owned loop therefore re-asks the tool forever. This backend
- * is correct against the INTENDED API and ready to wire in `runChat` the moment
- * ai-sdk ships tool-loop message serialization. Until then chat stays on the
- * F159 chain backends.
+ * Requires @broberg/ai-sdk ≥0.3.1, which serializes the tool-loop on both the
+ * openai/openrouter path (0.3.0) and the anthropic-direct path (0.3.1, F8.7):
+ * assistant `tool_calls`/`tool_use` blocks + `role:"tool"` → `tool_result`. Trail
+ * flagged the original gap (intercom #2639). Tool-loop verified converging.
  *
  * Replaces the F159 claude-cli / openrouter / claude-api backends with ONE
  * backend that issues each turn via the shared `ai.chat()` client and runs the

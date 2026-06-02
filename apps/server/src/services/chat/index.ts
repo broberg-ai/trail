@@ -12,7 +12,8 @@
  */
 
 import { ClaudeCLIChatBackend } from './claude-cli-backend.js';
-import { resolveChatChain, type ChainResolutionInput } from './chain.js';
+import { AiSdkChatBackend } from './ai-sdk-backend.js';
+import { resolveChatChain, DEFAULT_CHAT_MODEL, type ChainResolutionInput } from './chain.js';
 import type {
   ChatBackend,
   ChatBackendId,
@@ -62,41 +63,18 @@ export interface RunChatInput
  * real bugs.
  */
 export async function runChat(input: RunChatInput): Promise<ChatBackendResult> {
-  // F190.3 — BLOCKED on @broberg/ai-sdk tool-loop support. AiSdkChatBackend is
-  // written + ready (services/chat/ai-sdk-backend.ts) but the SDK@0.2.0 cannot
-  // serialize a tool-result turn back to the provider: toOpenAIMessage drops
-  // assistant tool_calls, and the anthropic mapping drops assistant tool_use +
-  // turns role:"tool" into a plain user message (no tool_result block) — so the
-  // caller-owned loop re-asks the tool forever. Chat stays on the existing
-  // chain-based backends until ai-sdk ships tool-loop message serialization
-  // (flagged to ai-sdk). DO NOT wire AiSdkChatBackend here until then.
-  const chain = resolveChatChain({ kb: input.kb });
-  let lastError: unknown;
-  for (let i = 0; i < chain.length; i++) {
-    const step = chain[i]!;
-    try {
-      const backend = await createChatBackend(step.backend);
-      const result = await backend.run({
-        ...input,
-        model: input.modelOverride ?? step.model,
-      });
-      return { ...result, stepsAttempted: i + 1 };
-    } catch (err) {
-      lastError = err;
-      const isLast = i === chain.length - 1;
-      if (isLast || !isFallbackEligible(err)) throw err;
-      console.warn(
-        `[runChat] step ${i + 1}/${chain.length} (${step.backend}:${step.model}) failed, advancing: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-    }
-  }
-  throw new Error(
-    `runChat: chain exhausted (${chain.length} steps) — last error: ${
-      lastError instanceof Error ? lastError.message : String(lastError)
-    }`,
-  );
+  // F190.3 — chat runs through @broberg/ai-sdk (≥0.3.1, which fixed tool-loop
+  // message serialization on BOTH the openai/openrouter and anthropic paths).
+  // ai-sdk owns provider failover (anthropic-direct → openrouter chain); Trail
+  // owns the MCP tool-loop inside AiSdkChatBackend. The legacy F159
+  // chain/createChatBackend + claude-cli/openrouter/claude-api backends remain
+  // only for the chat-settings config-display route; runChat no longer uses them
+  // (full retirement is a follow-up that also removes the chat-backend config UX).
+  const backend = new AiSdkChatBackend();
+  return backend.run({
+    ...input,
+    model: input.modelOverride ?? DEFAULT_CHAT_MODEL,
+  });
 }
 
 /**
