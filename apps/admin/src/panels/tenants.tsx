@@ -303,6 +303,18 @@ function Num({ children, attention }: { children: JSX.Element | string | number;
   );
 }
 
+// F187.4 — localise the per-tenant role for display.
+function roleLabel(role: string, isDa: boolean): string {
+  const map: Record<string, [string, string]> = {
+    owner: ['Ejer', 'Owner'],
+    admin: ['Admin', 'Admin'],
+    member: ['Medlem', 'Member'],
+  };
+  const pair = map[role];
+  if (pair) return isDa ? pair[0] : pair[1];
+  return role; // unknown role → show raw (capitalize handled by CSS)
+}
+
 function TenantsList({
   items,
   isDa,
@@ -453,8 +465,7 @@ function TenantRow({
       <div>{tenant.plan ? <span class={'plan-badge ' + tenant.plan}>{tenant.plan}</span> : <span class="mono" style={{ fontSize: 11, color: 'var(--color-fg-subtle)' }}>—</span>}</div>
 
       <div style={{ fontSize: 13, color: 'var(--color-fg-muted)', textTransform: 'capitalize' }}>
-        {/* AuthTenant doesn't carry role yet; placeholder. */}
-        {isDa ? 'medlem' : 'member'}
+        {roleLabel(tenant.role, isDa)}
       </div>
 
       <div class="mono" style={{ fontSize: 11, color: 'var(--color-fg-subtle)', textAlign: 'right' }}>

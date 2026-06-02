@@ -78,6 +78,8 @@ export interface AuthTenant {
   language: string;
   plan: string | null;
   active: boolean;
+  /** F187.4 — caller's per-tenant role (owner | admin | member). */
+  role: string;
 }
 
 export interface AuthMe {

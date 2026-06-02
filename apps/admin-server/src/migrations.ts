@@ -101,6 +101,17 @@ const STATEMENTS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_invitations_org ON invitations(organization_id, status)`,
   `CREATE INDEX IF NOT EXISTS idx_invitations_email ON invitations(email)`,
+
+  // F187.4 — per-tenant membership roles (first real RBAC primitive).
+  // role: owner | admin | member. Display + data only; not enforced yet.
+  `CREATE TABLE IF NOT EXISTS control_memberships (
+    user_id TEXT NOT NULL REFERENCES control_users(id) ON DELETE CASCADE,
+    tenant_id TEXT NOT NULL REFERENCES control_tenants(id) ON DELETE CASCADE,
+    role TEXT NOT NULL DEFAULT 'member',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, tenant_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_control_memberships_tenant ON control_memberships(tenant_id)`,
 ];
 
 export async function runMigrations(): Promise<void> {
@@ -136,5 +147,35 @@ export async function runMigrations(): Promise<void> {
       args: [value, tenantId],
     });
     console.log(`[migrations] backfilled bearer for tenant ${slug} from ${envKey}`);
+  }
+
+  // F187.4 — seed memberships. Additive + idempotent:
+  //   1) every existing user × tenant-in-same-org pair gets a `member` row
+  //      (so each user shows a real role on every tenant they can see). This
+  //      matches today's pre-RBAC reality where org-membership = full access;
+  //      `member` is honest (no false elevation) and never reduces access.
+  //   2) cb@webhouse.dk is FORCED to `owner` on every membership row — the
+  //      repo-owner is always owner (UFRAVIGELIG). Runs every boot, so a stray
+  //      demotion self-heals. Never deletes/lowers cb; only raises to owner.
+  const seeded = await client.execute(
+    `INSERT INTO control_memberships (user_id, tenant_id, role)
+     SELECT u.id, t.id, 'member'
+       FROM control_users u
+       JOIN control_tenants t ON t.organization_id = u.organization_id
+      WHERE NOT EXISTS (
+        SELECT 1 FROM control_memberships m
+         WHERE m.user_id = u.id AND m.tenant_id = t.id
+      )`,
+  );
+  if (seeded.rowsAffected > 0) {
+    console.log(`[migrations] F187.4 seeded ${seeded.rowsAffected} membership row(s)`);
+  }
+  const promoted = await client.execute(
+    `UPDATE control_memberships SET role = 'owner'
+      WHERE role != 'owner'
+        AND user_id IN (SELECT id FROM control_users WHERE email = 'cb@webhouse.dk')`,
+  );
+  if (promoted.rowsAffected > 0) {
+    console.log(`[migrations] F187.4 enforced cb@webhouse.dk=owner on ${promoted.rowsAffected} tenant(s)`);
   }
 }

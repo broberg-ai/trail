@@ -197,6 +197,15 @@ authRoutes.get('/me', async (c) => {
     .where(eq(schema.controlTenants.organizationId, user.organizationId))
     .all();
 
+  // F187.4 — per-tenant role for this user. LEFT-join semantics via a map;
+  // a tenant with no membership row falls back to 'member'.
+  const memberships = await db
+    .select()
+    .from(schema.controlMemberships)
+    .where(eq(schema.controlMemberships.userId, user.id))
+    .all();
+  const roleByTenant = new Map(memberships.map((m) => [m.tenantId, m.role]));
+
   const activeSlugCookie = getCookie(c, 'trail-active-tenant');
   const active = (activeSlugCookie && tenants.find((t) => t.slug === activeSlugCookie)) || tenants[0];
 
@@ -224,6 +233,7 @@ authRoutes.get('/me', async (c) => {
       language: t.language,
       plan: (t as { plan?: string }).plan ?? null,
       active: active?.id === t.id,
+      role: roleByTenant.get(t.id) ?? 'member',
     })),
     engineUrl,
   });

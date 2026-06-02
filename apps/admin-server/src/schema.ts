@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core';
 
 /**
  * F33 control.db schema. Lives on trail-admin Fly app's volume at
@@ -132,6 +132,34 @@ export const invitations = sqliteTable(
   (t) => ({
     orgIdx: index('idx_invitations_org').on(t.organizationId, t.status),
     emailIdx: index('idx_invitations_email').on(t.email),
+  }),
+);
+
+/**
+ * F187.4 — per-tenant membership roles. The first real RBAC primitive in
+ * control.db; revisits F187's deferred "no role column" non-goal. role is
+ * display + data today (NOT enforced as permissions yet). Seeded for every
+ * existing user×org-tenant pair (default `member`); cb@webhouse.dk is forced
+ * to `owner` on every boot (UFRAVIGELIG: repo-owner is always owner).
+ */
+export const controlMemberships = sqliteTable(
+  'control_memberships',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => controlUsers.id, { onDelete: 'cascade' }),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => controlTenants.id, { onDelete: 'cascade' }),
+    /** owner | admin | member — reuses VALID_ROLES from invite.ts. */
+    role: text('role').notNull().default('member'),
+    createdAt: text('created_at')
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.tenantId] }),
+    tenantIdx: index('idx_control_memberships_tenant').on(t.tenantId),
   }),
 );
 
