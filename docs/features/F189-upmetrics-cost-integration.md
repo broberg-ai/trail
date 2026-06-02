@@ -1,5 +1,13 @@
 # F189 — Upmetrics Cost Integration (ai-sdk sink + read-API display)
 
+> **⚠️ SUPERSEDED by [F190](F190-adopt-ai-sdk-llm-layer.md) (2026-06-02).** Christian's
+> standing policy — all discrete LLM calls go through `@broberg/ai-sdk` — makes the
+> cost *sink* an inherent side-effect of routing calls through `createAI({ costSink:
+> upmetricsSink })` (F190.1–.4), so F189's separate sink-wiring is no longer a thing.
+> The read-API *display* (read upmetrics `/api/cost/summary` into the F151 panel) lives
+> on as **F190.5**. This doc is retained for the design history + the frozen F014
+> contract pin below; cards archived. Build against F190.
+
 > Route Trail's LLM calls through `@broberg/ai-sdk` so per-call cost lands in upmetrics, then read it back via upmetrics' F014 cost read-API and render it in the F151 Cost panel alongside the internal `ingest_jobs.cost_cents`. Tier: Phase 2 observability · Effort: Medium · Status: Planned (BLOCKED on deps).
 
 ## Problem

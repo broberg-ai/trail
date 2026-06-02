@@ -189,7 +189,8 @@ Multi-tenant SaaS, billing, richer pipelines, first 3rd-party adapters.
 | F154 | [Trail Control Plane (remote fleet management)](./features/F154-trail-control-plane.md) — kritisk ved Stadie 2, se [DEPLOYMENT-STAGES.md](./DEPLOYMENT-STAGES.md) | Must |
 | F155 | [Auto-scaling Policy (rule-drevet spawn/resize)](./features/F155-auto-scaling-policy.md) — automatiserer F154 handlinger ved Stadie 3 | Should |
 | F156 | [Credits-Based LLM Metering](./features/F156-credits-based-llm-metering.md) — user-paid LLM via credits + Stripe Checkout pakker; afgørende for unit economics | Must |
-| F189 | [Upmetrics Cost Integration](./features/F189-upmetrics-cost-integration.md) — rute LLM-kald gennem `@broberg/ai-sdk` til upmetrics-sink + læs F014 cost read-API ind i F151-panelet; blokeret på ai-sdk-sink + upmetrics F014.1 | Should |
+| F190 | [Adopt @broberg/ai-sdk as Trail's discrete-LLM layer](./features/F190-adopt-ai-sdk-llm-layer.md) — alle diskrete LLM-kald gennem ai-sdk (cloud=API), cost via upmetricsSink; ingest-agentik forbliver claude-code. Absorberer F189 | Must |
+| ~~F189~~ | Upmetrics Cost Integration — **superseded by F190** (sink falder ud gratis; display = F190.5) | — |
 
 ### SaaS Product UX
 
