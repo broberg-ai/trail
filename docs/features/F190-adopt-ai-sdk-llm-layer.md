@@ -76,6 +76,16 @@ Site-by-site behind nothing risky (each site is independently swappable + verifi
 - Ingest behaviour byte-unchanged (its `spawnClaude` agentic path untouched).
 - No cost regression: discrete calls were already metered-or-broken on cloud; cost is now tracked, not newly incurred.
 
+## Progress (2026-06-02)
+
+- **F190.1 vision** — ✅ shipped + runtime-verified + **deployed live** (engine). Cost-sink active.
+- **F190.2 helpers** (translation, tag-suggester, source-inferer, glossary-backfill, contradiction-lint) — ✅ migrated + verified + **deployed live**. Removed the contradiction-lint + glossary direct-fetch branches.
+- **F190.3 chat** — ⏸ **BLOCKED on @broberg/ai-sdk 0.3.1**. `AiSdkChatBackend` written + dormant; tool-loop verified on the openai/openrouter path (0.3.0 fix). Anthropic-direct request-mapping still drops `tool_use`/`tool_result` (dist line 329) — ai-sdk shipping the fix as 0.3.1 (their F8.7). Chat runs unchanged on the F159 chain meanwhile. Re-wire = one line in `runChat` once 0.3.1 lands.
+- **F190.4** — ✅ (core): `UPMETRICS_API_KEY` (trail project key) set on trail-engine-001, engine deployed, sink live, cost real via 0.3.0 (`costUsd=0.000111` on openrouter). ⏸ chat-backend retirement + full "no spawnClaude" waits on F190.3/0.3.1. Orphaned helper timeout/BACKEND consts still to sweep.
+- **F190.5 cost-display** — pending (unblocked by 0.3.0's openrouter cost fix). Build the read-client + F151 panel overlay against the frozen F014 contract.
+
+Deps bumped: `@broberg/ai-sdk` ^0.2.0→^0.3.0, `@upmetrics/sdk` ^0.1.4→^0.1.5.
+
 ## Stories
 - **F190.1** — `lib/ai.ts` shared client + migrate `vision.ts` → `ai.vision()`. (Lowest risk; xrt81 already proved the vision path.)
 - **F190.2** — Migrate the single-shot helpers → `ai.chat()`/`ai.translate()`: `translation.ts`, `tag-suggester.ts`, `source-inferer.ts`, `glossary-backfill.ts`, `contradiction-lint.ts` (cheap/Haiku tier).
