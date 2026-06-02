@@ -99,3 +99,71 @@ Inviter revoker
 - Phase 1 — backend (tabel + endpoints + accept-hook). ✅
 - Phase 2 — UI (Invitations-fane fra "Coming Soon" → funktionel). ✅
 - Begge i ét ryk til `main` (Trail er ikke i production endnu).
+
+---
+
+## F187.4 — Control-plane per-tenant membership roles + real role display
+
+> **Follow-up story, added 2026-06-02.** Revisits the locked non-goal "ingen
+> `role`-kolonne, ingen many-to-many `tenant_users`-tabel" (Resolved decisions
+> §3). The placeholder shipped in F186; this story makes the role real.
+
+### Motivation
+
+The Manage Tenants "Din rolle / Your role" column is a **hardcoded placeholder**
+— `apps/admin/src/panels/tenants.tsx:451-454` renders the literal string
+`'medlem'` / `'member'` for **every** tenant, with the comment
+`{/* AuthTenant doesn't carry role yet; placeholder. */}`. `AuthTenant`
+(`apps/admin/src/api.ts:74-81`) has no `role` field, and `/api/auth/me`
+(`apps/admin-server/src/auth.ts:158-230`) returns none — control.db has no
+role model at all (membership = same `organization_id`). Result: Christian,
+who is owner of everything in `broberg-ai`, shows as "medlem".
+
+This collides with the standing rule that **`cb@webhouse.dk` is ALWAYS owner**
+on all his tenants. There is no demotion *mechanism* today (every row-action is
+a "Coming Soon" toast, so no lockout risk — the column simply lies), but the
+display is wrong and the model can't express "cb owner på begge, Sanne owner på
+sin tenant senere". F187.4 introduces the minimal real primitive.
+
+### Scope (in)
+
+- **`control_memberships` table** in control.db: `(user_id, tenant_id, role)`,
+  role ∈ `owner | admin | member` (reuse `VALID_ROLES` from `invite.ts`),
+  PK `(user_id, tenant_id)`, FKs cascade. Migration in
+  `apps/admin-server/src/migrations.ts` (hand-written, matches existing pattern).
+- **Backfill seed** (idempotent, runs in the migration): for every existing
+  `(control_user, control_tenant)` pair in the same org, insert a membership
+  row. **Seed role = `owner`** for the org's founding users so nobody loses
+  standing — and explicitly `owner` for `cb@webhouse.dk` on every broberg-ai
+  tenant. Never demote/remove cb's rows (UFRAVIGELIG-regel).
+- **Thread role through**: `/api/auth/me` joins `control_memberships` for the
+  signed-in user and adds `role` to each `tenants[]` entry; add `role` to
+  `AuthTenant` (`api.ts`).
+- **Render real role**: replace the hardcoded string in `tenants.tsx:451-454`
+  with `tenant.role` (capitalised, i18n).
+
+### Scope (explicit non-goals — unchanged from F187)
+
+- **No RBAC enforcement.** Role is still display + data only; it does NOT gate
+  any action yet (that stays a later story). This keeps Rule 2 intact — we add
+  the column the model was missing, not a half-wired permission layer.
+- No member-management UI (add/remove/change-role) — the "Members" row-action
+  stays "Coming Soon". F187.4 only seeds + displays.
+- No cross-org membership.
+
+### Verification
+
+`apps/admin-server/scripts/verify-f187-4.ts` against a temp control.db:
+- Migration creates `control_memberships` AND seeds one row per existing
+  user×tenant-in-org pair (assert count delta).
+- `cb@webhouse.dk` has a `role='owner'` row for every broberg-ai tenant.
+- `/api/auth/me` returns `tenants[].role` matching the seeded rows.
+- Re-running the migration is a no-op (idempotent seed).
+
+### Rollout
+
+⚠️ Trail is now in production (Sanne is a live paying tenant; broberg.ai tenant
+live). Per the prod-Fly-volume hard rule: **snapshot the trail-admin volume
+before running the migration** (`flyctl volumes snapshots create … -a
+trail-admin`), then deploy. The seed is additive (new table, INSERTs only) — it
+never touches existing control_users/control_tenants rows.
