@@ -80,9 +80,9 @@ Site-by-site behind nothing risky (each site is independently swappable + verifi
 
 - **F190.1 vision** — ✅ shipped + runtime-verified + **deployed live** (engine). Cost-sink active.
 - **F190.2 helpers** (translation, tag-suggester, source-inferer, glossary-backfill, contradiction-lint) — ✅ migrated + verified + **deployed live**. Removed the contradiction-lint + glossary direct-fetch branches.
-- **F190.3 chat** — ⏸ **BLOCKED on @broberg/ai-sdk 0.3.1**. `AiSdkChatBackend` written + dormant; tool-loop verified on the openai/openrouter path (0.3.0 fix). Anthropic-direct request-mapping still drops `tool_use`/`tool_result` (dist line 329) — ai-sdk shipping the fix as 0.3.1 (their F8.7). Chat runs unchanged on the F159 chain meanwhile. Re-wire = one line in `runChat` once 0.3.1 lands.
-- **F190.4** — ✅ (core): `UPMETRICS_API_KEY` (trail project key) set on trail-engine-001, engine deployed, sink live, cost real via 0.3.0 (`costUsd=0.000111` on openrouter). ⏸ chat-backend retirement + full "no spawnClaude" waits on F190.3/0.3.1. Orphaned helper timeout/BACKEND consts still to sweep.
-- **F190.5 cost-display** — pending (unblocked by 0.3.0's openrouter cost fix). Build the read-client + F151 panel overlay against the frozen F014 contract.
+- **F190.3 chat** — ✅ **shipped + prod-verified**. ai-sdk 0.3.1 (F8.7) fixed the anthropic tool-loop serialization (0.3.0 fixed openai). `runChat` → `AiSdkChatBackend` (ai.chat per turn + Trail-owned MCP tool-loop + ai-sdk failover). Prod-verified on broberg.ai/buddy-sessions: coherent answer (backend=claude-api) AND tool-loop (count tool → "114 neuroner"). Deployed.
+- **F190.4** — ✅ (core): `UPMETRICS_API_KEY` set on trail-engine-001 + deployed, sink live, real cost confirmed. **Follow-up:** sweep orphaned helper consts; retire the F159 chat backends + their chat-settings config UX (chat-settings.ts still imports `resolveChatChain`/`ChainStep` → a UX change, not just deletion); grep-confirm no `spawnClaude` outside ingest.
+- **F190.5 cost-display** — ⚠️ **needs a scope decision first**. The upmetrics key is per-Trail-PROJECT (engine-wide, all tenants), NOT per-KB/tenant — rendering it in the per-KB F151 panel for every curator would leak cross-tenant LLM cost. Decide: operator-only gate / per-tenant upmetrics projects / per-tenant tagging. Build read-client + overlay after.
 
 Deps bumped: `@broberg/ai-sdk` ^0.2.0→^0.3.0, `@upmetrics/sdk` ^0.1.4→^0.1.5.
 
