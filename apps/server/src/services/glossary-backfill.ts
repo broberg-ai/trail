@@ -113,7 +113,7 @@ export async function backfillGlossaryForKb(
 
   let rawResponse: string;
   try {
-    rawResponse = await callLlm(prompt);
+    rawResponse = await callLlm(prompt, kb.tenantId, kb.id);
   } catch (err) {
     console.error(
       `[F102 backfill] LLM call failed for KB "${kb.name}":`,
@@ -279,7 +279,7 @@ function buildGlossaryContent(entries: LlmEntry[], lang: 'en' | 'da'): string {
   return `${header}\n${sections}`;
 }
 
-async function callLlm(prompt: string): Promise<string> {
+async function callLlm(prompt: string, tenantId: string, kbId: string): Promise<string> {
   // F190.2 — one discrete call through @broberg/ai-sdk (anthropic-direct →
   // openrouter fallback, transport:http). The system prompt strips any tool
   // harness so the model returns only the requested JSON. Returns the model's
@@ -291,6 +291,7 @@ async function callLlm(prompt: string): Promise<string> {
     fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
     maxTokens: 4000,
     purpose: 'glossary-backfill',
+    labels: { tenantId, kbId },
   });
   return res.text;
 }

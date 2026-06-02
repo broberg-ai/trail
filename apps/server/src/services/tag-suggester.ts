@@ -63,6 +63,7 @@ export async function suggestTagsForNeuron(
       fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
       maxTokens: 512,
       purpose: 'tag-suggester',
+      labels: { tenantId, kbId },
     });
     const text = res.text.trim();
     return parseSuggestion(text);

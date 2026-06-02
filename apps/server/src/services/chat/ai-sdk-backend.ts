@@ -83,6 +83,7 @@ export class AiSdkChatBackend implements ChatBackend {
         fallback: CHAT_FALLBACK,
         maxTokens: 2048,
         purpose: 'chat',
+        labels: { tenantId: input.tenantId, kbId: input.knowledgeBaseId },
       });
       totalCostUsd += res.usage.costUsd;
       if (res.usage.costUsd > 0) sawCost = true;

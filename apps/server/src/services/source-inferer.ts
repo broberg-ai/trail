@@ -77,6 +77,7 @@ export async function proposeSourcesForOrphan(
       fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
       maxTokens: 1024,
       purpose: 'source-inferer',
+      labels: { tenantId, kbId },
     });
     const text = res.text.trim();
     const json = text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
