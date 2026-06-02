@@ -20,7 +20,7 @@
     "@trail/shared": "workspace:*",
     "@trail/storage": "workspace:*",
     "@trailmem/sdk": "workspace:*",
-    "@upmetrics/sdk": "^0.1.4",
+    "@upmetrics/sdk": "^0.1.5",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.6.0",
     "p-limit": "^7.3.0",
