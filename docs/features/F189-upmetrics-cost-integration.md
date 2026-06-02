@@ -151,10 +151,22 @@ None — all changes are additive and flag-gated.
 7. Set `UPMETRICS_READ_KEY` Fly secret; flip the flag on `broberg-ai/trail` tenant; verify in the live admin.
 
 ## Dependencies
-- **`@broberg/ai-sdk` cost sink must land real `agent_runs` cost-rows** (via the xrt81 pilot) before F189.2 can be verified.
-- **upmetrics F014.1 (`GET /api/cost/summary`) must ship and be frozen** before F189.3 can target a stable JSON shape.
+- **`@broberg/ai-sdk` cost sink** — the SDK→upmetrics path itself is **verified live** (xrt81 vision pilot, 2026-06-02: an `agent_run` landed with `cost_usd=$0.007407`, tier=vision, `tags.transport=http`). What remains for F189 is wiring *Trail's own* call-sites (F189.2) + minting a Trail cost-read-key.
+- **upmetrics F014.1 (`GET /api/cost/summary`)** — ✅ **SHIPPED + frozen 2026-06-02**. Trail green-lit the JSON shape (freeze-gate, intercom #2487→#2488). Frozen contract below; full doc: `github.com/broberg-ai/upmetrics/blob/main/docs/COST-API.md`.
 - F151 (Cost & Quality Dashboard) — the panel F189 extends. **Done (in Review).**
 - F149 (Pluggable Ingest Backends) — provides the OpenRouter cost seam. Done.
+
+### Frozen upmetrics F014 contract (target for F189.3)
+`GET https://upmetrics.org/api/cost/summary?window=day|week|month` (auth `X-Upmetrics-Key`):
+```
+{ generated_at, window:{from,to}, total_micro_usd, input_tokens, output_tokens,
+  cache_read_tokens, cache_creation_tokens, run_count,
+  metered:{ metered_micro_usd, free_run_count },
+  by_provider[], by_model[], by_tier[], by_capability[] }
+```
+`GET /api/cost/timeseries?bucket=day|hour` → `{ points:[{ ts, micro_usd, input_tokens, output_tokens, run_count }] }` (non-zero buckets only — Trail pads).
+
+Cross-check (post-F189.2): `total_micro_usd / 10_000 ≈ SUM(ingest_jobs.cost_cents)` for the same window (upmetrics slightly higher — no per-row `Math.round` loss). `metered.free_run_count` ↔ Max-Plan-$0 jobs. The numeric reconciliation can only run once Trail actually sinks to upmetrics (F189.2) — until then upmetrics has 0 Trail `agent_runs`.
 
 ## Open Questions
 - **SDK call surface:** exact `@broberg/ai-sdk` export + signature for reporting a run (`reportAgentRun`? a client instance?) — confirm against the published package before F189.1, since upmetrics is still iterating it.
