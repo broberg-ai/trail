@@ -322,7 +322,9 @@ function TenantsList({
         background: 'var(--color-bg-card)',
         border: '1px solid var(--color-border)',
         borderRadius: 'var(--radius-lg)',
-        overflow: 'hidden',
+        // Clip rounded corners normally, but let an open row-menu escape
+        // the box instead of being clipped behind the list below it.
+        overflow: openMenu ? 'visible' : 'hidden',
       }}
     >
       <div
@@ -387,6 +389,8 @@ function TenantRow({
         alignItems: 'center',
         borderBottom: '1px solid var(--color-border)',
         position: 'relative',
+        // Lift the open row so its dropdown stacks above sibling rows below.
+        zIndex: menuOpen ? 30 : undefined,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
