@@ -62,6 +62,14 @@ export interface RunChatInput
  * real bugs.
  */
 export async function runChat(input: RunChatInput): Promise<ChatBackendResult> {
+  // F190.3 — BLOCKED on @broberg/ai-sdk tool-loop support. AiSdkChatBackend is
+  // written + ready (services/chat/ai-sdk-backend.ts) but the SDK@0.2.0 cannot
+  // serialize a tool-result turn back to the provider: toOpenAIMessage drops
+  // assistant tool_calls, and the anthropic mapping drops assistant tool_use +
+  // turns role:"tool" into a plain user message (no tool_result block) — so the
+  // caller-owned loop re-asks the tool forever. Chat stays on the existing
+  // chain-based backends until ai-sdk ships tool-loop message serialization
+  // (flagged to ai-sdk). DO NOT wire AiSdkChatBackend here until then.
   const chain = resolveChatChain({ kb: input.kb });
   let lastError: unknown;
   for (let i = 0; i < chain.length; i++) {
