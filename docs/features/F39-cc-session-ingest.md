@@ -102,11 +102,11 @@ Dedicated KB per repo (or one shared "session-knowledge" KB):
 
 ```
 KB: trail-sessions
-  /neurons/sessions/broberg-ai/trail/
+  /neurons/sessions/trail/
     f17-queue-sole-write-path.md
     svg-shortcode-tiptap-workaround.md
     trail-vs-notebooklm-positioning.md
-  /neurons/sessions/webhousecode/cms/
+  /neurons/sessions/cms/
     svg-embed-node-view.md
     shortcode-expander-api.md
   /wiki/conventions/

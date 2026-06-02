@@ -6,7 +6,7 @@
 
 Concrete broken flow today:
 
-1. Curator runs `mcp__buddy__trail_save` to persist a session insight. Buddy posts `external-feed` candidate; auto-approval commits a new Neuron at `/neurons/sessions/broberg-ai/trail/<slug>.md`. The Neuron's `frontmatter.sources: []` is empty because the reasoning came from the cc session, not an uploaded document.
+1. Curator runs `mcp__buddy__trail_save` to persist a session insight. Buddy posts `external-feed` candidate; auto-approval commits a new Neuron at `/neurons/sessions/trail/<slug>.md`. The Neuron's `frontmatter.sources: []` is empty because the reasoning came from the cc session, not an uploaded document.
 2. Nightly lint runs. `detectOrphans()` in `packages/core/src/lint/orphans.ts` does a LEFT JOIN on `document_references`, finds `refCount=0` for the buddy-authored Neuron, emits a `cross-ref-suggestion` candidate tagged "Orphan Neuron: X".
 3. Curator opens the queue, sees the orphan-finding with F96 Action Recommender's picked "Auto-link sources" action. Clicks Accept.
 4. F90.1 inferer calls Haiku with the Neuron content + the KB's Source list. Zero Sources match because the Neuron is about buddy's internals, not Sanne's clinical material. Inferer returns `[]`. Server returns 422 `no_sources_inferred`.

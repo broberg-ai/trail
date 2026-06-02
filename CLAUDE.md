@@ -170,7 +170,7 @@ deriving it.
 |---|---|
 | `mcp__buddy__trail_save(...)` | Call at natural milestones: feature ship, bug diagnosed, architectural choice made. Buddy does the summarising + routes to Trail. **Preferred when buddy is live.** |
 | `mcp__trail__write(command="create", ...)` | When you want to author the Neuron yourself mid-turn (e.g. a specific design note that needs a particular shape). Only available when Trail's MCP is configured in the cc session's `.mcp.json`. |
-| `POST /api/v1/queue/candidates` with `Authorization: Bearer $TRAIL_INGEST_TOKEN` | Scripts, CI hooks, anything non-interactive. `kind: "external-feed"`, path `/neurons/sessions/broberg-ai/trail/`. |
+| `POST /api/v1/queue/candidates` with `Authorization: Bearer $TRAIL_INGEST_TOKEN` | Scripts, CI hooks, anything non-interactive. `kind: "external-feed"`, path `/neurons/sessions/trail/`. |
 
 **What deserves a Neuron** (not every turn):
 - "Why X over Y" — architectural choices + the alternatives rejected and why.
@@ -183,9 +183,16 @@ deriving it.
 - Things already documented in F-docs or ROADMAP.md.
 - Code-behaviour that well-named identifiers already explain.
 
-**Target path**: `/neurons/sessions/broberg-ai/trail/` under the Trail KB
-Christian uses for this repo. Tags: feature number if applicable (F90, F91),
-area (ingest, queue, ui), kind (decision, bug-fix, convention).
+**Target path**: `/neurons/sessions/trail/` under the Trail KB Christian uses
+for this repo. Tags: feature number if applicable (F90, F91), area (ingest,
+queue, ui), kind (decision, bug-fix, convention).
+
+**Path convention** (decided 2026-06-02): Neuron paths are
+`/neurons/<kind>/<source>/` — `kind` ∈ sessions, intercom, adr, caught-bugs,
+concepts, entities, heuristics, sources, queries; `source` = the repo/peer the
+knowledge came from (`trail`, `buddy`, `upmetrics`, …). **No org segment** — the
+whole KB is already the broberg-ai tenant, so a `/broberg-ai/` segment is
+redundant. Don't reintroduce it.
 
 **If none of these tools are live in your session**, say so explicitly to
 Christian at the top of the session — he'll decide whether to wire up
