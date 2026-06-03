@@ -143,6 +143,10 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
   const contentHash = createHash('sha256').update(buffer).digest('hex');
   console.log(`[upload] sha256=${contentHash.slice(0, 12)} ${lap()}`);
   const force = c.req.query('force') === 'true';
+  // F191 — Local Ingest Station signal. `?localCompile=true` parks the source
+  // for $0 in-session compile by the /local-ingest skill instead of the cloud
+  // OpenRouter compile. Defaults off → existing uploads behave unchanged.
+  const localCompile = c.req.query('localCompile') === 'true';
   if (!force) {
     const existing = await trail.db
       .select({
@@ -206,6 +210,7 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
       fileSize: file.size,
       status: initialStatus,
       errorMessage: initialError,
+      awaitingLocalCompile: localCompile,
       tags: uploadTags?.join(', ') ?? null,
       metadata: connector ? JSON.stringify({ connector, sourceUrl }) : null,
       // F162 — dedup hash. Set even on force-uploaded duplicates so the
@@ -248,7 +253,7 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
   // Legacy binary formats with no registered pipeline (xls, doc, raw
   // images pre-F25) still land status='pending' until handled.
   if (!isText && pickPipeline(file.name) !== null) {
-    processFileAsync(trail, docId, tenant.id, kbId, user.id, file.name, buffer).catch(async (err) => {
+    processFileAsync(trail, docId, tenant.id, kbId, user.id, file.name, buffer, localCompile).catch(async (err) => {
       console.error(`[pipeline] failed for ${file.name}:`, err);
       await trail.db
         .update(documents)
@@ -290,7 +295,8 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
   });
 
   // Auto-trigger wiki ingest for text sources that are ready to compile.
-  if (isText) {
+  // F191 — local-compile uploads skip the cloud compile; parked for /local-ingest.
+  if (isText && !localCompile) {
     triggerIngest({ trail, docId, kbId, tenantId: tenant.id, userId: user.id });
   }
 
@@ -855,6 +861,10 @@ export async function processFileAsync(
   userId: string,
   filename: string,
   buffer: Buffer,
+  // F191 — Local Ingest Station. When true, run extract but SKIP the cloud
+  // compile and park the source ('extracted', awaitingLocalCompile=true) for
+  // the /local-ingest skill to compile in an interactive cc session ($0).
+  awaitingLocalCompile = false,
 ): Promise<void> {
   await trail.db
     .update(documents)
@@ -971,6 +981,7 @@ export async function processFileAsync(
       title,
       ...(pageCount !== null ? { pageCount } : {}),
       ...(extractCostCents > 0 ? { extractCostCents } : {}),
+      ...(awaitingLocalCompile ? { awaitingLocalCompile: true } : {}),
       status: 'ready',
       version: 1,
       updatedAt: new Date().toISOString(),
@@ -983,7 +994,11 @@ export async function processFileAsync(
     await storeChunks(trail, docId, tenantId, kbId, chunks);
   }
 
-  triggerIngest({ trail, docId, kbId, tenantId, userId });
+  // F191 — local-ingest uploads skip the cloud OpenRouter compile; the source
+  // is parked for the /local-ingest skill to compile in-session ($0).
+  if (!awaitingLocalCompile) {
+    triggerIngest({ trail, docId, kbId, tenantId, userId });
+  }
 
   // F165 — async Vision-describe. We extracted images without running
   // Vision inline; queue a background job to fill in descriptions. The

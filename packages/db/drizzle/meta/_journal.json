@@ -267,6 +267,13 @@
       "when": 1780300100000,
       "tag": "0037_tenant_settings_json",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1780300200000,
+      "tag": "0038_local_ingest_awaiting",
+      "breakpoints": true
     }
   ]
 }

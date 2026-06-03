@@ -157,6 +157,15 @@ export const documents = sqliteTable(
     // F111.2 — stamped by the ingest subprocess via the MCP write tool so
     // wireSourceRefs can identify all docs touched by a specific job.
     ingestJobId: text('ingest_job_id'),
+    // F191 — Local Ingest Station. When true, this source was uploaded for
+    // $0 Max-plan compile by an interactive cc session: extract runs cloud-side
+    // as usual, but the cloud OpenRouter compile is SKIPPED and the source is
+    // parked ('extracted', neuronCount 0) until the /local-ingest skill picks
+    // it up and compiles it in-session via trail MCP. Distinguishes an
+    // intentionally-parked source from one whose compile ran but yielded 0
+    // Neurons (both are status='ready', neuronCount 0). Default false →
+    // existing uploads are untouched (compile fires as today).
+    awaitingLocalCompile: integer('awaiting_local_compile', { mode: 'boolean' }).notNull().default(false),
     // F25/F47 prep — pre-ingest extraction cost (vision-call for image
     // sources, Whisper-transcription for audio, future OCR for scans).
     // Complements ingest_jobs.cost_cents (F149) which tracks compile-fasen.

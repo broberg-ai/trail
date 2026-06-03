@@ -88,6 +88,13 @@ documentRoutes.get('/knowledge-bases/:kbId/documents', async (c) => {
     conditions.push(eq(documents.kind, kind.data));
   }
 
+  // F191 — Local Ingest Station. `?awaitingLocalCompile=true` returns the
+  // sources parked for $0 in-session compile, so the /local-ingest skill (and
+  // the Station) can list what's waiting to be picked up.
+  if (c.req.query('awaitingLocalCompile') === 'true') {
+    conditions.push(eq(documents.awaitingLocalCompile, true));
+  }
+
   const rows = await trail.db
     .select({
       id: documents.id,
@@ -101,6 +108,7 @@ documentRoutes.get('/knowledge-bases/:kbId/documents', async (c) => {
       fileType: documents.fileType,
       fileSize: documents.fileSize,
       status: documents.status,
+      awaitingLocalCompile: documents.awaitingLocalCompile,
       pageCount: documents.pageCount,
       tags: documents.tags,
       date: documents.date,
