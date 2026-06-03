@@ -224,18 +224,17 @@ export async function proxyToEngine(c: Context, next: Next): Promise<Response | 
   // truncated-chunk login-loop bug the buffering path below guards against.)
   const upstreamCt = upstream.headers.get('content-type') ?? '';
   if (upstreamCt.includes('text/event-stream') && upstream.body) {
-    // Copy safe upstream headers onto the streamed response.
-    upstream.headers.forEach((v, k) => {
-      const lk = k.toLowerCase();
-      if (lk === 'set-cookie' || lk === 'connection' || lk === 'content-length' || lk === 'content-encoding') return;
-      c.header(k, v);
-    });
-    // Explicitly pump + flush each chunk. `new Response(upstream.body)` let Bun
-    // buffer the re-served stream: only the connect-time `hello` (already in the
-    // first chunk) reached the browser, while later `candidate_*`/`ping` writes
-    // sat in the buffer — the EventStream tab showed nothing live. Reading the
-    // upstream reader directly yields chunks in real time (verified), and hono's
-    // stream() flushes per write (same primitive the engine's streamSSE uses).
+    // Set the streaming headers EXPLICITLY. `fetch` strips the hop-by-hop
+    // `Transfer-Encoding` from upstream.headers, so copying upstream headers
+    // loses it — and without `Transfer-Encoding: chunked` Bun buffers a
+    // ReadableStream response (waiting to compute Content-Length) and only the
+    // first chunk (`hello`) escaped; every later `candidate_*`/`ping` sat in the
+    // buffer (EventStream tab looked dead). These four headers are exactly what
+    // hono's streamSSE sets — replicating them makes Bun stream chunk-by-chunk.
+    c.header('Content-Type', 'text/event-stream');
+    c.header('Cache-Control', 'no-cache');
+    c.header('Connection', 'keep-alive');
+    c.header('Transfer-Encoding', 'chunked');
     const reader = upstream.body.getReader();
     return stream(c, async (s) => {
       try {
