@@ -1,4 +1,5 @@
 import type { Context, Next } from 'hono';
+import { stream } from 'hono/streaming';
 import { eq, and, isNull, gt } from 'drizzle-orm';
 import { getCookie } from 'hono/cookie';
 import { db, schema } from './db.js';
@@ -222,17 +223,32 @@ export async function proxyToEngine(c: Context, next: Next): Promise<Response | 
   // time. (SSE is read by EventSource, not response.json(), so it's immune to the
   // truncated-chunk login-loop bug the buffering path below guards against.)
   const upstreamCt = upstream.headers.get('content-type') ?? '';
-  if (upstreamCt.includes('text/event-stream')) {
-    const streamHeaders = new Headers();
+  if (upstreamCt.includes('text/event-stream') && upstream.body) {
+    // Copy safe upstream headers onto the streamed response.
     upstream.headers.forEach((v, k) => {
       const lk = k.toLowerCase();
       if (lk === 'set-cookie' || lk === 'connection' || lk === 'content-length' || lk === 'content-encoding') return;
-      streamHeaders.set(k, v);
+      c.header(k, v);
     });
-    return new Response(upstream.body, {
-      status: upstream.status,
-      statusText: upstream.statusText,
-      headers: streamHeaders,
+    // Explicitly pump + flush each chunk. `new Response(upstream.body)` let Bun
+    // buffer the re-served stream: only the connect-time `hello` (already in the
+    // first chunk) reached the browser, while later `candidate_*`/`ping` writes
+    // sat in the buffer — the EventStream tab showed nothing live. Reading the
+    // upstream reader directly yields chunks in real time (verified), and hono's
+    // stream() flushes per write (same primitive the engine's streamSSE uses).
+    const reader = upstream.body.getReader();
+    return stream(c, async (s) => {
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          await s.write(value);
+        }
+      } catch {
+        // client disconnect or upstream end — fall through to release the lock.
+      } finally {
+        try { reader.releaseLock(); } catch { /* already released */ }
+      }
     });
   }
 
