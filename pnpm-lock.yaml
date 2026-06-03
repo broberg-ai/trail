@@ -95,6 +95,34 @@ importers:
         specifier: ^5.5.0
         version: 5.9.3
 
+  apps/ingest-station:
+    dependencies:
+      '@trail/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      preact:
+        specifier: ^10.23.0
+        version: 10.29.1
+    devDependencies:
+      '@preact/preset-vite':
+        specifier: ^2.9.0
+        version: 2.10.5(@babel/core@7.29.0)(preact@10.29.1)(rollup@4.60.1)(vite@5.4.21(@types/node@22.19.17)(lightningcss@1.32.0))
+      '@tailwindcss/vite':
+        specifier: ^4.1.15
+        version: 4.2.2(vite@5.4.21(@types/node@22.19.17)(lightningcss@1.32.0))
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
+      tailwindcss:
+        specifier: ^4.1.15
+        version: 4.2.2
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vite:
+        specifier: ^5.4.0
+        version: 5.4.21(@types/node@22.19.17)(lightningcss@1.32.0)
+
   apps/mcp:
     dependencies:
       '@modelcontextprotocol/sdk':

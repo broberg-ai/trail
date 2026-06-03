@@ -1,0 +1,15 @@
+@import 'tailwindcss';
+
+/* F191 — the Station deliberately reuses Trail's warm cream palette so it
+ * reads as part of the product, but it is a lean standalone surface (Sources
+ * only), not the full admin. Tokens mirror apps/admin/src/index.css. */
+@theme {
+  --color-cream: #faf9f5;
+  --color-ink: #1a1715;
+  --color-muted: #8a8175;
+  --color-line: #e7e2d8;
+  --color-accent: #b8762e;
+  --color-ok: #4a7c59;
+  --color-warn: #b8762e;
+  --color-err: #b3543f;
+}
