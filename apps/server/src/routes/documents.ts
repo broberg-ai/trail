@@ -19,6 +19,7 @@ import {
   processXlsxAsync,
 } from './uploads.js';
 import { triggerIngest, buildCompilePrompt } from '../services/ingest.js';
+import { reportLocalIngestRun } from '../lib/ai.js';
 import { storage, sourcePath } from '../lib/storage.js';
 import { recordAccess } from '../services/access-tracker.js';
 import { recordReinforcement } from '../services/reinforcement.js';
@@ -731,7 +732,7 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { failed?: boolean };
 
   const doc = await trail.db
-    .select({ id: documents.id, kind: documents.kind })
+    .select({ id: documents.id, kind: documents.kind, knowledgeBaseId: documents.knowledgeBaseId })
     .from(documents)
     .where(and(eq(documents.id, docId), eq(documents.tenantId, tenant.id)))
     .get();
@@ -752,6 +753,13 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
     })
     .where(eq(documents.id, doc.id))
     .run();
+
+  // F191.5 — record a FREE ($0) ingest run to upmetrics for this source so the
+  // cost panel reflects local-ingest VOLUME alongside paid cloud ingest. Stamped
+  // server-side (key stays here); fire-and-forget, never blocks the response.
+  if (!body.failed) {
+    void reportLocalIngestRun({ tenantId: tenant.id, kbId: doc.knowledgeBaseId });
+  }
 
   return c.json({ id: doc.id, awaitingLocalCompile: false, failed: !!body.failed }, 200);
 });

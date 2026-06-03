@@ -26,6 +26,7 @@ import {
   anthropicAdapter,
   type CostSink,
   type AiClient,
+  type Usage,
 } from '@broberg/ai-sdk';
 
 function buildSink(): CostSink {
@@ -55,6 +56,51 @@ export const ai = createAI({ costSink: buildSink() });
  * `process.env` mutation, so concurrent ingests with different tenant keys
  * never race. Returns the shared `ai` unchanged when no per-tenant key is set.
  */
+// F191.5 — telemetry sink for FREE runs that don't go through an ai.* call
+// (the local-ingest compile is the interactive cc session's own work, not an
+// SDK call). Reusing the same upmetricsSink keeps ONE source of truth for the
+// agent_runs POST contract. noopSink when no key — never throws into a request.
+const telemetrySink = buildSink();
+
+/**
+ * F191.5 — record a FREE ($0) ingest run to upmetrics for a source compiled by
+ * the interactive local-ingest cc session (Max-plan). There is no ai.* call to
+ * auto-report it, so the engine stamps it server-side (UPMETRICS_API_KEY stays
+ * here, never reaches the Station/skill). Reports one run per compiled source —
+ * cost 0, subprocess:true — so the F151/F190.5 cost panel reflects local ingest
+ * VOLUME (free_run_count) alongside paid cloud ingest. Fire-and-forget.
+ */
+export async function reportLocalIngestRun(opts: {
+  tenantId: string;
+  kbId: string;
+  model?: string;
+}): Promise<void> {
+  const usage: Usage = {
+    provider: 'anthropic',
+    model: opts.model ?? 'claude-code',
+    transport: 'subprocess',
+    capability: 'chat',
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    costUsd: 0,
+    subprocess: true,
+    purpose: 'local-ingest',
+    latencyMs: 0,
+    labels: { tenantId: opts.tenantId, kbId: opts.kbId, connector: 'mcp:claude-code' },
+    ts: new Date().toISOString(),
+  };
+  try {
+    await telemetrySink.record(usage);
+  } catch (err) {
+    // Telemetry must never break the request that triggered it.
+    console.warn(
+      `[F191.5] local-ingest telemetry failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
 export function aiForTenant(keys: { openrouter?: string; anthropic?: string }): AiClient {
   if (!keys.openrouter && !keys.anthropic) return ai;
   return createAI({
