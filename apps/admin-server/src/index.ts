@@ -477,4 +477,11 @@ async function logout() {
 }
 
 console.log(`[admin-server] listening on :${PORT}`);
-export default { port: PORT, fetch: app.fetch };
+// idleTimeout: 0 — admin proxies long-lived SSE to the engine (/api/v1/stream +
+// /jobs/:id/stream). Bun's default 10s idle timeout killed those streams in the
+// 30s gap between the engine's `hello` and its periodic `ping`, which Fly's edge
+// surfaced as "could not finish reading HTTP body from instance" and the SPA saw
+// as an EventSource reconnect loop. The engine sets the same (apps/server
+// index.ts) for exactly this reason; the admin needs it now that proxyToEngine
+// streams SSE through instead of buffering.
+export default { port: PORT, idleTimeout: 0, fetch: app.fetch };
