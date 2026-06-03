@@ -888,7 +888,11 @@ export async function processFileAsync(
       imagePrefix: `${tenantId}/${kbId}/${docId}/images`,
       imageUrlPrefix: `/api/v1/documents/${docId}/images`,
       describeImage: undefined,
-      describeImageAsSource,
+      // F190.6 — tag the image-source vision call with tenant/KB so its cost
+      // reaches upmetrics per-tenant (the pipeline interface is fixed, so we
+      // wrap rather than widen its signature).
+      describeImageAsSource: (buf, mt, fn) =>
+        describeImageAsSource(buf, mt, fn, { tenantId, kbId }),
       transcribeAudio,
     }),
     timeoutMs,

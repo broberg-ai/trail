@@ -86,7 +86,7 @@ export function makeContradictionChecker(): ContradictionChecker {
   // F190.2 — single discrete call through @broberg/ai-sdk (anthropic-direct
   // primary, openrouter fallback, transport:http). Replaces the prior
   // BACKEND-switched claude-cli + direct-Anthropic-fetch checkers.
-  return async (newContent, existingContent): Promise<LlmContradictionResult> => {
+  return async (newContent, existingContent, labels): Promise<LlmContradictionResult> => {
     const userContent = [
       '## New passage',
       newContent.slice(0, 4000),
@@ -102,6 +102,8 @@ export function makeContradictionChecker(): ContradictionChecker {
         fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
         maxTokens: 300,
         purpose: 'contradiction-lint',
+        // F190.6 — per-tenant cost attribution (supplied per-doc by runForEvent).
+        ...(labels ? { labels } : {}),
       });
       const json = res.text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
       const parsed = JSON.parse(json) as LlmContradictionResult;
@@ -257,7 +259,13 @@ async function runForEvent(
     version: doc.version,
   };
 
-  const findings = await detectContradictions(neuron, similars, check);
+  // F190.6 — tag the per-pair LLM cost with this Neuron's tenant + KB. The
+  // scheduled full-pass (scanDocForContradictions) fabricates an event with
+  // empty tenantId/kbId, but `doc` is the real row here, so labels are accurate.
+  const findings = await detectContradictions(neuron, similars, check, {
+    tenantId: doc.tenantId,
+    kbId: doc.knowledgeBaseId,
+  });
 
   // F158 — stamp signature on every successful completion (zero or more
   // findings). Signature update happens BEFORE the early return on empty

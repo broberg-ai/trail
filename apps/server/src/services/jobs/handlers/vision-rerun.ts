@@ -75,7 +75,10 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
   const filter = payload!.filter ?? 'null-only';
   // F163.2 — use the metadata-aware backend so we can stamp
   // auto_flag_signal alongside the description.
-  const backend = createVisionBackendWithMetadata();
+  // F190.6 — stamp tenantId for per-tenant cost in upmetrics. A batch can span
+  // KBs (doc-scope), so only the tenant (the billing key) is constant here; the
+  // per-KB split for embedded-image vision is left out by design.
+  const backend = createVisionBackendWithMetadata({ tenantId: ctx.tenantId });
   if (!backend) {
     throw new Error(
       'No Vision backend configured (set ANTHROPIC_API_KEY or OPENROUTER_API_KEY)',

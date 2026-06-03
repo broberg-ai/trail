@@ -60,6 +60,7 @@ async function runVision(
   mimeType: string,
   prompt: string,
   purpose: string,
+  labels?: Record<string, string>,
 ): Promise<{ text: string; model: string; costCents: number } | null> {
   if (!hasVisionProvider()) return null;
   // Copy into a fresh ArrayBuffer-backed Uint8Array (the SDK's input type is
@@ -73,6 +74,9 @@ async function runVision(
     override: VISION_OVERRIDE,
     fallback: VISION_FALLBACK,
     purpose,
+    // F190.6 — per-tenant cost attribution in upmetrics. Omitted when the
+    // caller has no tenant context (then the call lands untagged).
+    ...(labels ? { labels } : {}),
   });
   const text = (res.text ?? '').trim();
   const model = res.usage.model || VISION_MODEL;
@@ -110,8 +114,9 @@ export async function describeImageAsSource(
   bytes: Buffer,
   mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif',
   filename: string,
+  labels?: Record<string, string>,
 ): Promise<ImageDescribeResult | null> {
-  const r = await runVision(bytes, mediaType, SOURCE_PROMPT(filename), 'image-source');
+  const r = await runVision(bytes, mediaType, SOURCE_PROMPT(filename), 'image-source', labels);
   if (!r || !r.text) return null;
   return { markdown: r.text, costCents: r.costCents, model: r.model };
 }
@@ -229,8 +234,8 @@ export function applyDimensionFlag(
  * model returned the "decorative" sentinel; throws only if every provider in
  * the chain errors (caller treats as a failed image).
  */
-export function createVisionBackend(): DescribeImage | null {
-  const rich = createVisionBackendWithMetadata();
+export function createVisionBackend(labels?: Record<string, string>): DescribeImage | null {
+  const rich = createVisionBackendWithMetadata(labels);
   if (!rich) return null;
   return async (pngBytes, context) => {
     const result = await rich(pngBytes, context);
@@ -243,12 +248,14 @@ export type DescribeImageWithMetadata = (
   context: { page: number; width?: number; height?: number; filename?: string; language?: string },
 ) => Promise<DescribeResult>;
 
-export function createVisionBackendWithMetadata(): DescribeImageWithMetadata | null {
+export function createVisionBackendWithMetadata(
+  labels?: Record<string, string>,
+): DescribeImageWithMetadata | null {
   if (!hasVisionProvider()) return null;
 
   return async (pngBytes, context) => {
     const language = context.language ?? 'en';
-    const r = await runVision(pngBytes, 'image/png', EMBED_PROMPT(context.page, language), 'pdf-embedded-image');
+    const r = await runVision(pngBytes, 'image/png', EMBED_PROMPT(context.page, language), 'pdf-embedded-image', labels);
     // "decorative" sentinel is a legitimate result, not an error → treat as
     // null (no description, no auto-flag) exactly like the pre-F190 path.
     let raw: string | null = r ? r.text : null;

@@ -1,23 +1,28 @@
 /**
- * F149 Phase 2b — OpenRouter backend.
+ * F149 Phase 2b — OpenRouter ingest backend.
  *
- * In-process HTTPS client to openrouter.ai's chat-completions API.
- * Dispatches tool-calls to Trail's CandidateQueueAPI directly (no MCP,
- * no subprocess). Supports single-pass ingest via any OpenRouter model;
- * two-pass (translator-drafts → main-expands) is out-of-scope for v1
- * but the field is already plumbed through IngestBackendInput.
+ * F190.6 — now routes through the shared `@broberg/ai-sdk` client
+ * (`ai.chat({tools})`) instead of a hand-rolled `fetch(OPENROUTER_URL)`
+ * loop. We keep OpenRouter as the provider (cheap models proven adequate
+ * for ingest) by pinning `override:{provider:'openrouter', model}` per
+ * chain-step; the SDK owns the HTTP + cost-from-response-field parsing
+ * (F010) and forwards per-tenant cost to upmetrics via the sink in
+ * `lib/ai.ts`, tagged with `labels:{tenantId, kbId}`.
  *
- * Cost: requests usage accounting (`usage: {include: true}`) so the
- * response includes actual cost in USD, not an estimated lookup.
+ * Trail still owns BOTH loops that matter here: the tool-execution loop
+ * (model → toolCall → dispatchTool → result → model) and — at the layer
+ * above — the runner's fallback chain. So this backend takes NO ai-sdk
+ * `fallback`; it throws on error exactly as before and the runner advances
+ * to the next chain step. That keeps the runner's "0 writes ⇒ advance"
+ * accounting and modelTrail audit intact.
  *
  * Tools exposed to the model mirror the CandidateQueueAPI surface:
  * `guide`, `search`, `read`, `write`. Argument shapes match the API's
  * types so the dispatch is a straight passthrough.
- *
- * Chain fallback: on any non-2xx or network error, throws so the
- * runner's chain-loop can advance to the next backend/model step.
  */
 
+import { ai, aiForTenant } from '../../lib/ai.js';
+import type { Tool } from '@broberg/ai-sdk';
 import type {
   IngestBackend,
   IngestBackendInput,
@@ -25,39 +30,11 @@ import type {
 } from './backend.js';
 import type { CandidateQueueAPI } from '@trail/core';
 
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MAX_TOOL_RESPONSE_BYTES = 50_000;
 
-interface OpenRouterMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  content?: string | null;
-  tool_calls?: Array<{
-    id: string;
-    type: 'function';
-    function: { name: string; arguments: string };
-  }>;
-  tool_call_id?: string;
-}
-
-interface OpenRouterResponse {
-  choices: Array<{
-    message: {
-      role: string;
-      content: string | null;
-      tool_calls?: Array<{
-        id: string;
-        type: 'function';
-        function: { name: string; arguments: string };
-      }>;
-    };
-    finish_reason: string;
-  }>;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    cost?: number;  // present when `usage:{include:true}` is sent
-  };
-}
+// The exact message-array type ai.chat() accepts (schema-derived). Mirrors the
+// pattern in services/chat/ai-sdk-backend.ts so the tool-loop turns serialize.
+type ChatMessages = NonNullable<Parameters<typeof ai.chat>[0]['messages']>;
 
 export class OpenRouterBackend implements IngestBackend {
   readonly id = 'openrouter' as const;
@@ -66,29 +43,33 @@ export class OpenRouterBackend implements IngestBackend {
     if (!input.candidateApi) {
       throw new Error('OpenRouterBackend requires candidateApi in input (runner must pass it)');
     }
-    // F149 Phase 2e — prefer tenant-scoped key resolved by the runner,
-    // fall back to process env (Christian's personal key on Max-Plan
-    // tier). Throws only when neither source has a key.
-    const apiKey = input.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
-      throw new Error('OPENROUTER_API_KEY not configured for this tenant or in process env');
-    }
+    // F149 Phase 2e — when the tenant supplied its own OpenRouter key
+    // (tenant_secrets), `input.env.OPENROUTER_API_KEY` carries it and we mint a
+    // client pinned to it; otherwise the shared `ai` uses the engine-level Fly
+    // secret. The SDK adapter throws cleanly if no key is configured at all.
+    const tenantKey = input.env.OPENROUTER_API_KEY;
+    const client =
+      tenantKey && tenantKey !== process.env.OPENROUTER_API_KEY
+        ? aiForTenant({ openrouter: tenantKey })
+        : ai;
 
     const t0 = Date.now();
     const api = input.candidateApi;
-
-    // Build OpenAI-compatible tool definitions matching CandidateQueueAPI.
-    const tools = buildToolDefinitions();
+    const tools = buildTools();
+    const override = { provider: 'openrouter', model: input.model, transport: 'http' as const };
+    const labels = {
+      tenantId: input.env.TRAIL_TENANT_ID ?? '',
+      kbId: input.env.TRAIL_KNOWLEDGE_BASE_ID ?? '',
+    };
 
     // System prompt is empty — the compile-prompt (input.prompt) already
     // contains all the instructions Trail needs the model to follow. The
     // initial message goes as `user` so the model responds as assistant.
-    const messages: OpenRouterMessage[] = [
-      { role: 'user', content: input.prompt },
-    ];
+    const messages: ChatMessages = [{ role: 'user', content: input.prompt }];
 
     let totalCostUsd = 0;
     let totalTurns = 0;
+    let lastModel = input.model;
     const modelTrail: Array<{ turn: number; model: string }> = [];
 
     for (let turn = 1; turn <= input.maxTurns; turn++) {
@@ -97,62 +78,34 @@ export class OpenRouterBackend implements IngestBackend {
         throw new Error(`openrouter timed out after ${Math.round(elapsed / 1000)}s`);
       }
 
-      const response = await fetch(OPENROUTER_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://trailmem.com',
-          'X-Title': 'trail-ingest',
-        },
-        body: JSON.stringify({
-          model: input.model,
-          messages,
-          tools,
-          temperature: 0.3,
-          max_tokens: 4096,
-          usage: { include: true },
-        }),
-        signal: AbortSignal.timeout(Math.max(5_000, input.timeoutMs - elapsed)),
-      }).catch((err: unknown) => {
-        throw new Error(`openrouter network error on ${input.model}: ${err instanceof Error ? err.message : String(err)}`);
+      const res = await client.chat({
+        messages,
+        tools,
+        override,
+        temperature: 0.3,
+        maxTokens: 4096,
+        purpose: 'ingest',
+        labels,
       });
-
-      if (!response.ok) {
-        const body = await response.text().catch(() => '');
-        throw new Error(`openrouter ${response.status} on ${input.model}: ${body.slice(0, 400)}`);
-      }
-
-      const data = (await response.json()) as OpenRouterResponse;
-      const choice = data.choices[0];
-      if (!choice) throw new Error(`openrouter returned no choices for ${input.model}`);
 
       totalTurns = turn;
-      modelTrail.push({ turn, model: input.model });
-      if (typeof data.usage?.cost === 'number') {
-        totalCostUsd += data.usage.cost;
-      }
+      lastModel = res.usage.model || input.model;
+      modelTrail.push({ turn, model: lastModel });
+      totalCostUsd += res.usage.costUsd;
 
-      // Push assistant message (with any tool-calls) into the convo history.
-      messages.push({
-        role: 'assistant',
-        content: choice.message.content,
-        tool_calls: choice.message.tool_calls,
-      });
-
-      const toolCalls = choice.message.tool_calls;
+      const toolCalls = res.toolCalls;
       if (!toolCalls || toolCalls.length === 0) {
         // Model chose to stop. We're done.
         break;
       }
 
-      // Dispatch each tool call to CandidateQueueAPI; push tool-result
-      // messages back into the convo so the model sees them next turn.
+      // Push the assistant's tool-call turn, then dispatch each call to the
+      // CandidateQueueAPI and feed the result back so the model sees it.
+      messages.push({ role: 'assistant', content: res.text ?? '', toolCalls });
       for (const tc of toolCalls) {
         let toolResult: string;
         try {
-          const args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
-          toolResult = await dispatchTool(api, tc.function.name, args);
+          toolResult = await dispatchTool(api, tc.name, tc.arguments);
         } catch (err) {
           toolResult = `Tool error: ${err instanceof Error ? err.message : String(err)}`;
         }
@@ -161,11 +114,7 @@ export class OpenRouterBackend implements IngestBackend {
         if (toolResult.length > MAX_TOOL_RESPONSE_BYTES) {
           toolResult = toolResult.slice(0, MAX_TOOL_RESPONSE_BYTES) + '\n\n[truncated at 50K chars]';
         }
-        messages.push({
-          role: 'tool',
-          tool_call_id: tc.id,
-          content: toolResult,
-        });
+        messages.push({ role: 'tool', toolCallId: tc.id, content: toolResult });
       }
     }
 
@@ -325,70 +274,58 @@ function formatWrite(r: Awaited<ReturnType<CandidateQueueAPI['write']>>): string
   return 'Write completed.';
 }
 
-// ── Tool definitions (OpenAI-compatible function-calling schema) ────────
+// ── Tool definitions (ai-sdk Tool[] — adapter converts to provider format) ──
 
-function buildToolDefinitions() {
+function buildTools(): Tool[] {
   return [
     {
-      type: 'function' as const,
-      function: {
-        name: 'guide',
-        description: "List the tenant's knowledge bases and explain how trail works. Call this first when you're unsure which KB to write to.",
-        parameters: { type: 'object', properties: {}, required: [] },
+      name: 'guide',
+      description: "List the tenant's knowledge bases and explain how trail works. Call this first when you're unsure which KB to write to.",
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+    {
+      name: 'search',
+      description: 'Browse or FTS-search documents in a knowledge base. Use mode="list" for a file-tree (default); mode="search" for keyword FTS.',
+      parameters: {
+        type: 'object',
+        properties: {
+          knowledge_base: { type: 'string', description: 'Name, slug, or id of the KB. Omit to use the active KB from context.' },
+          mode: { type: 'string', enum: ['list', 'search'], description: 'list = file tree, search = FTS.' },
+          query: { type: 'string', description: 'Search query (required for search mode).' },
+          path: { type: 'string', description: 'Path filter glob (e.g. "/neurons/*").' },
+          kind: { type: 'string', enum: ['source', 'wiki', 'any'], description: 'Filter by document kind.' },
+        },
+        required: [],
       },
     },
     {
-      type: 'function' as const,
-      function: {
-        name: 'search',
-        description: 'Browse or FTS-search documents in a knowledge base. Use mode="list" for a file-tree (default); mode="search" for keyword FTS.',
-        parameters: {
-          type: 'object',
-          properties: {
-            knowledge_base: { type: 'string', description: 'Name, slug, or id of the KB. Omit to use the active KB from context.' },
-            mode: { type: 'string', enum: ['list', 'search'], description: 'list = file tree, search = FTS.' },
-            query: { type: 'string', description: 'Search query (required for search mode).' },
-            path: { type: 'string', description: 'Path filter glob (e.g. "/neurons/*").' },
-            kind: { type: 'string', enum: ['source', 'wiki', 'any'], description: 'Filter by document kind.' },
-          },
-          required: [],
+      name: 'read',
+      description: 'Read document content from a knowledge base. Accepts a single path or a glob (e.g. "/neurons/*.md"). For large files, a 120K-char cap applies.',
+      parameters: {
+        type: 'object',
+        properties: {
+          knowledge_base: { type: 'string', description: 'Name, slug, or id of the KB.' },
+          path: { type: 'string', description: 'Full path (e.g. "/neurons/overview.md") or glob (e.g. "/neurons/*.md").' },
         },
+        required: ['path'],
       },
     },
     {
-      type: 'function' as const,
-      function: {
-        name: 'read',
-        description: 'Read document content from a knowledge base. Accepts a single path or a glob (e.g. "/neurons/*.md"). For large files, a 120K-char cap applies.',
-        parameters: {
-          type: 'object',
-          properties: {
-            knowledge_base: { type: 'string', description: 'Name, slug, or id of the KB.' },
-            path: { type: 'string', description: 'Full path (e.g. "/neurons/overview.md") or glob (e.g. "/neurons/*.md").' },
-          },
-          required: ['path'],
+      name: 'write',
+      description: 'Create or edit wiki pages via the Curation Queue. Supports create / str_replace / append.',
+      parameters: {
+        type: 'object',
+        properties: {
+          knowledge_base: { type: 'string', description: 'Name, slug, or id of the KB.' },
+          command: { type: 'string', enum: ['create', 'str_replace', 'append'], description: 'create = new wiki page; str_replace = find/replace; append = add to end.' },
+          path: { type: 'string', description: 'Directory path for create (default "/neurons/"). Ignored for str_replace/append — use `title` for the full doc path.' },
+          title: { type: 'string', description: 'For create: the new page title. For str_replace/append: the full document path (e.g. "/neurons/overview.md").' },
+          content: { type: 'string', description: 'Content for create or append.' },
+          tags: { type: 'string', description: 'Comma-separated tags (create only).' },
+          old_text: { type: 'string', description: 'Text to find (str_replace only).' },
+          new_text: { type: 'string', description: 'Replacement text (str_replace only).' },
         },
-      },
-    },
-    {
-      type: 'function' as const,
-      function: {
-        name: 'write',
-        description: 'Create or edit wiki pages via the Curation Queue. Supports create / str_replace / append.',
-        parameters: {
-          type: 'object',
-          properties: {
-            knowledge_base: { type: 'string', description: 'Name, slug, or id of the KB.' },
-            command: { type: 'string', enum: ['create', 'str_replace', 'append'], description: 'create = new wiki page; str_replace = find/replace; append = add to end.' },
-            path: { type: 'string', description: 'Directory path for create (default "/neurons/"). Ignored for str_replace/append — use `title` for the full doc path.' },
-            title: { type: 'string', description: 'For create: the new page title. For str_replace/append: the full document path (e.g. "/neurons/overview.md").' },
-            content: { type: 'string', description: 'Content for create or append.' },
-            tags: { type: 'string', description: 'Comma-separated tags (create only).' },
-            old_text: { type: 'string', description: 'Text to find (str_replace only).' },
-            new_text: { type: 'string', description: 'Replacement text (str_replace only).' },
-          },
-          required: ['command'],
-        },
+        required: ['command'],
       },
     },
   ];

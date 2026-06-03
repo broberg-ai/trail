@@ -17,7 +17,16 @@
  * NOT for the agentic ingest compile-loop — that stays claude-code
  * orchestration (ai-sdk is single-shot by design; see F190 plan-doc).
  */
-import { createAI, upmetricsSink, noopSink, type CostSink } from '@broberg/ai-sdk';
+import {
+  createAI,
+  upmetricsSink,
+  noopSink,
+  defaultProviders,
+  openrouterAdapter,
+  anthropicAdapter,
+  type CostSink,
+  type AiClient,
+} from '@broberg/ai-sdk';
 
 function buildSink(): CostSink {
   const apiKey = process.env.UPMETRICS_API_KEY;
@@ -35,3 +44,33 @@ function buildSink(): CostSink {
 }
 
 export const ai = createAI({ costSink: buildSink() });
+
+/**
+ * F190.6 — per-tenant key client for ingest (F149 Phase 2e). The shared `ai`
+ * above keys off the engine-level env (ANTHROPIC_API_KEY / OPENROUTER_API_KEY
+ * Fly secrets) — the path every current tenant on the shared engine uses. When
+ * a tenant has supplied its OWN key via `tenant_secrets`, ingest passes it here
+ * and we mint a throwaway client that pins that key onto the relevant adapter
+ * (the SDK has no per-call apiKey override yet — flagged to ai-sdk). No
+ * `process.env` mutation, so concurrent ingests with different tenant keys
+ * never race. Returns the shared `ai` unchanged when no per-tenant key is set.
+ */
+export function aiForTenant(keys: { openrouter?: string; anthropic?: string }): AiClient {
+  if (!keys.openrouter && !keys.anthropic) return ai;
+  return createAI({
+    costSink: buildSink(),
+    providers: {
+      ...defaultProviders,
+      ...(keys.openrouter
+        ? {
+            openrouter: openrouterAdapter({
+              apiKey: keys.openrouter,
+              referer: 'https://trailmem.com',
+              title: 'trail-ingest',
+            }),
+          }
+        : {}),
+      ...(keys.anthropic ? { anthropic: anthropicAdapter({ apiKey: keys.anthropic }) } : {}),
+    },
+  });
+}

@@ -33,6 +33,9 @@ export interface LlmContradictionResult {
 export type ContradictionChecker = (
   newContent: string,
   existingContent: string,
+  /** F190.6 — per-tenant cost attribution dimensions, forwarded to the LLM
+   *  call's cost sink. Optional so non-engine callers (tests) can omit it. */
+  labels?: Record<string, string>,
 ) => Promise<LlmContradictionResult>;
 
 export interface NewNeuron {
@@ -53,6 +56,8 @@ export async function detectContradictions(
   neuron: NewNeuron,
   candidates: ContradictionCandidate[],
   check: ContradictionChecker,
+  /** F190.6 — forwarded to each per-pair LLM call for per-tenant cost. */
+  labels?: Record<string, string>,
 ): Promise<LintFinding[]> {
   const findings: LintFinding[] = [];
 
@@ -62,7 +67,7 @@ export async function detectContradictions(
 
     let result: LlmContradictionResult;
     try {
-      result = await check(neuron.content, cand.content);
+      result = await check(neuron.content, cand.content, labels);
     } catch {
       // An LLM error here means "we don't know" — keep silent. The next
       // candidate_approved on this Neuron (if anyone re-edits it) will
