@@ -268,6 +268,7 @@ ${JSON.stringify(input, null, 2)}`;
       fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
       maxTokens: 4000,
       purpose: 'translation',
+      labels: { tenantId: candidate.tenantId, kbId: candidate.knowledgeBaseId },
     });
     const text = res.text.trim();
     const json = text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
