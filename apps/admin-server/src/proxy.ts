@@ -198,14 +198,58 @@ export async function proxyToEngine(c: Context, next: Next): Promise<Response | 
     (init as RequestInit & { duplex: string }).duplex = 'half';
   }
 
-  const upstream = await fetch(url.toString(), init);
+  let upstream: Response;
+  try {
+    upstream = await fetch(url.toString(), init);
+  } catch (err) {
+    // Engine unreachable (DNS, connection refused, or a connection reset
+    // mid-flight during a rolling engine deploy). A gateway translates an
+    // upstream failure into a 502 — it does NOT crash with a 500 +
+    // error-level captureException. This is what produced the proxyToEngine
+    // incident noise.
+    console.warn(`[proxy] upstream fetch failed for ${path}:`, err instanceof Error ? err.message : err);
+    return c.json({ error: 'engine unreachable' }, 502);
+  }
 
-  // Forward response — buffer the full body so we don't have to forward
-  // the upstream's transfer-encoding. (Streaming through with stripped
-  // transfer-encoding caused the SPA's response.json() to throw on what
-  // the browser interpreted as truncated chunks; SPA catch → redirect
-  // to /api/auth/google → infinite login loop.)
-  const buf = await upstream.arrayBuffer();
+  // SSE / event-stream responses (the engine's /api/v1/stream + /jobs/:id/stream)
+  // MUST be forwarded as a live stream, never buffered. `arrayBuffer()` on an SSE
+  // body never resolves — the stream has no EOF, so it hangs until the connection
+  // is torn down (tab close, EventSource reconnect, engine restart) and THEN
+  // rejects with "The socket connection was closed unexpectedly". That was the
+  // root cause of the proxyToEngine incident, and it also meant live events never
+  // reached the browser through the proxy. Pass the body straight through with
+  // transfer-encoding intact and no Content-Length so chunked SSE flows in real
+  // time. (SSE is read by EventSource, not response.json(), so it's immune to the
+  // truncated-chunk login-loop bug the buffering path below guards against.)
+  const upstreamCt = upstream.headers.get('content-type') ?? '';
+  if (upstreamCt.includes('text/event-stream')) {
+    const streamHeaders = new Headers();
+    upstream.headers.forEach((v, k) => {
+      const lk = k.toLowerCase();
+      if (lk === 'set-cookie' || lk === 'connection' || lk === 'content-length' || lk === 'content-encoding') return;
+      streamHeaders.set(k, v);
+    });
+    return new Response(upstream.body, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: streamHeaders,
+    });
+  }
+
+  // Non-stream (JSON / file download) — buffer the full body so we don't have to
+  // forward the upstream's transfer-encoding. (Streaming through with stripped
+  // transfer-encoding caused the SPA's response.json() to throw on what the
+  // browser interpreted as truncated chunks; SPA catch → redirect to
+  // /api/auth/google → infinite login loop.)
+  let buf: ArrayBuffer;
+  try {
+    buf = await upstream.arrayBuffer();
+  } catch (err) {
+    // Body read interrupted (engine restarted mid-response, network blip).
+    // 502 rather than an unhandled reject → no error-level incident.
+    console.warn(`[proxy] upstream body read failed for ${path}:`, err instanceof Error ? err.message : err);
+    return c.json({ error: 'engine connection closed' }, 502);
+  }
   const respHeaders = new Headers();
   upstream.headers.forEach((v, k) => {
     const lk = k.toLowerCase();
