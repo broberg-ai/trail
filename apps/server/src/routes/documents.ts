@@ -18,7 +18,7 @@ import {
   processPptxAsync,
   processXlsxAsync,
 } from './uploads.js';
-import { triggerIngest } from '../services/ingest.js';
+import { triggerIngest, buildCompilePrompt } from '../services/ingest.js';
 import { storage, sourcePath } from '../lib/storage.js';
 import { recordAccess } from '../services/access-tracker.js';
 import { recordReinforcement } from '../services/reinforcement.js';
@@ -714,6 +714,84 @@ documentRoutes.post('/documents/:docId/reingest', async (c) => {
   });
 
   return c.json({ id: doc.id, status: 'processing' }, 202);
+});
+
+/**
+ * F191 — Local Ingest Station. Called by the `/local-ingest` skill AFTER it
+ * has compiled an `awaiting-local-compile` source in-session (via trail MCP
+ * write, $0 Max-plan) to clear the parked flag so the source leaves the
+ * "awaiting" queue and reads as fully ingested. Does NOT trigger any cloud
+ * compile — the Neurons were already written by the interactive session.
+ * `failed:true` instead parks it as failed (compile produced nothing usable).
+ */
+documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const docId = c.req.param('docId');
+  const body = (await c.req.json().catch(() => ({}))) as { failed?: boolean };
+
+  const doc = await trail.db
+    .select({ id: documents.id, kind: documents.kind })
+    .from(documents)
+    .where(and(eq(documents.id, docId), eq(documents.tenantId, tenant.id)))
+    .get();
+
+  if (!doc) return c.json({ error: 'Document not found' }, 404);
+  if (doc.kind !== 'source') {
+    return c.json({ error: 'Only source documents can be local-compiled' }, 400);
+  }
+
+  await trail.db
+    .update(documents)
+    .set({
+      awaitingLocalCompile: false,
+      ...(body.failed
+        ? { status: 'failed' as const, errorMessage: 'local-ingest compile produced no Neurons' }
+        : {}),
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(documents.id, doc.id))
+    .run();
+
+  return c.json({ id: doc.id, awaitingLocalCompile: false, failed: !!body.failed }, 200);
+});
+
+/**
+ * F191 — Local Ingest Station. Returns the EXACT compile prompt cloud ingest
+ * would use for this source (built by the shared buildCompilePrompt, so the
+ * $0 in-session compile produces Neurons identical in shape). The /local-ingest
+ * skill fetches this, follows it via trail MCP read/write, then calls
+ * /local-compiled to clear the flag. Read-only — triggers no cloud compile.
+ */
+documentRoutes.get('/knowledge-bases/:kbId/documents/:docId/compile-prompt', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const user = getUser(c);
+  const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
+  if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
+  const docId = c.req.param('docId');
+
+  const doc = await trail.db
+    .select()
+    .from(documents)
+    .where(and(eq(documents.id, docId), eq(documents.tenantId, tenant.id), eq(documents.knowledgeBaseId, kbId)))
+    .get();
+  if (!doc) return c.json({ error: 'Document not found' }, 404);
+  if (doc.kind !== 'source') return c.json({ error: 'Only source documents have a compile prompt' }, 400);
+  if (!doc.content || !doc.content.trim()) {
+    return c.json({ error: 'No extracted content yet — extract must finish first' }, 409);
+  }
+
+  const kb = await trail.db.select().from(knowledgeBases).where(eq(knowledgeBases.id, kbId)).get();
+  if (!kb) return c.json({ error: 'Knowledge base not found' }, 404);
+
+  const prompt = await buildCompilePrompt(
+    trail,
+    { trail, docId: doc.id, kbId, tenantId: tenant.id, userId: user.id },
+    doc,
+    kb,
+  );
+  return c.json({ docId: doc.id, sourcePath: `${doc.path}${doc.filename}`, prompt }, 200);
 });
 
 /**

@@ -405,44 +405,20 @@ export async function recoverIngestJobs(trail: TrailDatabase): Promise<void> {
   }
 }
 
-async function runJob(
+
+/**
+ * F191 — extracted verbatim from runJob so the cloud compile (runJob) AND the
+ * interactive local-ingest skill (via GET .../compile-prompt) share ONE prompt.
+ * Single-source: the $0 in-session compile must produce Neurons identical in
+ * shape to cloud ingest. Builds tag/entity/schema/language context, returns the
+ * rendered compile prompt string.
+ */
+export async function buildCompilePrompt(
   trail: TrailDatabase,
-  jobId: string,
   job: IngestJob,
-): Promise<void> {
-
-  const doc = await trail.db.select().from(documents).where(eq(documents.id, job.docId)).get();
-  const kb = await trail.db.select().from(knowledgeBases).where(eq(knowledgeBases.id, job.kbId)).get();
-
-  if (!doc || !kb) {
-    // Orphaned job — document or KB deleted between enqueue and claim.
-    // Mark terminal so the row doesn't linger as "running" forever.
-    await trail.db
-      .update(ingestJobs)
-      .set({
-        status: 'failed',
-        errorMessage: 'document or KB no longer exists',
-        completedAt: new Date().toISOString(),
-      })
-      .where(eq(ingestJobs.id, jobId))
-      .run();
-    return;
-  }
-
-  await trail.db
-    .update(documents)
-    .set({ status: 'processing', updatedAt: new Date().toISOString() })
-    .where(eq(documents.id, job.docId))
-    .run();
-
-  broadcaster.emit({
-    type: 'ingest_started',
-    tenantId: job.tenantId,
-    kbId: job.kbId,
-    docId: job.docId,
-    filename: doc.filename,
-  });
-
+  doc: typeof documents.$inferSelect,
+  kb: typeof knowledgeBases.$inferSelect,
+): Promise<string> {
   const today = new Date().toISOString().slice(0, 10);
   const sourcePath = `${doc.path}${doc.filename}`;
 
@@ -619,6 +595,48 @@ GENERAL
 - Do NOT create pages for trivial concepts. Focus on the 2-5 most important ones.
 - If the source is very short or trivial, just create the summary and update overview/log.
 - You do not need to pass knowledge_base to tool calls — the default KB is already set.`;
+  return prompt;
+}
+
+async function runJob(
+  trail: TrailDatabase,
+  jobId: string,
+  job: IngestJob,
+): Promise<void> {
+
+  const doc = await trail.db.select().from(documents).where(eq(documents.id, job.docId)).get();
+  const kb = await trail.db.select().from(knowledgeBases).where(eq(knowledgeBases.id, job.kbId)).get();
+
+  if (!doc || !kb) {
+    // Orphaned job — document or KB deleted between enqueue and claim.
+    // Mark terminal so the row doesn't linger as "running" forever.
+    await trail.db
+      .update(ingestJobs)
+      .set({
+        status: 'failed',
+        errorMessage: 'document or KB no longer exists',
+        completedAt: new Date().toISOString(),
+      })
+      .where(eq(ingestJobs.id, jobId))
+      .run();
+    return;
+  }
+
+  await trail.db
+    .update(documents)
+    .set({ status: 'processing', updatedAt: new Date().toISOString() })
+    .where(eq(documents.id, job.docId))
+    .run();
+
+  broadcaster.emit({
+    type: 'ingest_started',
+    tenantId: job.tenantId,
+    kbId: job.kbId,
+    docId: job.docId,
+    filename: doc.filename,
+  });
+
+  const prompt = await buildCompilePrompt(trail, job, doc, kb);
 
   console.log(`[ingest] Starting for "${doc.filename}" in "${kb.name}" (tenant ${job.tenantId})`);
 
