@@ -31,11 +31,10 @@
 import { queueCandidates, knowledgeBases, type TrailDatabase } from '@trail/db';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import type { CandidateAction, CandidateRecommendation } from '@trail/shared';
-import { spawnClaude, extractAssistantText } from './claude.js';
+import { ai } from '../lib/ai.js';
 import { broadcaster } from './broadcast.js';
 
 const MODEL = process.env.TRAIL_RECOMMENDER_MODEL ?? 'claude-haiku-4-5-20251001';
-const TIMEOUT_MS = Number(process.env.TRAIL_RECOMMENDER_TIMEOUT_MS ?? 45_000);
 
 /**
  * One-shot backfill: walk every pending candidate missing a
@@ -140,23 +139,25 @@ async function recommend(
   const language = kb?.language ?? 'da';
 
   const prompt = buildPrompt(row, actions, language);
-  const raw = await spawnClaude(
-    [
-      '-p',
-      prompt,
-      '--dangerously-skip-permissions',
-      '--max-turns',
-      '1',
-      '--output-format',
-      'json',
-      '--model',
-      MODEL,
-    ],
-    { timeoutMs: TIMEOUT_MS },
-  );
-
-  const text = extractAssistantText(raw).trim();
-  const json = text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
+  // F190.4 — single discrete call through @broberg/ai-sdk (anthropic-direct
+  // primary, openrouter fallback, transport:http). Replaces the prior
+  // `spawnClaude` path, which fails on the cloud engine (no `claude` CLI).
+  // Cost reports to upmetrics tagged per tenant/KB.
+  let json: string;
+  try {
+    const res = await ai.chat({
+      messages: [{ role: 'user', content: prompt }],
+      override: { provider: 'anthropic', model: MODEL, transport: 'http' },
+      fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
+      maxTokens: 400,
+      purpose: 'action-recommender',
+      labels: { tenantId, kbId: row.knowledgeBaseId },
+    });
+    json = res.text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
+  } catch (err) {
+    console.error('[action-recommender] LLM call failed:', err instanceof Error ? err.message : err);
+    return;
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
