@@ -224,10 +224,19 @@ export async function proxyToEngine(c: Context, next: Next): Promise<Response | 
 
   // Stream body if present (POST/PUT)
   const method = c.req.method;
+  // Connection-leak fix: an AbortController tied to the upstream fetch so that
+  // when the browser disconnects an SSE stream we can ACTIVELY close the
+  // proxy→engine socket. Without it the engine never sees the client leave, its
+  // /api/v1/stream handler stays alive holding a connection slot, and orphaned
+  // streams accumulate until the engine hits its concurrency hard_limit (100)
+  // → Fly "no healthy instances" → total saturation. (Each tab close, EventSource
+  // reconnect, or rolling deploy spawned a fresh stream and leaked the old one.)
+  const ac = new AbortController();
   const init: RequestInit = {
     method,
     headers: fwdHeaders,
     redirect: 'manual',
+    signal: ac.signal,
   };
   if (method !== 'GET' && method !== 'HEAD') {
     init.body = c.req.raw.body;
@@ -273,6 +282,10 @@ export async function proxyToEngine(c: Context, next: Next): Promise<Response | 
     c.header('Transfer-Encoding', 'chunked');
     const reader = upstream.body.getReader();
     return stream(c, async (s) => {
+      // When the browser disconnects, ABORT the upstream fetch so the engine's
+      // stream handler sees the close and frees its connection slot. Without
+      // this the engine-side stream leaks (the saturation root cause).
+      s.onAbort(() => { try { ac.abort(); } catch { /* already aborted */ } });
       try {
         for (;;) {
           const { done, value } = await reader.read();
@@ -283,6 +296,7 @@ export async function proxyToEngine(c: Context, next: Next): Promise<Response | 
         // client disconnect or upstream end — fall through to release the lock.
       } finally {
         try { reader.releaseLock(); } catch { /* already released */ }
+        try { ac.abort(); } catch { /* already aborted */ } // close proxy→engine socket
       }
     });
   }
