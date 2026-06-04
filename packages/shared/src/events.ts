@@ -121,6 +121,21 @@ export interface KbCreatedEvent {
   name: string;
 }
 
+/**
+ * F191.8 — a source's local-compile (awaiting) state changed: drained
+ * (`awaitingLocalCompile=false`, after a `/local-ingest` run or a failed mark)
+ * or re-parked (`true`). Lets the Ingest Station refresh its "awaiting" banner
+ * live instead of leaving a stale count until a manual reload.
+ */
+export interface SourceCompiledEvent {
+  type: 'source_compiled';
+  tenantId: string;
+  kbId: string;
+  docId: string;
+  awaitingLocalCompile: boolean;
+  failed: boolean;
+}
+
 export type DomainEvent =
   | CandidateCreatedEvent
   | CandidateApprovedEvent
@@ -128,7 +143,8 @@ export type DomainEvent =
   | IngestStartedEvent
   | IngestCompletedEvent
   | IngestFailedEvent
-  | KbCreatedEvent;
+  | KbCreatedEvent
+  | SourceCompiledEvent;
 
 // ── Control frames ────────────────────────────────────────────────
 

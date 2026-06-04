@@ -21,6 +21,7 @@ import {
 import { triggerIngest, buildCompilePrompt } from '../services/ingest.js';
 import { reportLocalIngestRun } from '../lib/ai.js';
 import { storage, sourcePath } from '../lib/storage.js';
+import { broadcaster } from '../services/broadcast.js';
 import { recordAccess } from '../services/access-tracker.js';
 import { recordReinforcement } from '../services/reinforcement.js';
 import { isNull } from 'drizzle-orm';
@@ -795,6 +796,18 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
     void reportLocalIngestRun({ tenantId: tenant.id, kbId: doc.knowledgeBaseId });
   }
 
+  // F191.8 — tell the Ingest Station (live) that this source left the awaiting
+  // queue, so its banner updates without a manual reload. Soft list-refresh on
+  // the client; never a page reload, so an in-flight upload isn't disturbed.
+  broadcaster.emit({
+    type: 'source_compiled',
+    tenantId: tenant.id,
+    kbId: doc.knowledgeBaseId,
+    docId: doc.id,
+    awaitingLocalCompile: false,
+    failed: !!body.failed,
+  });
+
   return c.json({ id: doc.id, awaitingLocalCompile: false, failed: !!body.failed }, 200);
 });
 
@@ -812,7 +825,7 @@ documentRoutes.post('/documents/:docId/local-recompile', async (c) => {
   const docId = c.req.param('docId');
 
   const doc = await trail.db
-    .select({ id: documents.id, kind: documents.kind })
+    .select({ id: documents.id, kind: documents.kind, knowledgeBaseId: documents.knowledgeBaseId })
     .from(documents)
     .where(and(eq(documents.id, docId), eq(documents.tenantId, tenant.id)))
     .get();
@@ -832,6 +845,17 @@ documentRoutes.post('/documents/:docId/local-recompile', async (c) => {
     })
     .where(eq(documents.id, doc.id))
     .run();
+
+  // F191.8 — re-parked: Station banner should reflect the source rejoined the
+  // awaiting queue, live.
+  broadcaster.emit({
+    type: 'source_compiled',
+    tenantId: tenant.id,
+    kbId: doc.knowledgeBaseId,
+    docId: doc.id,
+    awaitingLocalCompile: true,
+    failed: false,
+  });
 
   return c.json({ id: doc.id, awaitingLocalCompile: true }, 200);
 });
