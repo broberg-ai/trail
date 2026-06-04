@@ -57,6 +57,56 @@ export function invalidateKbs(): void {
   inflight = null;
 }
 
+export interface KbResolution {
+  /** True until the KB list has resolved at least once for this kbId. */
+  loading: boolean;
+  /** The matched KB, or null while loading / when not found. */
+  kb: KnowledgeBase | null;
+  /** True once the list resolved and kbId matched nothing — a real
+   *  "this Trail doesn't exist" signal (vs. the loading null). Lets a
+   *  caller render a not-found state instead of spinning forever. */
+  notFound: boolean;
+}
+
+/**
+ * Like `useKb`, but distinguishes "still loading" from "resolved, no
+ * match". `useKb` returns null for BOTH, which makes panels that gate on
+ * `if (!kb) return <Loader/>` spin forever when the URL carries a kbId
+ * that isn't a real KB (e.g. a tenant slug typed as `/kb/<tenant>/…`).
+ */
+export function useKbResolution(kbId: string): KbResolution {
+  const [state, setState] = useState<{ loading: boolean; kb: KnowledgeBase | null }>(() => {
+    if (!kbId) return { loading: false, kb: null };
+    if (cache) return { loading: false, kb: matchKb(cache, kbId) };
+    return { loading: true, kb: null };
+  });
+  useEffect(() => {
+    if (!kbId) {
+      setState({ loading: false, kb: null });
+      return;
+    }
+    if (cache) {
+      setState({ loading: false, kb: matchKb(cache, kbId) });
+      return;
+    }
+    let cancelled = false;
+    setState({ loading: true, kb: null });
+    ensureKbs()
+      .then((list) => {
+        if (!cancelled) setState({ loading: false, kb: matchKb(list, kbId) });
+      })
+      .catch(() => {
+        // List fetch failed (network/auth). Resolve empty rather than
+        // spin; the not-found shell offers a retry via "back to Trails".
+        if (!cancelled) setState({ loading: false, kb: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [kbId]);
+  return { loading: state.loading, kb: state.kb, notFound: !!kbId && !state.loading && !state.kb };
+}
+
 export function useKb(kbId: string): KnowledgeBase | null {
   const [kb, setKb] = useState<KnowledgeBase | null>(
     kbId && cache ? matchKb(cache, kbId) : null,
