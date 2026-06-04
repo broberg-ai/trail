@@ -45,7 +45,7 @@ export function App() {
 function KeyGate({ onSaved }: { onSaved: (key: string) => void }) {
   const [val, setVal] = useState('');
   return (
-    <div class="min-h-screen flex items-center justify-center bg-cream text-ink p-6">
+    <div data-testid="ingest-keygate-root" class="min-h-screen flex items-center justify-center bg-cream text-ink p-6">
       <div class="w-full max-w-md">
         <h1 class="flex items-center gap-2 mb-2">
           <TrailLogo size={30} />
@@ -58,6 +58,7 @@ function KeyGate({ onSaved }: { onSaved: (key: string) => void }) {
           åbne Claude Code-session.
         </p>
         <input
+          data-testid="ingest-keygate-input"
           type="password"
           value={val}
           onInput={(e) => setVal((e.target as HTMLInputElement).value)}
@@ -65,6 +66,7 @@ function KeyGate({ onSaved }: { onSaved: (key: string) => void }) {
           class="w-full border border-line rounded-lg px-3 py-2 mb-3 font-mono text-sm bg-white"
         />
         <button
+          data-testid="ingest-keygate-submit"
           disabled={!val.trim().startsWith('trail_')}
           onClick={() => onSaved(val.trim())}
           class="w-full bg-accent text-white rounded-lg px-4 py-2 font-medium
@@ -210,7 +212,7 @@ function Station({ onSignOut }: { onSignOut: () => void }) {
   const awaiting = sources.filter((s) => s.awaitingLocalCompile);
 
   return (
-    <div class="min-h-screen bg-cream text-ink">
+    <div data-testid="ingest-station-root" class="min-h-screen bg-cream text-ink">
       <header class="flex items-center justify-between px-6 py-4 border-b border-line">
         <div class="flex items-center gap-3 min-w-0">
           {/* Brand identity — Trail mark + wordmark + surface name */}
@@ -226,7 +228,7 @@ function Station({ onSignOut }: { onSignOut: () => void }) {
             <KbPicker kbs={kbs} value={kbId} onChange={setKbId} />
           )}
         </div>
-        <button onClick={onSignOut} class="text-sm text-muted hover:text-ink transition shrink-0">Log ud</button>
+        <button data-testid="ingest-signout" onClick={onSignOut} class="text-sm text-muted hover:text-ink transition shrink-0">Log ud</button>
       </header>
 
       <main class="max-w-3xl mx-auto px-6 py-8">
@@ -236,6 +238,7 @@ function Station({ onSignOut }: { onSignOut: () => void }) {
 
         {/* Drop-zone */}
         <div
+          data-testid="ingest-dropzone"
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer?.files) void doUpload(e.dataTransfer.files); }}
@@ -247,6 +250,7 @@ function Station({ onSignOut }: { onSignOut: () => void }) {
           <p class="text-muted text-sm mt-1 font-mono">{ACCEPTED}</p>
           {uploading > 0 && <p class="text-accent text-sm mt-3">Uploader {uploading}…</p>}
           <input
+            data-testid="ingest-file-input"
             ref={fileInput}
             type="file"
             multiple
@@ -257,7 +261,7 @@ function Station({ onSignOut }: { onSignOut: () => void }) {
 
         {/* Awaiting-session banner (F191.4) */}
         {awaiting.length > 0 && (
-          <div class="mt-6 rounded-lg border border-warn/30 bg-warn/5 px-4 py-3 text-sm">
+          <div data-testid="ingest-awaiting-banner" class="mt-6 rounded-lg border border-warn/30 bg-warn/5 px-4 py-3 text-sm">
             <strong>{awaiting.length}</strong> kilde{awaiting.length === 1 ? '' : 'r'} venter på
             kompilering i en aktiv Claude Code-session. Kør <code>/local-ingest {kbId}</code> i en
             åben cc-session (eller lad buddy dispatche et job) — så kompileres de gratis ($0) og
@@ -277,6 +281,7 @@ function Station({ onSignOut }: { onSignOut: () => void }) {
             </span>
             <span class="flex items-center gap-2 shrink-0">
               <button
+                data-testid="ingest-dup-force"
                 onClick={() => forceUpload(d.name)}
                 class="text-xs px-2.5 py-1 rounded-full border border-line transition
                        hover:border-accent/50 hover:text-accent active:scale-[0.97]"
@@ -284,6 +289,7 @@ function Station({ onSignOut }: { onSignOut: () => void }) {
                 Upload alligevel
               </button>
               <button
+                data-testid="ingest-dup-skip"
                 onClick={() => skipDuplicate(d.name)}
                 class="text-xs px-2 py-1 rounded-full text-muted hover:text-ink active:scale-[0.97] transition"
               >
@@ -320,6 +326,7 @@ function TenantPicker({ tenants, value, onChange }: { tenants: Tenant[]; value: 
   return (
     <div class="relative shrink-0">
       <button
+        data-testid="ingest-tenant-trigger"
         onClick={() => setOpen((o) => !o)}
         class="text-sm border border-line rounded-lg pl-2.5 pr-3 py-1.5 bg-white hover:border-accent/50 active:scale-[0.99] transition flex items-center gap-1.5"
       >
@@ -330,6 +337,7 @@ function TenantPicker({ tenants, value, onChange }: { tenants: Tenant[]; value: 
         <div class="absolute z-10 mt-1 w-60 max-h-80 overflow-auto rounded-lg border border-line bg-white shadow-lg">
           {tenants.map((t) => (
             <button
+              data-testid={`ingest-tenant-opt-${t.slug}`}
               key={t.slug}
               onClick={() => { onChange(t.slug); setOpen(false); }}
               class={`flex w-full items-center justify-between text-left px-3 py-2 text-sm hover:bg-cream transition
@@ -352,6 +360,7 @@ function KbPicker({ kbs, value, onChange }: { kbs: KnowledgeBase[]; value: strin
   return (
     <div class="relative">
       <button
+        data-testid="ingest-kb-trigger"
         onClick={() => setOpen((o) => !o)}
         class="text-sm border border-line rounded-lg px-3 py-1.5 bg-white hover:border-accent/50 active:scale-[0.99] transition"
       >
@@ -361,6 +370,7 @@ function KbPicker({ kbs, value, onChange }: { kbs: KnowledgeBase[]; value: strin
         <div class="absolute z-10 mt-1 w-56 max-h-80 overflow-auto rounded-lg border border-line bg-white shadow-lg">
           {kbs.map((k) => (
             <button
+              data-testid={`ingest-kb-opt-${k.id}`}
               key={k.id}
               onClick={() => { onChange(k.id); setOpen(false); }}
               class={`block w-full text-left px-3 py-2 text-sm hover:bg-cream transition
@@ -406,6 +416,7 @@ function FailedList({
               )}
             </div>
             <button
+              data-testid={`ingest-retry-${s.id}`}
               onClick={() => onRetry(s.id)}
               disabled={retrying.has(s.id)}
               class="text-xs px-2.5 py-0.5 rounded-full border border-err/30 bg-white transition shrink-0
