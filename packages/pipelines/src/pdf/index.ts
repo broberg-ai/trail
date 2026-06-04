@@ -67,13 +67,18 @@ export async function processPdf(opts: ProcessPdfOptions): Promise<PdfResult> {
   const pages: string[] = [];
   const images: ExtractedImage[] = [];
   const minDescribeSize = opts.minDescribeSize ?? 100;
+  // Shared across pages so a wedged document-level XObject (e.g. a logo on every
+  // slide) is attempted ONCE, not re-timed-out per page; plus a hard total budget
+  // so image extraction can never starve text. See IMAGE_TOTAL_BUDGET_MS.
+  const failedObjIds = new Set<string>();
+  const imageDeadline = Date.now() + IMAGE_TOTAL_BUDGET_MS;
 
   for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
     const page = await doc.getPage(pageNum);
     const pageText = await extractText(page);
 
     const pageImageRefs: string[] = [];
-    const pageImages = await extractImages(page, pageNum);
+    const pageImages = await extractImages(page, pageNum, failedObjIds, imageDeadline);
 
     for (const img of pageImages) {
       const storagePath = `${opts.imagePrefix}/${img.filename}`;
@@ -163,6 +168,18 @@ interface RawImage {
  */
 const IMAGE_OBJECT_TIMEOUT_MS = 8_000;
 
+/**
+ * Total wall-clock budget for image extraction across the WHOLE PDF. Text is
+ * extracted first per page and is cheap + reliable; image XObject resolution is
+ * the only slow/wedge-prone part. Once this budget is spent we stop pulling
+ * images but keep extracting text for every remaining page — so a PDF with
+ * pathological image objects can never starve the outer extraction timeout and
+ * lose its text. (2026-06-04: a 62-page slide deck with one shared, un-resolving
+ * logo XObject re-attempted at 8s × 62 pages ≈ 500s blew the 240s timeout and
+ * dropped 19k chars of perfectly good text.)
+ */
+const IMAGE_TOTAL_BUDGET_MS = 60_000;
+
 function getImageObject(
   page: PDFPageProxy,
   objId: string,
@@ -196,7 +213,12 @@ function getImageObject(
   });
 }
 
-async function extractImages(page: PDFPageProxy, pageNum: number): Promise<RawImage[]> {
+async function extractImages(
+  page: PDFPageProxy,
+  pageNum: number,
+  failedObjIds: Set<string>,
+  imageDeadline: number,
+): Promise<RawImage[]> {
   const images: RawImage[] = [];
   let opList;
   try {
@@ -216,9 +238,22 @@ async function extractImages(page: PDFPageProxy, pageNum: number): Promise<RawIm
 
   let imgIndex = 0;
   for (const objId of imgObjectIds) {
+    // A document-level object that already wedged on an earlier page won't
+    // resolve now either — skip instantly instead of re-spending 8s on it.
+    if (failedObjIds.has(objId)) continue;
+    // Total image budget spent — stop pulling images so text extraction for the
+    // remaining pages always completes well inside the outer timeout.
+    if (Date.now() > imageDeadline) {
+      console.warn(`[pdf] image budget exhausted at page ${pageNum} — skipping remaining images (text preserved)`);
+      break;
+    }
     try {
       const img = await getImageObject(page, objId);
-      if (!img || !img.data || !img.width || !img.height) continue;
+      if (!img) {
+        failedObjIds.add(objId); // wedged/timed-out — never retry across pages
+        continue;
+      }
+      if (!img.data || !img.width || !img.height) continue;
 
       imgIndex++;
       const filename = `page-${pageNum}-img-${imgIndex}.png`;
