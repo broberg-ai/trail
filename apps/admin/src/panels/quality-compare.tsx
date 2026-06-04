@@ -68,7 +68,7 @@ export function QualityComparePanel() {
   if (error) return <div class="page-shell text-red-500">Error: {error}</div>;
 
   return (
-    <div class="page-shell space-y-4">
+    <div class="page-shell space-y-4" data-testid="quality-compare-root">
       <div class="flex items-baseline gap-3 text-sm text-[color:var(--color-fg-muted)]">
         <a href={`/kb/${kbId}/cost`} class="hover:text-[color:var(--color-fg)]">
           {t('quality.back')}

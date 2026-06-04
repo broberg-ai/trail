@@ -456,7 +456,7 @@ export function ChatPanel() {
   const oneTurnLeft = !!turnBudget && !atTurnLimit && turnBudget.used === turnBudget.limit - 1;
 
   return (
-    <div class="page-shell" style="padding-top: 1rem; padding-bottom: 1rem;">
+    <div class="page-shell" data-testid="chat-root" style="padding-top: 1rem; padding-bottom: 1rem;">
       {/* Chat lives inside the main flex column — use available height
           rather than min-height so it fits without scrolling the outer
           page. */}

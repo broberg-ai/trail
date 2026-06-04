@@ -211,7 +211,7 @@ export function NeuronEditorPanel() {
   }
 
   return (
-    <div class="page-shell">
+    <div class="page-shell" data-testid="neuron-editor-root">
       <header class="mb-4 flex items-baseline justify-between gap-4">
         <div class="font-mono text-[11px] uppercase tracking-wider text-[color:var(--color-fg-subtle)]">
           {formatPathDisplay(d.path ?? '')} · v{loadedVersion ?? d.version}

@@ -134,7 +134,7 @@ export function ActivityPanel() {
   if (!filtered) return <CenteredLoader />;
 
   return (
-    <div class="page-shell">
+    <div class="page-shell" data-testid="activity-root">
       <div class="mb-4 flex items-baseline justify-between">
         <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 32px; letter-spacing: -0.015em; line-height: 1.15; margin: 0;">{t('activityPanel.title')}</h1>
         <button

@@ -89,7 +89,7 @@ export function KnowledgeBasesPanel() {
 
   if (!kbs.length) {
     return (
-      <div style={{ position: 'relative', padding: '60px 28px 40px', maxWidth: 1200, margin: '0 auto' }}>
+      <div style={{ position: 'relative', padding: '60px 28px 40px', maxWidth: 1200, margin: '0 auto' }} data-testid="trails-root">
         <div class="constellation" style={{ opacity: 0.5 }} />
         <PageHeader
           title={t('kbs.title')}
@@ -123,7 +123,7 @@ export function KnowledgeBasesPanel() {
   const formattedTotal = totalNeurons.toLocaleString(locale === 'da' ? 'da-DK' : 'en-US');
 
   return (
-    <div style={{ position: 'relative', padding: '60px 28px 40px', maxWidth: 1200, margin: '0 auto' }}>
+    <div style={{ position: 'relative', padding: '60px 28px 40px', maxWidth: 1200, margin: '0 auto' }} data-testid="trails-root">
       <div class="constellation" style={{ opacity: 0.5 }} />
       <PageHeader
         title={t('kbs.title')}

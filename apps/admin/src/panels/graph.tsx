@@ -728,7 +728,7 @@ export function GraphPanel() {
   const showEmpty = !loading && !error && nodeCount < 2;
 
   return (
-    <div class="relative w-full h-[calc(100vh-140px)] -mx-6 -mb-6">
+    <div class="relative w-full h-[calc(100vh-140px)] -mx-6 -mb-6" data-testid="graph-root">
       <div
         ref={containerRef}
         class={`absolute inset-0 ${showEmpty ? 'opacity-0 pointer-events-none' : ''}`}

@@ -72,7 +72,7 @@ export function ManageTenantsPanel() {
   const filtered = tab === 'all' ? tenants : tab === 'owner' ? tenants : [];
 
   return (
-    <div class="page-shell" style={{ position: 'relative', maxWidth: 920, marginLeft: 0 }}>
+    <div class="page-shell" data-testid="tenants-root" style={{ position: 'relative', maxWidth: 920, marginLeft: 0 }}>
       <div class="constellation" style={{ opacity: 0.35 }} />
 
       {/* Header */}

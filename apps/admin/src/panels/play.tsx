@@ -36,7 +36,7 @@ function InteractivePlayground() {
   const [count, setCount] = useState<number | 'auto'>('auto');
   const resolved = count === 'auto' ? densityForSize(size) : count;
   return (
-    <div class="flex flex-col gap-6">
+    <div class="flex flex-col gap-6" data-testid="play-root">
       <div class="flex flex-col gap-4 max-w-md">
         <label class="flex flex-col gap-1 text-sm">
           <span class="flex justify-between">

@@ -138,7 +138,7 @@ export function LinkReportPanel() {
       .replace('{resolved}', String(s.resolved));
 
   return (
-    <div class="page-shell">
+    <div class="page-shell" data-testid="link-check-root">
       <header class="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 32px; letter-spacing: -0.015em; line-height: 1.15; margin: 0 0 6px;">{t('linkReport.title')}</h1>

@@ -207,7 +207,7 @@ function ReaderView() {
   const readerTags = dbTags.length > 0 ? dbTags : frontmatterTags;
 
   return (
-    <div class="page-shell">
+    <div class="page-shell" data-testid="neuron-root">
       <header class="mb-4 flex items-center justify-between gap-4">
         <a
           href={`/kb/${kbId}/neurons`}

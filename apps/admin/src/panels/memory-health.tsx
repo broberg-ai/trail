@@ -120,7 +120,7 @@ export function MemoryHealthPanel() {
   if (!data) return <CenteredLoader />;
 
   return (
-    <div class="page-shell">
+    <div class="page-shell" data-testid="memory-health-root">
       <header class="mb-6">
         <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 28px; letter-spacing: -0.015em; margin: 0 0 4px;">
           {t('lifecycle.memoryHealth')}

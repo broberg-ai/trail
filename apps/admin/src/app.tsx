@@ -170,7 +170,7 @@ export function App({ children }: { children: ComponentChildren }) {
  */
 function KbNotFound({ kbId }: { kbId: string }) {
   return (
-    <div style={{ padding: '64px 28px', maxWidth: 640, margin: '0 auto' }}>
+    <div data-testid="kb-not-found-root" style={{ padding: '64px 28px', maxWidth: 640, margin: '0 auto' }}>
       <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 28, letterSpacing: '-0.015em' }}>
         Trail ikke fundet
       </h1>

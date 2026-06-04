@@ -49,7 +49,7 @@ export function SettingsAccountPanel() {
   const isDa = getLocale() === 'da';
 
   return (
-    <div class="page-shell" style={{ position: 'relative', maxWidth: 760, marginLeft: 0 }}>
+    <div class="page-shell" data-testid="account-settings-root" style={{ position: 'relative', maxWidth: 760, marginLeft: 0 }}>
       <div class="constellation" style={{ opacity: 0.35 }} />
 
       <header style={{ position: 'relative', marginBottom: 40 }}>
