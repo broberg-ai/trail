@@ -118,6 +118,15 @@ export function recompileSource(docId: string): Promise<{ id: string; awaitingLo
   return api(`/api/v1/documents/${encodeURIComponent(docId)}/local-recompile`, { method: 'POST' });
 }
 
+/**
+ * Delete (soft-archive) a source — used to clear a failed source that can
+ * never compile (e.g. a legacy .doc that extracts to nothing). Archived
+ * sources drop out of the list, so the failed row disappears on refresh.
+ */
+export function deleteSource(docId: string): Promise<void> {
+  return api(`/api/v1/documents/${encodeURIComponent(docId)}`, { method: 'DELETE' });
+}
+
 /** A normalized event off the engine's /api/v1/stream SSE bus. */
 export interface StreamEvent {
   event: string; // e.g. 'candidate_created', 'ping', 'hello', 'ingest_started'

@@ -11,6 +11,7 @@ import {
   listSources,
   uploadSource,
   recompileSource,
+  deleteSource,
   subscribeStream,
   type StreamEvent,
   type Tenant,
@@ -209,6 +210,21 @@ function Station({ onSignOut }: { onSignOut: () => void }) {
     }
   }, [kbId, refresh]);
 
+  // "Slet" — soft-archive a source that can't be salvaged (e.g. a legacy .doc
+  // that never extracts). Per-id loading so each button is independent.
+  const [deleting, setDeleting] = useState<Set<string>>(new Set());
+  const onDelete = useCallback(async (id: string) => {
+    setDeleting((s) => new Set(s).add(id));
+    try {
+      await deleteSource(id);
+      await refresh(kbId);
+    } catch (e) {
+      setError(`Kunne ikke slette ${id}: ${(e as Error).message}`);
+    } finally {
+      setDeleting((s) => { const n = new Set(s); n.delete(id); return n; });
+    }
+  }, [kbId, refresh]);
+
   const awaiting = sources.filter((s) => s.awaitingLocalCompile);
 
   return (
@@ -300,7 +316,7 @@ function Station({ onSignOut }: { onSignOut: () => void }) {
         ))}
 
         {/* Only what failed — the rest of the source history is noise (Christian's call) */}
-        <FailedList sources={sources} onRetry={onRetry} retrying={retrying} />
+        <FailedList sources={sources} onRetry={onRetry} retrying={retrying} onDelete={onDelete} deleting={deleting} />
       </main>
     </div>
   );
@@ -392,10 +408,14 @@ function FailedList({
   sources,
   onRetry,
   retrying,
+  onDelete,
+  deleting,
 }: {
   sources: Source[];
   onRetry: (id: string) => void;
   retrying: Set<string>;
+  onDelete: (id: string) => void;
+  deleting: Set<string>;
 }) {
   const failed = sources.filter((s) => s.status === 'failed' && !s.awaitingLocalCompile);
   if (failed.length === 0) return null;
@@ -415,16 +435,28 @@ function FailedList({
                 </span>
               )}
             </div>
-            <button
-              data-testid={`ingest-retry-${s.id}`}
-              onClick={() => onRetry(s.id)}
-              disabled={retrying.has(s.id)}
-              class="text-xs px-2.5 py-0.5 rounded-full border border-err/30 bg-white transition shrink-0
-                     hover:border-accent/50 hover:text-accent active:scale-[0.97]
-                     disabled:opacity-50 disabled:cursor-wait"
-            >
-              {retrying.has(s.id) ? 'Genstarter…' : 'Prøv igen'}
-            </button>
+            <div class="flex items-center gap-2 shrink-0">
+              <button
+                data-testid={`ingest-retry-${s.id}`}
+                onClick={() => onRetry(s.id)}
+                disabled={retrying.has(s.id) || deleting.has(s.id)}
+                class="text-xs px-2.5 py-0.5 rounded-full border border-err/30 bg-white transition
+                       hover:border-accent/50 hover:text-accent active:scale-[0.97]
+                       disabled:opacity-50 disabled:cursor-wait"
+              >
+                {retrying.has(s.id) ? 'Genstarter…' : 'Prøv igen'}
+              </button>
+              <button
+                data-testid={`ingest-delete-${s.id}`}
+                onClick={() => onDelete(s.id)}
+                disabled={deleting.has(s.id) || retrying.has(s.id)}
+                class="text-xs px-2.5 py-0.5 rounded-full text-muted transition
+                       hover:text-err hover:bg-err/10 active:scale-[0.97]
+                       disabled:opacity-50 disabled:cursor-wait"
+              >
+                {deleting.has(s.id) ? 'Sletter…' : 'Slet'}
+              </button>
+            </div>
           </li>
         ))}
       </ul>
