@@ -399,7 +399,14 @@ documentRoutes.put('/documents/:docId/content', async (c) => {
   const tenant = getTenant(c);
   const user = getUser(c);
   const docId = c.req.param('docId');
-  const body = UpdateContentSchema.parse(await c.req.json());
+  // Validate gracefully — a bad/missing body (e.g. no expectedVersion) is a
+  // client error (400), NOT an uncaught throw that escapes as a 500 and
+  // pollutes telemetry. (.parse() outside the try did exactly that.)
+  const parsed = UpdateContentSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    return c.json({ error: 'invalid request body', details: parsed.error.issues }, 400);
+  }
+  const body = parsed.data;
 
   try {
     // F92 — canonicalise incoming tags at the write boundary so the
