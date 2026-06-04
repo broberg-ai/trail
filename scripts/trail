@@ -57,6 +57,12 @@ ENGINE_LOG="$STATE_DIR/engine.log"
 ADMIN_LOG="$STATE_DIR/admin.log"
 ENV_FILE="$STATE_DIR/.env"
 
+# F191 — Local Ingest Station (separate Vite app; its dev-proxy forwards /api to
+# the CLOUD admin, so it talks to prod tenants, not the local engine).
+STATION_PORT="${TRAIL_INGEST_PORT:-3032}"
+STATION_PID_FILE="$STATE_DIR/ingest-station.pid"
+STATION_LOG="$STATE_DIR/ingest-station.log"
+
 mkdir -p "$STATE_DIR"
 
 # ── Helpers ─────────────────────────────────────────────────────────
@@ -458,9 +464,75 @@ cmd_uninstall_daemon() {
   esac
 }
 
+# ── F191: Local Ingest Station ─────────────────────────────────────────
+open_browser() {
+  local url="$1"
+  case "$(detect_os)" in
+    macos) open "$url" >/dev/null 2>&1 || true ;;
+    linux) xdg-open "$url" >/dev/null 2>&1 || true ;;
+    *)     echo "  open it yourself → $url" ;;
+  esac
+}
+
+cmd_ingest() {
+  if [[ "${1:-}" == "stop" ]]; then
+    if is_running "$STATION_PID_FILE"; then
+      local pid; pid="$(cat "$STATION_PID_FILE")"
+      pkill -P "$pid" 2>/dev/null || true
+      kill "$pid" 2>/dev/null || true
+    fi
+    local orphans; orphans="$(lsof -tiTCP:"$STATION_PORT" -sTCP:LISTEN 2>/dev/null || true)"
+    [[ -n "$orphans" ]] && echo "$orphans" | xargs -r kill 2>/dev/null || true
+    rm -f "$STATION_PID_FILE"
+    echo "trail ingest: stopped (:$STATION_PORT)"
+    return
+  fi
+
+  local url="http://127.0.0.1:$STATION_PORT"
+
+  # Already up (ours or anything on the port) → just open it.
+  if is_running "$STATION_PID_FILE" || ! port_free "$STATION_PORT"; then
+    echo "trail ingest: already running on :$STATION_PORT"
+    open_browser "$url"
+    return
+  fi
+
+  echo "trail ingest: launching Local Ingest Station…"
+  # The station's Vite dev-proxy forwards /api → CLOUD_API (default
+  # app.trailmem.com); auth is a personal trail_ key pasted in the UI. So no
+  # secrets on the command line — the app handles login itself.
+  (
+    cd "$REPO" && \
+    PORT="$STATION_PORT" \
+    CLOUD_API="${TRAIL_CLOUD_API:-https://app.trailmem.com}" \
+    nohup bun run --cwd apps/ingest-station vite --port "$STATION_PORT" --host 127.0.0.1 --strictPort >"$STATION_LOG" 2>&1 &
+    echo $! > "$STATION_PID_FILE"
+  )
+
+  local up=0
+  for _ in $(seq 1 30); do
+    local code
+    code="$(curl -s -o /dev/null -w '%{http_code}' "$url/" 2>/dev/null || echo '000')"
+    if [[ "$code" != "000" ]]; then up=1; break; fi
+    is_running "$STATION_PID_FILE" || break
+    sleep 0.5
+  done
+
+  if (( up )); then
+    echo "  ✓ station :$STATION_PORT"
+    echo "  open → $url"
+    open_browser "$url"
+  else
+    echo "  ✗ station did not come up — see $STATION_LOG" >&2
+    echo "    (first run? ensure deps: pnpm install)" >&2
+    exit 1
+  fi
+}
+
 # ── Dispatch ────────────────────────────────────────────────────────
 case "${1:-help}" in
   start)             cmd_start ;;
+  ingest)            shift; cmd_ingest "$@" ;;
   stop)              cmd_stop ;;
   restart)           cmd_restart ;;
   status)            cmd_status ;;
@@ -476,6 +548,9 @@ Usage: trail <command>
 
 Commands:
   start              launch engine + admin (routes via supervisor if installed)
+  ingest [stop]      launch the Local Ingest Station (Vite :$STATION_PORT) + open it
+                     in the browser. Talks to the CLOUD admin (drop files → \$0
+                     in-session compile via /local-ingest). 'ingest stop' kills it.
   stop               stop both
   restart            stop + start (or supervisor-kickstart if installed)
   status             show running state + supervisor mode

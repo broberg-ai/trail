@@ -26,14 +26,23 @@ just data I/O — they are NOT LLM calls. So:
 
 If you can't compile without one of those, STOP and report.
 
-## Config
+## Config — Step 0: load credentials
 
-- `$TRAIL_CLOUD_API` — cloud base, e.g. `https://app.trailmem.com`.
-- `$TRAIL_API_KEY` — a personal `trail_` key (F188); sent as `Authorization: Bearer`.
+Credentials live in the gitignored `.env.local-ingest` at the repo root (so they
+persist across sessions without `~/.bashrc`). **Source it first**, every drain:
+
+```bash
+set -a; source "$REPO/.env.local-ingest"; set +a   # $REPO = repo root, e.g. /Users/cb/Apps/broberg/trail
+```
+
+It defines:
+- `TRAIL_CLOUD_API` — cloud base (e.g. `https://app.trailmem.com`).
+- `TRAIL_API_KEY` — a personal `trail_` key (F188); sent as `Authorization: Bearer`.
   The cloud admin-proxy routes it to the key's tenant engine.
 
-Set both before draining (the Station hands them over, or export them yourself).
-All calls below: `-H "Authorization: Bearer $TRAIL_API_KEY"` against `$TRAIL_CLOUD_API`.
+If the file is missing, mint a key in the cloud admin (Settings → API-nøgler) and
+write the two lines into `.env.local-ingest`. All calls below:
+`-H "Authorization: Bearer $TRAIL_API_KEY"` against `$TRAIL_CLOUD_API`.
 
 ## Step 1 — `status`
 

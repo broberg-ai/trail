@@ -17,6 +17,16 @@ type Source = Document & { awaitingLocalCompile?: boolean };
 
 const ACCEPTED = '.md · .pdf · .docx · .pptx · .txt · .html · .csv · billeder';
 
+// F191 — localhost auto-login. The Vite config injects the personal key from
+// the gitignored .env.local-ingest as __TRAIL_DEV_KEY__ (empty string in a
+// standalone build with no env file). Persist it BEFORE first render so the api
+// client + the KB load use it — no paste gate when you're on localhost with the
+// key already in .env.
+declare const __TRAIL_DEV_KEY__: string;
+if (typeof __TRAIL_DEV_KEY__ === 'string' && __TRAIL_DEV_KEY__ && !getKey()) {
+  setKey(__TRAIL_DEV_KEY__);
+}
+
 export function App() {
   const [key, setKeyState] = useState(getKey());
   if (!key) return <KeyGate onSaved={(k) => { setKey(k); setKeyState(k); }} />;
