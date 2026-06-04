@@ -156,6 +156,35 @@ you to hand off, or to ask a peer that owns a different domain. Incoming
 peer messages live ONLY in the receiving cc's context — they are never
 auto-forwarded to Christian's phone.
 
+## Scheduled dispatch (buddy F062) — how auto-ingest reaches this session
+
+buddy is a central "cron as a service". Recurring jobs are registered with
+`mcp__buddy__schedule_job` (+ `list_jobs`, `cancel_job`, `pause_all` = fleet
+emergency-stop). Two kinds: `interval` (fire every period) and `probe` (poll an
+HTTP endpoint, dispatch ONLY when it reports pending work, deduped). The job's
+`command` is delivered to a target cc session **as an intercom turn**
+(`<channel type="intercom" from="buddy-dispatch">`).
+
+**THE BINDING RULE:** when a `from="buddy-dispatch"` intercom lands carrying a
+`/command` (e.g. `/local-ingest sanne-andersen`), it is a **directive to run
+that command immediately** — not an FYI. Execute it that turn.
+
+**$0 invariant:** dispatch only ever targets a RUNNING interactive cc session
+(intercom), or `auto_launch` opens an interactive Max session (iTerm `ccb`,
+never headless `claude -p`). Honours `pause_all`.
+
+**Trail's registered jobs (F191.8 — local-ingest auto-dispatch):** two probe
+jobs, both 120s, target session `trail`:
+- broberg-ai → `/local-ingest broberg-ai`
+- sanne-andersen → `/local-ingest sanne-andersen`
+
+Each probes the tenant-wide `GET /api/v1/documents?awaitingLocalCompile=true`
+(`{documents, ids}`; key in `.env.local-ingest`, `X-Trail-Tenant` header). When
+a dropped source parks, buddy dispatches `/local-ingest <tenant>` here; the
+skill compiles it $0 and the engine emits a `source_compiled` SSE event so the
+Ingest Station banner self-clears. Manage/inspect via `list_jobs`; re-register
+(after key rotation etc.) via `schedule_job` with the contract above.
+
 ## Dogfooding — save Trail development into Trail
 
 Trail is used to store Trail's own development knowledge. Every non-trivial
