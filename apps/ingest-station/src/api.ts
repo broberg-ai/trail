@@ -38,7 +38,9 @@ function authHeaders(): Record<string, string> {
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  // body carries the parsed JSON error payload (e.g. the 409 duplicate_source
+  // fields) so callers can react without re-parsing.
+  constructor(public status: number, message: string, public body?: Record<string, unknown>) {
     super(message);
     this.name = 'ApiError';
   }
@@ -54,11 +56,12 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
+    let body: Record<string, unknown> | undefined;
     try {
-      const b = (await res.json()) as { error?: unknown };
-      if (b.error) msg = typeof b.error === 'string' ? b.error : JSON.stringify(b.error);
+      body = (await res.json()) as Record<string, unknown>;
+      if (body.error) msg = typeof body.error === 'string' ? body.error : JSON.stringify(body.error);
     } catch { /* non-JSON body */ }
-    throw new ApiError(res.status, msg);
+    throw new ApiError(res.status, msg, body);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
@@ -91,12 +94,18 @@ export function listSources(kbId: string, awaitingOnly = false): Promise<Documen
   return api<Document[]>(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/documents${q}`);
 }
 
-/** Upload a file as a source PARKED for $0 in-session compile (?localCompile=true). */
-export async function uploadSource(kbId: string, file: File): Promise<Document> {
+/**
+ * Upload a file as a source PARKED for $0 in-session compile (?localCompile=true).
+ * A byte-identical file already in this Trail → the engine returns 409
+ * `duplicate_source` (F162 hash dedup); pass `force` to upload it anyway as a
+ * separate source.
+ */
+export async function uploadSource(kbId: string, file: File, force = false): Promise<Document> {
   const fd = new FormData();
   fd.append('file', file);
+  const q = `?localCompile=true${force ? '&force=true' : ''}`;
   return api<Document>(
-    `/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/documents/upload?localCompile=true`,
+    `/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/documents/upload${q}`,
     { method: 'POST', body: fd },
   );
 }

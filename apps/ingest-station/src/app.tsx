@@ -149,21 +149,48 @@ function Station({ onSignOut }: { onSignOut: () => void }) {
     return unsub;
   }, [kbId, refresh]);
 
+  // F162 dedup — a byte-identical file already in this Trail comes back as a
+  // 409 `duplicate_source`. Surface it on the drop (the "already ingested"
+  // notice Christian asked for) with an "upload anyway" escape, instead of a
+  // raw error.
+  const [duplicates, setDuplicates] = useState<{ file: File; name: string; createdAt?: string }[]>([]);
+
+  const uploadOne = useCallback(async (f: File, force: boolean) => {
+    setUploading((n) => n + 1);
+    try {
+      await uploadSource(kbId, f, force);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409 && e.body?.code === 'duplicate_source') {
+        setDuplicates((d) =>
+          d.some((x) => x.name === f.name)
+            ? d
+            : [...d, { file: f, name: f.name, createdAt: e.body?.existingCreatedAt as string | undefined }],
+        );
+      } else {
+        setError(`Upload fejlede for ${f.name}: ${(e as Error).message}`);
+      }
+    } finally {
+      setUploading((n) => n - 1);
+    }
+  }, [kbId]);
+
   const doUpload = useCallback(async (files: FileList | File[]) => {
     if (!kbId) return;
-    const arr = Array.from(files);
-    setUploading((n) => n + arr.length);
-    for (const f of arr) {
-      try {
-        await uploadSource(kbId, f);
-      } catch (e) {
-        setError(`Upload fejlede for ${f.name}: ${(e as Error).message}`);
-      } finally {
-        setUploading((n) => n - 1);
-      }
-    }
+    for (const f of Array.from(files)) await uploadOne(f, false);
     void refresh(kbId);
-  }, [kbId, refresh]);
+  }, [kbId, uploadOne, refresh]);
+
+  const forceUpload = useCallback(async (name: string) => {
+    const dup = duplicates.find((d) => d.name === name);
+    if (!dup) return;
+    setDuplicates((d) => d.filter((x) => x.name !== name));
+    await uploadOne(dup.file, true);
+    void refresh(kbId);
+  }, [duplicates, uploadOne, refresh, kbId]);
+
+  const skipDuplicate = useCallback((name: string) => {
+    setDuplicates((d) => d.filter((x) => x.name !== name));
+  }, []);
 
   // "Prøv igen" — re-park a failed source so the next /local-ingest drain
   // retries it. Tracked per-id so each button shows its own loading state.
@@ -238,8 +265,36 @@ function Station({ onSignOut }: { onSignOut: () => void }) {
           </div>
         )}
 
-        {/* Source list */}
-        <SourceList sources={sources} onRetry={onRetry} retrying={retrying} />
+        {/* Dedup notices — "already ingested" feedback on drop (F162) */}
+        {duplicates.map((d) => (
+          <div
+            key={d.name}
+            class="mt-4 rounded-lg border border-warn/30 bg-warn/5 px-4 py-3 text-sm flex items-center justify-between gap-3"
+          >
+            <span class="min-w-0">
+              <strong class="break-all">{d.name}</strong> er allerede i denne Trail
+              {d.createdAt ? ` (uploadet ${new Date(d.createdAt).toLocaleDateString('da-DK')})` : ''} — samme indhold.
+            </span>
+            <span class="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => forceUpload(d.name)}
+                class="text-xs px-2.5 py-1 rounded-full border border-line transition
+                       hover:border-accent/50 hover:text-accent active:scale-[0.97]"
+              >
+                Upload alligevel
+              </button>
+              <button
+                onClick={() => skipDuplicate(d.name)}
+                class="text-xs px-2 py-1 rounded-full text-muted hover:text-ink active:scale-[0.97] transition"
+              >
+                Spring over
+              </button>
+            </span>
+          </div>
+        ))}
+
+        {/* Only what failed — the rest of the source history is noise (Christian's call) */}
+        <FailedList sources={sources} onRetry={onRetry} retrying={retrying} />
       </main>
     </div>
   );
@@ -320,7 +375,10 @@ function KbPicker({ kbs, value, onChange }: { kbs: KnowledgeBase[]; value: strin
   );
 }
 
-function SourceList({
+// Failures only — Christian only needs to see what failed; the Færdig/Afventer
+// rows are noise. Each failed source shows its error + a "Prøv igen" retry that
+// re-parks it for the next /local-ingest drain. Renders nothing when all good.
+function FailedList({
   sources,
   onRetry,
   retrying,
@@ -329,51 +387,36 @@ function SourceList({
   onRetry: (id: string) => void;
   retrying: Set<string>;
 }) {
-  if (sources.length === 0) {
-    return <p class="mt-10 text-center text-muted">Ingen kilder endnu.</p>;
-  }
+  const failed = sources.filter((s) => s.status === 'failed' && !s.awaitingLocalCompile);
+  if (failed.length === 0) return null;
   return (
-    <ul class="mt-6 divide-y divide-line">
-      {sources.map((s) => {
-        const failed = s.status === 'failed' && !s.awaitingLocalCompile;
-        return (
-          <li key={s.id} class="flex items-center justify-between py-3 gap-3">
+    <div class="mt-6">
+      <h2 class="text-sm font-medium text-err mb-2">
+        {failed.length} kilde{failed.length === 1 ? '' : 'r'} fejlede
+      </h2>
+      <ul class="divide-y divide-line border border-err/20 rounded-lg overflow-hidden">
+        {failed.map((s) => (
+          <li key={s.id} class="flex items-center justify-between py-3 px-4 gap-3 bg-err/5">
             <div class="min-w-0">
-              <span class="block truncate">{s.title ?? s.filename}</span>
-              {failed && s.errorMessage && (
+              <span class="block truncate font-medium">{s.title ?? s.filename}</span>
+              {s.errorMessage && (
                 <span class="block text-xs text-err/80 truncate mt-0.5" title={s.errorMessage}>
                   {s.errorMessage}
                 </span>
               )}
             </div>
-            <div class="flex items-center gap-2 shrink-0">
-              {failed && (
-                <button
-                  onClick={() => onRetry(s.id)}
-                  disabled={retrying.has(s.id)}
-                  class="text-xs px-2.5 py-0.5 rounded-full border border-line transition
-                         hover:border-accent/50 hover:text-accent active:scale-[0.97]
-                         disabled:opacity-50 disabled:cursor-wait"
-                >
-                  {retrying.has(s.id) ? 'Genstarter…' : 'Prøv igen'}
-                </button>
-              )}
-              <StatusBadge source={s} />
-            </div>
+            <button
+              onClick={() => onRetry(s.id)}
+              disabled={retrying.has(s.id)}
+              class="text-xs px-2.5 py-0.5 rounded-full border border-err/30 bg-white transition shrink-0
+                     hover:border-accent/50 hover:text-accent active:scale-[0.97]
+                     disabled:opacity-50 disabled:cursor-wait"
+            >
+              {retrying.has(s.id) ? 'Genstarter…' : 'Prøv igen'}
+            </button>
           </li>
-        );
-      })}
-    </ul>
+        ))}
+      </ul>
+    </div>
   );
-}
-
-function StatusBadge({ source }: { source: Source }) {
-  let label: string;
-  let cls: string;
-  if (source.awaitingLocalCompile) { label = 'Afventer lokal compile'; cls = 'text-warn bg-warn/10'; }
-  else if (source.status === 'processing') { label = 'Kompilerer…'; cls = 'text-accent bg-accent/10'; }
-  else if (source.status === 'failed') { label = 'Fejlet'; cls = 'text-err bg-err/10'; }
-  else if (source.status === 'ready') { label = 'Færdig'; cls = 'text-ok bg-ok/10'; }
-  else { label = source.status; cls = 'text-muted bg-line/40'; }
-  return <span class={`shrink-0 text-xs px-2 py-0.5 rounded-full ${cls}`}>{label}</span>;
 }
