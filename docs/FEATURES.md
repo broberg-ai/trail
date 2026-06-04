@@ -86,7 +86,7 @@ Status reflects the engine (this repo). Landing-site and CMS-adapter work lives 
 | F74 | [Event-Sourcing: Time-Travel Queries](#f74-time-travel-queries) | Idea | 3 | — |
 | F75 | [Undo / Redo via Event Stream](#f75-undo-redo) | Idea | 3 | — |
 | F76 | [Real-Time Collaboration (CRDT)](#f76-crdt-collab) | Idea | 3 | — |
-| F77 | [Multi-Region Deployments](#f77-multi-region) | Idea | 3 | — |
+| F77 | [Multi-Region Deployments](#f77-multi-region) | Planned | 3 | [plan](features/F77-multi-region-failover.md) |
 | F78 | [Trust Tiers + Provenance Graph (Claims Table)](#f78-trust-tiers) | Idea | 3 | — |
 | F79 | [Scheduled Wiki Re-Compilation](#f79-scheduled-recompile) | Idea | 3 | — |
 | F80 | [Federated Trail (`[[ext:…]]` Links)](#f80-federated-trail) | Idea | 3 | — |
@@ -584,7 +584,7 @@ One-click revert of any approved change. Emits a new event, doesn't mutate histo
 Real-time multi-curator editing on the same wiki page via CRDT. Yjs most likely. Phase 3 scope — compile-at-ingest model means live editing is less critical than for traditional wikis.
 
 ### F77 — Multi-Region
-Read replicas + geo-DNS. Sub-100ms query latency for global customers.
+Read replicas + geo-DNS for sub-100ms læsninger i fjerne regioner, OG **regional failover** så en Fly-region-outage ikke tager en Business+-tenant ned (underbygger F86 SLA). Business+ opt-in, Phase 3+ — single-region `arn` forbliver default; Hobby/Starter/Pro accepterer kort downtime. Bliver på embedded libSQL via replicas (ikke central DB — det er F84). Fuld plan: [features/F77-multi-region-failover.md](features/F77-multi-region-failover.md).
 
 ### F78 — Trust Tiers + Provenance Graph
 First-class `claims` table joining on F22 anchors. Per-claim trust score derived from source canonicality (F53's `is_canonical` foundation) + curator approvals. Enables "show me only high-trust claims" filters.
