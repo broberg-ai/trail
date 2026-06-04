@@ -9,7 +9,7 @@ import {
   canonicaliseTagString,
 } from '@trail/shared';
 import { eq, and, inArray, asc, desc, sql, type SQL } from 'drizzle-orm';
-import { submitCuratorEdit, VersionConflictError, resolveKbId } from '@trail/core';
+import { submitCuratorEdit, VersionConflictError, resolveKbId, createCandidateQueueAPI, type WriteArgs } from '@trail/core';
 import { requireAuth, getUser, getTenant, getTrail } from '../middleware/auth.js';
 import { chunkText, storeChunks } from '../services/chunker.js';
 import {
@@ -800,6 +800,54 @@ documentRoutes.get('/knowledge-bases/:kbId/documents/:docId/compile-prompt', asy
     kb,
   );
   return c.json({ docId: doc.id, sourcePath: `${doc.path}${doc.filename}`, prompt }, 200);
+});
+
+/**
+ * F191 — Local Ingest Station write surface. The `/local-ingest` cc session
+ * compiles a parked source IN-SESSION ($0 Max-plan) and writes the resulting
+ * Neurons here, over plain REST — no MCP. It's already authed to the cloud
+ * (its `trail_` bearer) on a closed network, so the direct API is the right
+ * path (the trail MCP is local-stdio-only and can't reach the cloud DB anyway).
+ *
+ * This wraps the SAME `CandidateQueueAPI.write` the cloud ingest backend uses
+ * (create / str_replace / append), so an in-session compile produces Neurons
+ * identical in shape + goes through the same auto-approval policy + connector
+ * attribution (mcp:claude-code). One write per call, mirroring the MCP `write`
+ * tool the compile prompt instructs.
+ */
+documentRoutes.post('/knowledge-bases/:kbId/wiki-write', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const user = getUser(c);
+  const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
+  if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
+
+  const body = (await c.req.json().catch(() => null)) as Partial<WriteArgs> | null;
+  if (!body || (body.command !== 'create' && body.command !== 'str_replace' && body.command !== 'append')) {
+    return c.json({ error: 'command must be one of create | str_replace | append' }, 400);
+  }
+
+  const api = createCandidateQueueAPI({
+    trail,
+    tenantId: tenant.id,
+    tenantName: tenant.name ?? tenant.id,
+    userId: user.id,
+    connector: 'mcp:claude-code',
+    ingestJobId: null,
+    defaultKbId: kbId,
+  });
+
+  const result = await api.write({
+    knowledge_base: kbId,
+    command: body.command,
+    path: body.path,
+    title: body.title,
+    content: body.content,
+    tags: body.tags,
+    old_text: body.old_text,
+    new_text: body.new_text,
+  });
+  return c.json(result, result.ok ? 200 : 400);
 });
 
 /**

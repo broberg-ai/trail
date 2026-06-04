@@ -1,6 +1,6 @@
 ---
 name: local-ingest
-description: Drain awaiting-local-compile sources for a Trail tenant and compile them into Neurons IN THIS interactive cc session ($0 Max-plan) via the cloud trail MCP. The Local Ingest Station (F191) parks sources here; buddy can also dispatch a drain job (the upmetrics-remediation pattern).
+description: Drain awaiting-local-compile sources for a Trail tenant and compile them into Neurons IN THIS interactive cc session ($0 Max-plan), writing to the cloud KB over the plain cloud REST API (no MCP). The Local Ingest Station (F191) parks sources; buddy can also dispatch a drain job (the upmetrics-remediation pattern).
 argument-hint: "<kb-slug-or-id> | status"
 ---
 
@@ -9,93 +9,90 @@ argument-hint: "<kb-slug-or-id> | status"
 The **$0 ingest engine** for F191. The cloud engine compiles via paid OpenRouter;
 this skill compiles **for free** by doing the work itself — in an interactive
 Claude Code session on the Max subscription — and writing the Neurons straight
-into the cloud KB via the trail MCP.
+into the cloud KB over the **cloud REST API**. No MCP: the session is already
+authed to the closed-network cloud peer (its `trail_` key), so direct API is
+the right path (and the trail MCP is local-stdio-only — it can't reach cloud).
 
 ## THE INVARIANT (read this first)
 
-The whole point is $0. That only holds because an **interactive cc session runs
-on the Max subscription** — no `ANTHROPIC_API_KEY`, no `claude -p` subprocess.
+$0 only holds because **YOU** (an interactive cc session on Max) do the compile:
+read the source, reason about it, decide the Neurons. The REST calls below are
+just data I/O — they are NOT LLM calls. So:
 
-- **YOU compile.** Read the source, reason about it, write Neurons via
-  `mcp__trail__write`. That is your own turn-work = $0.
-- **NEVER** shell out to `claude -p` (Anthropic API-bills headless `claude -p` →
-  not $0). **NEVER** call an Anthropic/OpenRouter API key. **NEVER** call the
-  cloud `/reingest` endpoint (that triggers the paid cloud compile).
+- **YOU compile** — your own turn-reasoning. That is $0.
+- **NEVER** shell out to `claude -p` (Anthropic API-bills it → not $0).
+- **NEVER** call an Anthropic/OpenRouter API key, and **never** hit the cloud
+  `/reingest` endpoint (that fires the paid cloud compile).
 
-If you can't compile without one of those, STOP and report — don't silently
-incur cost.
+If you can't compile without one of those, STOP and report.
 
-## Config (how this session reaches the cloud tenant)
+## Config
 
-- **Cloud API base** — `$TRAIL_CLOUD_API` (e.g. `https://app.trailmem.com`). Used
-  for the REST calls below (auth: `Authorization: Bearer $TRAIL_API_KEY`, a
-  personal `trail_` key minted in the cloud admin / handed over by the Station).
-- **Cloud trail MCP** — the `mcp__trail__*` tools (guide/search/read/write) must
-  be configured to point at the SAME cloud tenant (the Station / `.mcp.json`
-  sets this up). Confirm with `mcp__trail__guide` before compiling: it should
-  list the cloud tenant's KBs.
+- `$TRAIL_CLOUD_API` — cloud base, e.g. `https://app.trailmem.com`.
+- `$TRAIL_API_KEY` — a personal `trail_` key (F188); sent as `Authorization: Bearer`.
+  The cloud admin-proxy routes it to the key's tenant engine.
 
-If either is missing, report it and stop — you cannot write to the cloud KB
-without the MCP, and cannot list pending sources without the key.
+Set both before draining (the Station hands them over, or export them yourself).
+All calls below: `-H "Authorization: Bearer $TRAIL_API_KEY"` against `$TRAIL_CLOUD_API`.
 
 ## Step 1 — `status`
-
-List what's waiting without compiling:
 
 ```bash
 curl -s -H "Authorization: Bearer $TRAIL_API_KEY" \
   "$TRAIL_CLOUD_API/api/v1/knowledge-bases/<kb>/documents?awaitingLocalCompile=true"
 ```
-
 Print the count + filenames. Stop.
 
 ## Step 2 — drain (`/local-ingest <kb-slug-or-id>`)
 
-1. **Confirm MCP context.** `mcp__trail__guide` → verify the cloud tenant + the
-   target KB are present.
+1. **List pending** (same curl as Step 1) → the parked sources.
 
-2. **List pending.** Same curl as Step 1 → the array of parked sources
-   (`status:"ready", awaitingLocalCompile:true`).
-
-3. **For each source `S`:**
+2. **For each source `S` (id `$SID`):**
    a. **Fetch the exact compile prompt** (single-source with cloud ingest):
       ```bash
       curl -s -H "Authorization: Bearer $TRAIL_API_KEY" \
-        "$TRAIL_CLOUD_API/api/v1/knowledge-bases/<kb>/documents/$S_ID/compile-prompt"
+        "$TRAIL_CLOUD_API/api/v1/knowledge-bases/<kb>/documents/$SID/compile-prompt"
       ```
       → `{ prompt, sourcePath }`. The `prompt` is the EXACT 9-step compile prompt
-      cloud ingest would run.
-   b. **Execute it yourself** via the trail MCP — follow the prompt verbatim:
-      `mcp__trail__read` the source at `sourcePath`, `mcp__trail__search` the
-      wiki to survey, then `mcp__trail__write` (create / str_replace / append)
-      the source-summary, concept pages, entity pages, glossary, overview, and
-      log — exactly as the prompt's 9 steps direct. This reasoning + these
-      tool-calls ARE the compile. No subprocess, no API key.
-   c. **Clear the flag** when the source's Neurons are written:
+      cloud ingest would run. **Follow it verbatim** — but map its tool-calls to
+      these REST endpoints (do the reasoning yourself between calls):
+      - the prompt's `read path=…` → `GET .../documents/$SID/content` (the source);
+        for wiki pages, `GET .../knowledge-bases/<kb>/documents` (list) then read by id.
+      - the prompt's `search` → `GET .../knowledge-bases/<kb>/search?q=<terms>`.
+      - the prompt's `write command=create|str_replace|append …` →
+        ```bash
+        curl -s -X POST -H "Authorization: Bearer $TRAIL_API_KEY" \
+          -H "Content-Type: application/json" \
+          "$TRAIL_CLOUD_API/api/v1/knowledge-bases/<kb>/wiki-write" \
+          -d '{"command":"create","path":"/neurons/sources/","title":"…","content":"…","tags":"…"}'
+        ```
+        (For str_replace/append pass `title` = full doc path + `old_text`/`new_text`
+        or `content`, exactly as the prompt directs. This wraps the SAME
+        `CandidateQueueAPI.write` the cloud compile uses → identical Neuron shape,
+        same auto-approval policy, connector `mcp:claude-code`.)
+   b. **Clear the flag** when the source's Neurons are written:
       ```bash
       curl -s -X POST -H "Authorization: Bearer $TRAIL_API_KEY" \
-        "$TRAIL_CLOUD_API/api/v1/documents/$S_ID/local-compiled" -d '{}'
+        "$TRAIL_CLOUD_API/api/v1/documents/$SID/local-compiled" -d '{}'
       ```
-      (Pass `{"failed":true}` instead if the source yielded nothing usable — it
-      parks as failed rather than looping forever.)
-   d. The engine stamps a **free-run** to upmetrics on your MCP writes (F191.5,
-      connector `mcp:claude-code`, cost 0) — nothing for you to do.
+      (Pass `-d '{"failed":true}'` if the source yielded nothing usable.)
+   c. The engine stamps a **free-run** to upmetrics on `/local-compiled` (F191.5,
+      cost 0, connector mcp:claude-code) — nothing for you to do.
 
-4. **Report**: `✓ local-ingest <kb>: compiled N source(s) → M Neurons, $0 (Max-plan).`
+3. **Report**: `✓ local-ingest <kb>: compiled N source(s) → M Neurons, $0 (Max-plan).`
 
 ## How a drain gets started
 
-- **Manual**: you run `/local-ingest <kb>` in an open session.
-- **buddy-dispatched** (the F191.2 pattern): the Station asks buddy to
-  instantiate an ingest job in a cc session — exactly how upmetrics relays a
-  remediation job (`mcp__buddy__launch_agent` / an intercom task). When you
-  receive such a task, run this skill's Step 2 for the named KB.
+- **Manual**: run `/local-ingest <kb>` in an open session.
+- **buddy-dispatched** (F191.2 pattern): the Station asks buddy to instantiate an
+  ingest job in a cc session — exactly how upmetrics relays a remediation job
+  (`mcp__buddy__launch_agent` / an intercom task). On receiving such a task, run
+  Step 2 for the named KB.
 
 ## Guardrails
 
-- Idempotent: re-running over an already-cleared source is a no-op (it's no
-  longer in the `awaitingLocalCompile=true` list).
-- One source at a time; don't parallelise writes to the same KB (the wiki
-  pages — overview/log/glossary — are shared and would race).
-- If `mcp__trail__guide` shows a DIFFERENT tenant than the KB you were asked to
-  drain, STOP — you'd write into the wrong tenant. Re-point the MCP first.
+- Idempotent: a cleared source drops out of the `awaitingLocalCompile=true` list.
+- One source at a time; don't parallelise writes to the same KB (overview/log/
+  glossary are shared pages and would race).
+- If a write returns `{ok:false}`, read the error, fix the args, retry — don't
+  clear the flag until the source's Neurons are actually written.

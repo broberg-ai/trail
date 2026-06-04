@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "cardmem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://services.cardmem.com/mcp",
+        "--header",
+        "Authorization: Bearer pa_58dac4c403450b6da33b9eb85081eaea64f68f8a6a6d658382c20633d8b09f57"
+      ]
+    },
+    "cardmem-lens": {
+      "type": "http",
+      "url": "http://127.0.0.1:7475/mcp"
+    }
+  }
+}
