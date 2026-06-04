@@ -148,6 +148,40 @@ documentRoutes.get('/knowledge-bases/:kbId/documents', async (c) => {
   return c.json(rows);
 });
 
+/**
+ * F191.8 — tenant-wide pending-work probe for buddy's scheduled-dispatch (F62).
+ * Lists ALL of the tenant's sources parked for local compile, across every KB,
+ * so a SINGLE probe job per tenant covers the whole tenant (and auto-covers new
+ * KBs) instead of one job per (tenant, kb). Shape `{ documents, ids }` matches
+ * the probe's pendingPath="documents" (array length = pending count) +
+ * idsPath="ids" (stable dedup list).
+ */
+documentRoutes.get('/documents', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  if (c.req.query('awaitingLocalCompile') !== 'true') {
+    return c.json({ error: 'only ?awaitingLocalCompile=true is supported here' }, 400);
+  }
+  const rows = await trail.db
+    .select({
+      id: documents.id,
+      knowledgeBaseId: documents.knowledgeBaseId,
+      filename: documents.filename,
+      fileType: documents.fileType,
+    })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.tenantId, tenant.id),
+        eq(documents.awaitingLocalCompile, true),
+        eq(documents.kind, 'source'),
+        eq(documents.archived, false),
+      ),
+    )
+    .all();
+  return c.json({ documents: rows, ids: rows.map((r) => r.id) });
+});
+
 documentRoutes.get('/documents/:docId', async (c) => {
   const trail = getTrail(c);
   const tenant = getTenant(c);

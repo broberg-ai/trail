@@ -45,11 +45,26 @@ It defines:
   `sanne-andersen`). The admin-proxy picks ONE tenant per request from the
   **`X-Trail-Tenant` header** (verified against the key user's memberships).
 
-**Pick the tenant for this drain** — the FIRST argument is the tenant slug:
+**Pick the tenant for this drain** — the FIRST argument is the tenant slug,
+the SECOND (optional) is a specific KB:
 
 ```bash
 TENANT="${1:-broberg-ai}"   # e.g. sanne-andersen | broberg-ai
+KB="${2:-}"                 # optional — omit to drain EVERY KB in the tenant
 ```
+
+**Tenant-wide mode (no KB arg — how buddy's F62 dispatcher calls it,
+`/local-ingest <tenant>`):** list the tenant's pending sources across ALL KBs in
+one call, then drain each using its own `knowledgeBaseId`:
+
+```bash
+curl -s -H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT" \
+  "$TRAIL_CLOUD_API/api/v1/documents?awaitingLocalCompile=true"
+# → { documents: [{ id, knowledgeBaseId, filename, fileType }], ids: [...] }
+```
+
+For each returned doc, run Step 2 with `<kb>` = its `knowledgeBaseId`. When a
+specific `KB` arg IS given, skip this and use the per-KB list below.
 
 **Every** call below MUST send both headers, else a scope=`all` key silently
 falls back to its home tenant (broberg-ai) and you'd drain the wrong KB:
