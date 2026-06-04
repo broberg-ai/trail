@@ -65,6 +65,14 @@ export async function uploadSource(kbId: string, file: File): Promise<Document> 
   );
 }
 
+/**
+ * "Prøv igen" — re-park a failed source so the next `/local-ingest` drain
+ * retries it. Clears the failed status and sets awaitingLocalCompile=true.
+ */
+export function recompileSource(docId: string): Promise<{ id: string; awaitingLocalCompile: boolean }> {
+  return api(`/api/v1/documents/${encodeURIComponent(docId)}/local-recompile`, { method: 'POST' });
+}
+
 /** A normalized event off the engine's /api/v1/stream SSE bus. */
 export interface StreamEvent {
   event: string; // e.g. 'candidate_created', 'ping', 'hello', 'ingest_started'

@@ -7,6 +7,7 @@ import {
   listKbs,
   listSources,
   uploadSource,
+  recompileSource,
   subscribeStream,
   type StreamEvent,
 } from './api';
@@ -128,6 +129,21 @@ function Station({ onSignOut }: { onSignOut: () => void }) {
     void refresh(kbId);
   }, [kbId, refresh]);
 
+  // "Prøv igen" — re-park a failed source so the next /local-ingest drain
+  // retries it. Tracked per-id so each button shows its own loading state.
+  const [retrying, setRetrying] = useState<Set<string>>(new Set());
+  const onRetry = useCallback(async (id: string) => {
+    setRetrying((s) => new Set(s).add(id));
+    try {
+      await recompileSource(id);
+      await refresh(kbId);
+    } catch (e) {
+      setError(`Kunne ikke genstarte ${id}: ${(e as Error).message}`);
+    } finally {
+      setRetrying((s) => { const n = new Set(s); n.delete(id); return n; });
+    }
+  }, [kbId, refresh]);
+
   const awaiting = sources.filter((s) => s.awaitingLocalCompile);
 
   return (
@@ -179,7 +195,7 @@ function Station({ onSignOut }: { onSignOut: () => void }) {
         )}
 
         {/* Source list */}
-        <SourceList sources={sources} />
+        <SourceList sources={sources} onRetry={onRetry} retrying={retrying} />
       </main>
     </div>
   );
@@ -215,18 +231,49 @@ function KbPicker({ kbs, value, onChange }: { kbs: KnowledgeBase[]; value: strin
   );
 }
 
-function SourceList({ sources }: { sources: Source[] }) {
+function SourceList({
+  sources,
+  onRetry,
+  retrying,
+}: {
+  sources: Source[];
+  onRetry: (id: string) => void;
+  retrying: Set<string>;
+}) {
   if (sources.length === 0) {
     return <p class="mt-10 text-center text-muted">Ingen kilder endnu.</p>;
   }
   return (
     <ul class="mt-6 divide-y divide-line">
-      {sources.map((s) => (
-        <li key={s.id} class="flex items-center justify-between py-3">
-          <span class="truncate mr-3">{s.title ?? s.filename}</span>
-          <StatusBadge source={s} />
-        </li>
-      ))}
+      {sources.map((s) => {
+        const failed = s.status === 'failed' && !s.awaitingLocalCompile;
+        return (
+          <li key={s.id} class="flex items-center justify-between py-3 gap-3">
+            <div class="min-w-0">
+              <span class="block truncate">{s.title ?? s.filename}</span>
+              {failed && s.errorMessage && (
+                <span class="block text-xs text-err/80 truncate mt-0.5" title={s.errorMessage}>
+                  {s.errorMessage}
+                </span>
+              )}
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              {failed && (
+                <button
+                  onClick={() => onRetry(s.id)}
+                  disabled={retrying.has(s.id)}
+                  class="text-xs px-2.5 py-0.5 rounded-full border border-line transition
+                         hover:border-accent/50 hover:text-accent active:scale-[0.97]
+                         disabled:opacity-50 disabled:cursor-wait"
+                >
+                  {retrying.has(s.id) ? 'Genstarter…' : 'Prøv igen'}
+                </button>
+              )}
+              <StatusBadge source={s} />
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }

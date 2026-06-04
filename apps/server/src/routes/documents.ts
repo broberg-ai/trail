@@ -765,6 +765,44 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
 });
 
 /**
+ * F191 — Local Ingest Station "Prøv igen". Re-parks a source that previously
+ * failed local-compile (or one a user wants the in-session compile to retry):
+ * sets awaitingLocalCompile=true again and clears the failed status, so the
+ * source rejoins the "awaiting" queue and the next `/local-ingest <kb>` drain
+ * picks it up. The fail badge therefore has a real action behind it instead of
+ * being a dead-end. Triggers no cloud compile.
+ */
+documentRoutes.post('/documents/:docId/local-recompile', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const docId = c.req.param('docId');
+
+  const doc = await trail.db
+    .select({ id: documents.id, kind: documents.kind })
+    .from(documents)
+    .where(and(eq(documents.id, docId), eq(documents.tenantId, tenant.id)))
+    .get();
+
+  if (!doc) return c.json({ error: 'Document not found' }, 404);
+  if (doc.kind !== 'source') {
+    return c.json({ error: 'Only source documents can be local-recompiled' }, 400);
+  }
+
+  await trail.db
+    .update(documents)
+    .set({
+      awaitingLocalCompile: true,
+      status: 'ready',
+      errorMessage: null,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(documents.id, doc.id))
+    .run();
+
+  return c.json({ id: doc.id, awaitingLocalCompile: true }, 200);
+});
+
+/**
  * F191 — Local Ingest Station. Returns the EXACT compile prompt cloud ingest
  * would use for this source (built by the shared buildCompilePrompt, so the
  * $0 in-session compile produces Neurons identical in shape). The /local-ingest
