@@ -1,7 +1,7 @@
 ---
 name: local-ingest
 description: Drain awaiting-local-compile sources for a Trail tenant and compile them into Neurons IN THIS interactive cc session ($0 Max-plan), writing to the cloud KB over the plain cloud REST API (no MCP). The Local Ingest Station (F191) parks sources; buddy can also dispatch a drain job (the upmetrics-remediation pattern).
-argument-hint: "<kb-slug-or-id> | status"
+argument-hint: "<tenant-slug> <kb-slug-or-id> | status"
 ---
 
 # /local-ingest $ARGUMENTS
@@ -37,29 +37,44 @@ set -a; source "$REPO/.env.local-ingest"; set +a   # $REPO = repo root, e.g. /Us
 
 It defines:
 - `TRAIL_CLOUD_API` — cloud base (e.g. `https://app.trailmem.com`).
-- `TRAIL_API_KEY` — a personal `trail_` key (F188); sent as `Authorization: Bearer`.
-  The cloud admin-proxy routes it to the key's tenant engine.
+- `TRAIL_API_KEY` — a personal `trail_` key. cb's key is **scope=`all`**
+  (F191.6): it spans every tenant he's a member of (`broberg-ai` +
+  `sanne-andersen`). The admin-proxy picks ONE tenant per request from the
+  **`X-Trail-Tenant` header** (verified against the key user's memberships).
 
-If the file is missing, mint a key in the cloud admin (Settings → API-nøgler) and
-write the two lines into `.env.local-ingest`. All calls below:
-`-H "Authorization: Bearer $TRAIL_API_KEY"` against `$TRAIL_CLOUD_API`.
+**Pick the tenant for this drain** — the FIRST argument is the tenant slug:
+
+```bash
+TENANT="${1:-broberg-ai}"   # e.g. sanne-andersen | broberg-ai
+```
+
+**Every** call below MUST send both headers, else a scope=`all` key silently
+falls back to its home tenant (broberg-ai) and you'd drain the wrong KB:
+
+```
+-H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT"
+```
+
+If `.env.local-ingest` is missing, mint a key in the cloud admin
+(Settings → API-nøgler) and write the two lines into it. A bogus/unauthorised
+tenant slug → 401 (the header is a selector over your memberships, not a grant).
 
 ## Step 1 — `status`
 
 ```bash
-curl -s -H "Authorization: Bearer $TRAIL_API_KEY" \
+curl -s -H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT" \
   "$TRAIL_CLOUD_API/api/v1/knowledge-bases/<kb>/documents?awaitingLocalCompile=true"
 ```
 Print the count + filenames. Stop.
 
-## Step 2 — drain (`/local-ingest <kb-slug-or-id>`)
+## Step 2 — drain (`/local-ingest <tenant-slug> <kb-slug-or-id>`)
 
 1. **List pending** (same curl as Step 1) → the parked sources.
 
 2. **For each source `S` (id `$SID`):**
    a. **Fetch the exact compile prompt** (single-source with cloud ingest):
       ```bash
-      curl -s -H "Authorization: Bearer $TRAIL_API_KEY" \
+      curl -s -H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT" \
         "$TRAIL_CLOUD_API/api/v1/knowledge-bases/<kb>/documents/$SID/compile-prompt"
       ```
       → `{ prompt, sourcePath }`. The `prompt` is the EXACT 9-step compile prompt
@@ -70,7 +85,7 @@ Print the count + filenames. Stop.
       - the prompt's `search` → `GET .../knowledge-bases/<kb>/search?q=<terms>`.
       - the prompt's `write command=create|str_replace|append …` →
         ```bash
-        curl -s -X POST -H "Authorization: Bearer $TRAIL_API_KEY" \
+        curl -s -X POST -H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT" \
           -H "Content-Type: application/json" \
           "$TRAIL_CLOUD_API/api/v1/knowledge-bases/<kb>/wiki-write" \
           -d '{"command":"create","path":"/neurons/sources/","title":"…","content":"…","tags":"…"}'
@@ -81,7 +96,7 @@ Print the count + filenames. Stop.
         same auto-approval policy, connector `mcp:claude-code`.)
    b. **Clear the flag** when the source's Neurons are written:
       ```bash
-      curl -s -X POST -H "Authorization: Bearer $TRAIL_API_KEY" \
+      curl -s -X POST -H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT" \
         "$TRAIL_CLOUD_API/api/v1/documents/$SID/local-compiled" -d '{}'
       ```
       (Pass `-d '{"failed":true}'` if the source yielded nothing usable.)
@@ -92,7 +107,8 @@ Print the count + filenames. Stop.
 
 ## How a drain gets started
 
-- **Manual**: run `/local-ingest <kb>` in an open session.
+- **Manual**: run `/local-ingest <tenant-slug> <kb>` in an open session
+  (e.g. `/local-ingest sanne-andersen <kb>` to land Sanne's source material).
 - **buddy-dispatched** (F191.2 pattern): the Station asks buddy to instantiate an
   ingest job in a cc session — exactly how upmetrics relays a remediation job
   (`mcp__buddy__launch_agent` / an intercom task). On receiving such a task, run
