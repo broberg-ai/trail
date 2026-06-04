@@ -10,34 +10,75 @@ import type {
 import { slugify } from '@trail/shared';
 
 /**
+ * Transient upstream statuses worth a retry. The Trail engine + admin each
+ * run a SINGLE Fly machine (DB lives on a per-machine volume — F33 Phase 1),
+ * so every deploy/restart/health-blip is a brief window with NO failover where
+ * Fly's edge returns 502/503/504 to all clients. Riding through that window
+ * with a short backoff keeps deploys invisible to the user and stops polluting
+ * the error board with deploy-noise (the 2026-06-04 "ApiError: 503" issue).
+ */
+const TRANSIENT_STATUSES = new Set([502, 503, 504]);
+const MAX_ATTEMPTS = 3;
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Only idempotent methods may auto-retry — never risk double-applying a write. */
+function isSafeMethod(init?: RequestInit): boolean {
+  const m = (init?.method ?? 'GET').toUpperCase();
+  return m === 'GET' || m === 'HEAD';
+}
+
+/**
  * Typed fetch wrapper.
  * Cookies flow via credentials: 'include'. Errors surface as thrown
- * `ApiError` with status + server-provided message.
+ * `ApiError` with status + server-provided message. Safe methods retry
+ * transient 5xx / network blips with backoff (see TRANSIENT_STATUSES).
  */
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
-    ...init,
-  });
-  if (!response.ok) {
-    let message = `${response.status} ${response.statusText}`;
-    let body: Record<string, unknown> | undefined;
+  const safe = isSafeMethod(init);
+  const attempts = safe ? MAX_ATTEMPTS : 1;
+  let lastNetworkErr: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    let response: Response;
     try {
-      body = (await response.json()) as Record<string, unknown>;
-      if (body.error) {
-        message = typeof body.error === 'string' ? body.error : JSON.stringify(body.error);
+      response = await fetch(path, {
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...init?.headers,
+        },
+        ...init,
+      });
+    } catch (err) {
+      // Connection refused/reset mid deploy window — retry safe methods.
+      lastNetworkErr = err;
+      if (safe && attempt < attempts) {
+        await sleep(attempt * 400);
+        continue;
       }
-    } catch {
-      // ignore
+      throw err;
     }
-    throw new ApiError(response.status, message, body);
+    if (!response.ok) {
+      if (safe && TRANSIENT_STATUSES.has(response.status) && attempt < attempts) {
+        await sleep(attempt * 400);
+        continue;
+      }
+      let message = `${response.status} ${response.statusText}`;
+      let body: Record<string, unknown> | undefined;
+      try {
+        body = (await response.json()) as Record<string, unknown>;
+        if (body.error) {
+          message = typeof body.error === 'string' ? body.error : JSON.stringify(body.error);
+        }
+      } catch {
+        // ignore
+      }
+      throw new ApiError(response.status, message, body);
+    }
+    if (response.status === 204) return undefined as T;
+    return (await response.json()) as T;
   }
-  if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  // Unreachable for non-safe methods; safe methods exhausted all network retries.
+  throw lastNetworkErr instanceof Error ? lastNetworkErr : new Error('request failed');
 }
 
 export class ApiError extends Error {
