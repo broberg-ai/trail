@@ -901,8 +901,17 @@ export async function processFileAsync(
       // F190.6 — tag the image-source vision call with tenant/KB so its cost
       // reaches upmetrics per-tenant (the pipeline interface is fixed, so we
       // wrap rather than widen its signature).
-      describeImageAsSource: (buf, mt, fn) =>
-        describeImageAsSource(buf, mt, fn, { tenantId, kbId }),
+      // F191.7 — local-ingest defers vision to the $0 cc session. For a
+      // standalone image with awaitingLocalCompile we return a $0 placeholder
+      // instead of calling paid Haiku; the /local-ingest skill fetches the raw
+      // image, views it, and writes the real description via PUT /content.
+      describeImageAsSource: awaitingLocalCompile
+        ? async (_buf, _mt, fn) => ({
+            markdown: `# ${fn.replace(/\.[a-z0-9]+$/i, '')}\n\n*Billede — afventer lokal vision (F191.7).*`,
+            costCents: 0,
+            model: 'deferred-local-vision',
+          })
+        : (buf, mt, fn) => describeImageAsSource(buf, mt, fn, { tenantId, kbId }),
       transcribeAudio,
     }),
     timeoutMs,
@@ -1006,7 +1015,10 @@ export async function processFileAsync(
   // and is idempotent on `vision_description IS NULL` so a crashed/aborted
   // run can be re-submitted safely. Only fires for pipelines that produced
   // body-images (PDF today; pptx/docx if/when they extract images).
-  if (Array.isArray(result.images) && result.images.length > 0) {
+  // F191.7 — but NOT for local-ingest: paid cloud vision is exactly what we're
+  // deferring. The embedded image rows stay vision_description=NULL and the
+  // /local-ingest skill describes them in-session ($0) via /images?pending=1.
+  if (!awaitingLocalCompile && Array.isArray(result.images) && result.images.length > 0) {
     try {
       const runner = getJobRunner();
       const jobId = await runner.submit<VisionRerunPayload>({

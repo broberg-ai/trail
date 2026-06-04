@@ -4,7 +4,7 @@ import { eq, and, inArray, sql } from 'drizzle-orm';
 import { basename } from 'node:path';
 import { resolveKbId } from '@trail/core';
 import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
-import { storage, imagePath } from '../lib/storage.js';
+import { storage, imagePath, sourcePath } from '../lib/storage.js';
 import { defaultAudienceForAuth, isVisibleToAudience } from '../services/audience.js';
 import type { AppBindings } from '../app.js';
 
@@ -60,6 +60,114 @@ imageRoutes.get('/documents/:docId/images/:filename', async (c) => {
       'Cache-Control': 'private, max-age=3600',
     },
   });
+});
+
+// ── F191.7 — local vision ($0 cc session does image description) ──────────────
+
+const IMAGE_CONTENT_TYPES: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+  webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml',
+};
+
+/**
+ * F191.7 — raw SOURCE file bytes. The /local-ingest skill fetches this for a
+ * standalone image source, views it (Read tool), and writes the description
+ * back via PUT /documents/:docId/content. Tenant-scoped (the caller is draining
+ * its own parked source).
+ */
+imageRoutes.get('/documents/:docId/raw', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const docId = c.req.param('docId');
+  const doc = await trail.db
+    .select({ id: documents.id, knowledgeBaseId: documents.knowledgeBaseId, fileType: documents.fileType })
+    .from(documents)
+    .where(and(eq(documents.id, docId), eq(documents.tenantId, tenant.id)))
+    .get();
+  if (!doc) return c.json({ error: 'Not found' }, 404);
+
+  const ext = (doc.fileType ?? '').toLowerCase();
+  const data = await storage.get(sourcePath(tenant.id, doc.knowledgeBaseId, docId, ext));
+  if (!data) return c.json({ error: 'Source file not found' }, 404);
+
+  return new Response(data, {
+    headers: {
+      'Content-Type': IMAGE_CONTENT_TYPES[ext] ?? 'application/octet-stream',
+      'Cache-Control': 'private, max-age=3600',
+    },
+  });
+});
+
+/**
+ * F191.7 — list a document's embedded images. `?pending=1` filters to those
+ * still needing a description (vision_description IS NULL), i.e. the work the
+ * /local-ingest skill must do for this source ($0, in-session).
+ */
+imageRoutes.get('/documents/:docId/images', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const docId = c.req.param('docId');
+  const pendingOnly = c.req.query('pending') === '1' || c.req.query('pending') === 'true';
+
+  const conds = [eq(documentImages.documentId, docId), eq(documentImages.tenantId, tenant.id)];
+  if (pendingOnly) conds.push(sql`${documentImages.visionDescription} IS NULL`);
+
+  const rows = await trail.db
+    .select({
+      id: documentImages.id,
+      filename: documentImages.filename,
+      page: documentImages.page,
+      width: documentImages.width,
+      height: documentImages.height,
+      hasDescription: sql<number>`(${documentImages.visionDescription} IS NOT NULL)`,
+    })
+    .from(documentImages)
+    .where(and(...conds))
+    .all();
+
+  return c.json({ images: rows.map((r) => ({ ...r, hasDescription: !!r.hasDescription })) });
+});
+
+/**
+ * F191.7 — write a cc-produced image description ($0). Mirrors the exact write
+ * the paid vision-rerun handler does, but stamps vision_model='claude-code' and
+ * cost 0. Keyed by (docId, filename) — the same handle the bytes endpoint uses.
+ */
+imageRoutes.post('/documents/:docId/images/:filename/local-vision', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const docId = c.req.param('docId');
+  const filename = basename(c.req.param('filename'));
+  const body = (await c.req.json().catch(() => ({}))) as { description?: string };
+  const description = body.description?.trim();
+  if (!description) return c.json({ error: 'description is required' }, 400);
+
+  const img = await trail.db
+    .select({ id: documentImages.id })
+    .from(documentImages)
+    .where(
+      and(
+        eq(documentImages.documentId, docId),
+        eq(documentImages.filename, filename),
+        eq(documentImages.tenantId, tenant.id),
+      ),
+    )
+    .get();
+  if (!img) return c.json({ error: 'Image not found' }, 404);
+
+  await trail.db
+    .update(documentImages)
+    .set({
+      visionDescription: description,
+      visionModel: 'claude-code',
+      visionAt: new Date().toISOString(),
+      visionCostCents: 0,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(documentImages.id, img.id))
+    .run();
+
+  return c.json({ id: img.id, filename, visionModel: 'claude-code', costCents: 0 }, 200);
 });
 
 /**

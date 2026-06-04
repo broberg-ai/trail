@@ -20,11 +20,14 @@ read the source, reason about it, decide the Neurons. The REST calls below are
 just data I/O — they are NOT LLM calls. So:
 
 - **YOU compile** — your own turn-reasoning. That is $0.
+- **YOU do vision too** (F191.7) — you are multimodal. To describe an image,
+  download its bytes and **Read the local file** (the Read tool renders images),
+  then describe it in your own turn. That is $0 — NOT a vision API call.
 - **NEVER** shell out to `claude -p` (Anthropic API-bills it → not $0).
 - **NEVER** call an Anthropic/OpenRouter API key, and **never** hit the cloud
   `/reingest` endpoint (that fires the paid cloud compile).
 
-If you can't compile without one of those, STOP and report.
+If you can't compile/describe without one of those, STOP and report.
 
 ## Config — Step 0: load credentials
 
@@ -72,6 +75,40 @@ Print the count + filenames. Stop.
 1. **List pending** (same curl as Step 1) → the parked sources.
 
 2. **For each source `S` (id `$SID`):**
+
+   a0. **Local vision first (F191.7 — $0, you describe the images).** The pending
+      list includes `fileType`. Cloud vision is deliberately deferred to you here.
+      - **Standalone image** (`fileType` ∈ `png|jpg|jpeg|webp|gif|svg`): the
+        parked content is just a placeholder. Fetch the raw image, VIEW it, write
+        the description as the source content, THEN compile normally:
+        ```bash
+        curl -s -H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT" \
+          "$TRAIL_CLOUD_API/api/v1/documents/$SID/raw" -o /tmp/trail-img-$SID
+        ```
+        → **Read `/tmp/trail-img-$SID`** (you see the image) → write your
+        description back as the source body:
+        ```bash
+        curl -s -X PUT -H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT" \
+          -H "Content-Type: application/json" \
+          "$TRAIL_CLOUD_API/api/v1/documents/$SID/content" \
+          -d '{"content":"# <title>\n\n<your full description>"}'
+        ```
+      - **Embedded images (any source — PDF/DOCX/PPTX)**: list the ones needing a
+        description and describe each:
+        ```bash
+        curl -s -H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT" \
+          "$TRAIL_CLOUD_API/api/v1/documents/$SID/images?pending=1"
+        ```
+        → for each `{id, filename}`: fetch bytes (`GET .../documents/$SID/images/<filename>` → `-o /tmp/x`),
+        **Read** the file, then write the description:
+        ```bash
+        curl -s -X POST -H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT" \
+          -H "Content-Type: application/json" \
+          "$TRAIL_CLOUD_API/api/v1/documents/$SID/images/<filename>/local-vision" \
+          -d '{"description":"<your description of the image>"}'
+        ```
+      All of this is YOUR turn-reasoning over a Read image — **$0, no vision API.**
+
    a. **Fetch the exact compile prompt** (single-source with cloud ingest):
       ```bash
       curl -s -H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT" \
