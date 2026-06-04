@@ -7,6 +7,7 @@
 import type { KnowledgeBase, Document } from '@trail/shared';
 
 const KEY_STORAGE = 'trail.ingest.key';
+const TENANT_STORAGE = 'trail.ingest.tenant';
 
 export function getKey(): string {
   return localStorage.getItem(KEY_STORAGE) ?? '';
@@ -14,6 +15,26 @@ export function getKey(): string {
 export function setKey(key: string): void {
   if (key) localStorage.setItem(KEY_STORAGE, key.trim());
   else localStorage.removeItem(KEY_STORAGE);
+}
+
+// F191.6 — the active tenant slug. A scope='all' key spans multiple tenants;
+// the admin proxy picks one per request from the X-Trail-Tenant header we
+// attach below. Persisted so the choice survives reloads.
+export function getActiveTenant(): string {
+  return localStorage.getItem(TENANT_STORAGE) ?? '';
+}
+export function setActiveTenant(slug: string): void {
+  if (slug) localStorage.setItem(TENANT_STORAGE, slug);
+  else localStorage.removeItem(TENANT_STORAGE);
+}
+
+function authHeaders(): Record<string, string> {
+  const key = getKey();
+  const tenant = getActiveTenant();
+  return {
+    ...(key ? { Authorization: `Bearer ${key}` } : {}),
+    ...(tenant ? { 'X-Trail-Tenant': tenant } : {}),
+  };
 }
 
 export class ApiError extends Error {
@@ -24,12 +45,11 @@ export class ApiError extends Error {
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const key = getKey();
   const res = await fetch(path, {
     ...init,
     headers: {
       ...(init?.headers ?? {}),
-      ...(key ? { Authorization: `Bearer ${key}` } : {}),
+      ...authHeaders(),
     },
   });
   if (!res.ok) {
@@ -44,7 +64,23 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** List the KBs for the key's tenant — the engine scopes by the bearer. */
+/** A tenant the key's user can drop into (F191.6). */
+export interface Tenant {
+  slug: string;
+  name: string;
+  role: string;
+}
+
+/**
+ * List the tenants this key can reach (F191.6). A scope='all' key returns
+ * every tenant the user is a member of; a single-tenant key returns just its
+ * home tenant. Key-authed, answered by the admin (not proxied to an engine).
+ */
+export function listTenants(): Promise<{ scope: string; tenants: Tenant[] }> {
+  return api('/api/control/my-tenants');
+}
+
+/** List the KBs for the active tenant — proxy routes by key + X-Trail-Tenant. */
 export function listKbs(): Promise<KnowledgeBase[]> {
   return api<KnowledgeBase[]>('/api/v1/knowledge-bases');
 }
@@ -89,7 +125,7 @@ export function subscribeStream(onEvent: (e: StreamEvent) => void): () => void {
   (async () => {
     try {
       const res = await fetch('/api/v1/stream', {
-        headers: { Authorization: `Bearer ${getKey()}` },
+        headers: authHeaders(),
         signal: ac.signal,
       });
       if (!res.ok || !res.body) return;

@@ -128,6 +128,57 @@ apiKeyRoutes.get('/api-keys', async (c) => {
   return c.json({ keys: rows });
 });
 
+/**
+ * F191.6 — list the tenants the KEY's user can drop into, for the Ingest
+ * Station's tenant picker. Key-authed (the Station has no session cookie), and
+ * NOT proxied to an engine — it answers from control.db directly. A
+ * `scope='all'` key returns every tenant the user has a `control_memberships`
+ * row for; any other (single-tenant) key returns ONLY its home tenant, so a
+ * legacy key can't enumerate the user's whole tenant set.
+ */
+apiKeyRoutes.get('/my-tenants', async (c) => {
+  const authHeader = c.req.header('authorization');
+  if (!authHeader?.toLowerCase().startsWith('bearer ')) {
+    return c.json({ error: 'no key' }, 401);
+  }
+  const presented = authHeader.slice(7).trim();
+  if (!presented.startsWith('trail_')) return c.json({ error: 'no key' }, 401);
+
+  const key = await db.query.controlApiKeys.findFirst({
+    where: and(
+      eq(schema.controlApiKeys.keyHash, hashApiKey(presented)),
+      isNull(schema.controlApiKeys.revokedAt),
+    ),
+  });
+  if (!key) return c.json({ error: 'invalid key' }, 401);
+
+  if (key.scope !== 'all') {
+    const home = await db.query.controlTenants.findFirst({
+      where: eq(schema.controlTenants.id, key.tenantId),
+    });
+    return c.json({
+      scope: key.scope,
+      tenants: home ? [{ slug: home.slug, name: home.name, role: 'member' }] : [],
+    });
+  }
+
+  const rows = await db
+    .select({
+      slug: schema.controlTenants.slug,
+      name: schema.controlTenants.name,
+      role: schema.controlMemberships.role,
+    })
+    .from(schema.controlMemberships)
+    .innerJoin(
+      schema.controlTenants,
+      eq(schema.controlTenants.id, schema.controlMemberships.tenantId),
+    )
+    .where(eq(schema.controlMemberships.userId, key.userId))
+    .all();
+
+  return c.json({ scope: 'all', tenants: rows });
+});
+
 /** Soft-revoke a key the caller owns. */
 apiKeyRoutes.delete('/api-keys/:id', async (c) => {
   const ctx = await resolveContext(c);

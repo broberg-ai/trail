@@ -123,9 +123,45 @@ async function resolveApiKey(c: Context): Promise<ResolvedRoute | null> {
   });
   if (!key) return null;
 
-  const tenant = await db.query.controlTenants.findFirst({
-    where: eq(schema.controlTenants.id, key.tenantId),
-  });
+  // F191.6 — a scope='all' key spans every tenant the owning USER is a member
+  // of (control_memberships). The caller picks one per request via the
+  // X-Trail-Tenant header (the Ingest Station's tenant picker sets it). The
+  // header is a SELECTOR, not a grant: we only honour a slug the key's user
+  // actually has a membership row for, so a forged slug can't escape the
+  // user's tenant set. No header (or a legacy scope='full' key) → fall back to
+  // the key's home tenantId, so single-tenant keys behave exactly as before.
+  let tenant: { id: string; slug: string } | null = null;
+  if (key.scope === 'all') {
+    const hintSlug = c.req.header('x-trail-tenant');
+    if (hintSlug) {
+      tenant =
+        (await db
+          .select({ id: schema.controlTenants.id, slug: schema.controlTenants.slug })
+          .from(schema.controlTenants)
+          .innerJoin(
+            schema.controlMemberships,
+            eq(schema.controlMemberships.tenantId, schema.controlTenants.id),
+          )
+          .where(
+            and(
+              eq(schema.controlTenants.slug, hintSlug),
+              eq(schema.controlMemberships.userId, key.userId),
+            ),
+          )
+          .get()) ?? null;
+      // Asked for a tenant this user isn't a member of → refuse (don't silently
+      // fall back to the home tenant, which would mask an access error).
+      if (!tenant) return null;
+    }
+  }
+  if (!tenant) {
+    tenant =
+      (await db
+        .select({ id: schema.controlTenants.id, slug: schema.controlTenants.slug })
+        .from(schema.controlTenants)
+        .where(eq(schema.controlTenants.id, key.tenantId))
+        .get()) ?? null;
+  }
   if (!tenant) return null;
 
   const eng = await db.query.tenantEngines.findFirst({
