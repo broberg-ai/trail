@@ -88,9 +88,9 @@ Print the count + filenames. Stop.
         → **Read `/tmp/trail-img-$SID`** (you see the image) → write your
         description back as the source body:
         ```bash
-        curl -s -X PUT -H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT" \
+        curl -s -X POST -H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT" \
           -H "Content-Type: application/json" \
-          "$TRAIL_CLOUD_API/api/v1/documents/$SID/content" \
+          "$TRAIL_CLOUD_API/api/v1/documents/$SID/local-vision" \
           -d '{"content":"# <title>\n\n<your full description>"}'
         ```
       - **Embedded images (any source — PDF/DOCX/PPTX)**: list the ones needing a

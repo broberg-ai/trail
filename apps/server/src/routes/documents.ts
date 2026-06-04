@@ -803,6 +803,45 @@ documentRoutes.post('/documents/:docId/local-recompile', async (c) => {
 });
 
 /**
+ * F191.7 — write a cc-produced description as a standalone IMAGE source's body
+ * ($0 local vision). A direct content-set (NOT the curator-edit PUT /content,
+ * which needs expectedVersion + writes wiki-history) — this is the parked
+ * image's first real body, replacing the "afventer lokal vision" placeholder.
+ * Rebuilds search chunks. Embedded images use the sibling
+ * POST /documents/:docId/images/:filename/local-vision instead.
+ */
+documentRoutes.post('/documents/:docId/local-vision', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const docId = c.req.param('docId');
+  const body = (await c.req.json().catch(() => ({}))) as { content?: string };
+  const content = body.content?.trim();
+  if (!content) return c.json({ error: 'content is required' }, 400);
+
+  const doc = await trail.db
+    .select({ id: documents.id, knowledgeBaseId: documents.knowledgeBaseId, kind: documents.kind })
+    .from(documents)
+    .where(and(eq(documents.id, docId), eq(documents.tenantId, tenant.id)))
+    .get();
+  if (!doc) return c.json({ error: 'Document not found' }, 404);
+  if (doc.kind !== 'source') {
+    return c.json({ error: 'Only source documents accept local-vision content' }, 400);
+  }
+
+  await trail.db
+    .update(documents)
+    .set({ content, updatedAt: new Date().toISOString() })
+    .where(eq(documents.id, doc.id))
+    .run();
+
+  await trail.db.delete(documentChunks).where(eq(documentChunks.documentId, docId)).run();
+  const chunks = chunkText(content);
+  await storeChunks(trail, docId, tenant.id, doc.knowledgeBaseId, chunks);
+
+  return c.json({ id: docId, bytes: content.length }, 200);
+});
+
+/**
  * F191 — Local Ingest Station. Returns the EXACT compile prompt cloud ingest
  * would use for this source (built by the shared buildCompilePrompt, so the
  * $0 in-session compile produces Neurons identical in shape). The /local-ingest
