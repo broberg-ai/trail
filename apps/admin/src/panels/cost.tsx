@@ -214,6 +214,7 @@ export function CostPanel() {
           {WINDOWS.map((w) => (
             <button
               key={w.value}
+              data-testid={`cost-window-${w.value}`}
               onClick={() => setWindow(w.value)}
               class={
                 'px-2 py-1 text-xs font-mono rounded transition ' +
@@ -226,6 +227,7 @@ export function CostPanel() {
             </button>
           ))}
           <button
+            data-testid="cost-shadow-toggle"
             onClick={() => setIncludeShadow(!includeShadow)}
             title={t('cost.shadow.hint')}
             aria-pressed={includeShadow}

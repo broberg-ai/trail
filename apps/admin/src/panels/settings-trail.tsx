@@ -274,6 +274,7 @@ export function SettingsTrailPanel() {
           <input
             type="text"
             value={name}
+            data-testid="settings-name-input"
             onInput={(e) => setName((e.target as HTMLInputElement).value)}
             maxLength={100}
             class={
@@ -297,6 +298,7 @@ export function SettingsTrailPanel() {
           </label>
           <textarea
             value={description}
+            data-testid="settings-description-input"
             onInput={(e) => setDescription((e.target as HTMLTextAreaElement).value)}
             placeholder={t('settings.trail.descriptionPlaceholder')}
             rows={3}
@@ -507,6 +509,7 @@ export function SettingsTrailPanel() {
           <div class="mt-3">
             <button
               type="button"
+              data-testid="settings-save-ingest"
               onClick={onSaveIngestModel}
               disabled={!ingestDirty || ingestSavePending}
               class="px-3 py-1.5 text-sm rounded-md border border-[color:var(--color-accent)]/40 bg-[color:var(--color-accent)]/10 hover:bg-[color:var(--color-accent)]/20 disabled:opacity-40 disabled:cursor-not-allowed active:bg-[color:var(--color-accent)]/30 transition"
@@ -581,6 +584,7 @@ export function SettingsTrailPanel() {
           <div class="mt-3">
             <button
               type="button"
+              data-testid="settings-save-chat"
               onClick={onSaveChatModel}
               disabled={!chatDirty || chatSavePending}
               class="px-3 py-1.5 text-sm rounded-md border border-[color:var(--color-accent)]/40 bg-[color:var(--color-accent)]/10 hover:bg-[color:var(--color-accent)]/20 disabled:opacity-40 disabled:cursor-not-allowed active:bg-[color:var(--color-accent)]/30 transition"
@@ -626,7 +630,8 @@ export function SettingsTrailPanel() {
         <div class="pt-4 border-t border-[color:var(--color-border)]">
           <button
             type="button"
-            onClick={() => void onSave()}
+            data-testid="settings-save"
+          onClick={() => void onSave()}
             disabled={!dirty || busy}
             class="px-4 py-2 rounded-md bg-[color:var(--color-accent)] text-[color:var(--color-accent-fg)] text-sm font-medium disabled:opacity-50 transition"
           >
