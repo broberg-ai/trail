@@ -483,6 +483,7 @@ export function SourcesPanel() {
             <div class="flex items-center gap-3">
               <button
                 type="button"
+                data-testid="sources-bulk-retry"
                 onClick={() => runBulk('retry')}
                 disabled={bulkBusy !== null}
                 class="text-[11px] font-mono text-[color:var(--color-accent)] hover:text-[color:var(--color-fg)] disabled:opacity-50 transition"
@@ -492,6 +493,7 @@ export function SourcesPanel() {
               </button>
               <button
                 type="button"
+                data-testid="sources-bulk-reingest"
                 onClick={() => runBulk('reingest')}
                 disabled={bulkBusy !== null}
                 class="text-[11px] font-mono text-[color:var(--color-accent)] hover:text-[color:var(--color-fg)] disabled:opacity-50 transition"
@@ -502,6 +504,7 @@ export function SourcesPanel() {
               {visionRerunEnabled ? (
                 <button
                   type="button"
+                  data-testid="sources-bulk-vision"
                   onClick={onRunVisionBulk}
                   disabled={bulkBusy !== null}
                   class="text-[11px] font-mono text-[color:var(--color-accent)] hover:text-[color:var(--color-fg)] disabled:opacity-50 transition"
@@ -512,6 +515,7 @@ export function SourcesPanel() {
               ) : null}
               <button
                 type="button"
+                data-testid="sources-bulk-archive"
                 onClick={() => runBulk('archive')}
                 disabled={bulkBusy !== null}
                 class="text-[11px] font-mono text-[color:var(--color-danger)] hover:opacity-80 disabled:opacity-50 transition"
@@ -520,6 +524,7 @@ export function SourcesPanel() {
               </button>
               <button
                 type="button"
+                data-testid="sources-clear-selected"
                 onClick={clearSelected}
                 disabled={bulkBusy !== null}
                 class="text-[11px] font-mono text-[color:var(--color-fg-subtle)] hover:text-[color:var(--color-fg)] transition"

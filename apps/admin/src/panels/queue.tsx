@@ -709,6 +709,7 @@ export function QueuePanel() {
       <div class="mb-3">
         <div class="flex items-center gap-2 mb-2">
           <button
+            data-testid="queue-connector-filter-toggle"
             onClick={() => setConnectorFilterOpen((v) => !v)}
             class="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] hover:text-[color:var(--color-fg)] transition cursor-pointer"
             aria-expanded={connectorFilterOpen || selectedConnectors.size > 0}
@@ -766,6 +767,7 @@ export function QueuePanel() {
         <div class="mt-3">
           <div class="flex items-center gap-2 mb-2">
             <button
+              data-testid="queue-tag-filter-toggle"
               onClick={() => setTagFilterOpen((v) => !v)}
               class="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] hover:text-[color:var(--color-fg)] transition cursor-pointer"
               aria-expanded={tagFilterOpen || selectedTags.size > 0}
@@ -822,6 +824,7 @@ export function QueuePanel() {
         <div class="mt-3">
           <div class="flex items-center gap-2 mb-2">
             <button
+              data-testid="queue-confidence-filter-toggle"
               onClick={() => setConfidenceFilterOpen((v) => !v)}
               class="inline-flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] hover:text-[color:var(--color-fg)] transition cursor-pointer"
               aria-expanded={confidenceFilterOpen || confidenceTier !== 'all'}
@@ -934,6 +937,7 @@ export function QueuePanel() {
             </label>
             {selected.size > 0 ? (
               <button
+                data-testid="queue-clear-selection"
                 onClick={clearSelection}
                 class="text-[color:var(--color-fg-subtle)] hover:text-[color:var(--color-fg)] transition"
               >
@@ -944,6 +948,7 @@ export function QueuePanel() {
           {status === 'pending' && selected.size === 0 && lowConfidenceIds.length > 0 ? (
             <button
               disabled={bulkBusy}
+              data-testid="queue-dismiss-low-confidence"
               onClick={() => onDismissLowConfidence(lowConfidenceIds)}
               title={t('queue.bulkDismissLowConfidenceReason')}
               class="px-3 py-1.5 text-[11px] rounded-md border border-[color:var(--color-danger)]/40 text-[color:var(--color-danger)] hover:bg-[color:var(--color-danger)]/10 disabled:opacity-50 transition"
