@@ -3,7 +3,7 @@ import { useRoute } from 'preact-iso';
 import { useKb } from '../lib/kb-cache';
 import { t, useLocale } from '../lib/i18n';
 import { getQualityRuns, getFxRate, ApiError, type QualityComparison, type FxRate } from '../api';
-import { formatCostForLocale, maxPlanLabel } from '../lib/currency';
+import { formatCostForLocale, zeroCostLabel } from '../lib/currency';
 import { CenteredLoader } from '../components/centered-loader';
 
 /**
@@ -132,7 +132,7 @@ export function QualityComparePanel() {
                   </td>
                   <td class="py-2 pr-3 text-right font-mono">
                     {run.backend === 'claude-cli' && run.costCents === 0
-                      ? maxPlanLabel(locale)
+                      ? zeroCostLabel(locale)
                       : fmt(run.costCents)}
                   </td>
                   <td class="py-2 pr-3 text-right font-mono">{formatDuration(run.durationMs)}</td>

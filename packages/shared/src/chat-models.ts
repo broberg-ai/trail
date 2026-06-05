@@ -46,15 +46,15 @@ export interface ChatModel {
 }
 
 export const CHAT_MODELS: ChatModel[] = [
-  // Claude-cli backend — Christian's Max Plan, no per-message cost
-  // when subscription is active. Default for dev + Max-plan-equipped
-  // hosts. Not deployable on stock Fly engines (no CLI on disk).
+  // Claude-cli backend — local claude binary via CLI subprocess.
+  // Default for dev hosts that have the CLI on disk. Not deployable on
+  // stock Fly engines (no CLI on disk).
   {
     id: 'claude-sonnet-4-6',
     backend: 'claude-cli',
-    label: 'Claude Sonnet 4.6 (Max Plan)',
+    label: 'Claude Sonnet 4.6 (local CLI)',
     description:
-      "Claude Max Plan via CLI subprocess. No per-message cost when subscription is active. Best reasoning, full MCP tool support. Dev default.",
+      "Claude via local CLI subprocess. Best reasoning, full MCP tool support. Dev default.",
     costPerMillion: { input: 0, output: 0 },
     supportsToolCalling: true,
     quality: 'best',
@@ -63,9 +63,9 @@ export const CHAT_MODELS: ChatModel[] = [
   {
     id: 'claude-haiku-4-5-20251001',
     backend: 'claude-cli',
-    label: 'Claude Haiku 4.5 (Max Plan)',
+    label: 'Claude Haiku 4.5 (local CLI)',
     description:
-      'Cheaper Claude variant on Max Plan. Good for high-volume public-facing chat where Sonnet-grade reasoning is overkill.',
+      'Cheaper Claude variant via local CLI. Good for high-volume public-facing chat where Sonnet-grade reasoning is overkill.',
     costPerMillion: { input: 0, output: 0 },
     supportsToolCalling: true,
     quality: 'good',

@@ -313,7 +313,7 @@ export function CostPanel() {
           <div class="text-xs text-[color:var(--color-fg-muted)] mt-1">
             {upm.runCount} {locale === 'da' ? 'kald' : 'calls'}
             {upm.metered.freeRunCount > 0
-              ? ` · ${upm.metered.freeRunCount} ${locale === 'da' ? 'gratis (Max)' : 'free (Max)'}`
+              ? ` · ${upm.metered.freeRunCount} ${locale === 'da' ? 'uden cost-data' : 'no cost data'}`
               : ''}
             {upm.byCapability.length > 0
               ? ` · ${upm.byCapability.map((c) => c.key).slice(0, 3).join(', ')}`

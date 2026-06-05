@@ -40,12 +40,12 @@ export interface IngestModel {
 
 export const INGEST_MODELS: IngestModel[] = [
   // Claude-cli backend (not in OpenRouter registry — claude CLI
-  // resolves natively against Christian's Max Plan).
+  // resolves natively via the local claude binary).
   {
     id: 'claude-sonnet-4-6',
     backend: 'claude-cli',
-    label: 'Claude Sonnet 4.6 (Max Plan)',
-    description: 'Christian\'s Claude Max Plan subscription. No per-ingest cost when subscription is active; not in OpenRouter registry.',
+    label: 'Claude Sonnet 4.6 (local CLI)',
+    description: 'Local claude CLI backend (dev Mac only); not in the OpenRouter registry.',
     costPerMillion: { input: 0, output: 0 },
     supportsToolCalling: true,
     quality: 'best',
@@ -54,8 +54,8 @@ export const INGEST_MODELS: IngestModel[] = [
   {
     id: 'claude-haiku-4-5-20251001',
     backend: 'claude-cli',
-    label: 'Claude Haiku 4.5 (Max Plan)',
-    description: 'Cheaper Claude variant on Max Plan. Used for lint/contradiction-detection where tier-1 quality isn\'t needed.',
+    label: 'Claude Haiku 4.5 (local CLI)',
+    description: 'Cheaper Claude variant via local CLI. Used for lint/contradiction-detection where tier-1 quality isn\'t needed.',
     costPerMillion: { input: 0, output: 0 },
     supportsToolCalling: true,
     quality: 'good',
@@ -99,7 +99,7 @@ export const INGEST_MODELS: IngestModel[] = [
     id: 'anthropic/claude-sonnet-4.6',
     backend: 'openrouter',
     label: 'Claude Sonnet 4.6 (via API)',
-    description: 'Anthropic API path — used as high-quality last-resort when Max Plan is exhausted and cloud fallback hits it.',
+    description: 'Anthropic API path — high-quality last-resort when cloud fallback reaches it.',
     costPerMillion: { input: 3.0, output: 15.0 },
     supportsToolCalling: true,
     quality: 'best',

@@ -2,7 +2,7 @@
  * F151 — locale-aware cost display.
  *
  * Trail stores cost as USD cents on ingest_jobs (OpenRouter bills in
- * USD; Anthropic in USD; Max Plan emits 0). The cost dashboard shows
+ * USD; Anthropic in USD; un-priced models report 0). The cost dashboard shows
  * those numbers to the curator — but for a Danish-locale curator, USD
  * cents are cognitively expensive ("how much is 3¢? is that cheap?")
  * while DKK is second-nature.
@@ -12,8 +12,8 @@
  * at the backend for 4h. `stale:true` rate (fallback when live-fetch
  * fails) renders with `~` prefix so the curator knows it's approximate.
  *
- * Zero-cost cases keep a separate label so "gratis (Max)" isn't shown
- * as "0 kr" — makes the Max Plan benefit obvious at a glance.
+ * Zero-cost runs (provider reported costUsd=0) get a separate label so
+ * they read as "no cost data" rather than a measured "kr 0".
  */
 
 import type { Locale } from './i18n';
@@ -69,9 +69,11 @@ function formatDkk(cents: number, fx: FxRate): string {
 }
 
 /**
- * Dedicated "free (Max Plan)" label. Used when backend='claude-cli'
- * && cents=0 to distinguish "we paid 0" from "we don't know cost".
+ * Label for runs that reported no cost (costUsd=0) — e.g. an un-priced
+ * model where the provider's `usage.cost` came back 0. Distinguishes
+ * "no cost data" from a real measured "kr 0", without claiming a plan
+ * benefit (prod bills via OpenRouter/Anthropic, not a flat plan).
  */
-export function maxPlanLabel(locale: Locale): string {
-  return locale === 'da' ? 'gratis (Max)' : 'free (Max)';
+export function zeroCostLabel(locale: Locale): string {
+  return locale === 'da' ? 'uden cost-data' : 'no cost data';
 }
