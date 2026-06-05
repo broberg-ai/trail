@@ -56,6 +56,15 @@ export function mountConstellation(canvas: HTMLCanvasElement): () => void {
   let disposed = false;
   const mouse: { x: number | null; y: number | null } = { x: null, y: null };
 
+  // Respect prefers-reduced-motion: paint ONE static frame and never enter
+  // the rAF loop. This is correct a11y AND it frees the main thread in
+  // headless Lens captures — the perpetual loop starved Preact's auth/render
+  // (`/api/auth/me` never resolved → blank screenshots). cardmem's F098.8
+  // sets reduced-motion on the capture context; this is the app-side half.
+  const reducedMotion =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   function readVar(name: string, fallback: string): string {
     const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
     return v || fallback;
@@ -97,7 +106,7 @@ export function mountConstellation(canvas: HTMLCanvasElement): () => void {
     // ~1 Hz in background tabs, but we were still doing pair-checks per
     // scheduled frame. Zero work beats throttled work.
     if (document.visibilityState !== 'visible') {
-      frame = requestAnimationFrame(draw);
+      if (!reducedMotion) frame = requestAnimationFrame(draw);
       return;
     }
 
@@ -162,7 +171,7 @@ export function mountConstellation(canvas: HTMLCanvasElement): () => void {
       }
     }
 
-    frame = requestAnimationFrame(draw);
+    if (!reducedMotion) frame = requestAnimationFrame(draw);
   }
 
   function onMouseMove(e: MouseEvent): void {
