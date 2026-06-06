@@ -22,6 +22,7 @@ import { Hono } from 'hono';
 import { documents, documentImages, knowledgeBases } from '@trail/db';
 import { and, eq } from 'drizzle-orm';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
+import { needsDerivative } from '../services/vision-derivative.js';
 import { resolveKbId } from '@trail/core';
 import {
   parseAudienceParam,
@@ -86,7 +87,7 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
     const docClause = docIdFilter ? 'AND di.document_id = ?' : '';
     const sql = `
       SELECT di.id, di.document_id, di.filename, di.page, di.width, di.height,
-             di.vision_description, di.vision_model, di.created_at,
+             di.size_bytes, di.vision_description, di.vision_model, di.created_at,
              di.auto_flag_signal, di.auto_flag_reason,
              d.path AS doc_path, d.tags AS doc_tags
         FROM document_images_fts fts
@@ -113,7 +114,7 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
     const docClause = docIdFilter ? 'AND di.document_id = ?' : '';
     const sql = `
       SELECT di.id, di.document_id, di.filename, di.page, di.width, di.height,
-             di.vision_description, di.vision_model, di.created_at,
+             di.size_bytes, di.vision_description, di.vision_model, di.created_at,
              di.auto_flag_signal, di.auto_flag_reason,
              d.path AS doc_path, d.tags AS doc_tags
         FROM document_images di
@@ -162,6 +163,17 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
     // broken icon. Relative URL keeps the same-origin contract
     // documented on the ImageHit type.
     url: `/api/v1/documents/${row.document_id}/images/${String(row.filename).replace(/^\//, '')}`,
+    // F161.5 — relative thumbnail URL (≤1568px WebP via the serve route's
+    // ?variant=thumb branch) only for images heavy enough to warrant a
+    // derivative; null otherwise so a consumer's `thumbnailUrl ?? url`
+    // falls back to the (already small) original.
+    thumbnailUrl: needsDerivative(
+      Number(row.width),
+      Number(row.height),
+      Number(row.size_bytes ?? 0),
+    )
+      ? `/api/v1/documents/${row.document_id}/images/${String(row.filename).replace(/^\//, '')}?variant=thumb`
+      : null,
     alt: (row.vision_description as string | null) ?? '',
     page: row.page as number | null,
     width: row.width as number,

@@ -39,6 +39,17 @@ const SIZE_BYTES_THRESHOLD = 3 * 1024 * 1024;
 // the file size happens to be under threshold.
 const PIXELS_THRESHOLD = 4_000_000;
 
+/**
+ * F161.5 — single source of truth for the derivative threshold.
+ * An image gets a downscaled WebP derivative when it is too big to send
+ * to the vision model (>3 MB or >4 MP). The image-search endpoint reuses
+ * this to decide whether to advertise a `?variant=thumb` thumbnailUrl, so
+ * a hit only gets a thumb URL when a derivative would actually be produced.
+ */
+export function needsDerivative(width: number, height: number, sizeBytes: number): boolean {
+  return sizeBytes > SIZE_BYTES_THRESHOLD || width * height > PIXELS_THRESHOLD;
+}
+
 export interface DerivativeResult {
   /** Bytes the Vision model should see (derivative if generated, original otherwise). */
   bytes: Uint8Array;
@@ -66,9 +77,7 @@ export async function ensureDerivative(
   height: number,
   sizeBytes: number,
 ): Promise<DerivativeResult> {
-  const needs =
-    sizeBytes > SIZE_BYTES_THRESHOLD ||
-    width * height > PIXELS_THRESHOLD;
+  const needs = needsDerivative(width, height, sizeBytes);
 
   if (!needs) {
     const bytes = await storage.get(originalPath);

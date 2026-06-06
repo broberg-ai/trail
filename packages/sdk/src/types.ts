@@ -126,6 +126,13 @@ export interface ImageSearchHit {
   filename: string;
   /** Absolute URL — see RetrieveImage.url for proxy/Bearer notes. */
   url: string;
+  /**
+   * F161.5 — relative URL to a lightweight ≤1568px WebP variant
+   * (`url` + `?variant=thumb`), present only for images heavy enough to
+   * warrant a derivative; null otherwise. Prefer `thumbnailUrl ?? url`
+   * for inline render and keep `url` (full-res) behind a click.
+   */
+  thumbnailUrl: string | null;
   alt: string;
   page: number | null;
   width: number;

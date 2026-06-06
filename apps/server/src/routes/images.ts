@@ -5,6 +5,7 @@ import { basename } from 'node:path';
 import { resolveKbId } from '@trail/core';
 import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
 import { storage, imagePath, sourcePath } from '../lib/storage.js';
+import { ensureDerivative, needsDerivative } from '../services/vision-derivative.js';
 import { defaultAudienceForAuth, isVisibleToAudience } from '../services/audience.js';
 import type { AppBindings } from '../app.js';
 
@@ -41,6 +42,47 @@ imageRoutes.get('/documents/:docId/images/:filename', async (c) => {
   const audience = defaultAudienceForAuth(c.get('authType'));
   if (!isVisibleToAudience(audience, doc.path, doc.tags)) {
     return c.json({ error: 'Not found' }, 404);
+  }
+
+  // F161.5 — `?variant=thumb`: serve a lightweight ≤1568px WebP for heavy
+  // images so a chat answer with N hits doesn't load N× full-res PNGs. The
+  // $0 local-vision path never produced a derivative, so generate it lazily
+  // here via the F165.1 helper (idempotent + storage-cached). Below the
+  // threshold (≤3 MB and ≤4 MP) there's no derivative → fall through to the
+  // original (already small).
+  if (c.req.query('variant') === 'thumb') {
+    const img = await trail.db
+      .select({
+        width: documentImages.width,
+        height: documentImages.height,
+        sizeBytes: documentImages.sizeBytes,
+      })
+      .from(documentImages)
+      .where(
+        and(
+          eq(documentImages.documentId, docId),
+          eq(documentImages.filename, filename),
+          eq(documentImages.tenantId, tenant.id),
+        ),
+      )
+      .get();
+    if (img && needsDerivative(img.width, img.height, img.sizeBytes)) {
+      const deriv = await ensureDerivative(
+        imagePath(tenant.id, doc.knowledgeBaseId, docId, filename),
+        img.width,
+        img.height,
+        img.sizeBytes,
+      );
+      if (deriv.isDerivative) {
+        return new Response(deriv.bytes, {
+          headers: {
+            'Content-Type': 'image/webp',
+            'Cache-Control': 'private, max-age=86400',
+          },
+        });
+      }
+    }
+    // else: fall through and serve the original below.
   }
 
   const data = await storage.get(imagePath(tenant.id, doc.knowledgeBaseId, docId, filename));
