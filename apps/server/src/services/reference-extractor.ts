@@ -133,7 +133,12 @@ async function findSourceByName(
   kbId: string,
   target: string,
 ): Promise<SourceDoc | null> {
-  const normalised = target.trim();
+  // NFC-normalise the citation. macOS-uploaded filenames are frequently
+  // stored NFD (e.g. "på" as p + a + U+030A combining ring), while the
+  // compiler writes the `sources: [...]` citation NFC ("å" = U+00E5).
+  // `.toLowerCase()` does NOT normalise, so without this an NFD-named source
+  // never resolves against its NFC citation and its neuronCount badge stays 0.
+  const normalised = target.trim().normalize('NFC');
   if (!normalised) return null;
 
   // Strategy 1: exact filename match (case-sensitive).
@@ -167,12 +172,12 @@ async function findSourceByName(
     .all();
 
   const needle = normalised.toLowerCase();
-  const caseHit = allSources.find((s) => s.filename.toLowerCase() === needle);
+  const caseHit = allSources.find((s) => s.filename.normalize('NFC').toLowerCase() === needle);
   if (caseHit) return caseHit;
 
   // Strategy 3: stem match ignoring extension.
   const stem = stripExt(needle);
-  return allSources.find((s) => stripExt(s.filename.toLowerCase()) === stem) ?? null;
+  return allSources.find((s) => stripExt(s.filename.normalize('NFC').toLowerCase()) === stem) ?? null;
 }
 
 function stripExt(filename: string): string {
