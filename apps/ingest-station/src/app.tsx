@@ -17,9 +17,9 @@ import {
   type Tenant,
 } from './api';
 
-// The list endpoint returns awaiting_local_compile (F191.1); the shared Document
-// type doesn't model it yet, so augment locally.
-type Source = Document & { awaitingLocalCompile?: boolean };
+// The list endpoint returns awaiting_local_compile (F191.1) + neuronCount; the
+// shared Document type doesn't model them yet, so augment locally.
+type Source = Document & { awaitingLocalCompile?: boolean; neuronCount?: number };
 
 const ACCEPTED = '.md · .pdf · .docx · .pptx · .txt · .html · .csv · billeder';
 
@@ -315,7 +315,10 @@ function Station({ onSignOut }: { onSignOut: () => void }) {
           </div>
         ))}
 
-        {/* Only what failed — the rest of the source history is noise (Christian's call) */}
+        {/* F192 — kø + færdig board so the curator sees what's compiled vs still waiting */}
+        <SourceBoard sources={sources} />
+
+        {/* What failed — with retry / delete */}
         <FailedList sources={sources} onRetry={onRetry} retrying={retrying} onDelete={onDelete} deleting={deleting} />
       </main>
     </div>
@@ -401,9 +404,133 @@ function KbPicker({ kbs, value, onChange }: { kbs: KnowledgeBase[]; value: strin
   );
 }
 
-// Failures only — Christian only needs to see what failed; the Færdig/Afventer
-// rows are noise. Each failed source shows its error + a "Prøv igen" retry that
-// re-parks it for the next /local-ingest drain. Renders nothing when all good.
+// F192 — source status board: what's queued vs compiled (with neuron counts).
+// Earlier the Station showed failures only ("the Færdig/Afventer rows are
+// noise — Christian's call"); he reversed that — he wants to SEE which dropped
+// sources are still waiting and which are done, so he doesn't have to ask cc
+// how far an ingest has come. Source-kind only — the compiled /neurons/*.md
+// wiki pages are NOT sources and must not appear here.
+function SourceBoard({ sources }: { sources: Source[] }) {
+  const [tab, setTab] = useState<'queued' | 'done'>('queued');
+  const queued = sources.filter(
+    (s) => s.kind === 'source' && (s.awaitingLocalCompile || s.status === 'processing' || s.status === 'pending'),
+  );
+  const done = sources.filter(
+    (s) => s.kind === 'source' && !s.awaitingLocalCompile && s.status === 'ready',
+  );
+  if (queued.length === 0 && done.length === 0) return null;
+
+  // Fall back if the selected tab has no rows (e.g. the last queued source just
+  // compiled and moved to Færdig) so the panel never shows an empty tab.
+  const active: 'queued' | 'done' =
+    tab === 'queued' && queued.length === 0 ? 'done'
+    : tab === 'done' && done.length === 0 ? 'queued'
+    : tab;
+
+  const rows = active === 'queued' ? queued : done;
+  const badge =
+    active === 'queued'
+      ? (s: Source) => (s.awaitingLocalCompile ? 'venter på cc-session' : 'kompilerer…')
+      : (s: Source) => `${s.neuronCount ?? 0} neuron${(s.neuronCount ?? 0) === 1 ? '' : 'er'}`;
+
+  return (
+    <div class="mt-6" data-testid="ingest-board">
+      <div role="tablist" class="flex items-center gap-1 mb-3 border-b border-line">
+        <BoardTab
+          testid="ingest-tab-queued"
+          label="Kø"
+          count={queued.length}
+          tone="warn"
+          active={active === 'queued'}
+          onClick={() => setTab('queued')}
+        />
+        <BoardTab
+          testid="ingest-tab-done"
+          label="Færdig"
+          count={done.length}
+          tone="accent"
+          active={active === 'done'}
+          onClick={() => setTab('done')}
+        />
+      </div>
+      <SourceRows
+        testid={active === 'queued' ? 'ingest-queued' : 'ingest-done'}
+        tone={active === 'queued' ? 'warn' : 'accent'}
+        rows={rows}
+        badge={badge}
+      />
+    </div>
+  );
+}
+
+// A single tab (Kø / Færdig) with a state-dot + count. Custom button, no native
+// control; an underline marks the active tab.
+function BoardTab({
+  testid,
+  label,
+  count,
+  tone,
+  active,
+  onClick,
+}: {
+  testid: string;
+  label: string;
+  count: number;
+  tone: 'warn' | 'accent';
+  active: boolean;
+  onClick: () => void;
+}) {
+  const dot = tone === 'accent' ? 'var(--color-accent)' : 'var(--color-warn)';
+  return (
+    <button
+      data-testid={testid}
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      class={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium -mb-px border-b-2 transition active:scale-[0.98]
+              ${active ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
+    >
+      <span class="w-1.5 h-1.5 rounded-full" style={{ background: dot }} />
+      {label} <span class="text-muted font-normal">({count})</span>
+    </button>
+  );
+}
+
+// The rows for the active tab: filename + type/pages + a state badge.
+// Tokens-only styling (no hardcoded colors), data-testid for Lens, no native
+// controls — matches the rest of the Station.
+function SourceRows({
+  testid,
+  tone,
+  rows,
+  badge,
+}: {
+  testid: string;
+  tone: 'warn' | 'accent';
+  rows: Source[];
+  badge: (s: Source) => string;
+}) {
+  const badgeCls = tone === 'accent' ? 'bg-accent/10 text-accent' : 'bg-warn/10 text-warn';
+  return (
+    <ul data-testid={`${testid}-group`} class="divide-y divide-line border border-line rounded-lg overflow-hidden bg-white">
+      {rows.map((s) => (
+        <li key={s.id} data-testid={`${testid}-row`} class="flex items-center justify-between py-3 px-4 gap-3">
+          <div class="min-w-0">
+            <span class="block truncate font-medium">{s.title ?? s.filename}</span>
+            <span class="block text-xs text-muted mt-0.5 font-mono uppercase">
+              {s.fileType}{s.pageCount ? ` · ${s.pageCount} sider` : ''}
+            </span>
+          </div>
+          <span class={`text-xs shrink-0 px-2 py-0.5 rounded-full ${badgeCls}`}>{badge(s)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// Each failed source shows its error + a "Prøv igen" retry that re-parks it for
+// the next /local-ingest drain, and a "Slet" to soft-archive an unsalvageable
+// one. Renders nothing when nothing failed.
 function FailedList({
   sources,
   onRetry,
