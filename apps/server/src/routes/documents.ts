@@ -790,7 +790,7 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
       awaitingLocalCompile: false,
       ...(body.failed
         ? { status: 'failed' as const, errorMessage: 'local-ingest compile produced no Neurons' }
-        : {}),
+        : { status: 'ready' as const }),
       updatedAt: new Date().toISOString(),
     })
     .where(eq(documents.id, doc.id))
