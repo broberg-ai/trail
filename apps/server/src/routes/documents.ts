@@ -22,6 +22,7 @@ import { triggerIngest, buildCompilePrompt } from '../services/ingest.js';
 import { reportLocalIngestRun } from '../lib/ai.js';
 import { storage, sourcePath } from '../lib/storage.js';
 import { broadcaster } from '../services/broadcast.js';
+import { backfillReferencesForKb } from '../services/reference-extractor.js';
 import { recordAccess } from '../services/access-tracker.js';
 import { recordReinforcement } from '../services/reinforcement.js';
 import { isNull } from 'drizzle-orm';
@@ -801,6 +802,19 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
   // server-side (key stays here); fire-and-forget, never blocks the response.
   if (!body.failed) {
     void reportLocalIngestRun({ tenantId: tenant.id, kbId: doc.knowledgeBaseId });
+  }
+
+  // F191.8 — populate document_references for the Neurons this drain just wrote.
+  // The reference-extractor's live subscriber only fires on candidate_approved /
+  // ingest_completed; the local-ingest wiki-write path emits neither, so without
+  // this sweep the source's `neuronCount` badge stays 0 forever even though the
+  // Neurons exist and are searchable. This is the same KB-scoped backfill the
+  // boot sweep runs — idempotent (unique index), and it resolves each Neuron's
+  // `sources: [...]` frontmatter back to this source. Awaited before the emit so
+  // the Station shows the real count on its soft refresh. Skip on failure (no
+  // Neurons were written).
+  if (!body.failed) {
+    await backfillReferencesForKb(trail, doc.knowledgeBaseId);
   }
 
   // F191.8 — tell the Ingest Station (live) that this source left the awaiting

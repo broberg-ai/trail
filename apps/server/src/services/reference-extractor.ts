@@ -247,7 +247,7 @@ export async function extractReferencesForDoc(
  * targeted post-ingest sweep when a source doc has just been compiled.
  * Idempotent — existing refs skip via unique index.
  */
-async function backfillReferencesForKb(
+export async function backfillReferencesForKb(
   trail: TrailDatabase,
   kbId: string,
 ): Promise<number> {
