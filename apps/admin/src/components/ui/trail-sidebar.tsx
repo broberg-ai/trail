@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import { Icons, type IconName } from './icons';
 import { useKb } from '../../lib/kb-cache';
+import { listQueue } from '../../api';
 import { t } from '../../lib/i18n';
 
 /**
@@ -91,6 +92,19 @@ export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
   useEffect(() => {
     try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* no storage */ }
   }, [collapsed]);
+
+  // F186-followup — pending-queue count badge on the Kø item. Refetched on
+  // navigation so it stays honest after the curator resolves items. `count`
+  // is the TOTAL matching the filter (independent of limit), so limit:1 keeps
+  // the payload tiny.
+  const [queueCount, setQueueCount] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    listQueue({ knowledgeBaseId: kbId, status: 'pending', limit: 1 })
+      .then((r) => { if (!cancelled) setQueueCount(r.count); })
+      .catch(() => { if (!cancelled) setQueueCount(null); });
+    return () => { cancelled = true; };
+  }, [kbId, path]);
 
   const groups = buildGroups(kbId);
   const footer = footerItems(kbId);
@@ -216,7 +230,14 @@ export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
               </div>
             ) : null}
             {grp.items.map((it) => (
-              <Item key={it.id} item={it} active={isActive(it.path)} collapsed={collapsed} onClick={() => route(it.path)} />
+              <Item
+                key={it.id}
+                item={it}
+                active={isActive(it.path)}
+                collapsed={collapsed}
+                onClick={() => route(it.path)}
+                count={it.id === 'queue' ? queueCount : null}
+              />
             ))}
           </div>
         ))}
@@ -245,26 +266,33 @@ function Item({
   collapsed,
   onClick,
   dim,
+  count,
 }: {
   item: SidebarItem;
   active: boolean;
   collapsed: boolean;
   onClick: () => void;
   dim?: boolean;
+  /** Optional badge count (e.g. pending queue items). Null/0 → no badge. */
+  count?: number | null;
 }) {
   const IconComp = Icons[item.icon];
   const label = t(item.labelKey);
+  const showCount = count != null && count > 0;
   return (
     <button
       type="button"
       onClick={onClick}
       class={'sidebar-item' + (active ? ' is-active' : '') + (dim ? ' is-dim' : '')}
-      title={collapsed ? label : undefined}
-      aria-label={label}
+      title={collapsed && showCount ? `${label} (${count})` : collapsed ? label : undefined}
+      aria-label={showCount ? `${label} (${count})` : label}
     >
       {active ? <span class="sidebar-item__bar" /> : null}
       <IconComp size={14} class="sidebar-item__icon" />
       {!collapsed ? <span class="sidebar-item__label">{label}</span> : null}
+      {!collapsed && showCount ? (
+        <span class="sidebar-item__count is-attention">{count > 99 ? '99+' : count}</span>
+      ) : null}
     </button>
   );
 }
