@@ -14,6 +14,7 @@ import {
   getDecayRates,
   saveDecayRates,
   pinNeuronConfidence,
+  setKbDecayEnabled,
   type MemoryHealthData,
   type DecayRatesResponse,
   type DecayingNeuron,
@@ -51,6 +52,29 @@ export function MemoryHealthPanel() {
   // Local edits to τ before save; null = unchanged from server.
   const [draftRates, setDraftRates] = useState<Record<string, number> | null>(null);
   const [savingRates, setSavingRates] = useState(false);
+  // F195 — dismissible "what is this page?" intro + the per-Trail decay toggle.
+  const [introHidden, setIntroHidden] = useState<boolean>(() => {
+    try { return localStorage.getItem('trail.admin.memhealth.introHidden') === '1'; } catch { return false; }
+  });
+  const [togglingDecay, setTogglingDecay] = useState(false);
+  function setIntro(hidden: boolean) {
+    setIntroHidden(hidden);
+    try { localStorage.setItem('trail.admin.memhealth.introHidden', hidden ? '1' : '0'); } catch { /* no storage */ }
+  }
+  async function handleToggleDecay() {
+    if (!kbId || togglingDecay) return;
+    setTogglingDecay(true);
+    try {
+      await setKbDecayEnabled(kbId, !(data?.decayEnabled ?? false));
+      const d = await getMemoryHealth(kbId);
+      setData(d);
+      setDecaying(d.decaying);
+    } catch {
+      /* keep prior state; the button can be retried */
+    } finally {
+      setTogglingDecay(false);
+    }
+  }
 
   useEffect(() => {
     if (!kbId) return;
@@ -125,8 +149,82 @@ export function MemoryHealthPanel() {
         <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 28px; letter-spacing: -0.015em; margin: 0 0 4px;">
           {t('lifecycle.memoryHealth')}
         </h1>
-        <p class="text-sm text-[color:var(--color-fg-muted)]">{t('lifecycle.mhSubtitle')}</p>
+        <p class="text-sm text-[color:var(--color-fg-muted)]">
+          {t('lifecycle.mhSubtitle')}
+          {introHidden ? (
+            <button
+              type="button"
+              onClick={() => setIntro(false)}
+              class="text-[color:var(--color-accent)] hover:underline transition"
+              style={{ marginLeft: 8, background: 'transparent', border: 0, cursor: 'pointer', padding: 0, fontSize: 13 }}
+            >
+              {t('lifecycle.introShow')}
+            </button>
+          ) : null}
+        </p>
       </header>
+
+      {/* F195 — "what is this page?" intro box (dismissible) */}
+      {introHidden ? null : (
+        <div
+          style={{
+            border: '1px solid var(--color-border)',
+            background: 'var(--color-bg-sunk)',
+            borderRadius: 10,
+            padding: '16px 18px',
+            marginBottom: 20,
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
+            <h2 style={{ fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 18, margin: 0 }}>
+              {t('lifecycle.introTitle')}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setIntro(true)}
+              class="text-[11px] font-mono text-[color:var(--color-fg-subtle)] hover:text-[color:var(--color-fg)] transition active:scale-[0.98]"
+              style={{ background: 'transparent', border: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              {t('lifecycle.introHide')}
+            </button>
+          </div>
+          <p style={{ fontSize: 14, lineHeight: 1.55, color: 'var(--color-fg)', margin: '0 0 10px' }}>{t('lifecycle.introBody')}</p>
+          <p style={{ fontSize: 14, lineHeight: 1.55, color: 'var(--color-fg)', margin: '0 0 10px' }}>{t('lifecycle.introAction')}</p>
+          <p style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--color-fg-muted)', margin: 0, fontStyle: 'italic' }}>{t('lifecycle.introExample')}</p>
+        </div>
+      )}
+
+      {/* F195 — per-Trail decay state + toggle */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          marginBottom: 24,
+          padding: '10px 14px',
+          borderRadius: 8,
+          border: '1px solid var(--color-border)',
+          background: data.decayEnabled ? 'transparent' : 'var(--color-accent-soft)',
+        }}
+      >
+        <span style={{ fontSize: 13, color: 'var(--color-fg-muted)' }}>
+          {data.decayEnabled ? t('lifecycle.decayActive') : t('lifecycle.decayPaused')}
+        </span>
+        <button
+          type="button"
+          onClick={handleToggleDecay}
+          disabled={togglingDecay}
+          class="btn active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ padding: '6px 14px', fontSize: 12.5, whiteSpace: 'nowrap', flex: '0 0 auto' }}
+        >
+          {togglingDecay
+            ? t('lifecycle.decaySaving')
+            : data.decayEnabled
+              ? t('lifecycle.decayPause')
+              : t('lifecycle.decayEnable')}
+        </button>
+      </div>
 
       {/* Histogram */}
       <section class="mb-8">

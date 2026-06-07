@@ -360,6 +360,8 @@ export interface MemoryHealthData {
   histogram: number[];
   decaying: DecayingNeuron[];
   superseded: SupersededChain[];
+  /** F195 — is age/usage decay active for this Trail? Default false (paused). */
+  decayEnabled?: boolean;
 }
 
 /** Per-Neuron-type decay rate (τ, days). */
@@ -382,6 +384,15 @@ export function saveDecayRates(rates: DecayRates): Promise<DecayRatesResponse> {
   return api('/api/v1/memory-health/decay-rates', {
     method: 'PUT',
     body: JSON.stringify({ rates }),
+  });
+}
+
+/** F195 — turn memory-decay on/off for ONE Trail. Disabling resets that Trail's
+ *  Neurons to full confidence immediately (server-side). */
+export function setKbDecayEnabled(kbId: string, enabled: boolean): Promise<{ decayEnabled: boolean }> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/memory-health/decay-enabled`, {
+    method: 'PUT',
+    body: JSON.stringify({ enabled }),
   });
 }
 
