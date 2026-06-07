@@ -465,17 +465,29 @@ export function SettingsTrailPanel() {
             <span class="text-sm font-medium">{t('settings.trail.ingestModel.modelLabel')}</span>
           </label>
           {(() => {
+            // Show WHICH model "use default" resolves to — the first step of the
+            // effective fallback chain — in both the closed select and the list.
+            const firstStep = ingestSettings?.effectiveChain?.[0];
+            const defaultLabel = firstStep
+              ? INGEST_MODELS.find((m) => m.backend === firstStep.backend && m.id === firstStep.model)?.label
+                  ?? `${firstStep.backend}:${firstStep.model}`
+              : null;
             const modelOptions: DropdownOption[] = [
-              { value: '', label: t('settings.trail.ingestModel.useDefault') },
+              {
+                value: '',
+                label: defaultLabel
+                  ? `${t('settings.trail.ingestModel.useDefault')} (${defaultLabel})`
+                  : t('settings.trail.ingestModel.useDefault'),
+              },
               ...INGEST_MODELS.map((m: IngestModel): DropdownOption => {
-                const cost =
-                  m.costPerMillion.input === 0 && m.costPerMillion.output === 0
-                    ? t('settings.trail.ingestModel.maxPlanFree')
-                    : `$${m.costPerMillion.input.toFixed(2)} in / $${m.costPerMillion.output.toFixed(2)} out per 1M`;
+                // $0 (local-CLI / Max Plan) models show no cost note at all.
+                const free = m.costPerMillion.input === 0 && m.costPerMillion.output === 0;
                 return {
                   value: `${m.backend}:${m.id}`,
                   label: m.label,
-                  hint: cost,
+                  hint: free
+                    ? undefined
+                    : `$${m.costPerMillion.input.toFixed(2)} in / $${m.costPerMillion.output.toFixed(2)} out per 1M`,
                 };
               }),
             ];
@@ -540,17 +552,26 @@ export function SettingsTrailPanel() {
             <span class="text-sm font-medium">{t('settings.trail.chatModel.modelLabel')}</span>
           </label>
           {(() => {
+            const firstStep = chatSettings?.effectiveChain?.[0];
+            const defaultLabel = firstStep
+              ? CHAT_MODELS.find((m) => m.backend === firstStep.backend && m.id === firstStep.model)?.label
+                  ?? `${firstStep.backend}:${firstStep.model}`
+              : null;
             const modelOptions: DropdownOption[] = [
-              { value: '', label: t('settings.trail.chatModel.useDefault') },
+              {
+                value: '',
+                label: defaultLabel
+                  ? `${t('settings.trail.chatModel.useDefault')} (${defaultLabel})`
+                  : t('settings.trail.chatModel.useDefault'),
+              },
               ...CHAT_MODELS.map((m: ChatModel): DropdownOption => {
-                const cost =
-                  m.costPerMillion.input === 0 && m.costPerMillion.output === 0
-                    ? t('settings.trail.chatModel.maxPlanFree')
-                    : `$${m.costPerMillion.input.toFixed(2)} in / $${m.costPerMillion.output.toFixed(2)} out per 1M`;
+                const free = m.costPerMillion.input === 0 && m.costPerMillion.output === 0;
                 return {
                   value: `${m.backend}:${m.id}`,
                   label: m.label,
-                  hint: cost,
+                  hint: free
+                    ? undefined
+                    : `$${m.costPerMillion.input.toFixed(2)} in / $${m.costPerMillion.output.toFixed(2)} out per 1M`,
                 };
               }),
             ];
