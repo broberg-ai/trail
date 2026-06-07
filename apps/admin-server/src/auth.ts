@@ -220,6 +220,16 @@ authRoutes.get('/me', async (c) => {
     engineUrl = eng?.engineUrl ?? null;
   }
 
+  // F194 — linked OAuth identities, so the SPA can show "Tilknyttet (email)".
+  const linkedProviders = await db
+    .select({
+      provider: schema.oauthIdentities.provider,
+      email: schema.oauthIdentities.email,
+    })
+    .from(schema.oauthIdentities)
+    .where(eq(schema.oauthIdentities.userId, user.id))
+    .all();
+
   return c.json({
     user: { id: user.id, email: user.email, name: user.name, onboarded: user.onboarded },
     organizationId: user.organizationId,
@@ -235,6 +245,7 @@ authRoutes.get('/me', async (c) => {
       active: active?.id === t.id,
       role: roleByTenant.get(t.id) ?? 'member',
     })),
+    linkedProviders,
     engineUrl,
   });
 });

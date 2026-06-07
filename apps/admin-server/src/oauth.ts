@@ -1,6 +1,6 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { setCookie, getCookie } from 'hono/cookie';
-import { eq } from 'drizzle-orm';
+import { eq, and, gt } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import { db, schema } from './db.js';
 
@@ -38,8 +38,9 @@ interface OAuthProvider {
   scope: string;
   clientIdEnv: string;
   clientSecretEnv: string;
-  /** Maps provider profile JSON → { email, name }. */
-  parseProfile: (raw: Record<string, unknown>, headers: Record<string, string>) => Promise<{ email: string; name: string | null }>;
+  /** Maps provider profile JSON → { email, name, subject }. `subject` is the
+   *  provider's stable user id (Google `sub`, GitHub `id`). */
+  parseProfile: (raw: Record<string, unknown>, headers: Record<string, string>) => Promise<{ email: string; name: string | null; subject: string }>;
 }
 
 const PROVIDERS: Record<string, OAuthProvider> = {
@@ -68,7 +69,9 @@ const PROVIDERS: Record<string, OAuthProvider> = {
         }
       }
       if (!email) throw new Error('GitHub did not provide a verified email');
-      return { email: email.toLowerCase(), name };
+      const subject = String(raw.id ?? '');
+      if (!subject) throw new Error('GitHub did not provide a user id');
+      return { email: email.toLowerCase(), name, subject };
     },
   },
   google: {
@@ -82,10 +85,12 @@ const PROVIDERS: Record<string, OAuthProvider> = {
     async parseProfile(raw) {
       const email = raw.email as string | undefined;
       const name = (raw.name as string | undefined) ?? null;
+      const subject = raw.sub as string | undefined;
       if (!email || !raw.email_verified) {
         throw new Error('Google did not provide a verified email');
       }
-      return { email: email.toLowerCase(), name };
+      if (!subject) throw new Error('Google did not provide a subject (sub)');
+      return { email: email.toLowerCase(), name, subject };
     },
   },
 };
@@ -94,6 +99,73 @@ const BASE_URL = process.env.MAGIC_LINK_BASE_URL ?? 'https://app.trailmem.com';
 
 function newToken(bytes: number): string {
   return randomBytes(bytes).toString('hex');
+}
+
+/** F194 — resolve the currently signed-in user from the trail-session cookie. */
+async function resolveSessionUser(c: Context) {
+  const sessionId = getCookie(c, COOKIE_NAME);
+  if (!sessionId) return null;
+  const session = await db.query.sessions.findFirst({
+    where: and(
+      eq(schema.sessions.id, sessionId),
+      gt(schema.sessions.expiresAt, new Date().toISOString()),
+    ),
+  });
+  if (!session) return null;
+  return (
+    (await db.query.controlUsers.findFirst({
+      where: eq(schema.controlUsers.id, session.userId),
+    })) ?? null
+  );
+}
+
+/** F194 — find the user that owns a linked provider identity, or null. */
+async function findUserByIdentity(provider: string, subject: string) {
+  const row = await db.query.oauthIdentities.findFirst({
+    where: and(
+      eq(schema.oauthIdentities.provider, provider),
+      eq(schema.oauthIdentities.providerSubject, subject),
+    ),
+  });
+  if (!row) return null;
+  return (
+    (await db.query.controlUsers.findFirst({
+      where: eq(schema.controlUsers.id, row.userId),
+    })) ?? null
+  );
+}
+
+/** F194 — idempotently link (provider, subject) to userId. Refuses to steal an
+ *  identity already bound to a different user. */
+async function linkIdentity(
+  userId: string,
+  provider: string,
+  subject: string,
+  email: string | null,
+): Promise<'linked' | 'exists' | 'conflict'> {
+  const existing = await db.query.oauthIdentities.findFirst({
+    where: and(
+      eq(schema.oauthIdentities.provider, provider),
+      eq(schema.oauthIdentities.providerSubject, subject),
+    ),
+  });
+  if (existing) {
+    if (existing.userId !== userId) return 'conflict';
+    await db
+      .update(schema.oauthIdentities)
+      .set({ email })
+      .where(eq(schema.oauthIdentities.id, existing.id))
+      .run();
+    return 'exists';
+  }
+  await db.insert(schema.oauthIdentities).values({
+    id: `oid-${newToken(8)}`,
+    userId,
+    provider,
+    providerSubject: subject,
+    email,
+  });
+  return 'linked';
 }
 
 export const oauthRoutes = new Hono();
@@ -191,29 +263,51 @@ oauthRoutes.get('/:provider/callback', async (c) => {
     return c.text(`profile fetch failed: ${profileRes.status}`, 502);
   }
   const rawProfile = (await profileRes.json()) as Record<string, unknown>;
-  const { email, name } = await provider.parseProfile(rawProfile, {
+  const { email, name, subject } = await provider.parseProfile(rawProfile, {
     authorization: `Bearer ${tokenJson.access_token}`,
   });
 
-  console.log(`[oauth] ${provider.name} → email=${email} name=${name ?? '(no name)'}`);
+  console.log(`[oauth] ${provider.name} → email=${email} sub=${subject} name=${name ?? '(no name)'}`);
 
-  // Resolve user. Phase 1B: user MUST already exist (seeded via SQL).
-  // F172 will replace this branch with onboarding-redirect.
-  const user = await db.query.controlUsers.findFirst({
-    where: eq(schema.controlUsers.email, email),
-  });
+  // CSRF state is verified — clear the state cookie.
+  setCookie(c, STATE_COOKIE, '', { path: '/', maxAge: 0 });
+
+  // F194 — LINK mode: if the caller is already signed in, attach this provider
+  // identity to the CURRENT user regardless of email match, then return to
+  // settings. The authoritative user is the live session, not anything carried
+  // through the OAuth handshake.
+  const sessionUser = await resolveSessionUser(c);
+  if (sessionUser) {
+    const result = await linkIdentity(sessionUser.id, provider.name, subject, email);
+    if (result === 'conflict') {
+      console.warn(
+        `[oauth] ${provider.name} link refused — sub=${subject} already bound to another user`,
+      );
+      return c.redirect(`/settings?linkError=already_linked_elsewhere&provider=${provider.name}`, 302);
+    }
+    console.log(`[oauth] ${provider.name} ${result} → user ${sessionUser.email}`);
+    return c.redirect(`/settings?linked=${provider.name}`, 302);
+  }
+
+  // F194 — LOGIN mode: resolve by stable identity (sub) first, then email.
+  let user =
+    (await findUserByIdentity(provider.name, subject)) ??
+    (await db.query.controlUsers.findFirst({ where: eq(schema.controlUsers.email, email) })) ??
+    null;
   if (!user) {
-    console.warn(`[oauth] ${provider.name} login refused — email ${email} not in control_users`);
-    // Friendly redirect to /login with reason — F172 will replace with
-    // /onboarding/welcome that lets the user create an org+tenant.
+    console.warn(
+      `[oauth] ${provider.name} login refused — sub=${subject} / email=${email} not in control_users`,
+    );
     return c.redirect(`/login?error=email_not_registered&email=${encodeURIComponent(email)}`, 302);
   }
+
+  // Record/refresh the identity so future logins resolve by sub.
+  await linkIdentity(user.id, provider.name, subject, email);
 
   // Stamp display-name from OAuth if we don't have one yet
   if (name && !user.name) {
     await db.update(schema.controlUsers).set({ name }).where(eq(schema.controlUsers.id, user.id)).run();
   }
-
   // Mark onboarded (first OAuth login is equivalent to first magic-link login)
   if (!user.onboarded) {
     await db.update(schema.controlUsers).set({ onboarded: true }).where(eq(schema.controlUsers.id, user.id)).run();
@@ -236,8 +330,27 @@ oauthRoutes.get('/:provider/callback', async (c) => {
     path: '/',
     maxAge: SESSION_TTL_DAYS * 24 * 60 * 60,
   });
-  // Clear the state cookie
-  setCookie(c, STATE_COOKIE, '', { path: '/', maxAge: 0 });
 
   return c.redirect('/', 302);
+});
+
+// F194 — DELETE /api/auth/{provider}/identity — unlink a provider from the
+// signed-in user. Safe: magic-link (email) is always available, so this never
+// locks anyone out.
+oauthRoutes.delete('/:provider/identity', async (c) => {
+  const providerName = c.req.param('provider');
+  if (!PROVIDERS[providerName]) return c.json({ error: 'unknown provider' }, 404);
+  const user = await resolveSessionUser(c);
+  if (!user) return c.json({ error: 'not signed in' }, 401);
+  await db
+    .delete(schema.oauthIdentities)
+    .where(
+      and(
+        eq(schema.oauthIdentities.userId, user.id),
+        eq(schema.oauthIdentities.provider, providerName),
+      ),
+    )
+    .run();
+  console.log(`[oauth] ${user.email} unlinked ${providerName}`);
+  return c.json({ ok: true, provider: providerName });
 });

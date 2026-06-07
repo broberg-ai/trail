@@ -5,6 +5,7 @@ import {
   listApiKeys,
   createApiKey,
   revokeApiKey,
+  unlinkProvider,
   type AuthMe,
   type ApiKey,
 } from '../api';
@@ -34,9 +35,8 @@ export function SettingsAccountPanel() {
   useLocale();
   const [me, setMe] = useState<AuthMe | null>(null);
 
-  useEffect(() => {
-    fetchAuthMe().then(setMe).catch(() => setMe(null));
-  }, []);
+  const reloadMe = () => { fetchAuthMe().then(setMe).catch(() => setMe(null)); };
+  useEffect(() => { reloadMe(); }, []);
 
   if (!me) {
     return (
@@ -112,7 +112,7 @@ export function SettingsAccountPanel() {
       </div>
 
       <ProfileSection me={me} />
-      <LoginMethodsSection me={me} />
+      <LoginMethodsSection me={me} onReload={reloadMe} />
       <PreferencesSection />
       <NotificationsSection />
       <SessionsSection isDa={isDa} />
@@ -166,15 +166,65 @@ function ProfileSection({ me }: { me: AuthMe }) {
   );
 }
 
-function LoginMethodsSection({ me }: { me: AuthMe }) {
-  // F186-followup — visual section showing the identity providers a
-  // user can sign in with. Email-link is always active (the account is
-  // anchored to email). Google + GitHub render as "Link account"
-  // buttons that redirect through /api/auth/<provider> — the OAuth
-  // handler will reuse the existing account when the provider returns
-  // a matching email. Actual link-tracking (so we can show "Remove"
-  // instead of "Link account") needs an oauth_identities table — F-
-  // followup.
+function LoginMethodsSection({ me, onReload }: { me: AuthMe; onReload: () => void }) {
+  // F194 — Email-link is always active (account anchored to email). Google +
+  // GitHub show their linked state from me.linkedProviders: when linked, a
+  // "Tilknyttet · <email>" badge + "Fjern"; otherwise a "Tilknyt konto" button
+  // that hard-navigates to /api/auth/<provider> (the callback links the
+  // identity to the current session user).
+  const linkedOf = (provider: string) =>
+    me.linkedProviders?.find((p) => p.provider === provider) ?? null;
+
+  async function unlink(provider: string) {
+    try {
+      await unlinkProvider(provider);
+    } catch {
+      /* best-effort; reload reflects truth either way */
+    }
+    onReload();
+  }
+
+  function providerRight(provider: string): JSX.Element {
+    const linked = linkedOf(provider);
+    if (linked) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span
+            style={{
+              fontSize: 11,
+              padding: '4px 10px',
+              borderRadius: 999,
+              background: 'var(--color-accent-soft)',
+              color: 'var(--color-fg)',
+              fontWeight: 500,
+            }}
+          >
+            {t('accountPrefs.loginMethods.connected')}
+            {linked.email ? ` · ${linked.email}` : ''}
+          </span>
+          <button
+            type="button"
+            class="btn btn-ghost"
+            style={{ padding: '6px 12px', fontSize: 12.5 }}
+            onClick={() => unlink(provider)}
+          >
+            {t('accountPrefs.loginMethods.remove')}
+          </button>
+        </div>
+      );
+    }
+    return (
+      <button
+        type="button"
+        class="btn"
+        style={{ padding: '6px 12px', fontSize: 12.5 }}
+        onClick={() => { window.location.href = `/api/auth/${provider}`; }}
+      >
+        {t('accountPrefs.loginMethods.linkAccount')}
+      </button>
+    );
+  }
+
   return (
     <Section
       id="login"
@@ -203,32 +253,14 @@ function LoginMethodsSection({ me }: { me: AuthMe }) {
       <LoginMethodRow
         icon={<GoogleIcon />}
         name="Google"
-        email={me.user.email}
-        right={
-          <button
-            type="button"
-            class="btn"
-            style={{ padding: '6px 12px', fontSize: 12.5 }}
-            onClick={() => { window.location.href = '/api/auth/google'; }}
-          >
-            {t('accountPrefs.loginMethods.linkAccount')}
-          </button>
-        }
+        email={linkedOf('google')?.email ?? me.user.email}
+        right={providerRight('google')}
       />
       <LoginMethodRow
         icon={<GitHubIcon />}
         name="GitHub"
-        email={me.user.email}
-        right={
-          <button
-            type="button"
-            class="btn"
-            style={{ padding: '6px 12px', fontSize: 12.5 }}
-            onClick={() => { window.location.href = '/api/auth/github'; }}
-          >
-            {t('accountPrefs.loginMethods.linkAccount')}
-          </button>
-        }
+        email={linkedOf('github')?.email ?? me.user.email}
+        right={providerRight('github')}
       />
     </Section>
   );

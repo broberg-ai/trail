@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index, primaryKey, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 /**
  * F33 control.db schema. Lives on trail-admin Fly app's volume at
@@ -198,5 +198,36 @@ export const sessions = sqliteTable(
   },
   (t) => ({
     userIdx: index('idx_sessions_user').on(t.userId, t.expiresAt),
+  }),
+);
+
+/**
+ * F194 — linked OAuth identities. Lets a logged-in user attach a Google/GitHub
+ * account to their control_users row (regardless of provider email) and shows
+ * the linked state. `provider_subject` (Google `sub` / GitHub `id`) is the
+ * stable key — emails change. UNIQUE(provider, provider_subject) means one
+ * provider account maps to exactly one Trail user. `email` is denormalised for
+ * display only.
+ */
+export const oauthIdentities = sqliteTable(
+  'oauth_identities',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => controlUsers.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    providerSubject: text('provider_subject').notNull(),
+    email: text('email'),
+    createdAt: text('created_at')
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (t) => ({
+    providerSubjectIdx: uniqueIndex('idx_oauth_identities_provider_subject').on(
+      t.provider,
+      t.providerSubject,
+    ),
+    userIdx: index('idx_oauth_identities_user').on(t.userId),
   }),
 );

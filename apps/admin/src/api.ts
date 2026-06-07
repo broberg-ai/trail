@@ -128,7 +128,14 @@ export interface AuthMe {
   organizationId: string;
   tenant: { id: string; slug: string; name: string; language: string; plan: string | null } | null;
   tenants: AuthTenant[];
+  /** F194 — OAuth providers linked to this account (for the login-methods UI). */
+  linkedProviders?: { provider: string; email: string | null }[];
   engineUrl: string | null;
+}
+
+/** F194 — unlink a Google/GitHub identity from the signed-in account. */
+export function unlinkProvider(provider: string): Promise<{ ok: true; provider: string }> {
+  return api(`/api/auth/${provider}/identity`, { method: 'DELETE' });
 }
 
 /** Fetch the user + their full tenant list from admin-server. */

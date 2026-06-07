@@ -112,6 +112,17 @@ const STATEMENTS = [
     PRIMARY KEY (user_id, tenant_id)
   )`,
   `CREATE INDEX IF NOT EXISTS idx_control_memberships_tenant ON control_memberships(tenant_id)`,
+  // F194 — linked OAuth identities (Google/GitHub account-linking).
+  `CREATE TABLE IF NOT EXISTS oauth_identities (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL REFERENCES control_users(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL,
+    provider_subject TEXT NOT NULL,
+    email TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_oauth_identities_provider_subject ON oauth_identities(provider, provider_subject)`,
+  `CREATE INDEX IF NOT EXISTS idx_oauth_identities_user ON oauth_identities(user_id)`,
 ];
 
 export async function runMigrations(): Promise<void> {
