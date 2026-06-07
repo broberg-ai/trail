@@ -40,7 +40,7 @@ import {
   computeConfidence,
   type ConfidenceSignalInput,
 } from './confidence.js';
-import { loadDecayRates } from './tenant-settings.js';
+import { loadDecayRates, loadMemoryDecayEnabled } from './tenant-settings.js';
 
 const SCHEDULE_HOURS = Number(process.env.TRAIL_DECAY_SCHEDULE_HOURS ?? 24);
 const INITIAL_DELAY_MS =
@@ -80,6 +80,11 @@ export async function runDecayPass(
   // F182.7 — per-tenant τ overrides from tenants.settings_json (Memory Health
   // sliders), merged over DEFAULT_DECAY_RATES. Loaded once per pass.
   const decayRates = await loadDecayRates(trail);
+  // F195 — memory-decay is per-tenant opt-in (default OFF). While OFF, every
+  // Neuron is held at full confidence (1.0), so a freshly-loaded KB with no
+  // usage history doesn't wrongly fade. This both RESETS (first pass writes 1.0)
+  // and HOLDS (subsequent passes are EPSILON no-ops).
+  const decayEnabled = await loadMemoryDecayEnabled(trail);
 
   const kbs = await trail.db.select({ id: knowledgeBases.id }).from(knowledgeBases).all();
 
@@ -132,7 +137,7 @@ export async function runDecayPass(
       // F182.8 — a curator-pinned Neuron is decay-EXEMPT: human judgment
       // overrides the formula entirely and holds confidence at 1.0, so a
       // timeless fact (Newton's laws) never decays out of visibility with age.
-      const confidence = n.pinned
+      const confidence = n.pinned || !decayEnabled
         ? 1
         : computeConfidence({
             type: deriveType(neuronPath(n.path, n.filename)),

@@ -76,3 +76,39 @@ export async function saveDecayRates(
 
   return loadDecayRates(trail);
 }
+
+/**
+ * F195 — is the memory-decay job active for this tenant? **Default OFF.**
+ *
+ * A freshly-loaded KB has no real usage history yet, so age/usage-based decay
+ * would wrongly fade true-but-not-yet-cited knowledge ("everything is fading on
+ * day 1"). Decay stays paused until the operator turns it on — typically once
+ * the consuming site is in full operation and real reads/chat-cites start
+ * reinforcing the right Neurons. While OFF, the decay pass holds every Neuron at
+ * full confidence (1.0); supersession + contradiction still apply independently.
+ */
+export async function loadMemoryDecayEnabled(trail: TrailDatabase): Promise<boolean> {
+  const row = await trail.db.select({ s: tenants.settingsJson }).from(tenants).limit(1).get();
+  return parseSettings(row?.s ?? null).memoryDecayEnabled === true;
+}
+
+/** Persist the per-tenant memory-decay on/off flag into tenants.settings_json. */
+export async function saveMemoryDecayEnabled(
+  trail: TrailDatabase,
+  enabled: boolean,
+): Promise<boolean> {
+  const row = await trail.db
+    .select({ id: tenants.id, s: tenants.settingsJson })
+    .from(tenants)
+    .limit(1)
+    .get();
+  if (!row) throw new Error('tenant-settings: no tenant row to write');
+  const settings = parseSettings(row.s);
+  settings.memoryDecayEnabled = enabled;
+  await trail.db
+    .update(tenants)
+    .set({ settingsJson: JSON.stringify(settings) })
+    .where(eq(tenants.id, row.id))
+    .run();
+  return enabled;
+}
