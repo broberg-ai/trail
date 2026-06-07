@@ -11,6 +11,8 @@ import {
   updateIngestSettings,
   getChatSettings,
   updateChatSettings,
+  getMemoryHealth,
+  setKbDecayEnabled,
   type LintStatus,
   type IngestSettingsResponse,
   type IngestBackendId,
@@ -69,6 +71,10 @@ export function SettingsTrailPanel() {
   const [selectedChatModelKey, setSelectedChatModelKey] = useState<string>('');
   const [chatSavePending, setChatSavePending] = useState(false);
 
+  // F195 — per-Trail memory-decay on/off (also surfaced on the Sundhed page).
+  const [decayEnabled, setDecayEnabled] = useState<boolean | null>(null);
+  const [decayToggling, setDecayToggling] = useState(false);
+
   useEffect(() => {
     listKnowledgeBases()
       .then((list) => {
@@ -111,10 +117,28 @@ export function SettingsTrailPanel() {
               }
             })
             .catch(() => setChatSettings(null));
+          // F195 — memory-decay on/off for this Trail. Fail-soft.
+          getMemoryHealth(match.id)
+            .then((d) => setDecayEnabled(d.decayEnabled ?? false))
+            .catch(() => setDecayEnabled(null));
         }
       })
       .catch((err: ApiError) => setError(err.message));
   }, [kbId]);
+
+  async function handleToggleDecay() {
+    if (!kb || decayToggling || decayEnabled === null) return;
+    setDecayToggling(true);
+    try {
+      const r = await setKbDecayEnabled(kb.id, !decayEnabled);
+      setDecayEnabled(r.decayEnabled);
+      setToast({ kind: 'success', text: t('settings.trail.decay.saved') });
+    } catch {
+      setToast({ kind: 'error', text: t('settings.trail.decay.error') });
+    } finally {
+      setDecayToggling(false);
+    }
+  }
 
   useEffect(() => {
     if (!toast) return;
@@ -446,6 +470,49 @@ export function SettingsTrailPanel() {
               </div>
             </div>
           ) : null}
+        </section>
+
+        {/* F195 — per-Trail memory-decay toggle (mirrors the Sundhed banner). */}
+        <section class="pt-2 border-t border-[color:var(--color-border)]">
+          <div class="mb-3">
+            <h2 class="text-sm font-medium">{t('settings.trail.decay.title')}</h2>
+            <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-xl">
+              {t('settings.trail.decay.subtitle')}
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                padding: '4px 10px',
+                borderRadius: 999,
+                background: decayEnabled ? 'var(--color-bg-sunk)' : 'var(--color-accent-soft)',
+                color: 'var(--color-fg)',
+              }}
+            >
+              {decayEnabled === null
+                ? '…'
+                : decayEnabled
+                  ? t('settings.trail.decay.stateActive')
+                  : t('settings.trail.decay.statePaused')}
+            </span>
+            {decayEnabled !== null ? (
+              <button
+                type="button"
+                onClick={handleToggleDecay}
+                disabled={decayToggling}
+                class="btn active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ padding: '6px 14px', fontSize: 12.5 }}
+              >
+                {decayToggling
+                  ? t('lifecycle.decaySaving')
+                  : decayEnabled
+                    ? t('lifecycle.decayPause')
+                    : t('lifecycle.decayEnable')}
+              </button>
+            ) : null}
+          </div>
         </section>
 
         {/* F152 — Ingest model picker. Dropdown over INGEST_MODELS plus

@@ -876,6 +876,14 @@
         "lastFindings": "Findings",
         "never": "never run"
       },
+      "decay": {
+        "title": "Memory fading",
+        "subtitle": "When knowledge is replaced by better facts, the old version is down-weighted automatically. Trail can also let knowledge that's never actually used weigh less over time — only turn this on once the site using this Trail is in full operation, so new knowledge doesn't fade before it's been in use.",
+        "statePaused": "Paused",
+        "stateActive": "Active",
+        "saved": "Setting saved",
+        "error": "Couldn't change the setting"
+      },
       "ingestModel": {
         "title": "Ingest model",
         "subtitle": "Which LLM backend primarily compiles Sources into Neurons on this Trail. Pick 'Use global default' to inherit the engine config, or pin this Trail to a specific model.",

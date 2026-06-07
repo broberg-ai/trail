@@ -876,6 +876,14 @@
         "lastFindings": "Findings",
         "never": "har aldrig kørt"
       },
+      "decay": {
+        "title": "Hukommelses-forfald",
+        "subtitle": "Når viden erstattes af bedre fakta, nedtones den gamle automatisk. Trail kan også lade viden, der reelt aldrig bruges, få mindre vægt over tid — slå det først til når sitet der bruger denne Trail er i fuld drift, så ny viden ikke falmer før den har været i brug.",
+        "statePaused": "På pause",
+        "stateActive": "Aktivt",
+        "saved": "Indstilling gemt",
+        "error": "Kunne ikke ændre indstillingen"
+      },
       "ingestModel": {
         "title": "Ingest-model",
         "subtitle": "Hvilken LLM-backend der primært kompilerer Kilder til Neuroner på denne Trail. Vælg 'Brug global default' for at følge engine-konfigurationen, eller pin denne Trail til en specifik model.",
