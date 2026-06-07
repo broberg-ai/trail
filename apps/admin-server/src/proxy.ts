@@ -48,23 +48,35 @@ async function resolveSession(c: Context): Promise<ResolvedRoute | null> {
   });
   if (!user) return null;
 
-  // F186 — read active-tenant cookie set by POST /api/auth/switch-tenant.
-  // Falls back to first tenant in the org if unset (first-login default).
-  // Validates the cookie's slug belongs to the user's org so a tampered
-  // cookie value can't escape the user's tenant set.
+  // F193 — tenant access is MEMBERSHIP-gated, not org-gated: a user reaches
+  // ONLY the tenants they have a control_memberships row for. This is what
+  // lets cb co-own sanne-andersen (a different org) while Sanne — a member of
+  // only her own tenant — can never reach broberg-ai. A tampered
+  // active-tenant cookie cannot escape the membership set.
+  const memberships = await db
+    .select({ tenantId: schema.controlMemberships.tenantId })
+    .from(schema.controlMemberships)
+    .where(eq(schema.controlMemberships.userId, user.id))
+    .all();
+  const memberTenantIds = new Set(memberships.map((m) => m.tenantId));
+  if (memberTenantIds.size === 0) return null;
+
+  type CT = typeof schema.controlTenants.$inferSelect;
   const activeSlug = getCookie(c, 'trail-active-tenant');
-  let tenant = activeSlug
-    ? await db.query.controlTenants.findFirst({
-        where: and(
-          eq(schema.controlTenants.slug, activeSlug),
-          eq(schema.controlTenants.organizationId, user.organizationId),
-        ),
-      })
+  let tenant: CT | null = activeSlug
+    ? ((await db.query.controlTenants.findFirst({
+        where: eq(schema.controlTenants.slug, activeSlug),
+      })) ?? null)
     : null;
+  // Cookie slug must resolve to a tenant the user actually belongs to.
+  if (tenant && !memberTenantIds.has(tenant.id)) tenant = null;
   if (!tenant) {
-    tenant = await db.query.controlTenants.findFirst({
-      where: eq(schema.controlTenants.organizationId, user.organizationId),
-    });
+    const firstId = memberships[0]?.tenantId;
+    tenant = firstId
+      ? ((await db.query.controlTenants.findFirst({
+          where: eq(schema.controlTenants.id, firstId),
+        })) ?? null)
+      : null;
   }
   if (!tenant) return null;
 

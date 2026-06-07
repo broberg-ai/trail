@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { setCookie, deleteCookie, getCookie } from 'hono/cookie';
-import { eq, and, gt, isNull } from 'drizzle-orm';
+import { eq, and, gt, isNull, inArray } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import { db, schema } from './db.js';
 import { sendMagicLink } from './email.js';
@@ -186,25 +186,25 @@ authRoutes.get('/me', async (c) => {
     return c.json({ error: 'user not found' }, 401);
   }
 
-  // F186 — user can belong to multiple tenants via the same organization.
-  // Return the full list so the SPA's TenantSwitcher can render every
-  // tenant the user has access to, plus mark the currently-active one.
-  // Active tenant is read from the `trail-active-tenant` cookie (set by
-  // POST /api/auth/switch-tenant); falls back to the first row if unset.
-  const tenants = await db
-    .select()
-    .from(schema.controlTenants)
-    .where(eq(schema.controlTenants.organizationId, user.organizationId))
-    .all();
-
-  // F187.4 — per-tenant role for this user. LEFT-join semantics via a map;
-  // a tenant with no membership row falls back to 'member'.
+  // F193 — membership-gated: return ONLY the tenants this user has a
+  // control_memberships row for (not every tenant in the org). The SPA's
+  // TenantSwitcher renders exactly this list, so a single-tenant user like
+  // Sanne never sees another tenant. Active tenant is read from the
+  // `trail-active-tenant` cookie; falls back to the first row if unset.
   const memberships = await db
     .select()
     .from(schema.controlMemberships)
     .where(eq(schema.controlMemberships.userId, user.id))
     .all();
   const roleByTenant = new Map(memberships.map((m) => [m.tenantId, m.role]));
+  const memberTenantIds = memberships.map((m) => m.tenantId);
+  const tenants = memberTenantIds.length
+    ? await db
+        .select()
+        .from(schema.controlTenants)
+        .where(inArray(schema.controlTenants.id, memberTenantIds))
+        .all()
+    : [];
 
   const activeSlugCookie = getCookie(c, 'trail-active-tenant');
   const active = (activeSlugCookie && tenants.find((t) => t.slug === activeSlugCookie)) || tenants[0];
@@ -240,8 +240,8 @@ authRoutes.get('/me', async (c) => {
 });
 
 // F186 — switch the active tenant for this session. Cookie-based, so
-// no migration. Validates that the user actually has access to the
-// target tenant (= belongs to the same organization) before setting.
+// no migration. F193 — validates that the user actually has access to the
+// target tenant (= has a control_memberships row for it) before setting.
 authRoutes.post('/switch-tenant', async (c) => {
   const sessionId = getCookie(c, COOKIE_NAME);
   if (!sessionId) return c.json({ error: 'not signed in' }, 401);
@@ -264,12 +264,22 @@ authRoutes.post('/switch-tenant', async (c) => {
   const slug = body.slug?.trim();
   if (!slug) return c.json({ error: 'slug required' }, 400);
 
-  const target = await db.query.controlTenants.findFirst({
-    where: and(
-      eq(schema.controlTenants.slug, slug),
-      eq(schema.controlTenants.organizationId, user.organizationId),
-    ),
-  });
+  // F193 — membership-gated: may switch only to a tenant the user belongs to.
+  const targetRows = await db
+    .select({ t: schema.controlTenants })
+    .from(schema.controlMemberships)
+    .innerJoin(
+      schema.controlTenants,
+      eq(schema.controlTenants.id, schema.controlMemberships.tenantId),
+    )
+    .where(
+      and(
+        eq(schema.controlMemberships.userId, user.id),
+        eq(schema.controlTenants.slug, slug),
+      ),
+    )
+    .all();
+  const target = targetRows[0]?.t ?? null;
   if (!target) return c.json({ error: 'tenant not found or access denied' }, 404);
 
   setCookie(c, 'trail-active-tenant', target.slug, {

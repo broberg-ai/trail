@@ -34,8 +34,10 @@ export function hashApiKey(raw: string): string {
 }
 
 /** Resolve the signed-in user + their active tenant from the session
- *  cookie. Active tenant comes from the `trail-active-tenant` cookie
- *  (validated against the user's org), else the first tenant in the org. */
+ *  cookie. Active tenant comes from the `trail-active-tenant` cookie;
+ *  F193 — gated on control_memberships (NOT org), so a minted key can
+ *  only target a tenant the user actually belongs to. Falls back to the
+ *  user's first membership tenant. */
 async function resolveContext(c: Context) {
   const sessionId = getCookie(c, COOKIE_NAME);
   if (!sessionId) return null;
@@ -51,19 +53,29 @@ async function resolveContext(c: Context) {
   });
   if (!user) return null;
 
+  const memberships = await db
+    .select({ tenantId: schema.controlMemberships.tenantId })
+    .from(schema.controlMemberships)
+    .where(eq(schema.controlMemberships.userId, user.id))
+    .all();
+  const memberTenantIds = new Set(memberships.map((m) => m.tenantId));
+  if (memberTenantIds.size === 0) return null;
+
+  type CT = typeof schema.controlTenants.$inferSelect;
   const activeSlug = getCookie(c, 'trail-active-tenant');
-  let tenant = activeSlug
-    ? await db.query.controlTenants.findFirst({
-        where: and(
-          eq(schema.controlTenants.slug, activeSlug),
-          eq(schema.controlTenants.organizationId, user.organizationId),
-        ),
-      })
+  let tenant: CT | null = activeSlug
+    ? ((await db.query.controlTenants.findFirst({
+        where: eq(schema.controlTenants.slug, activeSlug),
+      })) ?? null)
     : null;
+  if (tenant && !memberTenantIds.has(tenant.id)) tenant = null;
   if (!tenant) {
-    tenant = await db.query.controlTenants.findFirst({
-      where: eq(schema.controlTenants.organizationId, user.organizationId),
-    });
+    const firstId = memberships[0]?.tenantId;
+    tenant = firstId
+      ? ((await db.query.controlTenants.findFirst({
+          where: eq(schema.controlTenants.id, firstId),
+        })) ?? null)
+      : null;
   }
   if (!tenant) return null;
   return { user, tenant };
