@@ -1,4 +1,9 @@
-# F195 — Memory-decay is per-tenant opt-in (default OFF)
+# F195 — Memory-decay is per-Trail (per-KB) opt-in (default OFF)
+
+> Granularity: **per-Trail (per-KB)**, not per-account — one account can have a
+> Trail in full operation (decay ON) while another is still being built (OFF).
+> Stored as a `{ [kbId]: true }` map in the tenant's `settings_json` (no schema
+> migration); the decay job loads the map once per pass and checks it per KB.
 
 **Status:** shipping
 **Date:** 2026-06-07

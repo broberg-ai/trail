@@ -19,8 +19,8 @@ import { DEFAULT_DECAY_RATES } from '../services/confidence.js';
 import {
   loadDecayRates,
   saveDecayRates,
-  loadMemoryDecayEnabled,
-  saveMemoryDecayEnabled,
+  loadKbDecayEnabled,
+  saveKbDecayEnabled,
 } from '../services/tenant-settings.js';
 import { runDecayPass } from '../services/confidence-decay.js';
 import { getMemoryHealth } from '../services/memory-health.js';
@@ -33,14 +33,15 @@ memoryHealthRoutes.get('/knowledge-bases/:kbId/memory-health', async (c) => {
   const tenant = getTenant(c);
   const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
   if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
-  return c.json(await getMemoryHealth(trail, tenant.id, kbId));
+  // F195 — decayEnabled is per-Trail (per-KB).
+  const decayEnabled = await loadKbDecayEnabled(trail, kbId);
+  return c.json({ ...(await getMemoryHealth(trail, tenant.id, kbId)), decayEnabled });
 });
 
 memoryHealthRoutes.get('/memory-health/decay-rates', async (c) => {
   const trail = getTrail(c);
   const rates = await loadDecayRates(trail);
-  const decayEnabled = await loadMemoryDecayEnabled(trail);
-  return c.json({ rates, defaults: DEFAULT_DECAY_RATES, decayEnabled });
+  return c.json({ rates, defaults: DEFAULT_DECAY_RATES });
 });
 
 memoryHealthRoutes.put('/memory-health/decay-rates', async (c) => {
@@ -52,14 +53,17 @@ memoryHealthRoutes.put('/memory-health/decay-rates', async (c) => {
   return c.json({ rates, defaults: DEFAULT_DECAY_RATES });
 });
 
-// F195 — toggle memory-decay for this tenant (default OFF). Disabling resets
-// every Neuron to full confidence right away: a decay pass with the flag off
-// holds all Neurons at 1.0.
-memoryHealthRoutes.put('/memory-health/decay-enabled', async (c) => {
+// F195 — toggle memory-decay for ONE Trail (per-KB, default OFF). Disabling
+// resets that Trail's Neurons to full confidence right away: a decay pass with
+// the KB's flag off holds its Neurons at 1.0.
+memoryHealthRoutes.put('/knowledge-bases/:kbId/memory-health/decay-enabled', async (c) => {
   const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
+  if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
   const body = (await c.req.json().catch(() => ({}))) as { enabled?: boolean };
   const enabled = body.enabled === true;
-  await saveMemoryDecayEnabled(trail, enabled);
+  await saveKbDecayEnabled(trail, kbId, enabled);
   if (!enabled) {
     await runDecayPass(trail);
   }

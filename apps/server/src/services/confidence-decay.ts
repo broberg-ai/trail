@@ -40,7 +40,7 @@ import {
   computeConfidence,
   type ConfidenceSignalInput,
 } from './confidence.js';
-import { loadDecayRates, loadMemoryDecayEnabled } from './tenant-settings.js';
+import { loadDecayRates, loadDecayEnabledMap } from './tenant-settings.js';
 
 const SCHEDULE_HOURS = Number(process.env.TRAIL_DECAY_SCHEDULE_HOURS ?? 24);
 const INITIAL_DELAY_MS =
@@ -80,15 +80,17 @@ export async function runDecayPass(
   // F182.7 — per-tenant τ overrides from tenants.settings_json (Memory Health
   // sliders), merged over DEFAULT_DECAY_RATES. Loaded once per pass.
   const decayRates = await loadDecayRates(trail);
-  // F195 — memory-decay is per-tenant opt-in (default OFF). While OFF, every
-  // Neuron is held at full confidence (1.0), so a freshly-loaded KB with no
-  // usage history doesn't wrongly fade. This both RESETS (first pass writes 1.0)
-  // and HOLDS (subsequent passes are EPSILON no-ops).
-  const decayEnabled = await loadMemoryDecayEnabled(trail);
+  // F195 — memory-decay is per-Trail (per-KB) opt-in (default OFF). While a KB is
+  // OFF, every Neuron in it is held at full confidence (1.0), so a freshly-loaded
+  // Trail with no usage history doesn't wrongly fade. This both RESETS (first
+  // pass writes 1.0) and HOLDS (subsequent passes are EPSILON no-ops). Loaded
+  // once per pass; checked per KB below.
+  const enabledByKb = await loadDecayEnabledMap(trail);
 
   const kbs = await trail.db.select({ id: knowledgeBases.id }).from(knowledgeBases).all();
 
   for (const kb of kbs) {
+    const decayEnabled = enabledByKb[kb.id] === true;
     const neurons = await trail.db
       .select({
         id: documents.id,

@@ -78,23 +78,42 @@ export async function saveDecayRates(
 }
 
 /**
- * F195 — is the memory-decay job active for this tenant? **Default OFF.**
+ * F195 — per-Trail (per-KB) memory-decay opt-in. **Default OFF** for every KB.
  *
- * A freshly-loaded KB has no real usage history yet, so age/usage-based decay
- * would wrongly fade true-but-not-yet-cited knowledge ("everything is fading on
- * day 1"). Decay stays paused until the operator turns it on — typically once
- * the consuming site is in full operation and real reads/chat-cites start
- * reinforcing the right Neurons. While OFF, the decay pass holds every Neuron at
- * full confidence (1.0); supersession + contradiction still apply independently.
+ * Stored as a map in the tenant's settings_json
+ * (`{ memoryDecayEnabledByKb: { [kbId]: true } }`) so a single account can have
+ * one Trail in full operation (decay ON) while another is still being built
+ * (decay OFF). A freshly-loaded Trail has no usage history yet, so age/usage
+ * decay would wrongly fade true-but-not-yet-cited knowledge ("everything is
+ * fading on day 1"). While a KB is OFF, the decay pass holds its Neurons at full
+ * confidence (1.0); supersession + contradiction still apply independently.
  */
-export async function loadMemoryDecayEnabled(trail: TrailDatabase): Promise<boolean> {
-  const row = await trail.db.select({ s: tenants.settingsJson }).from(tenants).limit(1).get();
-  return parseSettings(row?.s ?? null).memoryDecayEnabled === true;
+const DECAY_ENABLED_KEY = 'memoryDecayEnabledByKb';
+
+function decayEnabledMap(settings: Record<string, unknown>): Record<string, boolean> {
+  const raw = settings[DECAY_ENABLED_KEY];
+  const out: Record<string, boolean> = {};
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) out[k] = v === true;
+  }
+  return out;
 }
 
-/** Persist the per-tenant memory-decay on/off flag into tenants.settings_json. */
-export async function saveMemoryDecayEnabled(
+/** The whole per-KB enabled map — load once per decay pass. */
+export async function loadDecayEnabledMap(trail: TrailDatabase): Promise<Record<string, boolean>> {
+  const row = await trail.db.select({ s: tenants.settingsJson }).from(tenants).limit(1).get();
+  return decayEnabledMap(parseSettings(row?.s ?? null));
+}
+
+/** Is memory-decay enabled for this specific Trail (KB)? Default false. */
+export async function loadKbDecayEnabled(trail: TrailDatabase, kbId: string): Promise<boolean> {
+  return (await loadDecayEnabledMap(trail))[kbId] === true;
+}
+
+/** Persist the per-KB memory-decay flag into tenants.settings_json. */
+export async function saveKbDecayEnabled(
   trail: TrailDatabase,
+  kbId: string,
   enabled: boolean,
 ): Promise<boolean> {
   const row = await trail.db
@@ -104,7 +123,9 @@ export async function saveMemoryDecayEnabled(
     .get();
   if (!row) throw new Error('tenant-settings: no tenant row to write');
   const settings = parseSettings(row.s);
-  settings.memoryDecayEnabled = enabled;
+  const map = decayEnabledMap(settings);
+  map[kbId] = enabled;
+  settings[DECAY_ENABLED_KEY] = map;
   await trail.db
     .update(tenants)
     .set({ settingsJson: JSON.stringify(settings) })
