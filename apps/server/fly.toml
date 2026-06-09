@@ -20,6 +20,8 @@ primary_region = "arn"
 
 [env]
   TRAIL_DATA_DIR = "/data"
+  # F196 — this app's deploy-observe surface key (upmetrics release registry).
+  UPMETRICS_SITE = "trail-engine-001"
   # Upmetrics DSN is NOT here — single source is packages/shared/src/upmetrics.ts,
   # compiled into the engine binary so every engine auto-reports with zero config.
   # Phase 1A: hard-coded to Sanne. Phase 1B replaces with per-request

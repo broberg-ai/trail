@@ -51,6 +51,10 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV TRAIL_DATA_DIR=/data
 
+# F196 — git sha baked at build time (build-arg) for the on-boot deploy self-report.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=$GIT_SHA
+
 # Copy installed node_modules from deps stage (pnpm uses symlinks
 # under node_modules/.pnpm/, COPY preserves them).
 COPY --from=deps /app/node_modules ./node_modules

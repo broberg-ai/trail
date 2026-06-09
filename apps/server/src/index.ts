@@ -27,7 +27,7 @@ import { initJobRunner } from './services/jobs/runner.js';
 import { noopHandler } from './services/jobs/handlers/noop.js';
 import { visionRerunHandler } from './services/jobs/handlers/vision-rerun.js';
 import { init as upInit, setTag } from '@upmetrics/sdk';
-import { UPMETRICS_DSN } from '@trail/shared';
+import { UPMETRICS_DSN, reportDeploy } from '@trail/shared';
 
 // Upmetrics fleet-dogfooding — server-side error capture for every engine
 // (engine-001 … N). DSN is the single source from @trail/shared, compiled in,
@@ -217,6 +217,10 @@ const server = Bun.serve({
 
 console.log(`trail server running on http://localhost:${server.port}`);
 console.log(`  database: ${trail.path}`);
+
+// F196 — self-report this deploy to upmetrics (one success POST on boot,
+// fail-soft + no-op unless UPMETRICS_API_KEY + UPMETRICS_SITE are set).
+void reportDeploy();
 
 // Graceful shutdown: tear down background subscribers first so no async
 // handler can race an event against a closing libSQL client, then stop

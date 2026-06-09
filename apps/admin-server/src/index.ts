@@ -12,7 +12,7 @@ import { inviteRoutes } from './invite.js';
 import { apiKeyRoutes } from './keys.js';
 import { proxyToEngine } from './proxy.js';
 import { init as upInit, captureException, setTag } from '@upmetrics/sdk';
-import { UPMETRICS_DSN } from '@trail/shared';
+import { UPMETRICS_DSN, reportDeploy } from '@trail/shared';
 
 // Upmetrics fleet-dogfooding — server-side error capture for app.trailmem.com.
 // DSN is the single source from @trail/shared (compiled in). Gated on
@@ -477,6 +477,9 @@ async function logout() {
 }
 
 console.log(`[admin-server] listening on :${PORT}`);
+// F196 — self-report this deploy to upmetrics (fail-soft no-op unless
+// UPMETRICS_API_KEY + UPMETRICS_SITE are set; dormant until the key secret lands).
+void reportDeploy();
 // idleTimeout: 0 — admin proxies long-lived SSE to the engine (/api/v1/stream +
 // /jobs/:id/stream). Bun's default 10s idle timeout killed those streams in the
 // 30s gap between the engine's `hello` and its periodic `ping`, which Fly's edge

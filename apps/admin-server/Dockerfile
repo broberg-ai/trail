@@ -38,6 +38,10 @@ ENV NODE_ENV=production
 ENV PORT=8081
 ENV TRAIL_DATA_DIR=/data
 
+# F196 — git sha baked at build time (build-arg) for the on-boot deploy self-report.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=$GIT_SHA
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/admin-server/node_modules ./apps/admin-server/node_modules
 COPY --from=deps /app/packages ./packages

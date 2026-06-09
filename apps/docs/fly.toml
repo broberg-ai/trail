@@ -5,6 +5,10 @@
 app = "trail-docs"
 primary_region = "arn"
 
+# F196 — deploy-observe surface key (upmetrics release registry).
+[env]
+  UPMETRICS_SITE = "docs.trailmem.com"
+
 [build]
   dockerfile = "Dockerfile"
 
