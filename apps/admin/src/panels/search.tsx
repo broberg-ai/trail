@@ -91,7 +91,7 @@ export function SearchPanel() {
 
       <div class="relative mb-6">
         <input
-          type="search"
+          type="text"
           autoFocus
           placeholder={t('searchPanel.placeholder')}
           value={input}

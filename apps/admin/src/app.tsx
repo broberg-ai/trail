@@ -98,9 +98,9 @@ export function App({ children }: { children: ComponentChildren }) {
   // Tab title
   useEffect(() => {
     if (kbId && kb) {
-      document.title = `trail: ${kb.name}`;
+      document.title = `Trail · ${kb.name}`;
     } else {
-      document.title = 'trail: Admin';
+      document.title = 'Trail · Admin';
     }
   }, [kbId, kb]);
 
