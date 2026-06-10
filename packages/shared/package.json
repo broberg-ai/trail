@@ -10,6 +10,7 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
+    "@broberg/secret-scan": "^0.1.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
