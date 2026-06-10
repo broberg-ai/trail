@@ -42,9 +42,28 @@ export const SECRET_PATTERNS: SecretPattern[] = [
     regex: /sk-ant-(?:api03-)?[A-Za-z0-9_-]{20,}/g,
   },
   {
+    // OpenRouter (ai-sdk #4336) — distinct from OpenAI; runs BEFORE the generic
+    // sk- (which would otherwise also match + mislabel it).
+    label: 'openrouter-api-key',
+    description: 'OpenRouter API key (sk-or-v1- + 64 hex)',
+    regex: /\bsk-or-v1-[0-9a-f]{64}/g,
+  },
+  {
     label: 'openai-api-key',
     description: 'OpenAI API key (sk-… / sk-proj-…)',
     regex: /sk-(?:proj-)?[A-Za-z0-9_-]{20,}/g,
+  },
+  {
+    // ElevenLabs (ai-sdk #4336) — sk_ with UNDERSCORE (vs OpenAI sk-), 48 hex.
+    label: 'elevenlabs-api-key',
+    description: 'ElevenLabs API key (sk_ + 48 hex)',
+    regex: /\bsk_[0-9a-f]{48}\b/g,
+  },
+  {
+    // fal.ai (ai-sdk #4336) — uuid:hex32 (key_id:key_secret); the colon is the signal.
+    label: 'fal-api-key',
+    description: 'fal.ai key (uuid:hex32)',
+    regex: /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{32}\b/g,
   },
   {
     label: 'google-api-key',
@@ -89,13 +108,32 @@ export const SECRET_PATTERNS: SecretPattern[] = [
     regex: /\bre_(?=[A-Za-z0-9_]*\d)[A-Za-z0-9_]{24,}\b/g,
   },
   {
+    label: 'supabase-access-token',
+    description: 'Supabase personal/management access token (sbp_ + 40 hex)',
+    regex: /\bsbp_[0-9a-f]{40}/g,
+  },
+  {
+    label: 'supabase-secret-key',
+    description: 'Supabase secret API key (sb_secret_…)',
+    regex: /\bsb_secret_[A-Za-z0-9_-]{20,}/g,
+  },
+  {
+    // Per buddy (#4331): used by every @broberg/* publish — the highest-value
+    // leak from a .env / commit history.
+    label: 'npm-token',
+    description: 'npm publish/automation token (npm_ + 36 base62)',
+    regex: /\bnpm_[A-Za-z0-9]{36}\b/g,
+  },
+  {
     label: 'fly-api-token',
     description: 'Fly.io API token (FlyV1 fm2_… / fo1_…)',
     regex: /(?:FlyV1 fm2_[A-Za-z0-9+/=_-]{20,}|\bfo1_[A-Za-z0-9_-]{20,})/g,
   },
   {
     label: 'jwt',
-    description: 'JSON Web Token (eyJ….eyJ….…)',
+    // Also covers Turso DB/platform auth tokens AND Supabase anon/service_role
+    // keys — both are JWTs (eyJ…), so the single JWT pattern catches them.
+    description: 'JSON Web Token (eyJ…) — incl. Turso + Supabase service_role tokens',
     regex: /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
   },
   {
@@ -106,8 +144,15 @@ export const SECRET_PATTERNS: SecretPattern[] = [
   },
   {
     label: 'cardmem-key',
-    description: 'Cardmem personal/incident/project key (pa_/pi_/pk_…)',
+    description: 'Cardmem personal/incident/project key (pa_/pi_/pk_ + 64 hex)',
     regex: /\bp[aik]_[A-Za-z0-9]{20,}/g,
+  },
+  {
+    // cardmem inbox-webhook key (F109, #4337) — piw_ isn't matched by p[aik]_
+    // above (its 3rd char 'w' ≠ '_').
+    label: 'cardmem-webhook-key',
+    description: 'Cardmem inbox-webhook key (piw_ + 64 hex)',
+    regex: /\bpiw_[0-9a-f]{64}/g,
   },
   {
     label: 'trail-key',
@@ -129,6 +174,18 @@ export const SECRET_PATTERNS: SecretPattern[] = [
     label: 'labeled-hex-secret',
     description: 'A 40+ hex value assigned to a secret/token/password/api-key-named field',
     regex: /\b[A-Za-z0-9_-]*(?:secret|token|password|api[_-]?key)\b\s*[:=]\s*["'`]?[0-9a-f]{40,}/gi,
+  },
+  {
+    // Discord bot token (fds #4334) — three base64url segments. Anchored both
+    // sides so it can't partial-match a longer dotted string.
+    label: 'discord-bot-token',
+    description: 'Discord bot token (3 base64url segments)',
+    regex: /(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{24,26}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,40}(?![A-Za-z0-9_-])/g,
+  },
+  {
+    label: 'discord-mfa-token',
+    description: 'Discord MFA token (mfa. + 84 chars)',
+    regex: /\bmfa\.[A-Za-z0-9_-]{84}\b/g,
   },
   {
     label: 'cloudflare-global-key',

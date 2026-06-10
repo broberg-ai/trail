@@ -48,11 +48,20 @@ const SAMPLES: Array<[label: string, sample: string]> = [
   ['slack-token', 'xoxb-1234567890-abcdefghij'],
   ['stripe-secret-key', 'sk_live_' + 'g'.repeat(24)],
   ['resend-api-key', 're_AbCdEf12GhIjKl34MnOpQr56StUvWx'],
+  ['supabase-access-token', 'sbp_' + 'a1b2c3d4'.repeat(5)], // sbp_ + 40 hex
+  ['supabase-secret-key', 'sb_secret_AbCdEf1234567890GhIjKl'],
+  ['npm-token', 'npm_' + 'a'.repeat(36)],
   ['fly-api-token', 'FlyV1 fm2_' + 'h'.repeat(40)],
   ['upmetrics-key', 'uk_' + 'a1b2c3d4'.repeat(6)], // uk_ + 48 hex
   ['cardmem-key', 'pa_' + 'j'.repeat(24)],
   ['trail-key', 'trail_' + 'k'.repeat(24)],
   ['cms-access-token', 'wh_' + 'deadbeef'.repeat(8)], // wh_ + 64 hex
+  ['openrouter-api-key', 'sk-or-v1-' + 'a1b2c3d4'.repeat(8)], // sk-or-v1- + 64 hex
+  ['elevenlabs-api-key', 'sk_' + 'a1b2c3d4'.repeat(6)], // sk_ + 48 hex
+  ['fal-api-key', '01234567-89ab-cdef-0123-456789abcdef:' + 'a1b2c3d4'.repeat(4)],
+  ['cardmem-webhook-key', 'piw_' + 'a1b2c3d4'.repeat(8)], // piw_ + 64 hex
+  ['discord-bot-token', 'M' + 'A'.repeat(24) + '.GhIjKl.' + 'a'.repeat(30)],
+  ['discord-mfa-token', 'mfa.' + 'a'.repeat(84)],
 ];
 for (const [label, sample] of SAMPLES) {
   const r = redactSecrets(`my key is ${sample} ok`);
@@ -64,6 +73,13 @@ for (const [label, sample] of SAMPLES) {
 const jwt =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcDEFghiJKLmnoPQRstuv';
 assert(redactSecrets(jwt).redacted.includes('[REDACTED:jwt]'), 'jwt redacted');
+// buddy #4339 — the Anthropic OAuth variant (sk-ant-oat01-) must be caught by
+// the same anthropic rule, not just sk-ant-api03-.
+const oat = 'sk-ant-oat01-' + 'Z'.repeat(95);
+assert(
+  redactSecrets(oat).redacted.includes('[REDACTED:anthropic-api-key]') && !redactSecrets(oat).redacted.includes('Z'.repeat(95)),
+  'anthropic OAuth token (sk-ant-oat01-) redacted',
+);
 const pem =
   '-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA1234\n-----END RSA PRIVATE KEY-----';
 assert(redactSecrets(pem).redacted.includes('[REDACTED:private-key]'), 'private-key block redacted');
