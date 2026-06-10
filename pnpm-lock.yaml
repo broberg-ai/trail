@@ -380,8 +380,8 @@ importers:
   packages/shared:
     dependencies:
       '@broberg/secret-scan':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.1.1
+        version: 0.1.1
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -670,8 +670,8 @@ packages:
     resolution: {integrity: sha512-fXUdZZFhk/adH6S0UIUwHDlKWN2kxCedh9OMeaK03J0gTXtRIhz7LysFRJnFQTZMwtecJ7vw3HKJg5kdTadQUA==}
     engines: {bun: '>=1.3.0'}
 
-  '@broberg/secret-scan@0.1.0':
-    resolution: {integrity: sha512-FTMb4KRA2OX+7HRcqk+7WZKshOKrPpSMzpsZ+Hg6nLB6SDhe96T+EIbQAuxW9FYfdtzSHHjdTg5RMdyvzoAxwg==}
+  '@broberg/secret-scan@0.1.1':
+    resolution: {integrity: sha512-4WW88X0fCk/WO+xmjD7shKJg1ILu2yvysHlgHdFprbuc4JUvH5ZYdbXXnqwg0wH2q4i/1Af9YIRYjd6OhdaV2g==}
 
   '@crxjs/vite-plugin@2.4.0':
     resolution: {integrity: sha512-bDLdq0W2V1SkMQDJjrcYyjK9/uKtdl4joT7GRImcootCjZdKRiRYt+cv9z8tJoU/tK3o1lX48LTqN7JMsk5AQg==}
@@ -4032,7 +4032,7 @@ snapshots:
     dependencies:
       zod: 3.25.76
 
-  '@broberg/secret-scan@0.1.0': {}
+  '@broberg/secret-scan@0.1.1': {}
 
   '@crxjs/vite-plugin@2.4.0(vite@5.4.21(@types/node@22.19.17)(lightningcss@1.32.0))':
     dependencies:
