@@ -18,8 +18,33 @@ import type {
   CandidateAction,
   CandidateEffectKind,
 } from '@trail/shared';
+import { redactSecrets } from '@trail/shared';
 import { slugify } from '../slug.js';
 import { shouldAutoApprove } from './policy.js';
+
+/**
+ * F197 — secret-scan gate. Redact any leaked credential out of a candidate's
+ * title + content before it is persisted, so no secret ever lands in a Neuron.
+ * `redactSecrets` is the single-source detector in @trail/shared; this logs
+ * (never silent) whenever it strips something.
+ */
+function scrubForLeaks(
+  fields: { title: string; content: string },
+  where: string,
+): { title: string; content: string } {
+  const t = redactSecrets(fields.title);
+  const c = redactSecrets(fields.content);
+  const findings = [...t.findings, ...c.findings];
+  if (findings.length > 0) {
+    const total = findings.reduce((n, f) => n + f.count, 0);
+    console.warn(
+      `[secret-gate] redacted ${total} secret(s) at ${where}: ${findings
+        .map((f) => `${f.label}×${f.count}`)
+        .join(', ')}`,
+    );
+  }
+  return { title: t.redacted, content: c.redacted };
+}
 
 /**
  * Queue module — the sole write path into wiki documents.
@@ -378,6 +403,10 @@ export async function createCandidate(
   // input.metadata; those that don't get a best-effort inference from
   // kind + existing metadata hints.
   const stampedMetadata = stampConnector(input.metadata, input.kind);
+  const scrubbed = scrubForLeaks(
+    { title: input.title, content: input.content },
+    'candidate enqueue',
+  );
   await db
     .insert(queueCandidates)
     .values({
@@ -385,8 +414,8 @@ export async function createCandidate(
       tenantId,
       knowledgeBaseId: input.knowledgeBaseId,
       kind: input.kind,
-      title: input.title,
-      content: input.content,
+      title: scrubbed.title,
+      content: scrubbed.content,
       metadata: stampedMetadata,
       confidence: input.confidence ?? null,
       impactEstimate: input.impactEstimate ?? null,
@@ -488,6 +517,7 @@ export async function submitCuratorEdit(
   const metadata = JSON.stringify({ ...op, connector: 'curator' });
   const candidateTitle = input.title ?? doc.title ?? docId;
   const now = new Date().toISOString();
+  const scrubbed = scrubForLeaks({ title: candidateTitle, content: input.content }, 'curator edit');
 
   return trail.db.transaction(async (tx) => {
     await tx
@@ -497,8 +527,8 @@ export async function submitCuratorEdit(
         tenantId,
         knowledgeBaseId: doc.knowledgeBaseId,
         kind: 'user-correction',
-        title: candidateTitle,
-        content: input.content,
+        title: scrubbed.title,
+        content: scrubbed.content,
         metadata,
         confidence: 1,
         impactEstimate: null,
@@ -679,7 +709,16 @@ async function approveCreate(
   actor: Actor,
   ctx: CommitContext,
 ): Promise<ResolutionResult> {
-  const content = payload.editedContent ?? candidate.content;
+  // F197 — re-scan at materialize so an approve-time editedContent edit can't
+  // smuggle a secret past the enqueue gate (candidate.content is already clean).
+  const contentScan = redactSecrets(payload.editedContent ?? candidate.content);
+  if (contentScan.findings.length > 0) {
+    const total = contentScan.findings.reduce((n, f) => n + f.count, 0);
+    console.warn(
+      `[secret-gate] redacted ${total} secret(s) at approve-materialize (candidate ${candidate.id})`,
+    );
+  }
+  const content = contentScan.redacted;
   const rawName =
     payload.filename ?? op.filename ?? slugify(candidate.title) ?? 'untitled';
   const filename = rawName.endsWith('.md') ? rawName : `${rawName}.md`;
@@ -784,7 +823,16 @@ async function approveUpdate(
     throw new VersionConflictError(doc.version, op.expectedVersion);
   }
 
-  const content = payload.editedContent ?? candidate.content;
+  // F197 — re-scan at update-materialize (same reason as approveCreate: an
+  // approve-time editedContent edit must not bypass the enqueue gate).
+  const updateScan = redactSecrets(payload.editedContent ?? candidate.content);
+  if (updateScan.findings.length > 0) {
+    const total = updateScan.findings.reduce((n, f) => n + f.count, 0);
+    console.warn(
+      `[secret-gate] redacted ${total} secret(s) at update-materialize (candidate ${candidate.id})`,
+    );
+  }
+  const content = updateScan.redacted;
   const newVersion = doc.version + 1;
   const prevEventId = await lastEventIdFor(tx, candidate.tenantId, doc.id);
 

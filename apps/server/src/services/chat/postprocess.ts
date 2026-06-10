@@ -17,6 +17,7 @@
  * intact while removing render-poison for external consumers.
  */
 
+import { redactSecrets } from '@trail/shared';
 import type { Audience } from '../audience.js';
 
 /**
@@ -74,8 +75,12 @@ function stripCitationsBlock(text: string): string {
  * tool/public: strip wiki-links + citations block.
  */
 export function stripForAudience(answer: string, audience: Audience): string {
-  if (audience === 'curator') return answer;
-  let out = stripWikiLinks(answer);
+  // F197 — egress guardrail: a leaked credential must never surface in a chat
+  // answer, even if one slipped into a Neuron. Scrub for EVERY audience (curator
+  // included) before any other processing.
+  const safe = redactSecrets(answer).redacted;
+  if (audience === 'curator') return safe;
+  let out = stripWikiLinks(safe);
   out = stripCitationsBlock(out);
   return out;
 }

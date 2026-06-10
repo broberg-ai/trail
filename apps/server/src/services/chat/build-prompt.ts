@@ -25,6 +25,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { redactSecrets } from '@trail/shared';
 import type { Audience } from '../audience.js';
 
 export interface PriorTurn {
@@ -103,7 +104,10 @@ export function buildSystemPrompt({
     ? `## Current Trail\nThe user is currently viewing the Trail called **"${currentTrailName}"**. Always call tools WITHOUT a \`knowledge_base\` argument so they default to this Trail automatically.\n\n`
     : '';
   const contextBlock = context.trim().length > 0
-    ? `## Wiki Context (from content search)\n${context}`
+    ? // F197 — egress guardrail: scrub retrieved Neuron content of any leaked
+      // credential BEFORE it enters the prompt, so the model can never see (and
+      // therefore never echo / stream) a secret that slipped into a Neuron.
+      `## Wiki Context (from content search)\n${redactSecrets(context).redacted}`
     : '';
   const trailContext = `${trailLine}${contextBlock}`.trim();
 

@@ -13,3 +13,4 @@ export * from './diff/index.js';
 export * from './backpressure.js';
 export * from './neuron-types.js';
 export * from './upmetrics.js';
+export * from './secret-scan.js';

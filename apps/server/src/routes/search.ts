@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { documents, knowledgeBases } from '@trail/db';
 import { and, eq } from 'drizzle-orm';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
-import { parseTags, canonicaliseTag, parseSeqId, kbPrefix } from '@trail/shared';
+import { parseTags, canonicaliseTag, parseSeqId, kbPrefix, redactSecrets } from '@trail/shared';
 import { resolveKbId } from '@trail/core';
 import {
   parseAudienceParam,
@@ -57,7 +57,11 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
     // external Bearer caller probing `#sanne_00000017` shouldn't get a
     // heuristic Neuron back just because they guessed the right seq.
     if (hit && isVisibleToAudience(audience, hit.path, hit.tags)) {
-      return c.json({ documents: [hit], chunks: [] });
+      // F197 — egress guardrail: scrub any leaked credential from the title.
+      return c.json({
+        documents: [{ ...hit, title: hit.title == null ? hit.title : redactSecrets(hit.title).redacted }],
+        chunks: [],
+      });
     }
     // Unknown #id (or audience-filtered) — return empty rather than
     // silently fall through so the curator knows the id didn't resolve
@@ -118,13 +122,36 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
         isVisibleToAudience(audience, d.path, tagMap.get(d.id) ?? null),
       );
     }
+    // F197 — egress guardrail: redact any leaked credential out of the hits
+    // (title/highlight/userNote + chunk content) before they leave the API, so
+    // a secret that slipped into a Neuron can't surface in search results.
     return c.json({
-      documents: filtered.map((d) => ({ ...d, tags: tagMap.get(d.id) ?? null })),
-      chunks,
+      documents: filtered.map((d) => {
+        const un = (d as { userNote?: unknown }).userNote;
+        return {
+          ...d,
+          tags: tagMap.get(d.id) ?? null,
+          title: d.title == null ? d.title : redactSecrets(d.title).redacted,
+          highlight: redactSecrets(d.highlight).redacted,
+          ...(typeof un === 'string' ? { userNote: redactSecrets(un).redacted } : {}),
+        };
+      }),
+      chunks: chunks.map((ch) => ({
+        ...ch,
+        content: redactSecrets(ch.content).redacted,
+        highlight: redactSecrets(ch.highlight).redacted,
+      })),
     });
   }
 
-  return c.json({ documents, chunks });
+  return c.json({
+    documents,
+    chunks: chunks.map((ch) => ({
+      ...ch,
+      content: redactSecrets(ch.content).redacted,
+      highlight: redactSecrets(ch.highlight).redacted,
+    })),
+  });
 });
 
 /**
