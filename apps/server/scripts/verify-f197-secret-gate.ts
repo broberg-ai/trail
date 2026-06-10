@@ -48,9 +48,10 @@ const SAMPLES: Array<[label: string, sample: string]> = [
   ['slack-token', 'xoxb-1234567890-abcdefghij'],
   ['stripe-secret-key', 'sk_live_' + 'g'.repeat(24)],
   ['fly-api-token', 'FlyV1 fm2_' + 'h'.repeat(40)],
-  ['upmetrics-key', 'uk_' + 'i'.repeat(24)],
+  ['upmetrics-key', 'uk_' + 'a1b2c3d4'.repeat(6)], // uk_ + 48 hex
   ['cardmem-key', 'pa_' + 'j'.repeat(24)],
   ['trail-key', 'trail_' + 'k'.repeat(24)],
+  ['cms-access-token', 'wh_' + 'deadbeef'.repeat(8)], // wh_ + 64 hex
 ];
 for (const [label, sample] of SAMPLES) {
   const r = redactSecrets(`my key is ${sample} ok`);
@@ -65,6 +66,12 @@ assert(redactSecrets(jwt).redacted.includes('[REDACTED:jwt]'), 'jwt redacted');
 const pem =
   '-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA1234\n-----END RSA PRIVATE KEY-----';
 assert(redactSecrets(pem).redacted.includes('[REDACTED:private-key]'), 'private-key block redacted');
+const labeled = 'CMS_JWT_SECRET=' + 'f'.repeat(64);
+const labeledR = redactSecrets(labeled);
+assert(
+  labeledR.redacted.includes('[REDACTED:labeled-hex-secret]') && !labeledR.redacted.includes('f'.repeat(64)),
+  'labeled prefix-less hex secret redacted',
+);
 
 console.log('\n[1b] benign text untouched (no false positives)');
 const BENIGN = [

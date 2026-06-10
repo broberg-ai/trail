@@ -92,9 +92,10 @@ export const SECRET_PATTERNS: SecretPattern[] = [
     regex: /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
   },
   {
+    // Tightened per upmetrics (#4325): genApiKey = randomBytes(24).hex → uk_ + exactly 48 lowercase hex.
     label: 'upmetrics-key',
-    description: 'Upmetrics project key (uk_…)',
-    regex: /\buk_[A-Za-z0-9]{20,}/g,
+    description: 'Upmetrics project key (uk_ + 48 hex)',
+    regex: /\buk_[0-9a-f]{48}/g,
   },
   {
     label: 'cardmem-key',
@@ -105,6 +106,22 @@ export const SECRET_PATTERNS: SecretPattern[] = [
     label: 'trail-key',
     description: 'Trail personal API key (trail_…)',
     regex: /\btrail_[A-Za-z0-9]{20,}/g,
+  },
+  {
+    // Per cms (#4327): randomBytes(32).hex → wh_ + 64 lowercase hex (67 chars total).
+    label: 'cms-access-token',
+    description: 'webhouse.app CMS access token (wh_ + 64 hex)',
+    regex: /\bwh_[0-9a-f]{64}/g,
+  },
+  {
+    // Context-based catch for the prefix-less high-entropy service secrets that
+    // cms + upmetrics flagged (CMS_JWT_SECRET, revalidateSecret, fleet
+    // openssl-rand-hex secrets): a 40+ hex value assigned to a field whose name
+    // contains secret/token/password/api-key. The name requirement keeps the
+    // false-positive rate near zero (a bare 40/64-hex would hit shas/hashes).
+    label: 'labeled-hex-secret',
+    description: 'A 40+ hex value assigned to a secret/token/password/api-key-named field',
+    regex: /\b[A-Za-z0-9_-]*(?:secret|token|password|api[_-]?key)\b\s*[:=]\s*["'`]?[0-9a-f]{40,}/gi,
   },
   {
     label: 'cloudflare-global-key',
