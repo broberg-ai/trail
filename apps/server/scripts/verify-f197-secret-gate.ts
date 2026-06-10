@@ -47,6 +47,7 @@ const SAMPLES: Array<[label: string, sample: string]> = [
   ['github-token', 'ghp_' + 'f'.repeat(36)],
   ['slack-token', 'xoxb-1234567890-abcdefghij'],
   ['stripe-secret-key', 'sk_live_' + 'g'.repeat(24)],
+  ['resend-api-key', 're_AbCdEf12GhIjKl34MnOpQr56StUvWx'],
   ['fly-api-token', 'FlyV1 fm2_' + 'h'.repeat(40)],
   ['upmetrics-key', 'uk_' + 'a1b2c3d4'.repeat(6)], // uk_ + 48 hex
   ['cardmem-key', 'pa_' + 'j'.repeat(24)],

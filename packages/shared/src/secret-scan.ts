@@ -82,6 +82,13 @@ export const SECRET_PATTERNS: SecretPattern[] = [
     regex: /\b[rs]k_live_[A-Za-z0-9]{20,}/g,
   },
   {
+    // Resend email API key (re_…). Lookahead requires a digit in the body so
+    // we don't redact long snake_case identifiers like re_compute_the_thing.
+    label: 'resend-api-key',
+    description: 'Resend API key (re_ + token)',
+    regex: /\bre_(?=[A-Za-z0-9_]*\d)[A-Za-z0-9_]{24,}\b/g,
+  },
+  {
     label: 'fly-api-token',
     description: 'Fly.io API token (FlyV1 fm2_… / fo1_…)',
     regex: /(?:FlyV1 fm2_[A-Za-z0-9+/=_-]{20,}|\bfo1_[A-Za-z0-9_-]{20,})/g,

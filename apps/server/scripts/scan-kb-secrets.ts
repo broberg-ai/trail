@@ -1,20 +1,25 @@
 /**
- * F197.4 — retro-scan a KB's existing Neurons for leaked secrets that predate
- * the F197 ingest gate. Uses the SAME redactSecrets detector as the gate.
+ * F197.4 — retro-scan (and optionally redact) a KB's existing Neurons for
+ * leaked secrets that predate the F197 ingest gate. Uses the SAME redactSecrets
+ * detector as the gate.
  *
  * SAFETY: never echoes a raw secret. Reports only the pattern label + a context
- * line with the secret already masked, so findings can be triaged without
- * re-leaking the value into this transcript.
+ * line with the secret already masked.
  *
- * Run: cd apps/server && bun run scripts/scan-kb-secrets.ts <kb-slug> [tenant]
+ * Dry-run (default):  cd apps/server && bun run scripts/scan-kb-secrets.ts <kb> [tenant]
+ * Redact at rest:     … scripts/scan-kb-secrets.ts <kb> [tenant] --apply
+ *   --apply rewrites each leaked Neuron with its redacted content via the
+ *   curator-edit endpoint (PUT /documents/:id/content), then re-verifies.
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { redactSecrets } from '@trail/shared';
 
-const kb = process.argv[2] ?? 'buddy-sessions';
-const tenant = process.argv[3] ?? 'broberg-ai';
+const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+const kb = args[0] ?? 'buddy-sessions';
+const tenant = args[1] ?? 'broberg-ai';
+const APPLY = process.argv.includes('--apply');
 
 const here = dirname(fileURLToPath(import.meta.url));
 const envPath = resolve(here, '../../../.env.local-ingest');
@@ -31,22 +36,24 @@ if (!KEY) {
 }
 const H = { Authorization: `Bearer ${KEY}`, 'X-Trail-Tenant': tenant };
 
-console.log(`\n=== F197.4 retro-scan: kb=${kb} tenant=${tenant} ===\n`);
+console.log(`\n=== F197.4 ${APPLY ? 'REDACT' : 'scan'}: kb=${kb} tenant=${tenant} ===\n`);
 
 const listRes = await fetch(`${BASE}/api/v1/knowledge-bases/${kb}/documents`, { headers: H });
 if (!listRes.ok) {
   console.error(`list failed: HTTP ${listRes.status}`);
   process.exit(1);
 }
-const docs = (await listRes.json()) as Array<{ id: string; title: string; path: string }>;
+const docs = (await listRes.json()) as Array<{ id: string; title: string; path: string; version: number }>;
 console.log(`Scanning ${docs.length} Neurons…\n`);
 
 interface Hit {
   id: string;
   title: string;
   path: string;
+  version: number;
   labels: string[];
   sample: string;
+  redacted: string; // full redacted content, ready to write back
 }
 const hits: Hit[] = [];
 let scanned = 0;
@@ -69,17 +76,18 @@ for (let i = 0; i < docs.length; i += BATCH) {
           return;
         }
         const body = (await r.json()) as { content?: string };
-        const titleScan = redactSecrets(d.title ?? '');
         const contentScan = redactSecrets(body.content ?? '');
+        const titleScan = redactSecrets(d.title ?? '');
         const findings = [...titleScan.findings, ...contentScan.findings];
         if (findings.length > 0) {
-          const labels = [...new Set(findings.map((f) => f.label))];
           hits.push({
             id: d.id,
             title: d.title,
             path: d.path,
-            labels,
+            version: d.version,
+            labels: [...new Set(findings.map((f) => f.label))],
             sample: maskedLine(contentScan.redacted) || maskedLine(titleScan.redacted),
+            redacted: contentScan.redacted,
           });
         }
       } catch {
@@ -88,22 +96,53 @@ for (let i = 0; i < docs.length; i += BATCH) {
     }),
   );
   scanned += slice.length;
-  if (scanned % 80 === 0 || scanned >= docs.length) console.log(`  …${Math.min(scanned, docs.length)}/${docs.length}`);
+  if (scanned % 160 === 0 || scanned >= docs.length) console.log(`  …${Math.min(scanned, docs.length)}/${docs.length}`);
 }
 
-console.log(`\n=== RESULT ===`);
-console.log(`Scanned:            ${docs.length} Neurons (${errors} fetch errors)`);
-console.log(`With leaked secret: ${hits.length}`);
-if (hits.length > 0) {
-  const byLabel: Record<string, number> = {};
-  for (const h of hits) for (const l of h.labels) byLabel[l] = (byLabel[l] ?? 0) + 1;
-  console.log(`By type:            ${JSON.stringify(byLabel)}`);
-  console.log(`\n--- Neurons with secrets (raw value NOT shown) ---`);
+console.log(`\nScanned ${docs.length} Neurons (${errors} fetch errors) · ${hits.length} with leaked secret`);
+if (hits.length === 0) {
+  console.log('\n✓ clean — no leaked secrets.\n');
+  process.exit(0);
+}
+const byLabel: Record<string, number> = {};
+for (const h of hits) for (const l of h.labels) byLabel[l] = (byLabel[l] ?? 0) + 1;
+console.log(`By type: ${JSON.stringify(byLabel)}\n`);
+
+if (!APPLY) {
   for (const h of hits) {
     console.log(`• ${h.id}  [${h.labels.join(', ')}]  ${h.path}`);
-    console.log(`    title: ${redactSecrets(h.title).redacted.slice(0, 90)}`);
-    if (h.sample) console.log(`    ctx:   ${h.sample}`);
+    if (h.sample) console.log(`    ctx: ${h.sample}`);
+  }
+  console.log(`\n(dry-run — pass --apply to redact these at rest)\n`);
+  process.exit(0);
+}
+
+// ── --apply: rewrite each leaked Neuron with its redacted content ──────────
+console.log(`Redacting ${hits.length} Neurons at rest…\n`);
+let redacted = 0;
+let failed = 0;
+for (const h of hits) {
+  const put = await fetch(`${BASE}/api/v1/documents/${h.id}/content`, {
+    method: 'PUT',
+    headers: { ...H, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content: h.redacted, expectedVersion: h.version }),
+  });
+  if (!put.ok) {
+    console.log(`  ✗ ${h.id}: PUT HTTP ${put.status} ${(await put.text()).slice(0, 120)}`);
+    failed += 1;
+    continue;
+  }
+  // re-verify: fetch fresh content, assert no secret remains
+  const fresh = await fetch(`${BASE}/api/v1/documents/${h.id}/content`, { headers: H });
+  const freshBody = (await fresh.json()) as { content?: string };
+  const remaining = redactSecrets(freshBody.content ?? '').findings;
+  if (remaining.length === 0) {
+    console.log(`  ✓ ${h.id}  [${h.labels.join(', ')}] redacted + verified clean`);
+    redacted += 1;
+  } else {
+    console.log(`  ⚠ ${h.id}: still has secrets after write (${remaining.map((f) => f.label).join(',')})`);
+    failed += 1;
   }
 }
-console.log();
-process.exit(0);
+console.log(`\n=== ${failed === 0 ? 'DONE' : `DONE with ${failed} failures`} — ${redacted}/${hits.length} redacted ===\n`);
+process.exit(failed === 0 ? 0 : 1);
