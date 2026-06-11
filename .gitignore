@@ -181,3 +181,4 @@ apps/server/.baseline/
 # pollute git with traces/videos/screenshots.
 apps/widget/test-results/
 apps/widget/playwright-report/
+.lens/
