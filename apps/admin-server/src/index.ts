@@ -11,7 +11,7 @@ import { oauthRoutes } from './oauth.js';
 import { inviteRoutes } from './invite.js';
 import { apiKeyRoutes } from './keys.js';
 import { proxyToEngine } from './proxy.js';
-import { lensReadOnlyGuard, lensSessionHandler } from './lens-session.js';
+import { lensReadOnlyGuard, lensSessionRoute } from './lens-session.js';
 import { init as upInit, captureException, setTag } from '@upmetrics/sdk';
 import { UPMETRICS_DSN, reportDeploy } from '@trail/shared';
 
@@ -89,7 +89,7 @@ app.get('/api/health', async (c) => {
 app.route('/api/auth', authRoutes);
 // F198 — Lens mint endpoint (POST, bearer LENS_MINT_SECRET → 10-min read-only
 // storageState). Ships dark: 503 until the secret is provisioned.
-app.post('/api/lens-session', lensSessionHandler);
+app.post('/api/lens-session', lensSessionRoute);
 // Magic-link emails embed `/auth/verify?token=...` (clean URL, no /api/
 // prefix because the user clicks it from email). Mount the SAME router
 // at /auth so verify works at both paths — POST /api/auth/magic-link

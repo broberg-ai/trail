@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@broberg/lens": "0.1.1",
     "@libsql/client": "^0.14.0",
     "@trail/shared": "workspace:*",
     "@upmetrics/sdk": "^0.1.5",

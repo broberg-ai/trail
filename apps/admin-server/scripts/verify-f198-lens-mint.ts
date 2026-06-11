@@ -1,6 +1,8 @@
 /**
- * F198 — verify the Lens mint logic against a throwaway control.db. Proves the
- * security properties (HTTP 503/401 are verified live post-deploy).
+ * F198 — verify Trail's Lens minter (the `createSession` callback for
+ * @broberg/lens) against a throwaway control.db. The package's generic 80%
+ * (bearer/503/TTL/storageState/rate-limit/never-cb) is covered by components'
+ * own suite + the live e2e; this proves Trail's auth-specific 20%.
  *
  * Run: cd apps/admin-server && \
  *   rm -f /tmp/trail-f198-verify.db* && \
@@ -9,7 +11,7 @@
 import { eq, and } from 'drizzle-orm';
 import { db, schema } from '../src/db.js';
 import { runMigrations } from '../src/migrations.js';
-import { mintLensSession, isLensPrincipalSession, LENS_EMAIL } from '../src/lens-session.js';
+import { mintLensCookie, isLensPrincipalSession, LENS_EMAIL } from '../src/lens-session.js';
 
 let failures = 0;
 function assert(cond: unknown, msg: string): void {
@@ -20,7 +22,7 @@ function assert(cond: unknown, msg: string): void {
   }
 }
 
-console.log('\n=== F198 Lens mint verify ===\n');
+console.log('\n=== F198 Lens minter verify ===\n');
 await runMigrations();
 
 // ── seed: org + broberg-ai tenant + a cb@ user with a session ───────────────
@@ -40,19 +42,18 @@ await db
   .values({ id: 'sess-cb', userId: 'usr-cb', expiresAt: new Date(Date.now() + 3.6e6).toISOString() })
   .run();
 
-// ── 1. mint ─────────────────────────────────────────────────────────────────
-console.log('[1] mintLensSession');
-const state = await mintLensSession({ tenantSlug: 'broberg-ai', cookieDomain: '.trailmem.com' });
-const cookie = state.cookies[0];
-assert(cookie?.name === 'trail-session', 'cookie name = trail-session');
-assert(cookie?.domain === '.trailmem.com' && cookie.path === '/', 'domain/path set');
-assert(cookie?.httpOnly === true && cookie.secure === true && cookie.sameSite === 'Lax', 'httpOnly+secure+SameSite=Lax');
-assert(Array.isArray(state.origins) && state.origins.length === 0, 'origins = []');
-const ttlMs = (cookie?.expires ?? 0) * 1000 - Date.now();
-assert(ttlMs > 9 * 60_000 && ttlMs <= 10 * 60_000 + 5_000, `~10-min TTL (got ${Math.round(ttlMs / 1000)}s)`);
-const sessionId = cookie!.value;
+// The context the @broberg/lens core passes into createSession.
+const expiresAt = Date.now() + 600_000;
+const ctx = { principal: LENS_EMAIL, host: 'app.trailmem.com', secure: true, ttlMs: 600_000, expiresAt };
 
-// ── 2. principal is a dedicated NON-cb user ─────────────────────────────────
+// ── 1. mint ─────────────────────────────────────────────────────────────────
+console.log('[1] mintLensCookie (Trail createSession callback)');
+const cookie = await mintLensCookie(ctx);
+assert(cookie.name === 'trail-session', 'returns the trail-session cookie');
+assert(typeof cookie.value === 'string' && cookie.value.length === 64, 'value = raw 64-hex session id (unsigned)');
+const sessionId = cookie.value;
+
+// ── 2. dedicated NON-cb principal, broberg-ai only, TTL clamped ─────────────
 console.log('\n[2] dedicated read-only principal (never cb@)');
 const lens = await db.query.controlUsers.findFirst({ where: eq(schema.controlUsers.email, LENS_EMAIL) });
 assert(!!lens, `lens user exists (${LENS_EMAIL})`);
@@ -62,14 +63,18 @@ const mem = await db.query.controlMemberships.findFirst({
 });
 assert(mem?.role === 'member', 'member membership in broberg-ai only');
 const sess = await db.query.sessions.findFirst({ where: eq(schema.sessions.id, sessionId) });
-assert(sess?.userId === lens!.id, 'minted session belongs to the lens principal');
+assert(sess?.userId === lens!.id, 'session belongs to the lens principal');
+assert(
+  sess != null && Math.abs(new Date(sess.expiresAt).getTime() - expiresAt) < 2_000,
+  'session row clamped to the package TTL (~10 min)',
+);
 
 // ── 3. idempotent — no duplicate principal, fresh session each mint ─────────
 console.log('\n[3] idempotent find-or-create');
-const state2 = await mintLensSession({ tenantSlug: 'broberg-ai', cookieDomain: '.trailmem.com' });
+const cookie2 = await mintLensCookie(ctx);
 const lensUsers = await db.select().from(schema.controlUsers).where(eq(schema.controlUsers.email, LENS_EMAIL)).all();
 assert(lensUsers.length === 1, 'exactly ONE lens user after two mints (no dupe)');
-assert(state2.cookies[0]!.value !== sessionId, 'each mint issues a fresh session');
+assert(cookie2.value !== sessionId, 'each mint issues a fresh session');
 
 // ── 4. guard discrimination ─────────────────────────────────────────────────
 console.log('\n[4] isLensPrincipalSession');
