@@ -11,6 +11,8 @@ primary_region = "arn"
   TRAIL_DATA_DIR = "/data"
   # F196 — this app's deploy-observe surface key (upmetrics release registry).
   UPMETRICS_SITE = "app.trailmem.com"
+  # F198 — Lens session cookie domain (cross-subdomain under trailmem.com).
+  LENS_COOKIE_DOMAIN = ".trailmem.com"
 
 [http_service]
   internal_port = 8081

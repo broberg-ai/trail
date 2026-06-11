@@ -11,6 +11,7 @@ import { oauthRoutes } from './oauth.js';
 import { inviteRoutes } from './invite.js';
 import { apiKeyRoutes } from './keys.js';
 import { proxyToEngine } from './proxy.js';
+import { lensReadOnlyGuard, lensSessionHandler } from './lens-session.js';
 import { init as upInit, captureException, setTag } from '@upmetrics/sdk';
 import { UPMETRICS_DSN, reportDeploy } from '@trail/shared';
 
@@ -57,6 +58,10 @@ console.log(`[admin-server] control.db migrations applied`);
 
 const app = new Hono();
 app.use('*', logger());
+// F198 — read-only Lens principal may never mutate. Global guard runs before
+// every route (engine proxy + admin-local) and 403s any write carrying the lens
+// session cookie. GET/HEAD pass; the bearer-authed mint POST carries no cookie.
+app.use('*', lensReadOnlyGuard);
 // Upmetrics — capture unhandled route errors, then preserve Hono's default 500.
 app.onError((err, c) => {
   captureException(err, { request: { url: c.req.url, method: c.req.method } });
@@ -82,6 +87,9 @@ app.get('/api/health', async (c) => {
 });
 
 app.route('/api/auth', authRoutes);
+// F198 — Lens mint endpoint (POST, bearer LENS_MINT_SECRET → 10-min read-only
+// storageState). Ships dark: 503 until the secret is provisioned.
+app.post('/api/lens-session', lensSessionHandler);
 // Magic-link emails embed `/auth/verify?token=...` (clean URL, no /api/
 // prefix because the user clicks it from email). Mount the SAME router
 // at /auth so verify works at both paths — POST /api/auth/magic-link
