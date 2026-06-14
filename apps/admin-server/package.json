@@ -10,12 +10,12 @@
   },
   "dependencies": {
     "@broberg/lens": "0.1.1",
+    "@broberg/mail": "0.1.0",
     "@libsql/client": "^0.14.0",
     "@trail/shared": "workspace:*",
     "@upmetrics/sdk": "^0.1.5",
     "drizzle-orm": "^0.36.0",
-    "hono": "^4.6.0",
-    "resend": "^4.0.0"
+    "hono": "^4.6.0"
   },
   "devDependencies": {
     "@types/bun": "^1.1.0",

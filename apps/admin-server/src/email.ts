@@ -1,7 +1,11 @@
-import { Resend } from 'resend';
+import { createMailer } from '@broberg/mail';
 
 /**
- * F172 — magic-link email via Resend.
+ * F172 — magic-link email. Delivery via @broberg/mail (F005 fleet mailer):
+ * the package owns the Resend REST call, ship-dark (no key ⇒ logged no-op),
+ * and the dev recipient gate (`live:false` outside prod ⇒ only fleet admins
+ * receive real mail, so a preview/dev send can never reach a real user). Only
+ * Trail's subject/HTML template stays here.
  *
  * Sender: trail@webhouse.dk in Phase 1 (only verified domain in Christian's
  * Resend account today). Phase 2 migrates to noreply@trailmem.com once
@@ -9,11 +13,18 @@ import { Resend } from 'resend';
  * no code change.
  */
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const RESEND_FROM = process.env.RESEND_FROM ?? 'trail@webhouse.dk';
 const MAGIC_LINK_BASE_URL = process.env.MAGIC_LINK_BASE_URL ?? 'https://app.trailmem.com';
 
-const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
+// Live delivery only in prod (NODE_ENV=production on Fly — the same signal the
+// auth/oauth secure-cookies use). In dev, sends are gated to fleet admins
+// regardless of whether a key happens to be present locally.
+const mailer = createMailer({
+  apiKey: process.env.RESEND_API_KEY,
+  from: RESEND_FROM,
+  fromName: 'Trail',
+  live: process.env.NODE_ENV === 'production',
+});
 
 export interface SendMagicLinkInput {
   email: string;
@@ -69,20 +80,14 @@ this email — nothing happens until the link is used.
 <p style="font-size: 0.85rem; color: #777;">— Trail</p>
 </body></html>`;
 
-  if (!resend) {
-    // No Resend key — log so dev can copy the link. Useful in local dev.
-    console.warn(`[email] RESEND_API_KEY not set; magic-link is: ${link}`);
+  const result = await mailer.send({ to: input.email, subject, html, text });
+  if (result.skipped) {
+    // Ship-dark (no key) or recipient gated out in dev — surface the link so a
+    // local dev can still complete login without a real send.
+    console.warn(`[email] magic-link not delivered (skipped); link: ${link}`);
     return;
   }
-
-  const { error } = await resend.emails.send({
-    from: `Trail <${RESEND_FROM}>`,
-    to: input.email,
-    subject,
-    text,
-    html,
-  });
-  if (error) {
-    throw new Error(`Resend error: ${error.message}`);
+  if (!result.ok) {
+    throw new Error(`mail send failed: ${result.error ?? 'unknown error'}`);
   }
 }
