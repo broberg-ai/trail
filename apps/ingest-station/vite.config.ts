@@ -29,6 +29,11 @@ const DEV_KEY = readDevKey();
 export default defineConfig({
   plugins: [preact(), tailwindcss()],
   server: {
+    // Bind IPv4 loopback explicitly. Vite's default host `localhost` resolves
+    // IPv6-first on macOS, so a bare `vite` binds only [::1]:3032 and the
+    // canonical http://127.0.0.1:3032/ (used by the /local-ingest skill) is
+    // refused. Pinning 127.0.0.1 makes that URL work regardless of launcher.
+    host: '127.0.0.1',
     port: PORT,
     proxy: {
       '/api': {
