@@ -66,6 +66,9 @@ importers:
 
   apps/admin-server:
     dependencies:
+      '@broberg/apikey':
+        specifier: 0.1.0
+        version: 0.1.0(hono@4.12.12)
       '@broberg/lens':
         specifier: 0.1.1
         version: 0.1.1(hono@4.12.12)
@@ -672,6 +675,14 @@ packages:
   '@broberg/ai-sdk@0.13.0':
     resolution: {integrity: sha512-QnOOQeEBFYFOy0l5RpWvfgDhGoQiK1RbBU950kmJB8M2rnazobCE0r7WPV5H7qVzVLnzStTa4wkkOs+QfMH5UA==}
     engines: {bun: '>=1.3.0'}
+
+  '@broberg/apikey@0.1.0':
+    resolution: {integrity: sha512-Zp525Z7CDCiV+yk5beyQx98I2/+CLLVFnwEGaNDJK6/jeo3hqSTCxJs0xS0OaO7vSIO+3FbdNXHr91ghOF6uEw==}
+    peerDependencies:
+      hono: '>=4'
+    peerDependenciesMeta:
+      hono:
+        optional: true
 
   '@broberg/lens@0.1.1':
     resolution: {integrity: sha512-CU+CsnjnFsgtBGWFhbE5caZUW3KVgkjflESgy8sPw4XnJTWP9EueQiKRO2wLKxCQAGKC0gSXPnK6aW3YCfR3tw==}
@@ -3989,6 +4000,10 @@ snapshots:
   '@broberg/ai-sdk@0.13.0':
     dependencies:
       zod: 3.25.76
+
+  '@broberg/apikey@0.1.0(hono@4.12.12)':
+    optionalDependencies:
+      hono: 4.12.12
 
   '@broberg/lens@0.1.1(hono@4.12.12)':
     optionalDependencies:

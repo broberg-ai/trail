@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { eq, and, gt, isNull, desc } from 'drizzle-orm';
-import { randomBytes, createHash } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import { generateKey, hashKey, makeKeyPreview } from '@broberg/apikey';
 import { getCookie } from 'hono/cookie';
 import { db, schema } from './db.js';
 
@@ -26,11 +27,15 @@ const KEY_PREFIX_LEN = 14; // "trail_" + 8 hex chars
 function newToken(bytes: number): string {
   return randomBytes(bytes).toString('hex');
 }
+// F010 — mint + hash now delegate to @broberg/apikey (the fleet primitive that
+// owns prefixed minting + constant-time verify). Byte-identical to the prior
+// hand-rolled form (`trail_`+randomBytes(32).hex; sha256 hex), so every key
+// already stored keeps verifying — only the source of the primitive changed.
 function generateRawKey(): string {
-  return `trail_${newToken(32)}`;
+  return generateKey('trail');
 }
 export function hashApiKey(raw: string): string {
-  return createHash('sha256').update(raw).digest('hex');
+  return hashKey(raw);
 }
 
 /** Resolve the signed-in user + their active tenant from the session
@@ -103,7 +108,7 @@ apiKeyRoutes.post('/api-keys', async (c) => {
     id,
     tenantId: ctx.tenant.id,
     userId: ctx.user.id,
-    prefix: raw.slice(0, KEY_PREFIX_LEN),
+    prefix: makeKeyPreview(raw, KEY_PREFIX_LEN),
     keyHash: hashApiKey(raw),
     scope: 'full',
     name,
@@ -111,7 +116,7 @@ apiKeyRoutes.post('/api-keys', async (c) => {
 
   console.log(`[api-keys] ${ctx.user.email} created key "${name}" (${id})`);
   // raw key is returned ONCE — never retrievable again.
-  return c.json({ id, name, prefix: raw.slice(0, KEY_PREFIX_LEN), key: raw }, 201);
+  return c.json({ id, name, prefix: makeKeyPreview(raw, KEY_PREFIX_LEN), key: raw }, 201);
 });
 
 /** List the user's non-revoked keys. Never returns the hash or raw key. */

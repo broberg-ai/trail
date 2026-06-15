@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@broberg/apikey": "0.1.0",
     "@broberg/lens": "0.1.1",
     "@broberg/mail": "0.1.0",
     "@libsql/client": "^0.14.0",

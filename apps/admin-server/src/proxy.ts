@@ -3,6 +3,7 @@ import { stream } from 'hono/streaming';
 import { eq, and, isNull, gt } from 'drizzle-orm';
 import { getCookie } from 'hono/cookie';
 import { db, schema } from './db.js';
+import { selectTenant, TenantAccessError } from '@broberg/apikey/authorize';
 import { hashApiKey } from './keys.js';
 
 /**
@@ -135,45 +136,63 @@ async function resolveApiKey(c: Context): Promise<ResolvedRoute | null> {
   });
   if (!key) return null;
 
-  // F191.6 — a scope='all' key spans every tenant the owning USER is a member
-  // of (control_memberships). The caller picks one per request via the
-  // X-Trail-Tenant header (the Ingest Station's tenant picker sets it). The
-  // header is a SELECTOR, not a grant: we only honour a slug the key's user
-  // actually has a membership row for, so a forged slug can't escape the
-  // user's tenant set. No header (or a legacy scope='full' key) → fall back to
-  // the key's home tenantId, so single-tenant keys behave exactly as before.
-  let tenant: { id: string; slug: string } | null = null;
-  if (key.scope === 'all') {
-    const hintSlug = c.req.header('x-trail-tenant');
-    if (hintSlug) {
-      tenant =
-        (await db
+  // F010 — tenant resolution via @broberg/apikey's selectTenant, which models
+  // trail's "selector-not-grant" rule (now the fleet primitive): a scope='all'
+  // key lets the owning USER pick any tenant they're a member of via the
+  // X-Trail-Tenant header (the Ingest Station's picker sets it); a non-member
+  // slug is a HARD refuse (TenantAccessError → 401), never a silent fall-back to
+  // home that would mask an access error. No header (or a legacy scope='full'
+  // key) → the key's home tenant, so single-tenant keys behave exactly as
+  // before. The package owns the decision; we own the membership lookup +
+  // slug→engine routing.
+  const home =
+    (await db
+      .select({ id: schema.controlTenants.id, slug: schema.controlTenants.slug })
+      .from(schema.controlTenants)
+      .where(eq(schema.controlTenants.id, key.tenantId))
+      .get()) ?? null;
+  if (!home) return null;
+
+  const spansAll = key.scope === 'all';
+  const requestedSlug = c.req.header('x-trail-tenant') ?? undefined;
+  // Only the membership set the selector can choose from — fetched solely when
+  // a scope='all' key actually presents a slug (the JOIN restricts to tenants
+  // the key's user belongs to, so a forged slug can't escape that set).
+  let memberSlugs = new Set<string>();
+  if (spansAll && requestedSlug) {
+    const rows = await db
+      .select({ slug: schema.controlTenants.slug })
+      .from(schema.controlTenants)
+      .innerJoin(
+        schema.controlMemberships,
+        eq(schema.controlMemberships.tenantId, schema.controlTenants.id),
+      )
+      .where(eq(schema.controlMemberships.userId, key.userId))
+      .all();
+    memberSlugs = new Set(rows.map((r) => r.slug));
+  }
+
+  let chosenSlug: string;
+  try {
+    chosenSlug = selectTenant({
+      requestedSlug,
+      homeTenant: home.slug,
+      spansAll,
+      isMember: (slug) => memberSlugs.has(slug),
+    });
+  } catch (e) {
+    if (e instanceof TenantAccessError) return null; // non-member slug → caller 401
+    throw e;
+  }
+
+  const tenant =
+    chosenSlug === home.slug
+      ? home
+      : (await db
           .select({ id: schema.controlTenants.id, slug: schema.controlTenants.slug })
           .from(schema.controlTenants)
-          .innerJoin(
-            schema.controlMemberships,
-            eq(schema.controlMemberships.tenantId, schema.controlTenants.id),
-          )
-          .where(
-            and(
-              eq(schema.controlTenants.slug, hintSlug),
-              eq(schema.controlMemberships.userId, key.userId),
-            ),
-          )
+          .where(eq(schema.controlTenants.slug, chosenSlug))
           .get()) ?? null;
-      // Asked for a tenant this user isn't a member of → refuse (don't silently
-      // fall back to the home tenant, which would mask an access error).
-      if (!tenant) return null;
-    }
-  }
-  if (!tenant) {
-    tenant =
-      (await db
-        .select({ id: schema.controlTenants.id, slug: schema.controlTenants.slug })
-        .from(schema.controlTenants)
-        .where(eq(schema.controlTenants.id, key.tenantId))
-        .get()) ?? null;
-  }
   if (!tenant) return null;
 
   const eng = await db.query.tenantEngines.findFirst({
