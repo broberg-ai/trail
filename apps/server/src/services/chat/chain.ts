@@ -36,8 +36,10 @@ export interface ChainResolutionInput {
   env?: NodeJS.ProcessEnv;
 }
 
-/** Default chat model when the user hasn't set CHAT_MODEL. */
-export const DEFAULT_CHAT_MODEL = 'claude-haiku-4-5-20251001';
+/** Default chat model when the user hasn't set CHAT_MODEL.
+ *  F199.1 — flipped to Mistral (EU). Reversible: set env CHAT_MODEL back to
+ *  'claude-haiku-4-5-20251001' (and CHAT_PROVIDER=anthropic in ai-sdk-backend). */
+export const DEFAULT_CHAT_MODEL = process.env.CHAT_MODEL ?? 'mistral-small-latest';
 
 const VALID_BACKENDS: ReadonlyArray<ChatBackendId> = [
   'claude-cli',

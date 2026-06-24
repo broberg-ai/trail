@@ -27,13 +27,15 @@ import { tenants } from '@trail/db';
 import { eq } from 'drizzle-orm';
 import type { ChatBackend, ChatBackendId, ChatBackendInput, ChatBackendResult } from './backend.js';
 
-// Mirrors the pre-F190 chain.ts intent: anthropic-direct haiku primary
-// (transport:http — the cloud engine has no `claude` CLI), then OpenRouter
-// gemini-flash → claude-sonnet as failover. The primary model honours
-// input.model so a per-call modelOverride still works.
+// F199.1 — Chat flipped to Mistral (EU-direct) primary. Fallback is gemini-flash
+// via OpenRouter — a NON-Anthropic safety net; the prior anthropic/claude-sonnet
+// failover leg was removed so nothing silently falls back to Anthropic. The
+// primary provider is env-reversible: CHAT_PROVIDER=anthropic + CHAT_MODEL=
+// claude-haiku-4-5-20251001 restores the pre-F199 path. The primary model still
+// honours input.model so a per-call modelOverride keeps working.
+const CHAT_PRIMARY_PROVIDER = process.env.CHAT_PROVIDER ?? 'mistral';
 const CHAT_FALLBACK = [
   { provider: 'openrouter', model: 'google/gemini-2.5-flash', transport: 'http' as const },
-  { provider: 'openrouter', model: 'anthropic/claude-sonnet-4-6', transport: 'http' as const },
 ];
 
 /** ai-sdk Tool[] from the trail MCP tool registry (prefixed names, JSON-schema
@@ -62,7 +64,7 @@ export class AiSdkChatBackend implements ChatBackend {
     const t0 = Date.now();
     const ctx = await this.buildToolContext(input);
     const tools = toAiSdkTools();
-    const primary = { provider: 'anthropic', model: input.model, transport: 'http' as const };
+    const primary = { provider: CHAT_PRIMARY_PROVIDER, model: input.model, transport: 'http' as const };
 
     const messages: ChatMessages = [
       ...input.history.map((h) => ({ role: h.role, content: h.content })),
