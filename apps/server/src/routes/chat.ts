@@ -125,23 +125,32 @@ chatRoutes.post('/chat', async (c) => {
     chatPersonaTool: knowledgeBases.chatPersonaTool,
     chatPersonaPublic: knowledgeBases.chatPersonaPublic,
   };
-  const kbs = resolvedKbId
-    ? await trail.db
-        .select(kbColumns)
-        .from(knowledgeBases)
-        .where(
-          and(
-            eq(knowledgeBases.id, resolvedKbId),
-            eq(knowledgeBases.tenantId, tenant.id),
-          ),
-        )
-        .all()
-    : await trail.db
-        .select(kbColumns)
-        .from(knowledgeBases)
-        .where(eq(knowledgeBases.tenantId, tenant.id))
-        .all();
+  // Chat is ALWAYS scoped to the SINGLE Trail (KB) the user is in — it is the
+  // brain of THAT Trail, never a global search across the tenant's KBs. The UI
+  // always sends the current Trail as knowledgeBaseId. Without one, only
+  // auto-resolve when the tenant has exactly one KB; otherwise refuse rather
+  // than silently search everything (which leaked unrelated KBs' sources — e.g.
+  // another tenant-KB's PDFs — into answers).
+  const kbs = await trail.db
+    .select(kbColumns)
+    .from(knowledgeBases)
+    .where(
+      resolvedKbId
+        ? and(eq(knowledgeBases.id, resolvedKbId), eq(knowledgeBases.tenantId, tenant.id))
+        : eq(knowledgeBases.tenantId, tenant.id),
+    )
+    .all();
 
+  if (!resolvedKbId && kbs.length > 1) {
+    return c.json(
+      {
+        error:
+          'Specify which Trail to chat with (knowledgeBaseId) — chat is scoped to a single Trail, not a global search.',
+        code: 'knowledge_base_required',
+      },
+      400,
+    );
+  }
   if (kbs.length === 0) {
     return c.json({
       answer: 'No knowledge bases found for this tenant. Create a wiki first and add sources.',
@@ -607,6 +616,10 @@ async function retrieveContext(
 
     for (const hit of chunkHits) {
       if (totalChars >= MAX_CHARS) break;
+      // Chat answers from NEURONS (the brain), never raw source documents.
+      // Sources are compiled into Neurons at ingest; the Neuron is the unit of
+      // knowledge a chat question targets. Skip any chunk from a raw source.
+      if (hit.kind !== 'wiki') continue;
       if (fadedHeuristicIds.has(hit.documentId)) continue;
       if (!isChatVisible(confMap.get(hit.documentId))) continue;
       const header = hit.headerBreadcrumb ? `[${hit.headerBreadcrumb}] ` : '';

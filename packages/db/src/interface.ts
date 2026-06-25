@@ -99,6 +99,8 @@ export interface ChunkSearchHit {
   headerBreadcrumb: string | null;
   highlight: string;
   rank: number;
+  /** Parent document kind — chat filters context to neurons (wiki), never raw sources. */
+  kind: 'source' | 'wiki';
 }
 
 export interface DatabaseConfig {
