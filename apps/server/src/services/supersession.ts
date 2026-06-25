@@ -33,13 +33,20 @@ export interface SupersessionDecision {
   confidenceDelta: number;
 }
 
+export interface NeuronMeta {
+  confidence: number;
+  sourceCount: number;
+  /** documents.created_at (SQLite datetime text — lexically == chronologically sortable). */
+  createdAt: string;
+}
+
 async function loadMeta(
   trail: TrailDatabase,
   tenantId: string,
   id: string,
-): Promise<{ confidence: number; sourceCount: number } | null> {
+): Promise<NeuronMeta | null> {
   const doc = await trail.db
-    .select({ confidence: documents.confidence })
+    .select({ confidence: documents.confidence, createdAt: documents.createdAt })
     .from(documents)
     .where(and(eq(documents.id, id), eq(documents.tenantId, tenantId)))
     .get();
@@ -49,7 +56,7 @@ async function loadMeta(
     .from(documentReferences)
     .where(eq(documentReferences.wikiDocumentId, id))
     .get();
-  return { confidence: doc.confidence, sourceCount: Number(sc?.n ?? 0) };
+  return { confidence: doc.confidence, sourceCount: Number(sc?.n ?? 0), createdAt: doc.createdAt };
 }
 
 /**
@@ -65,25 +72,50 @@ export async function decideSupersession(
   const a = await loadMeta(trail, tenantId, newDocumentId);
   const b = await loadMeta(trail, tenantId, existingDocumentId);
   if (!a || !b) return null;
+  return decideFromMeta(newDocumentId, a, existingDocumentId, b);
+}
 
+/**
+ * Pure decision over two Neurons' meta. Exported for unit-testing without a DB.
+ *
+ * Confidence picks the winner — BUT a hard RECENCY GUARD prevents the bug class
+ * that suppressed a freshly-saved Neuron. A brand-new Neuron starts at the
+ * default 0.7 confidence — lower than an older, established Neuron near ~1.0 —
+ * so on a (frequently false-positive) contradiction match the OLDER Neuron would
+ * "win" and auto-supersede the NEWER one. That is backwards: supersession means
+ * "a newer/better Neuron replaces an older one", never the reverse. So we refuse
+ * any decision whose winner (replacement) is OLDER than its loser (target).
+ *
+ * Observed 2026-06-25: F199.1 (created 24 Jun) was wrongly superseded by an
+ * unrelated vision-selector Neuron (10 Jun), which hid F199.1 from chat
+ * entirely (isChatVisible drops superseded Neurons).
+ */
+export function decideFromMeta(
+  newDocumentId: string,
+  a: NeuronMeta,
+  existingDocumentId: string,
+  b: NeuronMeta,
+): SupersessionDecision | null {
   const delta = a.confidence - b.confidence;
+  let target: { id: string; meta: NeuronMeta };
+  let replacement: { id: string; meta: NeuronMeta };
   if (delta > SUPERSEDE_CONFIDENCE_DELTA && a.sourceCount >= b.sourceCount) {
     // The new Neuron is the stronger claim → it supersedes the existing one.
-    return {
-      targetNeuronId: existingDocumentId,
-      replacementNeuronId: newDocumentId,
-      replacementConfidence: a.confidence,
-      confidenceDelta: delta,
-    };
-  }
-  if (-delta > SUPERSEDE_CONFIDENCE_DELTA && b.sourceCount >= a.sourceCount) {
+    target = { id: existingDocumentId, meta: b };
+    replacement = { id: newDocumentId, meta: a };
+  } else if (-delta > SUPERSEDE_CONFIDENCE_DELTA && b.sourceCount >= a.sourceCount) {
     // The existing Neuron is the stronger claim → it supersedes the new one.
-    return {
-      targetNeuronId: newDocumentId,
-      replacementNeuronId: existingDocumentId,
-      replacementConfidence: b.confidence,
-      confidenceDelta: -delta,
-    };
+    target = { id: newDocumentId, meta: a };
+    replacement = { id: existingDocumentId, meta: b };
+  } else {
+    return null;
   }
-  return null;
+  // RECENCY GUARD — never let an OLDER Neuron supersede a NEWER one.
+  if (replacement.meta.createdAt < target.meta.createdAt) return null;
+  return {
+    targetNeuronId: target.id,
+    replacementNeuronId: replacement.id,
+    replacementConfidence: replacement.meta.confidence,
+    confidenceDelta: Math.abs(delta),
+  };
 }
