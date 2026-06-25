@@ -7,6 +7,26 @@
 import type { Client as LibSqlClient } from '@libsql/client';
 import type { DocumentSearchHit, ChunkSearchHit } from './interface.js';
 
+// Recency boost on FTS ranking. A fresh, specific Neuron (e.g. a just-written
+// decision) otherwise loses to many older rows that mention a ubiquitous term
+// ("mistral" appears in thousands of rows), because BM25 has no notion of "new".
+// We nudge recent rows up WITHOUT letting recency override a clearly stronger
+// match. SQLite `rank` (bm25) is negative — more-negative = better — so we
+// multiply by (1 + boost*recency) to push recent rows further negative. recency
+// = 1 at age 0, 0.5 at one half-life, →0 for old rows (hyperbolic decay; no
+// exp() needed). Fully reversible: SEARCH_RECENCY_BOOST=0 → pure BM25 (the
+// pre-change behaviour).
+const RECENCY_BOOST = Number(process.env.SEARCH_RECENCY_BOOST ?? '0.4');
+const RECENCY_HALFLIFE_DAYS = Number(process.env.SEARCH_RECENCY_HALFLIFE_DAYS ?? '30');
+
+/** ORDER BY clause: recency-boosted when configured (finite, positive), else
+ *  plain bm25 `rank`. A malformed env (NaN) fails the `> 0` guard → safe
+ *  fallback. `tsCol` is the created_at column to age against (in query scope). */
+function rankOrderBy(tsCol: string): string {
+  if (!(RECENCY_BOOST > 0) || !(RECENCY_HALFLIFE_DAYS > 0)) return 'ORDER BY rank';
+  return `ORDER BY rank * (1.0 + ${RECENCY_BOOST} * (1.0 / (1.0 + (julianday('now') - julianday(${tsCol})) / ${RECENCY_HALFLIFE_DAYS})))`;
+}
+
 const DOCUMENTS_SQL = `
   SELECT d.id                                               AS id,
          d.knowledge_base_id                                AS knowledgeBaseId,
@@ -23,7 +43,7 @@ const DOCUMENTS_SQL = `
      AND d.knowledge_base_id = ?
      AND d.tenant_id = ?
      AND d.archived = 0
-   ORDER BY rank
+   ${rankOrderBy('d.created_at')}
    LIMIT ?
 `;
 
@@ -38,10 +58,11 @@ const CHUNKS_SQL = `
          rank                                               AS rank
     FROM chunks_fts
     JOIN document_chunks dc ON dc.rowid = chunks_fts.rowid
+    JOIN documents pd ON pd.id = dc.document_id
    WHERE chunks_fts MATCH ?
      AND dc.knowledge_base_id = ?
      AND dc.tenant_id = ?
-   ORDER BY rank
+   ${rankOrderBy('pd.created_at')}
    LIMIT ?
 `;
 
