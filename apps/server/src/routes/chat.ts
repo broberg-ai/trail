@@ -650,11 +650,35 @@ async function retrieveContext(
     const rankedDocs = docHits
       .filter((h) => h.kind === 'wiki' && !fadedHeuristicIds.has(h.id) && isChatVisible(confMap.get(h.id)))
       .sort((a, b) => confidenceOf(confMap, b.id) - confidenceOf(confMap, a.id));
+
+    // Fetch CONTENT for the ranked Neurons whose CHUNKS didn't make the cut, so
+    // the cited Neuron's actual text reaches the model — not just a citation
+    // pill. A compact Neuron (e.g. a fresh decision) often has no chunk in the
+    // top-N yet IS the most relevant answer; without its body the model has the
+    // citation but nothing to ground on, and (correctly) declines.
+    const needContentIds = rankedDocs.filter((h) => !seen.has(h.id)).map((h) => h.id);
+    const docContent = new Map<string, string>();
+    if (needContentIds.length > 0) {
+      const rows = await trail.db
+        .select({ id: documents.id, content: documents.content })
+        .from(documents)
+        .where(and(eq(documents.tenantId, tenantId), inArray(documents.id, needContentIds)))
+        .all();
+      for (const r of rows) docContent.set(r.id, r.content ?? '');
+    }
+
     for (const hit of rankedDocs) {
       if (totalChars >= MAX_CHARS) break;
       if (!seen.has(hit.id)) {
         seen.add(hit.id);
         citations.push({ documentId: hit.id, path: hit.path, filename: hit.filename });
+        const body = docContent.get(hit.id);
+        if (body && body.trim().length > 0) {
+          const clean = stripClaimAnchors(body.slice(0, 4000));
+          const text = `### Neuron: ${hit.title ?? hit.filename}\n${clean}`;
+          chunks.push(text);
+          totalChars += text.length;
+        }
         recordAccess(trail, {
           tenantId,
           knowledgeBaseId: kbId,
