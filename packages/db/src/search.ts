@@ -55,6 +55,7 @@ const CHUNKS_SQL = `
          dc.content                                         AS content,
          dc.header_breadcrumb                               AS headerBreadcrumb,
          pd.kind                                            AS kind,
+         pd.created_at                                      AS docCreatedAt,
          highlight(chunks_fts, 0, '<mark>', '</mark>')      AS highlight,
          rank                                               AS rank
     FROM chunks_fts
@@ -106,6 +107,7 @@ export async function searchChunks(
     highlight: row.highlight as string,
     rank: row.rank as number,
     kind: row.kind as 'source' | 'wiki',
+    docCreatedAt: (row.docCreatedAt as string | null) ?? '',
   }));
 }
 

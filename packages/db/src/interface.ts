@@ -101,6 +101,8 @@ export interface ChunkSearchHit {
   rank: number;
   /** Parent document kind — chat filters context to neurons (wiki), never raw sources. */
   kind: 'source' | 'wiki';
+  /** Parent document created_at — so chat can date each Neuron in its context. */
+  docCreatedAt: string;
 }
 
 export interface DatabaseConfig {

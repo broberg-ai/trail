@@ -623,12 +623,13 @@ async function retrieveContext(
       if (fadedHeuristicIds.has(hit.documentId)) continue;
       if (!isChatVisible(confMap.get(hit.documentId))) continue;
       const header = hit.headerBreadcrumb ? `[${hit.headerBreadcrumb}] ` : '';
+      const dated = hit.docCreatedAt ? `(${hit.docCreatedAt.slice(0, 10)}) ` : '';
       // F22 leak-prevention: claim-anchor markers must NEVER reach the
       // chat-LLM — if they do, the model can echo them into the
       // user-visible answer. Strip at the chunk-content layer so every
       // backend (claude-cli, openrouter, claude-api) sees clean prose.
       const cleanContent = stripClaimAnchors(hit.content.slice(0, 2500));
-      const text = `### chunk ${header}\n${cleanContent}`;
+      const text = `### Neuron chunk ${dated}${header}\n${cleanContent}`;
       chunks.push(text);
       totalChars += text.length;
       if (!seen.has(hit.documentId)) {
@@ -657,14 +658,14 @@ async function retrieveContext(
     // top-N yet IS the most relevant answer; without its body the model has the
     // citation but nothing to ground on, and (correctly) declines.
     const needContentIds = rankedDocs.filter((h) => !seen.has(h.id)).map((h) => h.id);
-    const docContent = new Map<string, string>();
+    const docContent = new Map<string, { content: string; createdAt: string }>();
     if (needContentIds.length > 0) {
       const rows = await trail.db
-        .select({ id: documents.id, content: documents.content })
+        .select({ id: documents.id, content: documents.content, createdAt: documents.createdAt })
         .from(documents)
         .where(and(eq(documents.tenantId, tenantId), inArray(documents.id, needContentIds)))
         .all();
-      for (const r of rows) docContent.set(r.id, r.content ?? '');
+      for (const r of rows) docContent.set(r.id, { content: r.content ?? '', createdAt: r.createdAt });
     }
 
     for (const hit of rankedDocs) {
@@ -672,10 +673,11 @@ async function retrieveContext(
       if (!seen.has(hit.id)) {
         seen.add(hit.id);
         citations.push({ documentId: hit.id, path: hit.path, filename: hit.filename });
-        const body = docContent.get(hit.id);
-        if (body && body.trim().length > 0) {
-          const clean = stripClaimAnchors(body.slice(0, 4000));
-          const text = `### Neuron: ${hit.title ?? hit.filename}\n${clean}`;
+        const entry = docContent.get(hit.id);
+        if (entry && entry.content.trim().length > 0) {
+          const dated = entry.createdAt ? ` (created ${entry.createdAt.slice(0, 10)})` : '';
+          const clean = stripClaimAnchors(entry.content.slice(0, 4000));
+          const text = `### Neuron: ${hit.title ?? hit.filename}${dated}\n${clean}`;
           chunks.push(text);
           totalChars += text.length;
         }
