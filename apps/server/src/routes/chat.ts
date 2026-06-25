@@ -875,11 +875,40 @@ async function listFadedHeuristicIds(
   return faded;
 }
 
+// Common Danish + English function words. The query is an OR of every term, so
+// stopwords let irrelevant Neurons accumulate BM25 mass and drown the one that
+// actually answers a long natural-language question. Dropping them focuses the
+// query on content terms — the recall fix for questions like "Hvornår skiftede
+// Trail chat over til Mistral, og hvilken commit?" (was 15 OR-terms incl.
+// hvornår/over/til/og/svar/kort/med → now ~6 content terms).
+const FTS_STOPWORDS = new Set([
+  // Danish
+  'og', 'i', 'på', 'til', 'er', 'en', 'et', 'den', 'det', 'de', 'at', 'som', 'med', 'for', 'af', 'der',
+  'du', 'jeg', 'vi', 'han', 'hun', 'hvornår', 'hvad', 'hvem', 'hvilken', 'hvilke', 'hvor', 'hvorfor',
+  'hvordan', 'kan', 'skal', 'vil', 'har', 'var', 'blev', 'over', 'under', 'ved', 'om', 'men', 'eller',
+  'ikke', 'så', 'kort', 'svar', 'mig', 'os', 'din', 'dit', 'min', 'mit', 'denne', 'dette', 'disse',
+  // English
+  'the', 'a', 'an', 'to', 'of', 'is', 'are', 'was', 'were', 'and', 'or', 'in', 'on', 'with', 'what',
+  'when', 'which', 'who', 'how', 'why', 'can', 'should', 'will', 'do', 'does', 'please', 'short',
+  'answer', 'me', 'my', 'your', 'it', 'this', 'that',
+]);
+
 function sanitizeFtsQuery(raw: string): string {
   const terms = raw
     .split(/\s+/)
     .map((t) => t.replace(/[^\p{L}\p{N}]/gu, ''))
-    .filter((t) => t.length > 0)
+    .filter((t) => t.length >= 2 && !FTS_STOPWORDS.has(t.toLowerCase()))
     .map((t) => `"${t}"*`);
+  // Fall back to the full token set if stopword-stripping emptied the query
+  // (e.g. a question made entirely of function words) so we never widen to an
+  // empty MATCH (which would return zero context for an otherwise-answerable Q).
+  if (terms.length === 0) {
+    return raw
+      .split(/\s+/)
+      .map((t) => t.replace(/[^\p{L}\p{N}]/gu, ''))
+      .filter((t) => t.length > 0)
+      .map((t) => `"${t}"*`)
+      .join(' OR ');
+  }
   return terms.join(' OR ');
 }
