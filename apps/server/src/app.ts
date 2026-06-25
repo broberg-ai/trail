@@ -36,6 +36,7 @@ import { creditsRoutes } from './routes/credits.js';
 import { jobRoutes } from './routes/jobs.js';
 import { beamRoutes } from './routes/beam.js';
 import { activityRoutes } from './routes/activity.js';
+import { maintenanceRoutes } from './routes/maintenance.js';
 
 /**
  * Hono context variables visible to every handler.
@@ -187,6 +188,9 @@ export function createApp(trail: TrailDatabase, tenantPool: TenantPool): Hono<Ap
   app.route('/api/v1', jobRoutes);
   // F97 — activity log read API (paginated audit timeline).
   app.route('/api/v1', activityRoutes);
+
+  // F182.5 repair — audit/clear backwards supersessions (admin maintenance).
+  app.route('/api/v1', maintenanceRoutes);
 
   // Upmetrics — capture unhandled route errors (no-op unless UPMETRICS_DSN was
   // set at boot in index.ts), then preserve Hono's default 500 response.
