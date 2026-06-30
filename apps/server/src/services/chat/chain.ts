@@ -109,6 +109,7 @@ export function resolveChatChain(input: ChainResolutionInput = {}): ChainStep[] 
   return [
     { backend: 'claude-cli', model: env.CHAT_MODEL || DEFAULT_CHAT_MODEL },
     { backend: 'openrouter', model: 'google/gemini-2.5-flash' },
-    { backend: 'openrouter', model: 'anthropic/claude-sonnet-4-6' },
+    // F199 — last fallback swapped off Anthropic (was anthropic/claude-sonnet-4-6).
+    { backend: 'openrouter', model: 'z-ai/glm-5.1' },
   ];
 }
