@@ -13,8 +13,9 @@
  * (the engine DB handle is the requested tenant's).
  */
 import { Hono } from 'hono';
-import { documents } from '@trail/db';
-import { and, eq, isNotNull, inArray } from 'drizzle-orm';
+import { documents, queueCandidates } from '@trail/db';
+import { and, eq, isNotNull, inArray, like, lt, sql } from 'drizzle-orm';
+import { resolveKbId } from '@trail/core';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
 import type { AppBindings } from '../app.js';
 
@@ -97,5 +98,80 @@ maintenanceRoutes.post('/maintenance/repair-backwards-supersessions', async (c) 
       supersededByTitle: b.replId ? (replMap.get(b.replId)?.title ?? null) : null,
       supersededByCreatedAt: b.replId ? (replMap.get(b.replId)?.createdAt ?? null) : null,
     })),
+  });
+});
+
+/**
+ * F200.2 — non-LLM auto-cleanup of lint-noise candidates.
+ *
+ * Bulk-rejects PENDING candidates emitted by the lint detectors (connector
+ * `lint` — contradiction-alert / orphan-alert / stale-alert / faded-heuristic).
+ * Pure SQL, NO LLM, NO per-item reasoning. Targets `metadata.connector="lint"`
+ * so it can NEVER touch knowledge candidates (external-feed / chat / buddy /
+ * upload / mcp:* keep their own connectors and are left untouched).
+ *
+ * Safe to run on a schedule (cronjobs.webhouse.net daily). Audit by default;
+ * POST {"apply": true} to actually reject. Optional `kbId` (slug or uuid)
+ * scopes to one KB; optional `olderThanDays` only rejects stale backlog.
+ * Tenant-scoped (the engine DB handle is the requested tenant's).
+ */
+maintenanceRoutes.post('/maintenance/drain-lint-candidates', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const body = (await c.req.json().catch(() => ({}))) as {
+    apply?: boolean;
+    kbId?: string;
+    olderThanDays?: number;
+  };
+  const apply = body.apply === true;
+
+  let kbId: string | null = null;
+  if (body.kbId) {
+    kbId = await resolveKbId(trail, tenant.id, body.kbId);
+    if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
+  }
+
+  // connector lives inside the metadata JSON blob — match it by substring,
+  // the same cheap LIKE the queue's connector filter uses.
+  const filters = [
+    eq(queueCandidates.tenantId, tenant.id),
+    eq(queueCandidates.status, 'pending'),
+    like(queueCandidates.metadata, '%"connector":"lint"%'),
+  ];
+  if (kbId) filters.push(eq(queueCandidates.knowledgeBaseId, kbId));
+  if (typeof body.olderThanDays === 'number' && body.olderThanDays > 0) {
+    filters.push(lt(queueCandidates.createdAt, sql`datetime('now', ${`-${body.olderThanDays} days`})`));
+  }
+
+  const matching = await trail.db
+    .select({ id: queueCandidates.id })
+    .from(queueCandidates)
+    .where(and(...filters))
+    .all();
+
+  let rejected = 0;
+  if (apply && matching.length > 0) {
+    await trail.db
+      .update(queueCandidates)
+      .set({
+        status: 'rejected',
+        rejectionReason: 'F200.2 auto-drain: lint-noise (non-LLM routine)',
+        reviewedAt: sql`datetime('now')`,
+      })
+      .where(and(...filters))
+      .run();
+    rejected = matching.length;
+    console.log(
+      `[maintenance] F200.2 drained ${rejected} lint candidate(s) for tenant ${tenant.id}${kbId ? ` kb ${kbId}` : ''}`,
+    );
+  }
+
+  return c.json({
+    tenant: tenant.id,
+    kbId,
+    olderThanDays: body.olderThanDays ?? null,
+    scanned: matching.length,
+    rejected,
+    applied: apply,
   });
 });

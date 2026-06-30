@@ -18,7 +18,7 @@
  * The checker is idempotent via lintFingerprint (see runLint). Re-emitting
  * the same pair skips if a pending/approved alert already exists.
  */
-import { documents, queueCandidates, type TrailDatabase } from '@trail/db';
+import { documents, knowledgeBases, queueCandidates, type TrailDatabase } from '@trail/db';
 import { and, eq, like, ne } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import {
@@ -240,6 +240,22 @@ async function runForEvent(
   // (the findSimilarNeurons filter below skips them as the counterparty
   // side too).
   if (doc.path === '/neurons/' && doc.filename === 'glossary.md') return;
+
+  // F200.1 — per-KB contradiction-lint toggle. High-volume session KBs
+  // (e.g. buddy-sessions) flip this OFF so auto-approved near-duplicate
+  // Neurons stop flooding the queue with contradiction-alert candidates.
+  // Checked BEFORE findSimilarNeurons so the per-pair LLM cost is skipped too.
+  const kbRow = await trail.db
+    .select({ enabled: knowledgeBases.contradictionLintEnabled })
+    .from(knowledgeBases)
+    .where(eq(knowledgeBases.id, doc.knowledgeBaseId))
+    .get();
+  if (kbRow && kbRow.enabled === false) {
+    console.log(
+      `[contradiction-lint] "${doc.filename}": KB ${doc.knowledgeBaseId} has contradiction-lint disabled (F200.1) — skipping`,
+    );
+    return;
+  }
 
   const similars = await findSimilarNeurons(trail, doc);
   if (similars.length === 0) return;

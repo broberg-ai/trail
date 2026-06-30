@@ -37,6 +37,7 @@ import { jobRoutes } from './routes/jobs.js';
 import { beamRoutes } from './routes/beam.js';
 import { activityRoutes } from './routes/activity.js';
 import { maintenanceRoutes } from './routes/maintenance.js';
+import { lintSettingsRoutes } from './routes/lint-settings.js';
 
 /**
  * Hono context variables visible to every handler.
@@ -189,8 +190,10 @@ export function createApp(trail: TrailDatabase, tenantPool: TenantPool): Hono<Ap
   // F97 — activity log read API (paginated audit timeline).
   app.route('/api/v1', activityRoutes);
 
-  // F182.5 repair — audit/clear backwards supersessions (admin maintenance).
+  // F182.5 repair + F200.2 lint-drain — admin maintenance.
   app.route('/api/v1', maintenanceRoutes);
+  // F200.1 — per-KB lint settings (contradiction-lint toggle).
+  app.route('/api/v1', lintSettingsRoutes);
 
   // Upmetrics — capture unhandled route errors (no-op unless UPMETRICS_DSN was
   // set at boot in index.ts), then preserve Hono's default 500 response.

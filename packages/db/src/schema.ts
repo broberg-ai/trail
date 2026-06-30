@@ -65,6 +65,14 @@ export const knowledgeBases = sqliteTable(
     lintPolicy: text('lint_policy', { enum: ['trusting', 'strict'] })
       .notNull()
       .default('trusting'),
+    // F200.1 — per-KB contradiction-lint toggle. Default ON (true). Set OFF
+    // for high-volume session KBs (e.g. buddy-sessions) where auto-approved
+    // near-duplicate Neurons would otherwise flood the queue with
+    // contradiction-alert candidates. contradiction-lint's runForEvent skips
+    // emission (and the LLM cost) entirely when this is false.
+    contradictionLintEnabled: integer('contradiction_lint_enabled', { mode: 'boolean' })
+      .notNull()
+      .default(true),
     // F141 — per-KB access-telemetry toggle. On by default; curator can
     // flip off per Trail if they don't want individual reads recorded.
     // Off → recordAccess is a no-op + rollup skips the KB.
