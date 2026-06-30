@@ -24,7 +24,7 @@ import { ai } from '../lib/ai.js';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? '';
 const BACKEND = process.env.TRAIL_GLOSSARY_BACKFILL_BACKEND ?? (ANTHROPIC_API_KEY ? 'api' : 'cli');
-const MODEL = process.env.TRAIL_GLOSSARY_BACKFILL_MODEL ?? 'claude-haiku-4-5-20251001';
+const MODEL = process.env.TRAIL_GLOSSARY_BACKFILL_MODEL ?? 'mistral-small-latest';
 const CLI_TIMEOUT_MS = Number(process.env.TRAIL_GLOSSARY_BACKFILL_CLI_TIMEOUT_MS ?? 90_000);
 const MAX_NEURON_EXCERPT_CHARS = 600;
 const MAX_NEURONS_PER_PROMPT = 80;
@@ -280,15 +280,15 @@ function buildGlossaryContent(entries: LlmEntry[], lang: 'en' | 'da'): string {
 }
 
 async function callLlm(prompt: string, tenantId: string, kbId: string): Promise<string> {
-  // F190.2 — one discrete call through @broberg/ai-sdk (anthropic-direct →
-  // openrouter fallback, transport:http). The system prompt strips any tool
+  // F190.2 / F199.6 — one discrete call through @broberg/ai-sdk (Mistral →
+  // Mistral fallback, transport:http, EU). The system prompt strips any tool
   // harness so the model returns only the requested JSON. Returns the model's
   // text directly — parseEntries no longer routes through extractAssistantText.
   const res = await ai.chat({
     system: 'You generate JSON responses for an API. Never call tools. Respond with only the requested JSON object.',
     messages: [{ role: 'user', content: prompt }],
-    override: { provider: 'anthropic', model: MODEL, transport: 'http' },
-    fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
+    override: { provider: 'mistral', model: MODEL, transport: 'http' },
+    fallback: [{ provider: 'mistral', model: 'mistral-large-latest', transport: 'http' }],
     maxTokens: 4000,
     purpose: 'glossary-backfill',
     labels: { tenantId, kbId },

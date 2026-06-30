@@ -16,8 +16,8 @@
  */
 import { makeContradictionChecker } from '../src/services/contradiction-lint.js';
 
-if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENROUTER_API_KEY) {
-  console.error('✗ no ANTHROPIC_API_KEY / OPENROUTER_API_KEY — cannot runtime-verify');
+if (!process.env.MISTRAL_API_KEY) {
+  console.error('✗ no MISTRAL_API_KEY — cannot runtime-verify (F199.7: contradiction-lint routes to Mistral)');
   process.exit(1);
 }
 

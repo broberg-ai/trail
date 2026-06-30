@@ -21,7 +21,7 @@ import { canonicaliseTagString, parseTags } from '@trail/shared';
 import { ai } from '../lib/ai.js';
 import { listKbTags } from './tag-aggregate.js';
 
-const MODEL = process.env.TAG_SUGGEST_MODEL ?? 'claude-haiku-4-5-20251001';
+const MODEL = process.env.TAG_SUGGEST_MODEL ?? 'mistral-small-latest';
 const TIMEOUT_MS = Number(process.env.TAG_SUGGEST_TIMEOUT_MS ?? 20_000);
 const MAX_TAGS = 5;
 
@@ -59,8 +59,8 @@ export async function suggestTagsForNeuron(
   try {
     const res = await ai.chat({
       messages: [{ role: 'user', content: prompt }],
-      override: { provider: 'anthropic', model: MODEL, transport: 'http' },
-      fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
+      override: { provider: 'mistral', model: MODEL, transport: 'http' },
+      fallback: [{ provider: 'mistral', model: 'mistral-large-latest', transport: 'http' }],
       maxTokens: 512,
       purpose: 'tag-suggester',
       labels: { tenantId, kbId },

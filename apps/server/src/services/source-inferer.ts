@@ -38,7 +38,7 @@ import { documents, type TrailDatabase } from '@trail/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import { ai } from '../lib/ai.js';
 
-const MODEL = process.env.TRAIL_AUTOLINK_MODEL ?? 'claude-haiku-4-5-20251001';
+const MODEL = process.env.TRAIL_AUTOLINK_MODEL ?? 'mistral-small-latest';
 const TIMEOUT_MS = Number(process.env.TRAIL_AUTOLINK_TIMEOUT_MS ?? 60_000);
 const PREVIEW_CHARS = 400;
 // Cap on the number of Sources passed to the LLM. At 20 we're ~2–5K
@@ -73,8 +73,8 @@ export async function proposeSourcesForOrphan(
   try {
     const res = await ai.chat({
       messages: [{ role: 'user', content: prompt }],
-      override: { provider: 'anthropic', model: MODEL, transport: 'http' },
-      fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
+      override: { provider: 'mistral', model: MODEL, transport: 'http' },
+      fallback: [{ provider: 'mistral', model: 'mistral-large-latest', transport: 'http' }],
       maxTokens: 1024,
       purpose: 'source-inferer',
       labels: { tenantId, kbId },

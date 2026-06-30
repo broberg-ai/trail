@@ -34,7 +34,7 @@ import type { CandidateAction, CandidateRecommendation } from '@trail/shared';
 import { ai } from '../lib/ai.js';
 import { broadcaster } from './broadcast.js';
 
-const MODEL = process.env.TRAIL_RECOMMENDER_MODEL ?? 'claude-haiku-4-5-20251001';
+const MODEL = process.env.TRAIL_RECOMMENDER_MODEL ?? 'mistral-small-latest';
 
 /**
  * One-shot backfill: walk every pending candidate missing a
@@ -139,16 +139,16 @@ async function recommend(
   const language = kb?.language ?? 'da';
 
   const prompt = buildPrompt(row, actions, language);
-  // F190.4 — single discrete call through @broberg/ai-sdk (anthropic-direct
-  // primary, openrouter fallback, transport:http). Replaces the prior
+  // F190.4 / F199.8 — single discrete call through @broberg/ai-sdk (Mistral
+  // primary, Mistral fallback, transport:http, EU). Replaces the prior
   // `spawnClaude` path, which fails on the cloud engine (no `claude` CLI).
   // Cost reports to upmetrics tagged per tenant/KB.
   let json: string;
   try {
     const res = await ai.chat({
       messages: [{ role: 'user', content: prompt }],
-      override: { provider: 'anthropic', model: MODEL, transport: 'http' },
-      fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
+      override: { provider: 'mistral', model: MODEL, transport: 'http' },
+      fallback: [{ provider: 'mistral', model: 'mistral-large-latest', transport: 'http' }],
       maxTokens: 400,
       purpose: 'action-recommender',
       labels: { tenantId, kbId: row.knowledgeBaseId },

@@ -36,7 +36,12 @@ import { decideSupersession } from './supersession.js';
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? '';
 const BACKEND = process.env.TRAIL_CONTRADICTION_BACKEND ?? (ANTHROPIC_API_KEY ? 'api' : 'cli');
-const MODEL = process.env.TRAIL_CONTRADICTION_MODEL ?? 'claude-haiku-4-5-20251001';
+// F199.7 — contradiction-lint stays on mistral-LARGE (EU), not small: the
+// calibration set (verify-contradiction-lint-calibration.ts) showed small-latest
+// over-flags a coverage-difference as a contradiction (4/5), the exact over-flag
+// that drives bad F182.5 auto-supersessions; large-latest is 5/5. Accuracy here
+// outweighs the ~20× cost because a false contradiction corrupts memory lifecycle.
+const MODEL = process.env.TRAIL_CONTRADICTION_MODEL ?? 'mistral-large-latest';
 // F158 — kill-switch for the idempotent skip. Set to '1' to force a
 // full re-scan regardless of cached signatures. Useful when:
 //   - prompt or model env changed and you want fresh evaluations
@@ -83,8 +88,8 @@ Rules:
  * pass) can reuse the same configuration as the reactive subscriber.
  */
 export function makeContradictionChecker(): ContradictionChecker {
-  // F190.2 — single discrete call through @broberg/ai-sdk (anthropic-direct
-  // primary, openrouter fallback, transport:http). Replaces the prior
+  // F190.2 / F199.7 — single discrete call through @broberg/ai-sdk (Mistral
+  // primary, Mistral fallback, transport:http, EU). Replaces the prior
   // BACKEND-switched claude-cli + direct-Anthropic-fetch checkers.
   return async (newContent, existingContent, labels): Promise<LlmContradictionResult> => {
     const userContent = [
@@ -98,8 +103,8 @@ export function makeContradictionChecker(): ContradictionChecker {
       const res = await ai.chat({
         system: PROMPT,
         messages: [{ role: 'user', content: userContent }],
-        override: { provider: 'anthropic', model: MODEL, transport: 'http' },
-        fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
+        override: { provider: 'mistral', model: MODEL, transport: 'http' },
+        fallback: [{ provider: 'mistral', model: 'mistral-small-latest', transport: 'http' }],
         maxTokens: 300,
         purpose: 'contradiction-lint',
         // F190.6 — per-tenant cost attribution (supplied per-doc by runForEvent).
@@ -513,4 +518,4 @@ async function hasExistingFingerprint(
 
 // F190.2 — makeCliChecker (claude-cli) + makeAnthropicChecker (direct fetch)
 // removed; makeContradictionChecker above now issues one discrete call through
-// @broberg/ai-sdk (anthropic-direct → openrouter fallback).
+// @broberg/ai-sdk (F199.7: Mistral primary → Mistral fallback, EU).

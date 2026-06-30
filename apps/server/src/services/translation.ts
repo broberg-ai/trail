@@ -39,7 +39,7 @@ import {
 import type { TrailDatabase } from '@trail/db';
 import type { CandidateAction, Locale, QueueCandidate } from '@trail/shared';
 
-const CHAT_MODEL = process.env.TRAIL_TRANSLATE_MODEL ?? 'claude-haiku-4-5-20251001';
+const CHAT_MODEL = process.env.TRAIL_TRANSLATE_MODEL ?? 'mistral-small-latest';
 // 60s timed out on the bigger contradictions (title + content + 4 actions).
 // 120s covers the heaviest bundles observed in practice; change via
 // TRAIL_TRANSLATE_TIMEOUT_MS if a locale's payload is even chunkier.
@@ -264,8 +264,8 @@ ${JSON.stringify(input, null, 2)}`;
   try {
     const res = await ai.chat({
       messages: [{ role: 'user', content: prompt }],
-      override: { provider: 'anthropic', model: CHAT_MODEL, transport: 'http' },
-      fallback: [{ provider: 'openrouter', model: 'anthropic/claude-haiku-4.5', transport: 'http' }],
+      override: { provider: 'mistral', model: CHAT_MODEL, transport: 'http' },
+      fallback: [{ provider: 'mistral', model: 'mistral-large-latest', transport: 'http' }],
       maxTokens: 4000,
       purpose: 'translation',
       labels: { tenantId: candidate.tenantId, kbId: candidate.knowledgeBaseId },
