@@ -884,6 +884,17 @@
         "saved": "Setting saved",
         "error": "Couldn't change the setting"
       },
+      "lintToggle": {
+        "title": "Contradiction lint",
+        "subtitle": "Scans every new Neuron against existing ones and flags contradictions for curator review. Turn this off for high-volume, uncurated KBs (e.g. a session/dogfooding KB) where near-duplicate Neurons would otherwise flood the queue with alerts.",
+        "stateOff": "Off",
+        "stateOn": "On",
+        "turnOn": "Turn on",
+        "turnOff": "Turn off",
+        "saving": "Saving…",
+        "saved": "Setting saved",
+        "error": "Couldn't change the setting"
+      },
       "ingestModel": {
         "title": "Ingest model",
         "subtitle": "Which LLM backend primarily compiles Sources into Neurons on this Trail. Pick 'Use global default' to inherit the engine config, or pin this Trail to a specific model.",

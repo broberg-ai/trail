@@ -13,6 +13,8 @@ import {
   updateChatSettings,
   getMemoryHealth,
   setKbDecayEnabled,
+  getLintSettings,
+  setKbContradictionLint,
   type LintStatus,
   type IngestSettingsResponse,
   type IngestBackendId,
@@ -75,6 +77,11 @@ export function SettingsTrailPanel() {
   const [decayEnabled, setDecayEnabled] = useState<boolean | null>(null);
   const [decayToggling, setDecayToggling] = useState(false);
 
+  // F200.1 — per-Trail contradiction-lint on/off (root-cause throttle for
+  // high-volume session KBs flooding the queue with alert candidates).
+  const [lintEnabled, setLintEnabled] = useState<boolean | null>(null);
+  const [lintToggling, setLintToggling] = useState(false);
+
   useEffect(() => {
     listKnowledgeBases()
       .then((list) => {
@@ -121,6 +128,10 @@ export function SettingsTrailPanel() {
           getMemoryHealth(match.id)
             .then((d) => setDecayEnabled(d.decayEnabled ?? false))
             .catch(() => setDecayEnabled(null));
+          // F200.1 — contradiction-lint on/off for this Trail. Fail-soft.
+          getLintSettings(match.id)
+            .then((s) => setLintEnabled(s.contradictionLintEnabled))
+            .catch(() => setLintEnabled(null));
         }
       })
       .catch((err: ApiError) => setError(err.message));
@@ -137,6 +148,20 @@ export function SettingsTrailPanel() {
       setToast({ kind: 'error', text: t('settings.trail.decay.error') });
     } finally {
       setDecayToggling(false);
+    }
+  }
+
+  async function handleToggleLint() {
+    if (!kb || lintToggling || lintEnabled === null) return;
+    setLintToggling(true);
+    try {
+      const r = await setKbContradictionLint(kb.id, !lintEnabled);
+      setLintEnabled(r.contradictionLintEnabled);
+      setToast({ kind: 'success', text: t('settings.trail.lintToggle.saved') });
+    } catch {
+      setToast({ kind: 'error', text: t('settings.trail.lintToggle.error') });
+    } finally {
+      setLintToggling(false);
     }
   }
 
@@ -510,6 +535,51 @@ export function SettingsTrailPanel() {
                   : decayEnabled
                     ? t('lifecycle.decayPause')
                     : t('lifecycle.decayEnable')}
+              </button>
+            ) : null}
+          </div>
+        </section>
+
+        {/* F200.1 — per-Trail contradiction-lint toggle (mirrors the decay toggle above). */}
+        <section class="pt-2 border-t border-[color:var(--color-border)]">
+          <div class="mb-3">
+            <h2 class="text-sm font-medium">{t('settings.trail.lintToggle.title')}</h2>
+            <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-xl">
+              {t('settings.trail.lintToggle.subtitle')}
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span
+              data-testid="settings-lint-toggle-state"
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                padding: '4px 10px',
+                borderRadius: 999,
+                background: lintEnabled ? 'var(--color-bg-sunk)' : 'var(--color-accent-soft)',
+                color: 'var(--color-fg)',
+              }}
+            >
+              {lintEnabled === null
+                ? '…'
+                : lintEnabled
+                  ? t('settings.trail.lintToggle.stateOn')
+                  : t('settings.trail.lintToggle.stateOff')}
+            </span>
+            {lintEnabled !== null ? (
+              <button
+                type="button"
+                data-testid="settings-lint-toggle"
+                onClick={handleToggleLint}
+                disabled={lintToggling}
+                class="btn active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ padding: '6px 14px', fontSize: 12.5 }}
+              >
+                {lintToggling
+                  ? t('settings.trail.lintToggle.saving')
+                  : lintEnabled
+                    ? t('settings.trail.lintToggle.turnOff')
+                    : t('settings.trail.lintToggle.turnOn')}
               </button>
             ) : null}
           </div>

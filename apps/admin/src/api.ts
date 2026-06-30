@@ -396,6 +396,24 @@ export function setKbDecayEnabled(kbId: string, enabled: boolean): Promise<{ dec
   });
 }
 
+/** F200.1 — read the per-KB contradiction-lint toggle. */
+export function getLintSettings(kbId: string): Promise<{ contradictionLintEnabled: boolean }> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/lint-settings`);
+}
+
+/** F200.1 — turn contradiction-lint on/off for ONE Trail. Off stops the
+ *  background contradiction scan from emitting alert candidates for this KB
+ *  (the root-cause throttle for high-volume session KBs). */
+export function setKbContradictionLint(
+  kbId: string,
+  enabled: boolean,
+): Promise<{ contradictionLintEnabled: boolean }> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/lint-settings`, {
+    method: 'PATCH',
+    body: JSON.stringify({ contradictionLintEnabled: enabled }),
+  });
+}
+
 export function listQueue(filter: QueueFilter = {}): Promise<QueueListResponse> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(filter)) {

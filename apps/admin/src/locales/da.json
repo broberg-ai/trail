@@ -884,6 +884,17 @@
         "saved": "Indstilling gemt",
         "error": "Kunne ikke ændre indstillingen"
       },
+      "lintToggle": {
+        "title": "Modsigelses-tjek",
+        "subtitle": "Scanner hver ny Neuron mod eksisterende og flager modsigelser til kuratorgennemgang. Slå dette fra for høj-volumen, ukuraterede KB'er (fx en session/dogfooding-KB), hvor næsten-ens Neuroner ellers ville oversvømme køen med fund.",
+        "stateOff": "Fra",
+        "stateOn": "Til",
+        "turnOn": "Slå til",
+        "turnOff": "Slå fra",
+        "saving": "Gemmer…",
+        "saved": "Indstilling gemt",
+        "error": "Kunne ikke ændre indstillingen"
+      },
       "ingestModel": {
         "title": "Ingest-model",
         "subtitle": "Hvilken LLM-backend der primært kompilerer Kilder til Neuroner på denne Trail. Vælg 'Brug global default' for at følge engine-konfigurationen, eller pin denne Trail til en specifik model.",
