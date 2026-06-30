@@ -3,25 +3,28 @@ import { ai } from '../lib/ai.js';
 
 // Read keys at call-time, not module-load-time, so a key added after
 // boot (or rotated) gets picked up without restart.
-const getAnthropicKey = () => process.env.ANTHROPIC_API_KEY ?? '';
-const VISION_MODEL = process.env.VISION_MODEL ?? 'claude-haiku-4-5-20251001';
-const OPENROUTER_VISION_MODEL =
-  process.env.VISION_MODEL_OPENROUTER ?? 'anthropic/claude-haiku-4.5';
+const getMistralKey = () => process.env.MISTRAL_API_KEY ?? '';
+// F199.2 — vision migrated off Anthropic to Mistral (EU, GDPR-safe). Primary is
+// the cheap, multimodal mistral-small-latest (proven to read images back in
+// verify-f199-2-vision-mistral.ts, ~20× cheaper than haiku at equal quality);
+// fallback is the stronger pixtral-large-latest. BOTH are Mistral/EU, so a
+// fallback can never silently route customer images to a US model.
+const VISION_MODEL = process.env.VISION_MODEL ?? 'mistral-small-latest';
+const VISION_FALLBACK_MODEL = process.env.VISION_MODEL_FALLBACK ?? 'pixtral-large-latest';
 
 /**
- * F190.1 — all vision now goes through the shared @broberg/ai-sdk client.
- * We pin `transport:"http"` (the `claude` CLI is absent on the cloud engine)
- * and keep Trail's Anthropic-primary → OpenRouter-fallback chain via the SDK's
- * first-class `fallback` (retiring the home-rolled fetch + shouldFallback path).
- * Cost auto-reports to upmetrics via the sink configured in lib/ai.ts.
+ * F190.1 — all vision goes through the shared @broberg/ai-sdk client. We pin
+ * `transport:"http"` (the `claude` CLI is absent on the cloud engine). F199.2 —
+ * the chain is now Mistral-primary → Mistral-fallback (both EU) via the SDK's
+ * first-class `fallback`. Cost auto-reports to upmetrics via lib/ai.ts.
  */
-const VISION_OVERRIDE = { provider: 'anthropic', model: VISION_MODEL, transport: 'http' as const };
+const VISION_OVERRIDE = { provider: 'mistral', model: VISION_MODEL, transport: 'http' as const };
 const VISION_FALLBACK = [
-  { provider: 'openrouter', model: OPENROUTER_VISION_MODEL, transport: 'http' as const },
+  { provider: 'mistral', model: VISION_FALLBACK_MODEL, transport: 'http' as const },
 ];
 
 function hasVisionProvider(): boolean {
-  return getAnthropicKey().length > 0 || (process.env.OPENROUTER_API_KEY ?? '').length > 0;
+  return getMistralKey().length > 0;
 }
 
 /**
@@ -30,8 +33,7 @@ function hasVisionProvider(): boolean {
  * primary; the actual per-call model also comes back in usage.model.
  */
 export function getActiveVisionModel(): string {
-  if (process.env.ANTHROPIC_API_KEY) return VISION_MODEL;
-  if (process.env.OPENROUTER_API_KEY) return OPENROUTER_VISION_MODEL;
+  if (process.env.MISTRAL_API_KEY) return VISION_MODEL;
   return '';
 }
 
@@ -39,6 +41,12 @@ export function getActiveVisionModel(): string {
 // when the SDK reports costUsd=0 (unknown model in its price list) so
 // extract_cost_cents stays populated. Subprocess/$0 legitimately yields 0.
 const VISION_PRICING: Record<string, { inputPerM: number; outputPerM: number }> = {
+  // F199.2 — Mistral (EU) vision. mistral-small is priced in the SDK table
+  // (costUsd>0 there); pixtral-large is not, so this local fallback keeps
+  // extract_cost_cents populated when the SDK reports 0. Claude entries kept
+  // for back-compat if VISION_MODEL is overridden back to a Claude model.
+  'mistral-small-latest': { inputPerM: 0.1, outputPerM: 0.3 },
+  'pixtral-large-latest': { inputPerM: 2.0, outputPerM: 6.0 },
   'claude-haiku-4-5-20251001': { inputPerM: 1.0, outputPerM: 5.0 },
   'claude-sonnet-4-6': { inputPerM: 3.0, outputPerM: 15.0 },
 };
@@ -229,8 +237,8 @@ export function applyDimensionFlag(
 }
 
 /**
- * F164 — provider chain now owned by the SDK (Anthropic primary, OpenRouter
- * fallback via VISION_FALLBACK). Returns null if no keys are configured or the
+ * F164 — provider chain now owned by the SDK (F199.2: Mistral primary +
+ * Mistral fallback, both EU, via VISION_FALLBACK). Returns null if no key is configured or the
  * model returned the "decorative" sentinel; throws only if every provider in
  * the chain errors (caller treats as a failed image).
  */
