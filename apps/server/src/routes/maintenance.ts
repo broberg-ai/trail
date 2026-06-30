@@ -13,7 +13,7 @@
  * (the engine DB handle is the requested tenant's).
  */
 import { Hono } from 'hono';
-import { documents, queueCandidates } from '@trail/db';
+import { documents, queueCandidates, knowledgeBases } from '@trail/db';
 import { and, eq, isNotNull, inArray, like, lt, sql } from 'drizzle-orm';
 import { resolveKbId } from '@trail/core';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
@@ -125,10 +125,28 @@ maintenanceRoutes.post('/maintenance/drain-lint-candidates', async (c) => {
   };
   const apply = body.apply === true;
 
+  // Scope rule (SAFETY): an explicit kbId drains that one KB's lint backlog
+  // (operator chose it). WITHOUT a kbId (the daily-cron path), restrict to KBs
+  // where contradiction-lint is DISABLED — never auto-reject legitimate
+  // contradiction findings in a curated, lint-ON KB (e.g. a customer's).
   let kbId: string | null = null;
+  let disabledKbScope: string[] | null = null;
   if (body.kbId) {
     kbId = await resolveKbId(trail, tenant.id, body.kbId);
     if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
+  } else {
+    const disabled = await trail.db
+      .select({ id: knowledgeBases.id })
+      .from(knowledgeBases)
+      .where(and(eq(knowledgeBases.tenantId, tenant.id), eq(knowledgeBases.contradictionLintEnabled, false)))
+      .all();
+    disabledKbScope = disabled.map((r) => r.id);
+    if (disabledKbScope.length === 0) {
+      return c.json({
+        tenant: tenant.id, kbId: null, scope: 'lint-disabled-kbs', disabledKbs: 0,
+        olderThanDays: body.olderThanDays ?? null, scanned: 0, rejected: 0, applied: apply,
+      });
+    }
   }
 
   // connector lives inside the metadata JSON blob — match it by substring,
@@ -139,6 +157,7 @@ maintenanceRoutes.post('/maintenance/drain-lint-candidates', async (c) => {
     like(queueCandidates.metadata, '%"connector":"lint"%'),
   ];
   if (kbId) filters.push(eq(queueCandidates.knowledgeBaseId, kbId));
+  else if (disabledKbScope) filters.push(inArray(queueCandidates.knowledgeBaseId, disabledKbScope));
   if (typeof body.olderThanDays === 'number' && body.olderThanDays > 0) {
     filters.push(lt(queueCandidates.createdAt, sql`datetime('now', ${`-${body.olderThanDays} days`})`));
   }
@@ -169,6 +188,8 @@ maintenanceRoutes.post('/maintenance/drain-lint-candidates', async (c) => {
   return c.json({
     tenant: tenant.id,
     kbId,
+    scope: kbId ? 'single-kb' : 'lint-disabled-kbs',
+    disabledKbs: disabledKbScope ? disabledKbScope.length : undefined,
     olderThanDays: body.olderThanDays ?? null,
     scanned: matching.length,
     rejected,
