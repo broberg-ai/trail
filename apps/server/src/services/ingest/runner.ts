@@ -26,10 +26,12 @@ import type {
 import type { ChainStep } from './chain.js';
 import { ClaudeCLIBackend } from './claude-cli-backend.js';
 import { OpenRouterBackend } from './openrouter-backend.js';
+import { MistralBackend } from './mistral-backend.js';
 
 const BACKENDS: Record<string, IngestBackend> = {
   'claude-cli': new ClaudeCLIBackend(),
   'openrouter': new OpenRouterBackend(),
+  'mistral': new MistralBackend(),
 };
 
 export interface RunnerResult extends IngestBackendResult {

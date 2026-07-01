@@ -49,9 +49,23 @@ export interface ChainStep {
  */
 export const DEFAULT_CHAIN_CLAUDE_CLI: ChainStep[] = [
   { backend: 'claude-cli', model: 'claude-sonnet-4-6' },
+  // F199.10 — cloud fallback (fires only when local Max/claude-cli fails)
+  // routes through Mistral (EU) first, matching Christian's "Mistral is our
+  // go-to for any data that could contain personal content" directive.
+  // mistral-large is kept as a same-provider second step only for provider-
+  // level resilience (e.g. a small-tier outage) — NOT a quality upgrade;
+  // F199.10 testing showed mistral-large-latest consistently underperforms
+  // mistral-small-latest on this exact ingest tool-loop (see plan-doc).
+  { backend: 'mistral', model: 'mistral-small-latest' },
+  { backend: 'mistral', model: 'mistral-large-latest' },
+  // Last-resort if Mistral's API itself is unreachable.
   { backend: 'openrouter', model: 'google/gemini-2.5-flash' },
-  { backend: 'openrouter', model: 'z-ai/glm-5.1' },
-  { backend: 'openrouter', model: 'qwen/qwen3.6-plus' },
+];
+
+export const DEFAULT_CHAIN_MISTRAL: ChainStep[] = [
+  { backend: 'mistral', model: 'mistral-small-latest' },
+  { backend: 'mistral', model: 'mistral-large-latest' },
+  { backend: 'openrouter', model: 'google/gemini-2.5-flash' },
 ];
 
 export const DEFAULT_CHAIN_OPENROUTER: ChainStep[] = [
@@ -61,7 +75,9 @@ export const DEFAULT_CHAIN_OPENROUTER: ChainStep[] = [
   // F199.9 — deepest unattended fallback swapped off Anthropic (was
   // anthropic/claude-sonnet-4.6) to Gemini Flash so no Trail ingest path
   // touches Claude. Primary ingest is $0 local-ingest (Max); this chain is
-  // only the unattended cloud fallback.
+  // only the unattended cloud fallback. Kept as-is (not Mistral-first) for
+  // any KB/env that explicitly opts into 'openrouter' — use INGEST_BACKEND=
+  // mistral (DEFAULT_CHAIN_MISTRAL) for the new EU-first default.
   { backend: 'openrouter', model: 'google/gemini-2.5-flash' },
 ];
 
@@ -118,14 +134,16 @@ export function resolveIngestChain(
   }
 
   // 4. Hard-coded default. Chain depends on which backend is "primary"
-  // today — claude-cli for Max Plan users (Christian's default),
-  // openrouter for tenants who've configured cloud-first.
+  // today — claude-cli for Max Plan users (Christian's default), mistral
+  // for tenants who've configured cloud-first EU (F199.10), openrouter
+  // for an explicit non-EU-first opt-out.
   const primary = (env.INGEST_BACKEND ?? 'claude-cli') as IngestBackendId;
+  if (primary === 'mistral') return DEFAULT_CHAIN_MISTRAL;
   return primary === 'openrouter' ? DEFAULT_CHAIN_OPENROUTER : DEFAULT_CHAIN_CLAUDE_CLI;
 }
 
 function isKnownBackend(id: string): id is IngestBackendId {
-  return id === 'claude-cli' || id === 'openrouter';
+  return id === 'claude-cli' || id === 'openrouter' || id === 'mistral';
 }
 
 function parseChainJson(raw: string | null | undefined): ChainStep[] | null {

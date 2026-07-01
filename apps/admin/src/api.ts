@@ -1658,7 +1658,7 @@ export function listActivity(f: ActivityFilter = {}): Promise<ActivityListRespon
 
 // ── F152 — Per-KB ingest backend settings ────────────────────────────────
 
-export type IngestBackendId = 'claude-cli' | 'openrouter';
+export type IngestBackendId = 'claude-cli' | 'openrouter' | 'mistral';
 
 export interface ChainStep {
   backend: IngestBackendId;

@@ -17,7 +17,7 @@
  * hints ("~3¢ per ingest based on 2026 pricing").
  */
 
-export type IngestBackendId = 'claude-cli' | 'openrouter';
+export type IngestBackendId = 'claude-cli' | 'openrouter' | 'mistral';
 
 export interface IngestModel {
   /** Provider-native ID — what we pass to the API. */
@@ -59,6 +59,35 @@ export const INGEST_MODELS: IngestModel[] = [
     costPerMillion: { input: 0, output: 0 },
     supportsToolCalling: true,
     quality: 'good',
+    tested: true,
+  },
+
+  // Mistral backend — F199.10 (EU-direct, api.mistral.ai). New default for
+  // ingest: it sees the WHOLE source document, the largest customer-data
+  // surface in Trail. Empirically verified via a 15-page real customer PDF +
+  // two synthetic sources: mistral-small-latest matched or OUTPERFORMED
+  // mistral-large-latest on fact-recall in this tool-loop (large's slower
+  // per-turn latency means it gets through LESS of a long document before
+  // hitting the turn cap — see F199.10 plan-doc). Large is kept available
+  // for manual per-KB override, not used as an automatic size-based upgrade.
+  {
+    id: 'mistral-small-latest',
+    backend: 'mistral',
+    label: 'Mistral Small (EU)',
+    description: 'Default for ingest — EU-hosted, ~10x cheaper than the previous default, and matched/beat mistral-large-latest on recall in F199.10 testing.',
+    costPerMillion: { input: 0.1, output: 0.3 },
+    supportsToolCalling: true,
+    quality: 'great',
+    tested: true,
+  },
+  {
+    id: 'mistral-large-latest',
+    backend: 'mistral',
+    label: 'Mistral Large (EU)',
+    description: 'Higher-reasoning EU model. NOT auto-selected by document size — F199.10 testing showed it can score LOWER recall than Small on longer sources (slower per-turn, same turn budget). Available for manual per-KB override only.',
+    costPerMillion: { input: 2.0, output: 6.0 },
+    supportsToolCalling: true,
+    quality: 'best',
     tested: true,
   },
 

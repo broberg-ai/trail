@@ -65,6 +65,7 @@ Phased, one feature per story, lowest-risk first — EXCEPT Christian's directiv
 - **F199.7** — Contradiction-lint → mistral-small-latest (re-run calibration)
 - **F199.8** — Action-recommender → mistral-small-latest
 - **F199.9** — Cloud-ingest → $0 local-ingest + gemini-2.5-flash unattended fallback
+- **F199.10** — Ingest cloud fallback → Mistral EU (mistral-small-latest, NOT size-escalated to large — see its own plan-doc for the empirical finding)
 
 ## Impact Analysis
 
