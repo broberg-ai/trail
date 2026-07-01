@@ -134,6 +134,22 @@ export const INGEST_MODELS: IngestModel[] = [
     quality: 'best',
     tested: true,
   },
+  // F199.10 — added as a MANUAL, opt-in option (never a default/auto-selected
+  // chain step). Scored 23/25 (92%) fact-recall on a real customer source in
+  // F199.10 testing, ahead of every Mistral tier tested. NOT EU-hosted — the
+  // ai-sdk pricing table itself tags it `region:"cn"` (China). A curator must
+  // explicitly pick this per-KB and accept the GDPR tradeoff for that KB's
+  // data — never route personal/customer data through it by default.
+  {
+    id: 'deepseek/deepseek-v4-pro',
+    backend: 'openrouter',
+    label: 'DeepSeek V4 Pro (China — not GDPR-safe)',
+    description: 'Strongest recall in F199.10 testing (92% on a real customer source) but China-hosted (ai-sdk region:"cn"). Opt-in only — do not use for KBs with personal/customer data.',
+    costPerMillion: { input: 0.435, output: 0.87 },
+    supportsToolCalling: true,
+    quality: 'best',
+    tested: true,
+  },
 ];
 
 /** Lookup by ID (returns undefined for unknown IDs). */
