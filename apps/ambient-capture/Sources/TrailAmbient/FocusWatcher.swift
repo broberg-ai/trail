@@ -95,10 +95,19 @@ final class EventLog {
     private let url: URL
 
     private init() {
-        let dir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Logs/TrailAmbient", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        url = dir.appendingPathComponent("focus.jsonl")
+        // TRAIL_AMBIENT_LOG override keeps --selftest OFF the production
+        // capture log (a selftest event once leaked a "ResumedApp" row into
+        // a real ambient candidate, 2026-07-02). The relay honours the same
+        // env var so both sides stay in sync.
+        if let override = ProcessInfo.processInfo.environment["TRAIL_AMBIENT_LOG"] {
+            url = URL(fileURLWithPath: override)
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        } else {
+            let dir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Logs/TrailAmbient", isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            url = dir.appendingPathComponent("focus.jsonl")
+        }
     }
 
     func append(_ event: FocusEvent) {

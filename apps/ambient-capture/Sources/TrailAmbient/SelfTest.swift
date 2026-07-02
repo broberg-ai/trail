@@ -9,9 +9,12 @@ import AppKit
 @MainActor
 enum SelfTest {
     static func run() -> Never {
-        let dir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Logs/TrailAmbient", isDirectory: true)
-        let logURL = dir.appendingPathComponent("focus.jsonl")
+        // Redirect EventLog to a throwaway file so selftest events never
+        // pollute the real capture log (TRAIL_AMBIENT_LOG is read by both
+        // the Swift EventLog and the TS relay).
+        let logURL = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("trail-ambient-selftest.jsonl")
+        setenv("TRAIL_AMBIENT_LOG", logURL.path, 1)
         try? FileManager.default.removeItem(at: logURL)
 
         let watcher = FocusWatcher()
