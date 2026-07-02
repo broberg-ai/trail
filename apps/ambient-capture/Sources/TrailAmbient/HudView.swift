@@ -4,16 +4,62 @@
 // mode toggle (NO native segmented control — house rule). Enter runs it;
 // clicking a result opens it in the browser.
 import SwiftUI
+import AVFoundation
 
 @MainActor
 final class HudModel: ObservableObject {
     enum Mode: String, CaseIterable { case search = "Søg", ask = "Spørg" }
+    /// F201.6.5b — the in-HUD mic button's three states. `needsPermission` when
+    /// macOS hasn't granted the mic yet (tap → prompt, or → System Settings if
+    /// denied); `idle` when ready (tap → record); `recording` (tap → stop +
+    /// transcribe on-device). Discoverable + reliable-prompt companion to the
+    /// eyes-free ⌃⌥R global hotkey.
+    enum MicState { case needsPermission, idle, recording }
     @Published var mode: Mode = .search
     @Published var query = ""
     @Published var loading = false
     @Published var hits: [NeuronHit] = []
     @Published var answer: ChatAnswer?
     @Published var ran = false
+    /// Mic button state + the last capture's transcript (shown inline so the
+    /// user SEES what WhisperKit heard, instead of a file on disk).
+    @Published var mic: MicState = AudioWatcher.isMicGranted ? .idle : .needsPermission
+    @Published var transcript: String?
+
+    /// Mic button tapped. Grant-first: an accessory app's launch-time prompt is
+    /// unreliable (no front window), but the HUD is frontmost + app-active, so
+    /// requesting here reliably surfaces the system dialog.
+    func micTapped() {
+        switch mic {
+        case .needsPermission:
+            let status = AVCaptureDevice.authorizationStatus(for: .audio)
+            if status == .denied || status == .restricted {
+                // Already denied — the prompt won't re-appear, so send the user
+                // to the exact Privacy pane to flip it on.
+                if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                    NSWorkspace.shared.open(u)
+                }
+            } else {
+                AVCaptureDevice.requestAccess(for: .audio) { granted in
+                    Task { @MainActor in self.mic = granted ? .idle : .needsPermission }
+                }
+            }
+        case .idle:
+            transcript = nil
+            Task {
+                let ok = await AudioWatcher.shared.record()
+                await MainActor.run { self.mic = ok ? .recording : .needsPermission }
+            }
+        case .recording:
+            Task {
+                let text = await AudioWatcher.shared.finishAndTranscribe()
+                await MainActor.run {
+                    self.mic = .idle
+                    self.transcript = text   // "" → "no speech" hint in the banner
+                }
+            }
+        }
+    }
 
     func run() {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -35,7 +81,12 @@ final class HudModel: ObservableObject {
         }
     }
 
-    func reset() { query = ""; hits = []; answer = nil; ran = false; loading = false }
+    func reset() {
+        query = ""; hits = []; answer = nil; ran = false; loading = false
+        transcript = nil
+        // Re-read the grant on every open (it may have been granted since).
+        if mic != .recording { mic = AudioWatcher.isMicGranted ? .idle : .needsPermission }
+    }
 }
 
 // Trail palette.
@@ -59,11 +110,14 @@ struct HudView: View {
     /// editable field (it shows a yellow placeholder). No effect at runtime.
     var previewText: String? = nil
     @FocusState private var fieldFocused: Bool
+    /// Drives the recording dot's pulse.
+    @State private var pulse = false
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Rectangle().fill(Palette.hairline).frame(height: 1)
+            if model.mic == .recording || model.transcript != nil { audioBanner }
             content
             footer
         }
@@ -73,8 +127,10 @@ struct HudView: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
-        .shadow(color: .black.opacity(0.55), radius: 40, y: 18)
-        .padding(24)
+        // No SwiftUI .shadow()/.padding() here: the padding created a 24px
+        // transparent margin that rendered as an ugly grey rectangular frame
+        // around the card. The card now fills the panel edge-to-edge; the drop
+        // shadow is drawn by macOS on the panel itself (hasShadow = true).
         .onAppear { fieldFocused = true }
     }
 
@@ -97,9 +153,81 @@ struct HudView: View {
                     .onSubmit { model.run() }
             }
             modeToggle
+            micButton
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 18)
+    }
+
+    // MARK: Mic button (F201.6.5b) — grant + capture, right in the HUD.
+
+    private var micButton: some View {
+        Button { model.micTapped() } label: {
+            ZStack {
+                Circle()
+                    .fill(model.mic == .recording ? Color.red.opacity(0.16) : Color.white.opacity(0.05))
+                    .frame(width: 34, height: 34)
+                Image(systemName: micSymbol)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(micColor)
+            }
+        }
+        .buttonStyle(.plain)
+        .help(micHelp)
+    }
+
+    private var micSymbol: String {
+        switch model.mic {
+        case .needsPermission: return "mic.slash"
+        case .idle:            return "mic.fill"
+        case .recording:       return "stop.fill"
+        }
+    }
+    private var micColor: Color {
+        switch model.mic {
+        case .needsPermission: return Palette.fgMuted
+        case .idle:            return Palette.accent
+        case .recording:       return .red
+        }
+    }
+    private var micHelp: String {
+        switch model.mic {
+        case .needsPermission: return "Giv adgang til mikrofonen for at optage tale"
+        case .idle:            return "Optag tale (⌃⌥R)"
+        case .recording:       return "Stop og transskribér"
+        }
+    }
+
+    // Recording state / last transcript, shown inline so the result is visible.
+    private var audioBanner: some View {
+        HStack(spacing: 10) {
+            if model.mic == .recording {
+                Circle().fill(Color.red).frame(width: 9, height: 9)
+                    .opacity(pulse ? 0.25 : 1)
+                    .onAppear {
+                        withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulse = true }
+                    }
+                    .onDisappear { pulse = false }
+                Text("Optager… tryk mikrofonen igen for at stoppe")
+                    .foregroundColor(Palette.fg).font(.system(size: 13))
+                Spacer()
+            } else if let t = model.transcript {
+                Image(systemName: "waveform").foregroundColor(Palette.accent).font(.system(size: 13))
+                Text(t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                     ? "Ingen tale opfanget — prøv igen tættere på mikrofonen."
+                     : t)
+                    .foregroundColor(t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Palette.fgMuted : Palette.fg)
+                    .font(.system(size: 13)).lineLimit(3).textSelection(.enabled)
+                Spacer(minLength: 8)
+                Button { model.transcript = nil } label: {
+                    Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)).foregroundColor(Palette.fgSubtle)
+                }.buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 20).padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(model.mic == .recording ? Color.red.opacity(0.08) : Palette.accent.opacity(0.07))
+        .overlay(Rectangle().fill(Palette.hairline).frame(height: 1), alignment: .bottom)
     }
 
     private var modeToggle: some View {

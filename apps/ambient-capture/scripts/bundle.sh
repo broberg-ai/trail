@@ -46,6 +46,24 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
+# F201.6 — Hardened Runtime (--options runtime) BLOCKS the microphone unless
+# the app is signed WITH the audio-input entitlement. Without it, macOS denies
+# the mic SILENTLY: no TCC prompt, and the app never appears in
+# System Settings › Privacy › Microphone (observed 2026-07-03). The usage
+# string in Info.plist is necessary but NOT sufficient under hardened runtime —
+# the entitlement is the actual gate. (Screen Recording is TCC-only, no
+# entitlement needed; add com.apple.security.device.camera here if we ever
+# capture video.)
+ENTITLEMENTS="$(mktemp -t trail-ambient-entitlements).plist"
+cat > "$ENTITLEMENTS" <<'ENT'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.device.audio-input</key><true/>
+</dict>
+</plist>
+ENT
 # Signing = TCC identity. An ad-hoc signature changes with every rebuild,
 # silently DETACHING the user's Accessibility grant each time (observed
 # 2026-07-02: watcher_started_untrusted after a re-grant). A real Apple
@@ -53,10 +71,11 @@ PLIST
 # Fall back to ad-hoc only when no identity exists (fresh machine/CI).
 IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | grep -m1 -o '"Apple Development: [^"]*"' | tr -d '"')"
 if [ -n "$IDENTITY" ]; then
-  codesign --force --options runtime --sign "$IDENTITY" "$APP" 2>/dev/null \
-    && echo "[ambient-capture] signed with: $IDENTITY (stable TCC identity)" \
-    || codesign --force --sign - "$APP" 2>/dev/null || true
+  codesign --force --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP" 2>/dev/null \
+    && echo "[ambient-capture] signed with: $IDENTITY (stable TCC identity) + mic entitlement" \
+    || codesign --force --entitlements "$ENTITLEMENTS" --sign - "$APP" 2>/dev/null || true
 else
-  codesign --force --sign - "$APP" 2>/dev/null || true
+  codesign --force --entitlements "$ENTITLEMENTS" --sign - "$APP" 2>/dev/null || true
 fi
+rm -f "$ENTITLEMENTS"
 echo "[ambient-capture] built $APP"

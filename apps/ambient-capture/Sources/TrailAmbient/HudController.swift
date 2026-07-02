@@ -82,7 +82,11 @@ final class HudController {
         panel.hidesOnDeactivate = false
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = false // the SwiftUI card draws its own shadow
+        // Let macOS draw the drop shadow on the panel. Because the panel is
+        // non-opaque and the SwiftUI card is a rounded, opaque shape, the
+        // shadow follows the rounded corners — a soft shadow, NOT the hard grey
+        // rectangle we removed. (The card no longer draws its own .shadow().)
+        panel.hasShadow = true
         // F201.9 fix — let the user drag the panel around by its background
         // (a borderless panel has no title bar, so this is the only drag affordance).
         panel.isMovableByWindowBackground = true
@@ -93,9 +97,10 @@ final class HudController {
         let controller = NSHostingController(rootView: HudView(model: model, onClose: { [weak self] in self?.hide() }))
         controller.sizingOptions = [.preferredContentSize]
         panel.contentViewController = controller
-        // F201.9 fix — the SwiftUI card has a 24px transparent margin (for its
-        // own shadow); make the hosting view's backing clear so that margin
-        // shows the desktop, not a grey window backing (the "sjov grå ramme").
+        // F201.9 fix — the SwiftUI card is a rounded rect, so its four corners
+        // are transparent. Force the hosting view's backing clear so those
+        // corners show the desktop, not a grey window backing (the "firkantede
+        // grå ramme" Christian reported). This is what actually removes it.
         controller.view.wantsLayer = true
         controller.view.layer?.backgroundColor = NSColor.clear.cgColor
         return panel
