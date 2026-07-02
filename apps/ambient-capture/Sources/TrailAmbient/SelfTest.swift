@@ -30,10 +30,47 @@ enum SelfTest {
         let sawPaused = contents.contains("\"app\":\"PausedApp\"")
         let sawResumed = contents.contains("\"app\":\"ResumedApp\"")
 
-        print("SELFTEST paused_emitted=\(sawPaused) resumed_emitted=\(sawResumed)")
-        let ok = !sawPaused && sawResumed
+        // Menubar icon must render VISIBLE pixels under BOTH themes — the
+        // v1 icon froze labelColor at build time and vanished on a dark
+        // menubar (Christian: "jeg kan ikke se et menubar ikon").
+        let lightPx = visiblePixels(appearance: .aqua)
+        let darkPx = visiblePixels(appearance: .darkAqua)
+
+        print("SELFTEST paused_emitted=\(sawPaused) resumed_emitted=\(sawResumed) icon_light_px=\(lightPx) icon_dark_px=\(darkPx)")
+        let ok = !sawPaused && sawResumed && lightPx > 40 && darkPx > 40
         print(ok ? "SELFTEST PASS" : "SELFTEST FAIL")
         exit(ok ? 0 : 1)
+    }
+
+    /// Rasterize the menubar icon under a given appearance and count pixels
+    /// that are meaningfully visible against that theme's menubar: alpha'd
+    /// AND contrasting (dark theme → light pixels, light theme → dark ones).
+    private static func visiblePixels(appearance name: NSAppearance.Name) -> Int {
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: 18, pixelsHigh: 18, bitsPerSample: 8,
+            samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ) else { return 0 }
+        let img = TrailMark.menubarImage(filled: true)
+        var count = 0
+        NSAppearance(named: name)?.performAsCurrentDrawingAppearance {
+            guard let ctx = NSGraphicsContext(bitmapImageRep: rep) else { return }
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = ctx
+            img.draw(in: NSRect(x: 0, y: 0, width: 18, height: 18))
+            NSGraphicsContext.restoreGraphicsState()
+        }
+        for x in 0..<18 {
+            for y in 0..<18 {
+                guard let c = rep.colorAt(x: x, y: y), c.alphaComponent > 0.5 else { continue }
+                let luma = 0.299 * c.redComponent + 0.587 * c.greenComponent + 0.114 * c.blueComponent
+                // Contrast against the menubar: light bar (~1.0) needs dark
+                // pixels, dark bar (~0.1) needs light ones. Orange core
+                // (luma ≈ 0.7) counts as visible on both.
+                if name == .darkAqua ? luma > 0.45 : luma < 0.75 { count += 1 }
+            }
+        }
+        return count
     }
 
     /// Spin the run loop so the watcher's debounce Timer can fire.

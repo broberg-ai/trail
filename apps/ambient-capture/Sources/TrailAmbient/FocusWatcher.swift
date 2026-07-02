@@ -38,7 +38,11 @@ final class FocusWatcher {
                 self?.appDidActivate(name: name, pid: pid)
             }
         }
-        EventLog.shared.log(kind: "watcher_started")
+        // Surface the Accessibility trust state in the log so a missing
+        // grant is diagnosable from focus.jsonl instead of guessed at.
+        // NB: an ad-hoc re-signed rebuild gets a new code identity, so a
+        // previously given grant silently detaches — the log tells you.
+        EventLog.shared.log(kind: AXIsProcessTrusted() ? "watcher_started_trusted" : "watcher_started_untrusted")
     }
 
     /// Test hook (F201.3 verification) — runs the exact same gate the

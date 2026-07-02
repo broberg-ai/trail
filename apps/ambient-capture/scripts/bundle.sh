@@ -43,7 +43,17 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
-# Ad-hoc signing keeps a stable TCC identity across local rebuilds, so the
-# Accessibility grant doesn't have to be re-approved on every build.
-codesign --force --sign - "$APP" 2>/dev/null || true
+# Signing = TCC identity. An ad-hoc signature changes with every rebuild,
+# silently DETACHING the user's Accessibility grant each time (observed
+# 2026-07-02: watcher_started_untrusted after a re-grant). A real Apple
+# Development identity is stable across rebuilds, so the grant sticks.
+# Fall back to ad-hoc only when no identity exists (fresh machine/CI).
+IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | grep -m1 -o '"Apple Development: [^"]*"' | tr -d '"')"
+if [ -n "$IDENTITY" ]; then
+  codesign --force --options runtime --sign "$IDENTITY" "$APP" 2>/dev/null \
+    && echo "[ambient-capture] signed with: $IDENTITY (stable TCC identity)" \
+    || codesign --force --sign - "$APP" 2>/dev/null || true
+else
+  codesign --force --sign - "$APP" 2>/dev/null || true
+fi
 echo "[ambient-capture] built $APP"
