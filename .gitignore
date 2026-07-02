@@ -182,3 +182,6 @@ apps/server/.baseline/
 apps/widget/test-results/
 apps/widget/playwright-report/
 .lens/
+
+# Backup of .mcp.json — may contain credentials, never track (cardmem #15442)
+.mcp.json.bak
