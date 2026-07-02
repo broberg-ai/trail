@@ -34,6 +34,19 @@ typed edges, team sharing, FTS5 search + chat — all already exist.
 - Targets: **configurable** — route candidates to different Trail KBs
   (e.g. one KB for B2B deal-knowledge, one for personal knowledge)
 
+**Decisions added after the v2 spec:**
+- **Menubar status item (Christian, 2026-07-02):** the v2 spec said "no
+  menubar"; reversed. The agent ships a visible **NSStatusItem** in the
+  menubar showing capture state (capturing/paused — this doubles as the
+  privacy recording-indicator), the logged-in Trail account, and the
+  settings entry point (deny-list, pause, disconnect). Still `LSUIElement`
+  = no Dock icon. Rationale: seeing you're logged in is reassuring, and
+  settings need a natural home. (F201.3's AC reflects this.)
+- **Dedicated test KB:** F201's end-to-end testing runs against a dedicated
+  `ambient-test` Trail in the broberg-ai tenant (created 2026-07-02) — never
+  against a production KB. F201.4's "candidate lands in a test KB" AC targets
+  this KB.
+
 **Hard requirement from the card (Christian, verbatim intent):** Ambient is
 useless without a Trail account. Login MUST reuse the user's existing Trail
 user via a simple OAuth-style flow — launching Trail Ambient sends you to
@@ -42,10 +55,11 @@ app.trailmem.com to obtain your token.
 ## Scope
 
 **We build (new):**
-1. `apps/ambient-capture/` — native Swift macOS agent (`LSUIElement` launch
-   agent: no menubar, no dock) + a small SwiftUI HUD. AXUIElement focus
-   capture, ScreenCaptureKit frames + Vision OCR, system-audio tap + on-device
-   STT (WhisperKit first; Apple SpeechTranscriber later).
+1. `apps/ambient-capture/` — native Swift macOS agent (`LSUIElement`: no Dock
+   icon, but a visible menubar status item — see Decisions) + a small SwiftUI
+   HUD. AXUIElement focus capture, ScreenCaptureKit frames + Vision OCR,
+   system-audio tap + on-device STT (WhisperKit first; Apple
+   SpeechTranscriber later).
 2. `packages/ambient-gate/` — TS package (Bun, ESM): gate heuristics,
    PII/secret redaction, KB routing, candidate-POST client. Runs as a tiny
    local relay (Hono) or as a library the Swift agent calls.
@@ -64,9 +78,9 @@ a pure API client of `/api/v1/queue/candidates`, `/search`, `/chat`.
   the memory layer.
 - NOT a new repo — lives in the existing `broberg-ai/trail` monorepo.
 - NOT Windows/Linux/iOS; macOS (Apple Silicon) only in v1.
-- NOT Soda-style invisibility: transparency is the feature (visible recording
-  indicator, pause hotkey, per-app deny-list — never 1Password/bank/private
-  messages).
+- NOT Soda-style invisibility: transparency is the feature (menubar status
+  item as visible recording indicator, pause hotkey, per-app deny-list —
+  never 1Password/bank/private messages).
 - NOT replacing F146 (local-first native Trail app + CRDT sync). F146 packages
   the Trail *engine* natively; F201 is a capture *client* of the cloud engine.
   No shared code beyond the REST contract.
@@ -91,21 +105,25 @@ Corrections to existing knowledge use `kind: 'user-correction'` +
 `metadata.targetNeuron` (Trail's supersede mechanism). Raw frames/audio NEVER
 leave the machine.
 
-### Auth — device-authorization flow (RFC 8628-lite)
+### Auth — device-authorization flow (RFC 8628-lite) — SHIPPED (F201.2)
 
 "Simpelt oauth flow" per the card, without a full OAuth server:
 
-1. Agent generates a random `device_code`, opens the browser at
+1. Agent generates a random 64-hex `device_code`, opens the browser at
    `https://app.trailmem.com/ambient/connect?code=<device_code>&name=<mac-name>`.
-2. The logged-in Trail user sees an approve page: which device, pick tenant +
-   allowed KBs. Approve → admin mints a **scoped** `trail_` token (existing
-   API-key infrastructure; scope: candidates-write + search/chat read on the
-   chosen KBs) bound to the device_code.
-3. Agent polls `POST /api/v1/ambient/token {device_code}` until the token is
-   released (single-use exchange, short TTL), stores it in the macOS Keychain.
+2. The logged-in Trail user sees the approve page (custom checkbox rows per
+   KB) and approves → the engine mints an **'ambient'-scoped** `trail_` token
+   (new `api_keys.scope` column; the scope gate in `requireAuth` allows ONLY
+   candidates-write + search/chat read) and parks the raw token in
+   `ambient_device_codes` (migration 0040).
+3. Agent polls `POST /api/v1/ambient/token {code}` until the token is released
+   — single-use (replay → 410), 10-min TTL (expired → 410), unknown → 404;
+   the raw token is scrubbed from the row on claim. Store in macOS Keychain.
 
-No token pasting, no localhost callback server, works with any browser. An
-unapproved/expired code exchanges to 404/410 — never a silent fallback.
+Ship-dark: both endpoints 404 until `TRAIL_AMBIENT_AUTH=1` on the engine.
+Note: the ambient routes mount BEFORE the requireAuth'd route groups in
+app.ts — Hono matches in registration order, so a later mount would inherit
+`use('*', requireAuth)` from kbRoutes and 401 the public token exchange.
 
 ### Redaction — reuse, don't re-roll
 
@@ -136,11 +154,12 @@ roadmap→live when F201.4 lands end-to-end).
 ## Privacy / GDPR
 
 Transparency as the differentiator (vs Soda's deliberate invisibility):
-on-device raw capture only; visible recording indicator; pause hotkey; per-app
-deny-list; "what does Trail know about me" = search your own personal KB;
-Neuron-level right-to-delete; explicit consent for capturing other parties'
-audio (legal requirement for calls — clarify EU rules before F201.6 ships).
-Any cloud compile of ambient data follows the F199 directive: Mistral EU only.
+on-device raw capture only; the menubar status item is the always-visible
+recording indicator; pause hotkey; per-app deny-list; "what does Trail know
+about me" = search your own personal KB; Neuron-level right-to-delete;
+explicit consent for capturing other parties' audio (legal requirement for
+calls — clarify EU rules before F201.6 ships). Any cloud compile of ambient
+data follows the F199 directive: Mistral EU only.
 
 ## Stories
 
@@ -148,8 +167,8 @@ Any cloud compile of ambient data follows the F199 directive: Mistral EU only.
 |---|---|---|
 | F201.1 | Scaffold: `packages/ambient-gate` + connector registration + turbo wiring | §9 / step 2-3 |
 | F201.2 | Device-auth flow (engine endpoints + admin approve page + scoped token) | card requirement |
-| F201.3 | Swift skeleton: LSUIElement app, TCC perms, AXUIElement focus capture | F1 |
-| F201.4 | Gate→Trail end-to-end: gate + redaction → candidate in a test KB | F2 |
+| F201.3 | Swift skeleton: LSUIElement + menubar status item, TCC perms, AXUIElement focus capture | F1 |
+| F201.4 | Gate→Trail end-to-end: gate + redaction → candidate in the ambient-test KB | F2 |
 | F201.5 | Screen frames + Vision OCR (on-device) → gate | F3 |
 | F201.6 | Audio tap + mic + WhisperKit STT (on-device, VAD) → gate | F4 |
 | F201.7 | KB routing: deal vs personal → correct kb slug | F5 |
