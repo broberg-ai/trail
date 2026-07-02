@@ -7,9 +7,17 @@ import PackageDescription
 let package = Package(
     name: "TrailAmbient",
     platforms: [.macOS(.v14)],
+    dependencies: [
+        // F201.6.2 — on-device Whisper STT (CoreML/Neural Engine, $0, no cloud).
+        // Chosen over Apple's SFSpeechRecognizer for markedly better Danish.
+        .package(url: "https://github.com/argmaxinc/WhisperKit", from: "0.9.0"),
+    ],
     targets: [
         .executableTarget(
             name: "TrailAmbient",
+            dependencies: [
+                .product(name: "WhisperKit", package: "WhisperKit"),
+            ],
             path: "Sources/TrailAmbient"
         )
     ]
