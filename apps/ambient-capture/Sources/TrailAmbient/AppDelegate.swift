@@ -26,7 +26,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func render() {
-        statusItem.button?.title = paused ? "॥ Trail" : "● Trail"
+        // Trail mark instead of a text glyph — accent core FILLED while
+        // capturing, OUTLINE while paused (the visible recording tell).
+        statusItem.button?.image = TrailMark.menubarImage(filled: !paused)
+        statusItem.button?.title = ""
         statusItem.button?.toolTip = paused
             ? "Trail Ambient — på pause (ingen capture)"
             : "Trail Ambient — capturer aktivt"

@@ -10,6 +10,10 @@ struct TrailAmbientMain {
         if CommandLine.arguments.contains("--selftest") {
             SelfTest.run()
         }
+        if let i = CommandLine.arguments.firstIndex(of: "--genicon"),
+           i + 1 < CommandLine.arguments.count {
+            IconGen.write(toDir: CommandLine.arguments[i + 1])
+        }
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
         let delegate = AppDelegate()
