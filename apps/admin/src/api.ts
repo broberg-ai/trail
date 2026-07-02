@@ -267,6 +267,9 @@ export function updateKnowledgeBase(
     /** F176 — per-KB lint cadence (days). null clears the override
      *  so the KB falls back to global TRAIL_LINT_SCHEDULE_DAYS. */
     lintScheduleDays?: number | null;
+    /** F201.8 — ambient auto-approval threshold. null clears (off);
+     *  a number in [0,1] arms it. */
+    autoApproveThreshold?: number | null;
   },
 ): Promise<KnowledgeBase> {
   return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}`, {

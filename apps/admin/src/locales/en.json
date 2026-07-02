@@ -892,6 +892,17 @@
         "saved": "Setting saved",
         "error": "Couldn't change the setting"
       },
+      "autoApprove": {
+        "title": "Auto-approve ambient captures",
+        "subtitle": "When on, distilled knowledge from Ambient captures becomes Neurons automatically — no manual approval. Noise stays pending in the queue for review. This Trail only.",
+        "stateOff": "Manual review",
+        "stateOn": "Auto-approve on",
+        "turnOn": "Turn on auto-approve",
+        "turnOff": "Turn off",
+        "saving": "Saving…",
+        "saved": "Auto-approve updated",
+        "error": "Couldn't update auto-approve"
+      },
       "ingestModel": {
         "title": "Ingest model",
         "subtitle": "Which LLM backend primarily compiles Sources into Neurons on this Trail. Pick 'Use global default' to inherit the engine config, or pin this Trail to a specific model.",

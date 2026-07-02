@@ -42,6 +42,8 @@ export const KnowledgeBaseSchema = z.object({
   chatPersonaPublic: z.string().nullable().optional(),
   // F176 — per-KB lint cadence (days). null = use global default.
   lintScheduleDays: z.number().int().nullable().optional(),
+  // F201.8 — per-KB ambient auto-approval threshold. null = off.
+  autoApproveThreshold: z.number().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

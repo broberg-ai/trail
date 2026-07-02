@@ -892,6 +892,17 @@
         "saved": "Indstilling gemt",
         "error": "Kunne ikke ændre indstillingen"
       },
+      "autoApprove": {
+        "title": "Auto-godkend ambient-fangst",
+        "subtitle": "Når slået til bliver destilleret viden fra Ambient-optagelser automatisk til Neuroner — ingen manuel godkendelse. Støj bliver liggende i køen til gennemsyn. Gælder kun denne Trail.",
+        "stateOff": "Manuel godkendelse",
+        "stateOn": "Auto-godkend til",
+        "turnOn": "Slå auto-godkend til",
+        "turnOff": "Slå fra",
+        "saving": "Gemmer…",
+        "saved": "Auto-godkend opdateret",
+        "error": "Kunne ikke opdatere auto-godkend"
+      },
       "ingestModel": {
         "title": "Ingest-model",
         "subtitle": "Hvilken LLM-backend der primært kompilerer Kilder til Neuroner på denne Trail. Vælg 'Brug global default' for at følge engine-konfigurationen, eller pin denne Trail til en specifik model.",
