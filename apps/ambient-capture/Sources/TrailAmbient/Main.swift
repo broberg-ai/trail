@@ -16,6 +16,9 @@ struct TrailAmbientMain {
         if CommandLine.arguments.contains("--audiotest") {
             AudioTest.run()
         }
+        if CommandLine.arguments.contains("--sttest") {
+            SttTest.run()
+        }
         if let i = CommandLine.arguments.firstIndex(of: "--genicon"),
            i + 1 < CommandLine.arguments.count {
             IconGen.write(toDir: CommandLine.arguments[i + 1])
