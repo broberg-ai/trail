@@ -114,8 +114,10 @@ Udtræk KUN holdbar, personlig viden:
 
 IGNORÉR fuldstændigt:
 - UI-krom, menuer, fane-lister, knapper, navigation
-- kode eller tekst personen tydeligvis kun LÆSER (ikke deres egen beslutning)
+- kode-snippets, funktioner, config eller artikel-tekst der blot VISES på skærmen — det er noget personen LÆSER, IKKE deres viden. Medtag KUN hvis personen i første person beslutter/vælger/lover noget om det. Tvivl = udelad.
 - OCR-fragmenter og halve ord
+
+Vær konservativ: hellere udelade end at opdigte at personen "har implementeret" noget du kun ser som kode på skærmen.
 
 Hvis der IKKE er nogen holdbar personlig viden i øjebliksbilledet, svar PRÆCIST med kun linjen:
 VERDICT: NOISE
