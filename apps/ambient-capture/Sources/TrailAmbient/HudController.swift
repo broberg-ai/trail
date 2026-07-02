@@ -10,6 +10,27 @@ import SwiftUI
 final class KeyablePanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    // A borderless, non-activating panel doesn't reliably get the Edit menu's
+    // ⌘V routing (the app isn't fully active), so catch the standard editing
+    // shortcuts here and forward them to the first responder (the SwiftUI
+    // TextField's field editor). Belt-and-suspenders with the AppDelegate Edit
+    // menu — this path works even when the app isn't the active app.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command {
+            let sel: Selector?
+            switch event.charactersIgnoringModifiers {
+            case "v": sel = #selector(NSText.paste(_:))
+            case "c": sel = #selector(NSText.copy(_:))
+            case "x": sel = #selector(NSText.cut(_:))
+            case "a": sel = #selector(NSText.selectAll(_:))
+            case "z": sel = Selector(("undo:"))
+            default:  sel = nil
+            }
+            if let sel, NSApp.sendAction(sel, to: nil, from: self) { return true }
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 }
 
 @MainActor
@@ -62,6 +83,9 @@ final class HudController {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false // the SwiftUI card draws its own shadow
+        // F201.9 fix — let the user drag the panel around by its background
+        // (a borderless panel has no title bar, so this is the only drag affordance).
+        panel.isMovableByWindowBackground = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         // NSHostingController auto-resizes the window to the SwiftUI content,
         // so the panel GROWS as results arrive instead of clipping them
@@ -69,6 +93,11 @@ final class HudController {
         let controller = NSHostingController(rootView: HudView(model: model, onClose: { [weak self] in self?.hide() }))
         controller.sizingOptions = [.preferredContentSize]
         panel.contentViewController = controller
+        // F201.9 fix — the SwiftUI card has a 24px transparent margin (for its
+        // own shadow); make the hosting view's backing clear so that margin
+        // shows the desktop, not a grey window backing (the "sjov grå ramme").
+        controller.view.wantsLayer = true
+        controller.view.layer?.backgroundColor = NSColor.clear.cgColor
         return panel
     }
 
