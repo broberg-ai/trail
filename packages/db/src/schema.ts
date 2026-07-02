@@ -778,6 +778,9 @@ export const apiKeys = sqliteTable(
     name: text('name').notNull(),
     // SHA-256 hex of the raw `trail_<64hex>` token. Never stored in plaintext.
     keyHash: text('key_hash').notNull(),
+    // F201.2 — 'full' (default, unrestricted) or 'ambient' (candidates-write
+    // + search/chat read only; enforced by requireAuth's scope gate).
+    scope: text('scope').notNull().default('full'),
     lastUsedAt: text('last_used_at'),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
     revokedAt: text('revoked_at'),
@@ -786,6 +789,38 @@ export const apiKeys = sqliteTable(
     uniqueIndex('idx_api_keys_user_name').on(table.userId, table.name),
     index('idx_api_keys_hash').on(table.keyHash),
   ],
+);
+
+// ── F201.2 — Ambient device-auth codes (RFC 8628-lite) ──────────────────────
+//
+// One row per APPROVED device connection. The device generates a random
+// code and opens the browser at /ambient/connect?code=…; the logged-in
+// user's approval mints a scoped api_keys row and stores the RAW token
+// here until the device claims it via POST /api/v1/ambient/token —
+// single-use: the claim NULLs token_once and stamps claimed_at. Rows are
+// short-lived (expires_at ≈ 10 min); an expired or already-claimed code
+// exchanges to 410, an unknown code to 404.
+
+export const ambientDeviceCodes = sqliteTable(
+  'ambient_device_codes',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    // SHA-256 hex of the device-generated code — the code itself is the
+    // exchange bearer and is never stored in plaintext.
+    codeHash: text('code_hash').notNull(),
+    deviceName: text('device_name').notNull(),
+    apiKeyId: text('api_key_id').notNull().references(() => apiKeys.id, { onDelete: 'cascade' }),
+    // Raw trail_ token, held ONLY until the device claims it.
+    tokenOnce: text('token_once'),
+    // JSON array of granted KB ids — returned to the device at claim so
+    // the gate knows which KBs it may route to (F201.7).
+    kbIds: text('kb_ids').notNull(),
+    createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+    expiresAt: text('expires_at').notNull(),
+    claimedAt: text('claimed_at'),
+  },
+  (table) => [uniqueIndex('idx_ambient_device_codes_hash').on(table.codeHash)],
 );
 
 // ── F144 — Chat history persistence ─────────────────────────────────────────

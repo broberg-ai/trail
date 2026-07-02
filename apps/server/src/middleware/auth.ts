@@ -57,6 +57,24 @@ function resolveTenantDb(c: Context, tenantSlug: string): TrailDatabase | null {
   return pool.get(tenantSlug) ?? null;
 }
 
+/**
+ * F201.2 — endpoint allowlist for 'ambient'-scoped API keys (minted by the
+ * device-auth approval). An ambient capture device may ONLY write queue
+ * candidates and read search/chat — never keys, settings, sources, or any
+ * admin surface. 'full' (the column default) and any unknown value keep
+ * the historical unrestricted behaviour, so existing keys are unaffected.
+ */
+const AMBIENT_ALLOWED: ReadonlyArray<{ method: string; pattern: RegExp }> = [
+  { method: 'POST', pattern: /^\/api\/v1\/queue\/candidates$/ },
+  { method: 'GET', pattern: /^\/api\/v1\/knowledge-bases\/[^/]+\/search$/ },
+  { method: 'POST', pattern: /^\/api\/v1\/chat$/ },
+];
+
+function scopeAllows(scope: string, method: string, path: string): boolean {
+  if (scope !== 'ambient') return true;
+  return AMBIENT_ALLOWED.some((r) => r.method === method && r.pattern.test(path));
+}
+
 export async function requireAuth(c: Context, next: Next): Promise<Response | void> {
   // `trail` is the primary DB at request-entry. The multi-tenant branch
   // below may override it via `c.set('trail', tenantDb)` once the caller
@@ -91,7 +109,7 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
           return c.json({ error: 'Invalid or revoked API key' }, 401);
         }
         const row = await tenantDb.db
-          .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS, keyId: apiKeys.id })
+          .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS, keyId: apiKeys.id, scope: apiKeys.scope })
           .from(apiKeys)
           .innerJoin(users, eq(users.id, apiKeys.userId))
           .innerJoin(tenants, eq(tenants.id, users.tenantId))
@@ -100,6 +118,9 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
         if (!row) {
           // Indexed but the per-tenant row went missing — treat as 401.
           return c.json({ error: 'Invalid or revoked API key' }, 401);
+        }
+        if (!scopeAllows(row.scope, c.req.method, c.req.path)) {
+          return c.json({ error: 'API key scope does not allow this endpoint' }, 403);
         }
         c.set('trail', tenantDb);
         trail = tenantDb;
@@ -118,7 +139,7 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
       // Single-tenant path (TRAIL_MULTI_TENANT unset): historical
       // F40.1 behaviour, query the primary DB directly.
       const row = await trail.db
-        .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS, keyId: apiKeys.id })
+        .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS, keyId: apiKeys.id, scope: apiKeys.scope })
         .from(apiKeys)
         .innerJoin(users, eq(users.id, apiKeys.userId))
         .innerJoin(tenants, eq(tenants.id, users.tenantId))
@@ -126,6 +147,9 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
         .get();
       if (!row) {
         return c.json({ error: 'Invalid or revoked API key' }, 401);
+      }
+      if (!scopeAllows(row.scope, c.req.method, c.req.path)) {
+        return c.json({ error: 'API key scope does not allow this endpoint' }, 403);
       }
       c.set('user', row.user);
       c.set('tenant', row.tenant);

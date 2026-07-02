@@ -1773,3 +1773,23 @@ export function submitReaderFeedback(
     body: JSON.stringify(body),
   });
 }
+
+// ── F201.2 — Ambient device-auth ──────────────────────────────────
+
+export interface AmbientApproveResponse {
+  ok: boolean;
+  deviceName: string;
+  kbCount: number;
+}
+
+/** Approve an Ambient device: mints a scoped key bound to the device code. */
+export function approveAmbientDevice(body: {
+  code: string;
+  deviceName: string;
+  kbIds: string[];
+}): Promise<AmbientApproveResponse> {
+  return api('/api/v1/ambient/approve', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}

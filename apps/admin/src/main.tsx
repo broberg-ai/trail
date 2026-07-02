@@ -23,6 +23,7 @@ import { JobsPanel } from './panels/jobs';
 import { ActivityPanel } from './panels/activity';
 import { ImagesPanel } from './panels/images';
 import { NotFound } from './panels/not-found';
+import { AmbientConnectPanel } from './panels/ambient-connect';
 import { initTheme } from './theme';
 import { ensureAnchorMarkedExtensions } from './lib/markdown';
 import { init as initUpmetrics } from '@upmetrics/sdk';
@@ -64,6 +65,7 @@ function Main() {
           <Route path="/kb/:kbId/link-check" component={LinkReportPanel} />
           <Route path="/kb/:kbId/settings" component={SettingsTrailPanel} />
           <Route path="/settings" component={SettingsAccountPanel} />
+          <Route path="/ambient/connect" component={AmbientConnectPanel} />
           <Route path="/tenants" component={ManageTenantsPanel} />
           <Route path="/glossary" component={GlossaryPanel} />
           <Route path="/jobs" component={JobsPanel} />

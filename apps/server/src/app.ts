@@ -38,6 +38,7 @@ import { beamRoutes } from './routes/beam.js';
 import { activityRoutes } from './routes/activity.js';
 import { maintenanceRoutes } from './routes/maintenance.js';
 import { lintSettingsRoutes } from './routes/lint-settings.js';
+import { ambientRoutes } from './routes/ambient.js';
 
 /**
  * Hono context variables visible to every handler.
@@ -151,6 +152,14 @@ export function createApp(trail: TrailDatabase, tenantPool: TenantPool): Hono<Ap
   // BEAM_TOKEN Bearer check (different from F111.2 tenant Bearer keys).
   app.route('/api', beamRoutes);
   app.route('/api/auth', authRoutes);
+  // F201.2 — ambient device-auth. MUST mount before the requireAuth'd
+  // groups below: POST /ambient/token is deliberately unauthenticated
+  // (the device has no credential yet; the single-use code is the
+  // bearer), and Hono matches in registration order — mounted later it
+  // would inherit kbRoutes' use('*', requireAuth) and 401. /ambient/
+  // approve carries its own explicit requireAuth. Ship-dark until
+  // TRAIL_AMBIENT_AUTH=1.
+  app.route('/api/v1', ambientRoutes);
   app.route('/api/v1', kbRoutes);
   app.route('/api/v1', documentRoutes);
   app.route('/api/v1', uploadRoutes);

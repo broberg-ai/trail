@@ -281,6 +281,13 @@
       "when": 1780300300000,
       "tag": "0039_contradiction_lint_toggle",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1780300400000,
+      "tag": "0040_ambient_device_auth",
+      "breakpoints": true
     }
   ]
 }
