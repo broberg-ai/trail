@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        installEditMenu()
         render()
         // TCC: prompt for Accessibility on first run — required for window
         // titles via AXUIElement. The system remembers the answer.
@@ -35,6 +36,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // until granted — capture returns nil, window titles still flow.
         ScreenWatcher.requestScreenRecordingIfNeeded()
         focusWatcher.start()
+    }
+
+    /// F201.9 fix — the HUD search field couldn't paste (⌘V). An .accessory
+    /// (LSUIElement) app has no main menu, and macOS delivers the standard
+    /// editing shortcuts (⌘X/⌘C/⌘V/⌘A, ⌘Z) via the Edit menu's key equivalents.
+    /// Without an Edit menu those events never reach the SwiftUI TextField's
+    /// field editor — typing worked (direct key events) but paste didn't.
+    /// Installing this minimal Edit menu wires the responder-chain routing; an
+    /// accessory app shows no menu bar, so nothing appears on screen.
+    private func installEditMenu() {
+        let mainMenu = NSMenu()
+        let editItem = NSMenuItem()
+        mainMenu.addItem(editItem)
+        let edit = NSMenu(title: "Edit")
+        editItem.submenu = edit
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        NSApp.mainMenu = mainMenu
     }
 
     private func render() {
