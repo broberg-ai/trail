@@ -87,6 +87,13 @@ export const CONNECTORS = {
     status: 'live',
     hint: 'A web page clipped from the browser via the Trail Web Clipper extension (F111).',
   },
+  // F201 — ambient capture. status flips to 'live' when F201.4 lands the
+  // agent→gate→queue path end-to-end.
+  'trail-ambient-capture': {
+    label: 'Ambient Capture',
+    status: 'roadmap',
+    hint: 'Passive macOS capture (app/screen/audio) gated + redacted on-device by the Trail Ambient agent (F201).',
+  },
   slack: { label: 'Slack',   status: 'roadmap', hint: 'Not yet wired — planned ingest of channel messages into Trail.' },
   discord: { label: 'Discord', status: 'roadmap', hint: 'Not yet wired — planned ingest of server messages into Trail.' },
   notion: { label: 'Notion',  status: 'roadmap', hint: 'Not yet wired — planned ingest of Notion pages into Trail.' },
@@ -129,6 +136,9 @@ export const EXTERNAL_CONNECTORS: readonly ConnectorId[] = [
   'chat',
   'api',
   'web-clipper',
+  // F201 — ambient candidates originate from live capture (a call, a screen),
+  // never an uploaded Source document, so Source-citation lint must skip them.
+  'trail-ambient-capture',
 ];
 
 export function isExternalConnector(id: string | null | undefined): boolean {
