@@ -10,14 +10,14 @@ struct NeuronHit: Identifiable {
     let path: String
     let filename: String
     let highlight: String
-    var slug: String { filename.replacingOccurrences(of: ".md", with: "", options: [.caseInsensitive, .anchored]) }
+    var slug: String { filename.hasSuffix(".md") ? String(filename.dropLast(3)) : filename }
 }
 
 struct Citation: Identifiable {
     let id: String          // documentId
     let path: String
     let filename: String
-    var slug: String { filename.replacingOccurrences(of: ".md", with: "", options: [.caseInsensitive, .anchored]) }
+    var slug: String { filename.hasSuffix(".md") ? String(filename.dropLast(3)) : filename }
 }
 
 struct ChatAnswer {
