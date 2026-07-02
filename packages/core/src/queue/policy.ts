@@ -1,4 +1,5 @@
 import type { QueueCandidate, QueueCandidateKind } from '@trail/shared';
+import { AMBIENT_CONNECTOR } from '@trail/shared';
 
 /**
  * F19 — Auto-approval policy.
@@ -45,12 +46,28 @@ const TRUSTED_KINDS: QueueCandidateKind[] = [
 
 const DEFAULT_THRESHOLD = 0.8;
 
+/** F201.8 — per-KB auto-approval config passed in at the call site. */
+export interface AutoApproveKbPolicy {
+  /** null/undefined = OFF (ship-dark). A number in [0,1] arms ambient auto-approve. */
+  autoApproveThreshold?: number | null;
+}
+
 /** Read the F182.5 `autoSupersede` flag out of a candidate's metadata JSON. */
 function autoSupersedeFlag(candidate: QueueCandidate): boolean {
   if (!candidate.metadata) return false;
   try {
     const m = JSON.parse(candidate.metadata) as { autoSupersede?: boolean };
     return m?.autoSupersede === true;
+  } catch {
+    return false;
+  }
+}
+
+/** F201.8 — is this an ambient-capture candidate? (metadata.connector) */
+function isAmbientCandidate(candidate: QueueCandidate): boolean {
+  if (!candidate.metadata) return false;
+  try {
+    return (JSON.parse(candidate.metadata) as { connector?: string }).connector === AMBIENT_CONNECTOR;
   } catch {
     return false;
   }
@@ -64,7 +81,21 @@ function threshold(): number {
   return n;
 }
 
-export function shouldAutoApprove(candidate: QueueCandidate): boolean {
+export function shouldAutoApprove(candidate: QueueCandidate, kb?: AutoApproveKbPolicy): boolean {
+  // F201.8 — per-KB ambient auto-approval, evaluated FIRST because it's the
+  // only path that bypasses the createdBy block below. An ambient capture is a
+  // MACHINE capture (the agent + F201.11 distill decided what's knowledge), so
+  // the "humans never auto-approve" rule — which guards a curator's own
+  // submit-click — does not apply. When the KB opts in (threshold set), an
+  // ambient candidate at/above the threshold auto-approves unattended;
+  // distilled knowledge (conf 0.8) becomes a Neuron, noise (conf 0) stays
+  // pending. When the threshold is null (default), this is skipped entirely —
+  // ship-dark, ambient falls through to the createdBy block and stays pending.
+  const kbThreshold = kb?.autoApproveThreshold ?? null;
+  if (kbThreshold !== null && isAmbientCandidate(candidate)) {
+    return candidate.confidence != null && candidate.confidence >= kbThreshold;
+  }
+
   // Humans never auto-approve. If a curator wants a page in, they click it.
   if (candidate.createdBy) return false;
 

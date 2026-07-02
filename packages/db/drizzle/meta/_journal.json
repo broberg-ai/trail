@@ -288,6 +288,13 @@
       "when": 1780300400000,
       "tag": "0040_ambient_device_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1780300500000,
+      "tag": "0041_ambient_auto_approve",
+      "breakpoints": true
     }
   ]
 }

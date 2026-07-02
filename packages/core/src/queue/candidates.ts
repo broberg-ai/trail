@@ -429,7 +429,15 @@ export async function createCandidate(
     await db.select().from(queueCandidates).where(eq(queueCandidates.id, id)).get(),
   );
 
-  if (shouldAutoApprove(candidate)) {
+  // F201.8 — load this KB's auto-approval threshold (null = off) so the policy
+  // can decide whether an ambient capture auto-approves unattended.
+  const kbPolicy = await db
+    .select({ autoApproveThreshold: knowledgeBases.autoApproveThreshold })
+    .from(knowledgeBases)
+    .where(eq(knowledgeBases.id, candidate.knowledgeBaseId))
+    .get();
+
+  if (shouldAutoApprove(candidate, { autoApproveThreshold: kbPolicy?.autoApproveThreshold ?? null })) {
     // F182.5 — a supersede candidate carries no 'approve' action (its effect
     // is 'supersede'); auto-approval resolves that action instead. Everything
     // else uses the legacy default 'approve' action.

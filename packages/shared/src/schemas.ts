@@ -70,6 +70,10 @@ export const UpdateKBSchema = z.object({
   // omit to leave unchanged. CHECK constraint at the DB layer
   // enforces 1..90; this Zod range mirrors that for early rejection.
   lintScheduleDays: z.number().int().min(1).max(90).nullable().optional(),
+  // F201.8 — per-KB auto-approval threshold for ambient captures. null clears
+  // (OFF — captures stay pending); a number in [0,1] arms it. Omit to leave
+  // unchanged.
+  autoApproveThreshold: z.number().min(0).max(1).nullable().optional(),
 });
 
 // ── Sources & Wiki Pages ──────────────────────────────────────────────────────

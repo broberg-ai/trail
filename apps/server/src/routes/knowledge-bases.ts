@@ -256,6 +256,11 @@ kbRoutes.patch('/knowledge-bases/:id', async (c) => {
   if (body.lintScheduleDays !== undefined) {
     updates.lintScheduleDays = body.lintScheduleDays;
   }
+  // F201.8 — per-KB ambient auto-approval threshold. null clears (OFF);
+  // a number in [0,1] arms it.
+  if (body.autoApproveThreshold !== undefined) {
+    updates.autoApproveThreshold = body.autoApproveThreshold;
+  }
 
   await trail.db.update(knowledgeBases).set(updates).where(eq(knowledgeBases.id, kbId)).run();
 

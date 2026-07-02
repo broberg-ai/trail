@@ -73,6 +73,13 @@ export const knowledgeBases = sqliteTable(
     contradictionLintEnabled: integer('contradiction_lint_enabled', { mode: 'boolean' })
       .notNull()
       .default(true),
+    // F201.8 — per-KB auto-approval threshold. NULL (default) = OFF: current
+    // behaviour, ambient captures stay pending. When set to a number in [0,1],
+    // AMBIENT candidates with confidence >= threshold auto-approve unattended
+    // (distilled knowledge = 0.8 → Neuron; noise = 0 → stays pending). Ambient
+    // is a machine capture, so it bypasses the "humans never auto-approve"
+    // rule; non-ambient candidates are unaffected. Ship-dark by default.
+    autoApproveThreshold: real('auto_approve_threshold'),
     // F141 — per-KB access-telemetry toggle. On by default; curator can
     // flip off per Trail if they don't want individual reads recorded.
     // Off → recordAccess is a no-op + rollup skips the KB.
