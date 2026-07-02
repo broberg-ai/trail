@@ -14,7 +14,7 @@ final class HudModel: ObservableObject {
     /// denied); `idle` when ready (tap → record); `recording` (tap → stop +
     /// transcribe on-device). Discoverable + reliable-prompt companion to the
     /// eyes-free ⌃⌥R global hotkey.
-    enum MicState { case needsPermission, idle, recording }
+    enum MicState { case needsPermission, idle, recording, transcribing }
     @Published var mode: Mode = .search
     @Published var query = ""
     @Published var loading = false
@@ -51,6 +51,13 @@ final class HudModel: ObservableObject {
                 await MainActor.run { self.mic = ok ? .recording : .needsPermission }
             }
         case .recording:
+            // Stop pressed. large-v3 transcription of a long clip takes several
+            // seconds; flip to .transcribing SYNCHRONOUSLY so the button shows a
+            // spinner immediately. Without it the button stayed red during the
+            // wait, so the user pressed stop again ("det kommer langt tid efter",
+            // Christian 2026-07-03) — and the re-entry overwrote the real
+            // transcript with an empty one. This state also blocks that re-entry.
+            mic = .transcribing
             Task {
                 let text = await AudioWatcher.shared.finishAndTranscribe()
                 await MainActor.run {
@@ -58,6 +65,8 @@ final class HudModel: ObservableObject {
                     self.transcript = text   // "" → "no speech" hint in the banner
                 }
             }
+        case .transcribing:
+            break   // ignore taps while a transcription is in flight
         }
     }
 
@@ -85,7 +94,9 @@ final class HudModel: ObservableObject {
         query = ""; hits = []; answer = nil; ran = false; loading = false
         transcript = nil
         // Re-read the grant on every open (it may have been granted since).
-        if mic != .recording { mic = AudioWatcher.isMicGranted ? .idle : .needsPermission }
+        if mic != .recording && mic != .transcribing {
+            mic = AudioWatcher.isMicGranted ? .idle : .needsPermission
+        }
     }
 }
 
@@ -117,7 +128,7 @@ struct HudView: View {
         VStack(spacing: 0) {
             header
             Rectangle().fill(Palette.hairline).frame(height: 1)
-            if model.mic == .recording || model.transcript != nil { audioBanner }
+            if model.mic == .recording || model.mic == .transcribing || model.transcript != nil { audioBanner }
             content
             footer
         }
@@ -167,12 +178,17 @@ struct HudView: View {
                 Circle()
                     .fill(model.mic == .recording ? Color.red.opacity(0.16) : Color.white.opacity(0.05))
                     .frame(width: 34, height: 34)
-                Image(systemName: micSymbol)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(micColor)
+                if model.mic == .transcribing {
+                    ProgressView().controlSize(.small).tint(Palette.accent)
+                } else {
+                    Image(systemName: micSymbol)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(micColor)
+                }
             }
         }
         .buttonStyle(.plain)
+        .disabled(model.mic == .transcribing)
         .help(micHelp)
     }
 
@@ -181,6 +197,7 @@ struct HudView: View {
         case .needsPermission: return "mic.slash"
         case .idle:            return "mic.fill"
         case .recording:       return "stop.fill"
+        case .transcribing:    return "stop.fill"   // hidden behind the spinner
         }
     }
     private var micColor: Color {
@@ -188,6 +205,7 @@ struct HudView: View {
         case .needsPermission: return Palette.fgMuted
         case .idle:            return Palette.accent
         case .recording:       return .red
+        case .transcribing:    return Palette.accent
         }
     }
     private var micHelp: String {
@@ -195,6 +213,7 @@ struct HudView: View {
         case .needsPermission: return "Giv adgang til mikrofonen for at optage tale"
         case .idle:            return "Optag tale (⌃⌥R)"
         case .recording:       return "Stop og transskribér"
+        case .transcribing:    return "Transskriberer…"
         }
     }
 
@@ -209,6 +228,11 @@ struct HudView: View {
                     }
                     .onDisappear { pulse = false }
                 Text("Optager… tryk mikrofonen igen for at stoppe")
+                    .foregroundColor(Palette.fg).font(.system(size: 13))
+                Spacer()
+            } else if model.mic == .transcribing {
+                ProgressView().controlSize(.small).tint(Palette.accent)
+                Text("Transskriberer med large-v3… (et øjeblik)")
                     .foregroundColor(Palette.fg).font(.system(size: 13))
                 Spacer()
             } else if let t = model.transcript {

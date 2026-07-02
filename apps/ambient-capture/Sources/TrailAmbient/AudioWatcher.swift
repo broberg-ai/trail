@@ -57,6 +57,7 @@ actor AudioWatcher {
         }
         let input = engine.inputNode
         let hwFormat = input.outputFormat(forBus: 0)
+        Task { @MainActor in EventLog.shared.log(kind: "audio_hw_format sr=\(Int(hwFormat.sampleRate)) ch=\(hwFormat.channelCount)") }
         guard let converter = AVAudioConverter(from: hwFormat, to: Self.mono16k) else {
             Task { @MainActor in EventLog.shared.log(kind: "audio_watcher_no_converter") }
             return false
@@ -87,16 +88,32 @@ actor AudioWatcher {
         engine.inputNode.removeTap(onBus: 0)
         let samples = buffer
         buffer.removeAll(keepingCapacity: false)
-        let segments = vad.segments(samples)
-        guard !segments.isEmpty else { return "" }
-        var parts: [String] = []
-        for seg in segments {
-            let slice = Array(samples[seg.startSample ..< min(seg.endSample, samples.count)])
-            if let text = try? await Whisper.shared.transcribe(samples: slice), !text.isEmpty {
-                parts.append(text)
-            }
+
+        // Diagnostics: how much audio did we capture, and how loud? This tells
+        // "empty buffer" (no capture) apart from "VAD found no speech" apart from
+        // "transcription failed" when a capture comes back blank.
+        let peak = samples.reduce(Float(0)) { max($0, abs($1)) }
+        let secs = Double(samples.count) / 16_000.0
+
+        let segCount = vad.segments(samples).count
+        Task { @MainActor in
+            EventLog.shared.log(kind: "audio_capture_debug secs=\(String(format: "%.1f", secs)) peak=\(String(format: "%.3f", peak)) segs=\(segCount)")
         }
-        return parts.joined(separator: " ")
+        // Deliberate capture: transcribe the WHOLE buffer in ONE pass, NOT per
+        // VAD-segment. WhisperKit pads EVERY call to a 30s encoder window, so N
+        // short segments = N full 30s encoder passes — that's why large-v3 felt
+        // slow (7 segments → 7×30s). One pass over the whole clip (WhisperKit
+        // windows long audio internally) is far fewer passes → much faster, SAME
+        // model + quality. VAD/peak is now just the silence gate: return "" only
+        // when nothing was said, so pure silence doesn't hit the model at all.
+        guard segCount > 0 || (samples.count >= 8_000 && peak > 0.02) else { return "" }
+        do {
+            return try await Whisper.shared.transcribe(samples: samples)
+        } catch {
+            let msg = error.localizedDescription
+            Task { @MainActor in EventLog.shared.log(kind: "audio_transcribe_error \(msg)") }
+            return ""
+        }
     }
 
     /// Feed resampled mono frames through the deny-list guard into the buffer,

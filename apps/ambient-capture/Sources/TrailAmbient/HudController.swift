@@ -4,6 +4,7 @@
 // toggles it; Escape or clicking a result closes it.
 import AppKit
 import SwiftUI
+import Carbon.HIToolbox
 
 /// NSPanel that accepts key focus despite being borderless — required for
 /// the SwiftUI TextField to receive input.
@@ -38,13 +39,32 @@ final class HudController {
     private var panel: KeyablePanel?
     private let model = HudModel()
     private var hotKey: HotKey?
+    private var captureHotKey: HotKey?
     private var escMonitor: Any?
 
     init() {
         hotKey = HotKey { [weak self] in self?.toggle() }
+        // ⌃⌥R "optag nu" — open the HUD and toggle a voice capture, so the hotkey
+        // gives the SAME visible feedback as the in-HUD mic button (Christian
+        // 2026-07-03: "åbn HUD'en automatisk ved ⌃⌥R"), instead of the old
+        // headless path that wrote to a log file with no on-screen feedback.
+        captureHotKey = HotKey(
+            keyCode: UInt32(kVK_ANSI_R),
+            modifiers: UInt32(controlKey | optionKey),
+            id: 2
+        ) { [weak self] in self?.captureToggle() }
     }
 
     func toggle() { (panel?.isVisible ?? false) ? hide() : show() }
+
+    /// ⌃⌥R — ensure the HUD is up, then start/stop a capture through the SAME mic
+    /// flow the button uses (spinner while transcribing, transcript in the
+    /// banner). First press records; second press stops + transcribes.
+    func captureToggle() {
+        guard DeviceAuth.loadToken() != nil else { NSSound.beep(); return }
+        if !(panel?.isVisible ?? false) { show() }
+        model.micTapped()
+    }
 
     private func show() {
         guard DeviceAuth.loadToken() != nil else {
