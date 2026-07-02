@@ -240,9 +240,14 @@ async function lookupBySeqId(
 // raw user string can explode the parser. We tokenise on whitespace, strip
 // non-word chars, and OR the terms together as phrase-prefix searches.
 function sanitizeFtsQuery(raw: string): string {
+  // Split on whitespace AND punctuation. Stripping punctuation *within* a term
+  // glued "TV-lyd" → "TVlyd", which never matches: FTS indexes the document's
+  // "TV-lyd" as two tokens "tv"+"lyd", so the query token "tvlyd*" hits nothing
+  // and a hyphenated search silently returns zero. Splitting instead yields
+  // "TV"* OR "lyd"* → matches. (The raw `-` must never reach FTS5, where it is
+  // the NOT operator.)
   const terms = raw
-    .split(/\s+/)
-    .map((t) => t.replace(/[^\p{L}\p{N}]/gu, ''))
+    .split(/[^\p{L}\p{N}]+/u)
     .filter((t) => t.length > 0)
     .map((t) => `"${t}"*`);
   return terms.join(' OR ');

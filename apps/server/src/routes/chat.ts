@@ -920,21 +920,18 @@ const FTS_STOPWORDS = new Set([
 ]);
 
 function sanitizeFtsQuery(raw: string): string {
-  const terms = raw
-    .split(/\s+/)
-    .map((t) => t.replace(/[^\p{L}\p{N}]/gu, ''))
+  // Split on whitespace AND punctuation: stripping punctuation *within* a term
+  // glued "TV-lyd" → "TVlyd", which never matches (FTS indexes it as two tokens
+  // "tv"+"lyd"), so hyphenated terms silently retrieved nothing. See search.ts.
+  const split = (s: string) => s.split(/[^\p{L}\p{N}]+/u).filter((t) => t.length > 0);
+  const terms = split(raw)
     .filter((t) => t.length >= 2 && !FTS_STOPWORDS.has(t.toLowerCase()))
     .map((t) => `"${t}"*`);
   // Fall back to the full token set if stopword-stripping emptied the query
   // (e.g. a question made entirely of function words) so we never widen to an
   // empty MATCH (which would return zero context for an otherwise-answerable Q).
   if (terms.length === 0) {
-    return raw
-      .split(/\s+/)
-      .map((t) => t.replace(/[^\p{L}\p{N}]/gu, ''))
-      .filter((t) => t.length > 0)
-      .map((t) => `"${t}"*`)
-      .join(' OR ');
+    return split(raw).map((t) => `"${t}"*`).join(' OR ');
   }
   return terms.join(' OR ');
 }
