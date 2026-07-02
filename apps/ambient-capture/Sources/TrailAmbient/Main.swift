@@ -10,6 +10,9 @@ struct TrailAmbientMain {
         if CommandLine.arguments.contains("--selftest") {
             SelfTest.run()
         }
+        if CommandLine.arguments.contains("--ocrtest") {
+            ScreenOCRTest.run()
+        }
         if let i = CommandLine.arguments.firstIndex(of: "--genicon"),
            i + 1 < CommandLine.arguments.count {
             IconGen.write(toDir: CommandLine.arguments[i + 1])

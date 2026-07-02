@@ -59,7 +59,12 @@ function parseLine(line: string): RelayEvent | null {
   try {
     const obj = JSON.parse(line) as Record<string, unknown>;
     if (typeof obj.app !== 'string' || typeof obj.ts !== 'string') return null; // status events
-    return { app: obj.app, ts: obj.ts, windowTitle: typeof obj.windowTitle === 'string' ? obj.windowTitle : undefined };
+    return {
+      app: obj.app,
+      ts: obj.ts,
+      windowTitle: typeof obj.windowTitle === 'string' ? obj.windowTitle : undefined,
+      screenText: typeof obj.screenText === 'string' ? obj.screenText : undefined,
+    };
   } catch {
     return null;
   }

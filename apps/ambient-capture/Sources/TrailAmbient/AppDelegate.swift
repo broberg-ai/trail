@@ -31,6 +31,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // TCC: prompt for Accessibility on first run — required for window
         // titles via AXUIElement. The system remembers the answer.
         FocusWatcher.promptForAccessibilityIfNeeded()
+        // TCC: prompt for Screen Recording (F201.5 screen OCR). Ships dark
+        // until granted — capture returns nil, window titles still flow.
+        ScreenWatcher.requestScreenRecordingIfNeeded()
         focusWatcher.start()
     }
 
@@ -140,6 +143,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item.isEnabled = false
             settingsMenu.addItem(item)
         }
+        // F201.5 — screen-OCR grant status (a visible recording-indicator, and
+        // a one-glance diagnosis of a missing Screen Recording permission).
+        settingsMenu.addItem(.separator())
+        let ocrStatus = NSMenuItem(
+            title: ScreenWatcher.isScreenRecordingGranted
+                ? "Skærm-OCR: aktiv (on-device)"
+                : "Skærm-OCR: kræver Skærmoptagelse-tilladelse",
+            action: nil, keyEquivalent: ""
+        )
+        ocrStatus.isEnabled = false
+        settingsMenu.addItem(ocrStatus)
         if deviceAuth.isConnected {
             settingsMenu.addItem(.separator())
             let disconnect = NSMenuItem(
@@ -198,4 +212,12 @@ enum Settings {
     /// Default per-app deny-list (F201 privacy rule). Enforcement happens in
     /// the gate (F201.4); user-editable list is F201.4+ scope.
     static let denyList = ["1Password", "Banking", "Messages", "Signal"]
+
+    /// Same case-insensitive substring match as the TS relay's isDenyListed —
+    /// used by ScreenWatcher (F201.5) to skip capturing deny-listed apps
+    /// BEFORE any frame is grabbed, so their content never reaches the log.
+    static func isDenyListed(_ app: String) -> Bool {
+        let lower = app.lowercased()
+        return denyList.contains { lower.contains($0.lowercased()) }
+    }
 }

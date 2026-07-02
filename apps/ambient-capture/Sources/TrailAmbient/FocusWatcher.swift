@@ -11,6 +11,10 @@ import ApplicationServices
 struct FocusEvent: Codable {
     let app: String
     let windowTitle: String?
+    /// F201.5 — on-device screen OCR of the frontmost window (nil when there's
+    /// no Screen Recording grant, the app is deny-listed, or the window is
+    /// unchanged). The frame never leaves the machine; only this text does.
+    let screenText: String?
     let ts: String
 }
 
@@ -60,9 +64,15 @@ final class FocusWatcher {
         debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
             Task { @MainActor in
                 let title = Self.focusedWindowTitle(pid: pid)
+                // F201.5 — enrich the event with on-device screen OCR. pid 0 is
+                // the test hook (no real window). The frame is captured, OCR'd
+                // and discarded entirely on-device; only `screenText` rides
+                // along. nil when no grant / deny-listed / window unchanged.
+                let screenText = pid == 0 ? nil : await ScreenWatcher.shared.capture(app: name, pid: pid)
                 let event = FocusEvent(
                     app: name,
                     windowTitle: title,
+                    screenText: screenText,
                     ts: ISO8601DateFormatter().string(from: Date())
                 )
                 EventLog.shared.append(event)

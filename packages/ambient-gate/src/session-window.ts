@@ -10,6 +10,10 @@
 export interface RelayEvent {
   app: string;
   windowTitle?: string;
+  /** F201.5 — on-device Vision OCR of the frontmost window (redacted at
+   * candidate assembly). The frame itself never leaves the Mac; only this text
+   * reaches the relay. */
+  screenText?: string;
   ts: string;
 }
 
@@ -63,15 +67,26 @@ export function summarizeWindow(window: RelayEvent[]): WindowSummary {
   const start = window[0]!.ts;
   const end = window[window.length - 1]!.ts;
 
-  interface Run { app: string; titles: string[]; count: number }
+  interface Run { app: string; titles: string[]; screenTexts: string[]; count: number }
   const runs: Run[] = [];
+  /** Per-run OCR budget so a dense screen can't dominate the candidate. */
+  const OCR_BUDGET = 1500;
+  const addScreenText = (run: Run, text: string): void => {
+    const t = text.trim();
+    if (!t || run.screenTexts.includes(t)) return;
+    const used = run.screenTexts.reduce((n, s) => n + s.length, 0);
+    if (used < OCR_BUDGET) run.screenTexts.push(t.slice(0, OCR_BUDGET - used));
+  };
   for (const event of window) {
     const last = runs[runs.length - 1];
     if (last && last.app === event.app) {
       last.count++;
       if (event.windowTitle && !last.titles.includes(event.windowTitle)) last.titles.push(event.windowTitle);
+      if (event.screenText) addScreenText(last, event.screenText);
     } else {
-      runs.push({ app: event.app, titles: event.windowTitle ? [event.windowTitle] : [], count: 1 });
+      const run: Run = { app: event.app, titles: event.windowTitle ? [event.windowTitle] : [], screenTexts: [], count: 1 };
+      if (event.screenText) addScreenText(run, event.screenText);
+      runs.push(run);
     }
   }
 
@@ -79,9 +94,14 @@ export function summarizeWindow(window: RelayEvent[]): WindowSummary {
   for (const run of runs) byApp.set(run.app, (byApp.get(run.app) ?? 0) + run.count);
   const dominant = [...byApp.entries()].sort((a, b) => b[1] - a[1])[0]![0];
 
-  const lines = runs.map((run) =>
-    run.titles.length > 0 ? `- ${run.app}: ${run.titles.map((t) => `"${t}"`).join(', ')}` : `- ${run.app}`,
-  );
+  // Each app run: its distinct window titles, then the on-device OCR of what
+  // was on screen (the real knowledge signal). Redaction happens downstream in
+  // buildCandidateBody, so secrets in OCR text never reach the queue.
+  const lines = runs.flatMap((run) => {
+    const head = run.titles.length > 0 ? `- ${run.app}: ${run.titles.map((t) => `"${t}"`).join(', ')}` : `- ${run.app}`;
+    if (run.screenTexts.length === 0) return [head];
+    return [head, ...run.screenTexts.map((s) => `  Skærm: ${s.replace(/\n/g, ' ⏎ ')}`)];
+  });
 
   return {
     title: `Arbejdssession ${timeFmt(start)}–${timeFmt(end)} — ${dominant}`,

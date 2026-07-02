@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "bash scripts/bundle.sh",
+    "test": "bash scripts/test.sh",
     "typecheck": "echo '[ambient-capture] Swift target — type-checked by swift build'",
     "clean": "rm -rf .build dist .turbo"
   }
