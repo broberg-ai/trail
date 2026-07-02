@@ -47,7 +47,7 @@ enum SelfTest {
     /// AND contrasting (dark theme → light pixels, light theme → dark ones).
     private static func visiblePixels(appearance name: NSAppearance.Name) -> Int {
         guard let rep = NSBitmapImageRep(
-            bitmapDataPlanes: nil, pixelsWide: 18, pixelsHigh: 18, bitsPerSample: 8,
+            bitmapDataPlanes: nil, pixelsWide: 22, pixelsHigh: 22, bitsPerSample: 8,
             samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
             colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
         ) else { return 0 }
@@ -57,11 +57,11 @@ enum SelfTest {
             guard let ctx = NSGraphicsContext(bitmapImageRep: rep) else { return }
             NSGraphicsContext.saveGraphicsState()
             NSGraphicsContext.current = ctx
-            img.draw(in: NSRect(x: 0, y: 0, width: 18, height: 18))
+            img.draw(in: NSRect(x: 0, y: 0, width: 22, height: 22))
             NSGraphicsContext.restoreGraphicsState()
         }
-        for x in 0..<18 {
-            for y in 0..<18 {
+        for x in 0..<22 {
+            for y in 0..<22 {
                 guard let c = rep.colorAt(x: x, y: y), c.alphaComponent > 0.5 else { continue }
                 let luma = 0.299 * c.redComponent + 0.587 * c.greenComponent + 0.114 * c.blueComponent
                 // Contrast against the menubar: light bar (~1.0) needs dark

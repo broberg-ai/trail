@@ -70,13 +70,18 @@ enum TrailMark {
         return img
     }
 
-    /// Menubar status-item image, ~18px. The drawing handler runs every
-    /// time AppKit renders the image, under the menubar's appearance, so
+    /// Menubar drawing size — the menubar's full usable glyph height
+    /// (22 pt; the bar itself is 24). Christian 2026-07-02: "brug max
+    /// størrelsen" — 18 px drowned next to neighbouring items.
+    static let menubarSize: CGFloat = 22
+
+    /// Menubar status-item image. The drawing handler runs every time
+    /// AppKit renders the image, under the menubar's appearance, so
     /// labelColor inverts with the theme (Web Clipper pattern) while the
     /// accent core stays orange. Non-template on purpose — a template
     /// would flatten the orange core to the tint colour.
     static func menubarImage(filled: Bool) -> NSImage {
-        let img = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { bounds in
+        let img = NSImage(size: NSSize(width: menubarSize, height: menubarSize), flipped: false) { bounds in
             draw(in: bounds, filled: filled, ringColor: .labelColor)
             return true
         }
