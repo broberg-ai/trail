@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private let focusWatcher = FocusWatcher()
     private let deviceAuth = DeviceAuth()
+    private let hud = HudController()
 
     private var paused = false {
         didSet { render() }
@@ -104,6 +105,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         menu.addItem(.separator())
 
+        if deviceAuth.isConnected {
+            let lookup = NSMenuItem(title: "Slå op i Trail…", action: #selector(openHud), keyEquivalent: "t")
+            lookup.keyEquivalentModifierMask = [.control, .option]
+            lookup.target = self
+            menu.addItem(lookup)
+            menu.addItem(.separator())
+        }
+
         let pause = NSMenuItem(
             title: paused ? "Genoptag capture" : "Pause capture",
             action: #selector(togglePause), keyEquivalent: "p"
@@ -163,6 +172,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ))
         return s
     }
+
+    @objc private func openHud() { hud.toggle() }
 
     @objc private func togglePause() {
         paused.toggle()

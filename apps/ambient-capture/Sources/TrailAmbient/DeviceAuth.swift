@@ -25,8 +25,8 @@ enum ConnectState: Equatable {
 final class DeviceAuth {
     private static let connectBase = "https://app.trailmem.com"
     private static let engineBase = "https://engine-001.trailmem.com"
-    private static let keychainService = "com.broberg.trail-ambient"
-    private static let keychainAccount = "trail-api-token"
+    private nonisolated static let keychainService = "com.broberg.trail-ambient"
+    private nonisolated static let keychainAccount = "trail-api-token"
 
     private var pollTask: Task<Void, Never>?
 
@@ -172,7 +172,9 @@ final class DeviceAuth {
         SecItemAdd(query as CFDictionary, nil)
     }
 
-    static func loadToken() -> String? {
+    // nonisolated: a pure Keychain read with no actor state, so the HUD's
+    // networking (off the main actor) can read the token directly.
+    nonisolated static func loadToken() -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
