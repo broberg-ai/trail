@@ -31,3 +31,14 @@ export {
   type PostCandidateOptions,
   type PostCandidateResult,
 } from './candidate.js';
+
+export {
+  windowEvents,
+  summarizeWindow,
+  DEFAULT_WINDOW_OPTIONS,
+  type RelayEvent,
+  type WindowOptions,
+  type WindowSummary,
+} from './session-window.js';
+
+export { isDenyListed, DENY_LIST } from './relay.js';

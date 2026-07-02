@@ -87,11 +87,11 @@ export const CONNECTORS = {
     status: 'live',
     hint: 'A web page clipped from the browser via the Trail Web Clipper extension (F111).',
   },
-  // F201 — ambient capture. status flips to 'live' when F201.4 lands the
-  // agent→gate→queue path end-to-end.
+  // F201 — ambient capture. Live since F201.4: agent→relay→gate→queue path
+  // proven end-to-end (verify-f201-4-relay-e2e.ts, 10/10).
   'trail-ambient-capture': {
     label: 'Ambient Capture',
-    status: 'roadmap',
+    status: 'live',
     hint: 'Passive macOS capture (app/screen/audio) gated + redacted on-device by the Trail Ambient agent (F201).',
   },
   slack: { label: 'Slack',   status: 'roadmap', hint: 'Not yet wired — planned ingest of channel messages into Trail.' },
