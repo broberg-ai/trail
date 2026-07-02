@@ -52,7 +52,7 @@ final class HudController {
 
     private func makePanel() -> KeyablePanel {
         let panel = KeyablePanel(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 120),
+            contentRect: NSRect(x: 0, y: 0, width: 688, height: 140),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered, defer: false
         )
@@ -61,15 +61,14 @@ final class HudController {
         panel.hidesOnDeactivate = false
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.hasShadow = false // the SwiftUI card draws its own shadow
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        let host = NSHostingView(rootView: HudView(model: model, onClose: { [weak self] in self?.hide() }))
-        host.frame = panel.contentView?.bounds ?? .zero
-        host.autoresizingMask = [.width, .height]
-        panel.contentView?.addSubview(host)
-        // Size the panel to the SwiftUI content.
-        host.setFrameSize(host.fittingSize)
-        panel.setContentSize(host.fittingSize)
+        // NSHostingController auto-resizes the window to the SwiftUI content,
+        // so the panel GROWS as results arrive instead of clipping them
+        // (the "der sker ikke noget" bug — a fixed-size panel hid the hits).
+        let controller = NSHostingController(rootView: HudView(model: model, onClose: { [weak self] in self?.hide() }))
+        controller.sizingOptions = [.preferredContentSize]
+        panel.contentViewController = controller
         return panel
     }
 

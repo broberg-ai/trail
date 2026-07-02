@@ -14,6 +14,10 @@ struct TrailAmbientMain {
            i + 1 < CommandLine.arguments.count {
             IconGen.write(toDir: CommandLine.arguments[i + 1])
         }
+        if let i = CommandLine.arguments.firstIndex(of: "--previewhud"),
+           i + 1 < CommandLine.arguments.count {
+            HudPreview.render(toDir: CommandLine.arguments[i + 1])
+        }
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
         let delegate = AppDelegate()

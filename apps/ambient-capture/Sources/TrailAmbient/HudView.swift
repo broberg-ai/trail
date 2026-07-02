@@ -1,7 +1,8 @@
-// F201.9 — the HUD content. A search field + Søg/Spørg mode toggle over the
-// user's own Trail. Enter runs it; results are Neuron hits (Søg) or a
-// synthesised answer + citations (Spørg). Clicking any result opens the
-// Neuron in the browser. Trail palette: warm bg, #e8a87c accent.
+// F201.9 — the HUD content. A Raycast/Spotlight-style launcher over the
+// user's own Trail, in the Trail palette (warm near-black + #e8a87c accent).
+// Søg → FTS Neuron hits; Spørg → synthesised answer + cited Neurons. Custom
+// mode toggle (NO native segmented control — house rule). Enter runs it;
+// clicking a result opens it in the browser.
 import SwiftUI
 
 @MainActor
@@ -37,111 +38,227 @@ final class HudModel: ObservableObject {
     func reset() { query = ""; hits = []; answer = nil; ran = false; loading = false }
 }
 
+// Trail palette.
+private enum Palette {
+    static let accent = Color(red: 0xE8/255.0, green: 0xA8/255.0, blue: 0x7C/255.0)
+    static let bgTop = Color(red: 0.13, green: 0.115, blue: 0.10)
+    static let bgBottom = Color(red: 0.09, green: 0.08, blue: 0.072)
+    static let card = Color.white.opacity(0.045)
+    static let cardHover = Color.white.opacity(0.09)
+    static let hairline = Color.white.opacity(0.08)
+    static let fg = Color(red: 0.96, green: 0.94, blue: 0.91)
+    static let fgMuted = Color.white.opacity(0.55)
+    static let fgSubtle = Color.white.opacity(0.32)
+}
+
 struct HudView: View {
     @ObservedObject var model: HudModel
     var onClose: () -> Void
+    /// When set (off-screen preview only), the query renders as static text
+    /// instead of the live TextField — ImageRenderer can't rasterize an
+    /// editable field (it shows a yellow placeholder). No effect at runtime.
+    var previewText: String? = nil
     @FocusState private var fieldFocused: Bool
-
-    private let accent = Color(red: 0xE8/255.0, green: 0xA8/255.0, blue: 0x7C/255.0)
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider().overlay(Color.white.opacity(0.08))
+            Rectangle().fill(Palette.hairline).frame(height: 1)
             content
+            footer
         }
-        .frame(width: 560)
-        .background(Color(red: 0.10, green: 0.09, blue: 0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.10), lineWidth: 1))
+        .frame(width: 640)
+        .background(
+            LinearGradient(colors: [Palette.bgTop, Palette.bgBottom], startPoint: .top, endPoint: .bottom)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
+        .shadow(color: .black.opacity(0.55), radius: 40, y: 18)
+        .padding(24)
         .onAppear { fieldFocused = true }
     }
 
+    // MARK: Header — mark + field + custom mode toggle
+
     private var header: some View {
-        HStack(spacing: 10) {
-            Circle().stroke(accent, lineWidth: 2).frame(width: 15, height: 15)
-                .overlay(Circle().fill(accent).frame(width: 5, height: 5))
-            TextField(model.mode == .search ? "Søg i din Trail…" : "Spørg din Trail…", text: $model.query)
-                .textFieldStyle(.plain)
-                .font(.system(size: 16))
-                .foregroundColor(.white)
-                .focused($fieldFocused)
-                .onSubmit { model.run() }
-            Picker("", selection: $model.mode) {
-                ForEach(HudModel.Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+        HStack(spacing: 13) {
+            TrailMarkView(size: 22)
+            if let preview = previewText {
+                Text(preview.isEmpty ? (model.mode == .search ? "Søg i din Trail…" : "Spørg din Trail…") : preview)
+                    .font(.system(size: 19))
+                    .foregroundColor(preview.isEmpty ? Palette.fgSubtle : Palette.fg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                TextField("", text: $model.query, prompt: Text(model.mode == .search ? "Søg i din Trail…" : "Spørg din Trail…").foregroundColor(Palette.fgSubtle))
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 19, weight: .regular))
+                    .foregroundColor(Palette.fg)
+                    .focused($fieldFocused)
+                    .onSubmit { model.run() }
             }
-            .pickerStyle(.segmented)
-            .frame(width: 130)
-            .onChange(of: model.mode) { _ in model.hits = []; model.answer = nil; model.ran = false }
+            modeToggle
         }
-        .padding(14)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 18)
     }
+
+    private var modeToggle: some View {
+        HStack(spacing: 3) {
+            ForEach(HudModel.Mode.allCases, id: \.self) { m in
+                let on = model.mode == m
+                Button {
+                    model.mode = m; model.hits = []; model.answer = nil; model.ran = false
+                } label: {
+                    Text(m.rawValue)
+                        .font(.system(size: 12.5, weight: on ? .semibold : .medium))
+                        .foregroundColor(on ? Color(red: 0.10, green: 0.08, blue: 0.06) : Palette.fgMuted)
+                        .padding(.horizontal, 13).padding(.vertical, 6)
+                        .background(on ? Palette.accent : Color.clear)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(3)
+        .background(Color.white.opacity(0.05))
+        .clipShape(Capsule())
+    }
+
+    // MARK: Content
 
     @ViewBuilder private var content: some View {
         if model.loading {
-            row { ProgressView().controlSize(.small); Text("Slår op…").foregroundColor(.white.opacity(0.6)) }
+            centered { ProgressView().controlSize(.small).tint(Palette.accent); Text("Slår op…").foregroundColor(Palette.fgMuted) }
         } else if model.mode == .search {
             if model.ran && model.hits.isEmpty {
-                empty("Ingen Neuroner matcher.")
+                centered { hintMark("Ingen Neuroner matcher endnu.") }
+            } else if model.hits.isEmpty {
+                centered { hintMark("Skriv og tryk ↵ for at søge i din viden.") }
             } else {
-                ScrollView { LazyVStack(spacing: 6) {
-                    ForEach(model.hits) { hit in hitRow(hit) }
-                }.padding(10) }.frame(maxHeight: 380)
+                scroll(maxHeight: 400) { VStack(spacing: 7) { ForEach(model.hits) { hitRow($0) } }.padding(14) }
             }
         } else {
             if let a = model.answer {
-                ScrollView { VStack(alignment: .leading, spacing: 12) {
-                    Text(a.answer).foregroundColor(.white).font(.system(size: 14)).textSelection(.enabled)
+                scroll(maxHeight: 420) { VStack(alignment: .leading, spacing: 14) {
+                    Text(a.answer).foregroundColor(Palette.fg).font(.system(size: 14.5)).lineSpacing(3).textSelection(.enabled)
                     if !a.citations.isEmpty {
-                        Text("Kilder").font(.system(size: 11, weight: .semibold)).foregroundColor(.white.opacity(0.5))
-                        ForEach(a.citations) { c in citationRow(c) }
+                        Text("KILDER").font(.system(size: 10.5, weight: .semibold)).tracking(0.8).foregroundColor(Palette.fgSubtle)
+                        VStack(alignment: .leading, spacing: 5) { ForEach(a.citations) { citationRow($0) } }
                     }
-                }.padding(14) }.frame(maxHeight: 400)
+                }.padding(18) }
             } else if model.ran {
-                empty("Intet svar.")
+                centered { hintMark("Intet svar.") }
             } else {
-                empty("Tryk Enter for at spørge.")
+                centered { hintMark("Stil et spørgsmål, tryk ↵ — Trail svarer med kilder.") }
             }
         }
     }
 
     private func hitRow(_ hit: NeuronHit) -> some View {
-        Button { open(slug: hit.slug); onClose() } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text(hit.title).foregroundColor(.white).font(.system(size: 14, weight: .medium)).lineLimit(1)
-                    Spacer()
-                    Text(hit.path).foregroundColor(.white.opacity(0.35)).font(.system(size: 10, design: .monospaced)).lineLimit(1)
+        HoverButton { open(slug: hit.slug); onClose() } content: { hovering in
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(hit.title).foregroundColor(Palette.fg).font(.system(size: 14.5, weight: .medium)).lineLimit(1)
+                    Spacer(minLength: 12)
+                    Text(hit.path).foregroundColor(Palette.fgSubtle).font(.system(size: 10.5, design: .monospaced)).lineLimit(1)
                 }
                 if !hit.highlight.isEmpty {
-                    Text(stripMarks(hit.highlight)).foregroundColor(.white.opacity(0.6)).font(.system(size: 12)).lineLimit(2)
+                    Text(stripMarks(hit.highlight)).foregroundColor(Palette.fgMuted).font(.system(size: 12.5)).lineLimit(2).lineSpacing(1)
                 }
             }
-            .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white.opacity(0.04)).cornerRadius(8)
-        }.buttonStyle(.plain)
+            .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+            .background(hovering ? Palette.cardHover : Palette.card)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(hovering ? Palette.accent.opacity(0.4) : .clear, lineWidth: 1))
+        }
     }
 
     private func citationRow(_ c: Citation) -> some View {
-        Button { open(slug: c.slug); onClose() } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "doc.text").foregroundColor(accent).font(.system(size: 11))
-                Text(c.filename).foregroundColor(accent).font(.system(size: 12)).lineLimit(1)
+        HoverButton { open(slug: c.slug); onClose() } content: { hovering in
+            HStack(spacing: 7) {
+                Image(systemName: "doc.text.fill").foregroundColor(Palette.accent).font(.system(size: 11))
+                Text(c.filename.replacingOccurrences(of: ".md", with: "")).foregroundColor(hovering ? Palette.accent : Palette.fg).font(.system(size: 12.5)).lineLimit(1)
                 Spacer()
-            }.padding(.vertical, 4)
-        }.buttonStyle(.plain)
+                Image(systemName: "arrow.up.right").foregroundColor(Palette.fgSubtle).font(.system(size: 9))
+            }
+            .padding(.horizontal, 11).padding(.vertical, 7)
+            .background(hovering ? Palette.cardHover : Palette.card)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
     }
 
-    private func empty(_ s: String) -> some View {
-        row { Text(s).foregroundColor(.white.opacity(0.4)).font(.system(size: 13)) }
+    // MARK: Footer hint
+
+    private var footer: some View {
+        HStack(spacing: 16) {
+            hintKey("↵", "udfør")
+            hintKey("⇥", "skift felt")
+            hintKey("esc", "luk")
+            Spacer()
+            Text("Ambient Test").font(.system(size: 10.5, design: .monospaced)).foregroundColor(Palette.fgSubtle)
+        }
+        .padding(.horizontal, 18).padding(.vertical, 10)
+        .background(Color.black.opacity(0.18))
+        .overlay(Rectangle().fill(Palette.hairline).frame(height: 1), alignment: .top)
     }
 
-    private func row<C: View>(@ViewBuilder _ c: () -> C) -> some View {
-        HStack(spacing: 8) { c() }.padding(20).frame(maxWidth: .infinity, alignment: .center)
+    private func hintKey(_ key: String, _ label: String) -> some View {
+        HStack(spacing: 5) {
+            Text(key).font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                .foregroundColor(Palette.fgMuted)
+                .padding(.horizontal, 5).padding(.vertical, 1.5)
+                .background(Color.white.opacity(0.06)).clipShape(RoundedRectangle(cornerRadius: 4))
+            Text(label).font(.system(size: 10.5)).foregroundColor(Palette.fgSubtle)
+        }
     }
 
+    // MARK: Helpers
+
+    /// Wrap results in a ScrollView at runtime; render them inline for the
+    /// off-screen preview (ImageRenderer can't rasterize ScrollView content).
+    @ViewBuilder private func scroll<C: View>(maxHeight: CGFloat, @ViewBuilder _ c: () -> C) -> some View {
+        if previewText != nil {
+            c()
+        } else {
+            ScrollView { c() }.frame(maxHeight: maxHeight)
+        }
+    }
+
+    private func centered<C: View>(@ViewBuilder _ c: () -> C) -> some View {
+        HStack(spacing: 9) { c() }.frame(maxWidth: .infinity).padding(.vertical, 34)
+    }
+    private func hintMark(_ s: String) -> some View {
+        VStack(spacing: 12) {
+            TrailMarkView(size: 30).opacity(0.5)
+            Text(s).foregroundColor(Palette.fgSubtle).font(.system(size: 13))
+        }
+    }
     private func open(slug: String) { if let u = TrailClient.neuronURL(slug: slug) { NSWorkspace.shared.open(u) } }
     private func stripMarks(_ s: String) -> String {
         s.replacingOccurrences(of: "<mark>", with: "").replacingOccurrences(of: "</mark>", with: "")
+    }
+}
+
+/// The Trail mark as SwiftUI (concentric circles + accent core).
+private struct TrailMarkView: View {
+    let size: CGFloat
+    var body: some View {
+        ZStack {
+            Circle().stroke(Palette.fg.opacity(0.9), lineWidth: size * 0.06).padding(size * 0.06)
+            Circle().stroke(Palette.accent.opacity(0.55), lineWidth: size * 0.03).padding(size * 0.22)
+            Circle().fill(Palette.accent).frame(width: size * 0.22, height: size * 0.22)
+        }.frame(width: size, height: size)
+    }
+}
+
+/// Button that reports hover state to its content builder (no native styling).
+private struct HoverButton<Content: View>: View {
+    var action: () -> Void
+    @ViewBuilder var content: (Bool) -> Content
+    @State private var hovering = false
+    var body: some View {
+        Button(action: action) { content(hovering) }
+            .buttonStyle(.plain)
+            .onHover { hovering = $0 }
     }
 }
