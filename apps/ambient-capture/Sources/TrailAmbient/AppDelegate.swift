@@ -16,6 +16,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         didSet { render() }
     }
 
+    // Cached account avatar. Fetched ONCE via ensureAvatar(); buildMenu only
+    // ever READS this. (The first version fetched inside buildMenu and called
+    // render() from the callback — once the avatar was cached the callback
+    // ran synchronously, so render→buildMenu→render recursed until the stack
+    // overflowed and the app crashed the instant it connected. 2026-07-02.)
+    private var avatarImage: NSImage?
+    private var avatarFetching = false
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         render()
@@ -34,6 +42,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ? "Trail Ambient — på pause (ingen capture)"
             : "Trail Ambient — capturer aktivt"
         statusItem.menu = buildMenu()
+        ensureAvatar()
+    }
+
+    /// Fetch the account gravatar at most ONCE. Idempotent + guarded, so a
+    /// cached (synchronous) callback can safely call render() again without
+    /// re-triggering a fetch → no recursion.
+    private func ensureAvatar() {
+        guard deviceAuth.isConnected, avatarImage == nil, !avatarFetching,
+              let email = deviceAuth.accountEmail else { return }
+        avatarFetching = true
+        Gravatar.avatar(for: email) { [weak self] img in
+            guard let self else { return }
+            self.avatarImage = img
+            self.avatarFetching = false
+            self.render()
+        }
     }
 
     private func buildMenu() -> NSMenu {
@@ -48,11 +72,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     primary: deviceAuth.accountLabel,
                     secondary: deviceAuth.tenantLabel ?? email
                 )
-                // Async gravatar — refreshes the menu when it lands.
-                Gravatar.avatar(for: email) { [weak self] img in
-                    header.image = img
-                    self?.render()
-                }
+                // Read the cached avatar only — the fetch is owned by
+                // ensureAvatar() so buildMenu never triggers a render loop.
+                header.image = avatarImage
             }
             menu.addItem(header)
             if let kb = deviceAuth.kbLabel {
@@ -156,6 +178,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func disconnectFromTrail() {
         deviceAuth.disconnect()
+        avatarImage = nil
         render()
     }
 }
