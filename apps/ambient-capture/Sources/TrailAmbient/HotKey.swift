@@ -37,8 +37,13 @@ final class HotKey {
                               nil, MemoryLayout<EventHotKeyID>.size, nil, &hkID)
             if hkID.id == me.hotKeyId {
                 DispatchQueue.main.async { MainActor.assumeIsolated { me.onFire() } }
+                return noErr
             }
-            return noErr
+            // NOT ours — every HotKey instance installs a handler on the app
+            // event target, so returning noErr here would swallow a hotkey meant
+            // for another instance (the capture handler ate ⌃⌥T before the HUD
+            // handler saw it). Signal "not handled" so propagation continues.
+            return OSStatus(eventNotHandledErr)
         }, 1, &eventType, selfPtr, &handler)
 
         RegisterEventHotKey(keyCode, modifiers, id, GetApplicationEventTarget(), 0, &ref)
