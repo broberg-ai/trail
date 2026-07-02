@@ -219,6 +219,30 @@ chatRoutes.post('/chat', async (c) => {
       : audience === 'public'
         ? primaryKbForPrompt.chatPersonaPublic
         : null;
+  // The chat only ever *sees* the handful of retrieved Neurons, so a
+  // meta-question ("how many Neurons do you have?") made it guess from the
+  // visible sources — "5" for a 55-Neuron Trail (Christian, 2026-07-02).
+  // Count the current Trail(s)' Neurons (non-archived wiki docs) so the model
+  // can answer scope questions truthfully. Failure → undefined (block silently
+  // omitted), never breaks the chat.
+  let neuronCount: number | undefined;
+  try {
+    const row = await trail.db
+      .select({ n: sql<number>`count(*)` })
+      .from(documents)
+      .where(
+        and(
+          inArray(documents.knowledgeBaseId, kbs.map((k) => k.id)),
+          eq(documents.kind, 'wiki'),
+          eq(documents.archived, false),
+        ),
+      )
+      .get();
+    neuronCount = row?.n ?? undefined;
+  } catch {
+    neuronCount = undefined;
+  }
+
   const systemPrompt = buildSystemPrompt({
     currentTrailName,
     context,
@@ -227,6 +251,7 @@ chatRoutes.post('/chat', async (c) => {
     // Thread KB.language so the model gets a hard "answer in <lang>"
     // directive. Default 'da' matches the schema-level default.
     kbLanguage: primaryKbForPrompt?.language ?? 'da',
+    neuronCount,
   });
 
   // F30 — server-side render of [[wiki-links]] into `[display](href)`

@@ -59,6 +59,14 @@ export interface SystemPromptInput {
    * Defaults to 'da' to match Christian's Danish-first stance.
    */
   kbLanguage?: string;
+  /**
+   * Total non-archived Neuron count in the current Trail. The chat only ever
+   * *sees* the handful of most-relevant Neurons in the Wiki Context, so when
+   * asked a meta-question ("how many Neurons do you have?") it would otherwise
+   * guess from the visible sources (Christian, 2026-07-02: answered "5" for a
+   * 55-Neuron Trail). Given here so the model can answer the total truthfully.
+   */
+  neuronCount?: number;
 }
 
 const THIS_DIR = dirname(fileURLToPath(import.meta.url));
@@ -89,6 +97,7 @@ export function buildSystemPrompt({
   audience = 'curator',
   kbPersonaOverride = null,
   kbLanguage = 'da',
+  neuronCount,
 }: SystemPromptInput): string {
   const template = loadTemplate(audience);
 
@@ -131,6 +140,17 @@ export function buildSystemPrompt({
 - NEVER invent or infer specifics that aren't in the context — no dates, commit hashes, IDs, version numbers, names, or file paths.
 - NEVER mention or cite a Neuron, source, path, or filename that does not appear in the Wiki Context above.
 - If the Wiki Context is empty, say you have no relevant Neurons for that question.`;
+
+  // Trail-scope facts. The grounding rule above (answer ONLY from Wiki Context)
+  // is right for content questions but WRONG for meta-questions about the Trail
+  // itself — the total Neuron count isn't in the context, so the model guesses
+  // from the visible sources ("5" for a 55-Neuron Trail). Give it the true
+  // total as an explicit, authoritative fact it MAY use for scope questions.
+  if (typeof neuronCount === 'number') {
+    prompt += `\n\n## Trail facts (authoritative — exception to Grounding)
+- This Trail contains **${neuronCount} Neuron${neuronCount === 1 ? '' : 'er'}** i alt. The Wiki Context above shows only the few most relevant to the question, NOT the whole Trail.
+- When asked about the SIZE or SCOPE of this Trail (e.g. how many Neurons it has), answer with this total — it is authoritative and overrides any number you might infer from how many sources are shown.`;
+  }
 
   // Append per-KB persona override (tool + public only). Curator audience
   // gets the override stripped intentionally — admin tone is global.
