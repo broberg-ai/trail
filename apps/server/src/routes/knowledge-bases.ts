@@ -21,6 +21,7 @@ const LIST_SQL = `
          kb.lint_policy AS lintPolicy,
          kb.chat_persona_tool AS chatPersonaTool,
          kb.chat_persona_public AS chatPersonaPublic,
+         kb.auto_approve_threshold AS autoApproveThreshold,
          kb.created_at AS createdAt, kb.updated_at AS updatedAt,
          (SELECT COUNT(*) FROM documents d
             WHERE d.knowledge_base_id = kb.id
