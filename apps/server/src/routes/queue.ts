@@ -24,6 +24,12 @@ import { broadcaster } from '../services/broadcast.js';
 import { ensureCandidateInLocale } from '../services/translation.js';
 import { proposeSourcesForOrphan } from '../services/source-inferer.js';
 import { suggestTagsForNeuron, isAutoTagEnabled } from '../services/tag-suggester.js';
+import {
+  distillAmbientCapture,
+  isAmbientDistillEnabled,
+  isAmbientCandidate,
+  stampDistill,
+} from '../services/ambient-distill.js';
 import { documents } from '@trail/db';
 import { and, eq } from 'drizzle-orm';
 
@@ -163,6 +169,32 @@ queueRoutes.post('/queue/candidates', async (c) => {
   const kbId = await resolveKbId(getTrail(c), tenant.id, payload.knowledgeBaseId);
   if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
   payload = { ...payload, knowledgeBaseId: kbId };
+
+  // F201.11 — ambient distill-compile. An ambient candidate arrives as a RAW
+  // per-window screen dump (mostly noise). Distill it to extracted knowledge
+  // BEFORE persist so what lands (and later auto-approves under F201.8) is
+  // clean; a pure-noise window → verdict 'noise' (confidence 0, flagged) so it
+  // never auto-approves. Ship-dark behind TRAIL_AMBIENT_DISTILL=1. LLM failure
+  // → log-and-continue with the raw candidate (never lose a capture).
+  if (isAmbientDistillEnabled() && isAmbientCandidate(payload.metadata)) {
+    try {
+      const distilled = await distillAmbientCapture(
+        { title: payload.title, content: payload.content },
+        { tenantId: tenant.id, kbId: payload.knowledgeBaseId },
+      );
+      payload = {
+        ...payload,
+        // Knowledge → replace with the distilled text; noise → keep the raw
+        // body for audit but zero the confidence so it can't auto-approve.
+        title: distilled.verdict === 'knowledge' ? distilled.title : payload.title,
+        content: distilled.verdict === 'knowledge' ? distilled.content : payload.content,
+        confidence: distilled.confidence,
+        metadata: stampDistill(payload.metadata, distilled.verdict),
+      };
+    } catch (err) {
+      console.error('[queue] ambient distill failed, keeping raw candidate:', err instanceof Error ? err.message : err);
+    }
+  }
   // F92 — canonicalise any incoming metadata.tags string at the HTTP
   // boundary so external POSTs (scripts, webhooks, the chat-save
   // flow, buddy's trail_save) all store the same normalised shape.

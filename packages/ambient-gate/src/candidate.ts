@@ -91,14 +91,27 @@ export async function postCandidate(
 ): Promise<PostCandidateResult> {
   const { body, redactionFindings } = buildCandidateBody(input);
   const doFetch = opts.fetchImpl ?? fetch;
-  const res = await doFetch(`${opts.apiBase.replace(/\/$/, '')}/api/v1/queue/candidates`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${opts.token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await doFetch(`${opts.apiBase.replace(/\/$/, '')}/api/v1/queue/candidates`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${opts.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    // A transient network blip (socket closed, DNS hiccup) must NOT kill the
+    // relay — return a failure the caller logs + retries next tick, so the
+    // capture loop survives a flaky connection.
+    return {
+      ok: false,
+      status: 0,
+      error: err instanceof Error ? err.message : 'network error',
+      redactionFindings,
+    };
+  }
   const json = (await res.json().catch(() => null)) as
     | { candidate?: { id?: string }; error?: unknown }
     | null;

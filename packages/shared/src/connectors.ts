@@ -103,6 +103,10 @@ export const CONNECTORS = {
 
 export type ConnectorId = keyof typeof CONNECTORS;
 
+/** The ambient-capture connector id (F201) — imported wherever a candidate is
+ * attributed or distilled so the literal lives in exactly one place. */
+export const AMBIENT_CONNECTOR = 'trail-ambient-capture' satisfies ConnectorId;
+
 /** The ids of every connector that can currently emit a candidate. */
 export const LIVE_CONNECTORS: readonly ConnectorId[] = Object.entries(CONNECTORS)
   .filter(([, def]) => def.status === 'live')
