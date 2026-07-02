@@ -170,19 +170,31 @@ export function SettingsTrailPanel() {
     }
   }
 
-  // F201.8 — flip ambient auto-approval on/off for this Trail. "On" arms the
-  // threshold at 0.5 (distilled knowledge = 0.8 auto-approves, noise = 0 stays
-  // pending); "off" clears it to null (every capture waits for review).
-  async function handleToggleAutoApprove() {
+  // F201.12 — Ambient-tilstand: one toggle that makes a KB self-managing. "On"
+  // bundles the two settings that a hands-off ambient KB needs, so the user
+  // never wires them separately:
+  //   • auto-approve armed at 0.5 (F201.8) — distilled knowledge (0.8)
+  //     auto-approves; distilled noise auto-rejects out of Pending (F201.12
+  //     backend); and
+  //   • contradiction-lint OFF (F200.1) — near-duplicate ambient Neurons would
+  //     otherwise flood the queue with contradiction candidates.
+  // "Off" reverses both (threshold null, lint on). Net effect when on: the
+  // Pending queue stays empty with zero human triage.
+  async function handleToggleAmbientMode() {
     if (!kb || autoApproveToggling || autoApproveOn === null) return;
     setAutoApproveToggling(true);
     try {
       const next = !autoApproveOn;
+      // Both writes, in one action. Auto-approve first: if the lint write fails
+      // the KB is still in a coherent "approve on, lint on" state rather than a
+      // half-applied ambient mode.
       await updateKnowledgeBase(kb.id, { autoApproveThreshold: next ? 0.5 : null });
+      const lint = await setKbContradictionLint(kb.id, !next);
       setAutoApproveOn(next);
-      setToast({ kind: 'success', text: t('settings.trail.autoApprove.saved') });
+      setLintEnabled(lint.contradictionLintEnabled);
+      setToast({ kind: 'success', text: t('settings.trail.ambientMode.saved') });
     } catch {
-      setToast({ kind: 'error', text: t('settings.trail.autoApprove.error') });
+      setToast({ kind: 'error', text: t('settings.trail.ambientMode.error') });
     } finally {
       setAutoApproveToggling(false);
     }
@@ -608,17 +620,18 @@ export function SettingsTrailPanel() {
           </div>
         </section>
 
-        {/* F201.8 — per-Trail ambient auto-approval toggle (mirrors the lint toggle). */}
+        {/* F201.12 — Ambient-tilstand: one toggle bundling auto-approve (F201.8)
+            + contradiction-lint-off (F200.1) so an ambient KB self-manages. */}
         <section class="pt-2 border-t border-[color:var(--color-border)]">
           <div class="mb-3">
-            <h2 class="text-sm font-medium">{t('settings.trail.autoApprove.title')}</h2>
+            <h2 class="text-sm font-medium">{t('settings.trail.ambientMode.title')}</h2>
             <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-xl">
-              {t('settings.trail.autoApprove.subtitle')}
+              {t('settings.trail.ambientMode.subtitle')}
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span
-              data-testid="settings-autoapprove-toggle-state"
+              data-testid="settings-ambient-mode-state"
               style={{
                 fontSize: 12,
                 fontWeight: 500,
@@ -631,23 +644,23 @@ export function SettingsTrailPanel() {
               {autoApproveOn === null
                 ? '…'
                 : autoApproveOn
-                  ? t('settings.trail.autoApprove.stateOn')
-                  : t('settings.trail.autoApprove.stateOff')}
+                  ? t('settings.trail.ambientMode.stateOn')
+                  : t('settings.trail.ambientMode.stateOff')}
             </span>
             {autoApproveOn !== null ? (
               <button
                 type="button"
-                data-testid="settings-autoapprove-toggle"
-                onClick={handleToggleAutoApprove}
+                data-testid="settings-ambient-mode-toggle"
+                onClick={handleToggleAmbientMode}
                 disabled={autoApproveToggling}
                 class="btn active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ padding: '6px 14px', fontSize: 12.5 }}
               >
                 {autoApproveToggling
-                  ? t('settings.trail.autoApprove.saving')
+                  ? t('settings.trail.ambientMode.saving')
                   : autoApproveOn
-                    ? t('settings.trail.autoApprove.turnOff')
-                    : t('settings.trail.autoApprove.turnOn')}
+                    ? t('settings.trail.ambientMode.turnOff')
+                    : t('settings.trail.ambientMode.turnOn')}
               </button>
             ) : null}
           </div>

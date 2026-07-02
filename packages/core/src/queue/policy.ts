@@ -73,12 +73,41 @@ function isAmbientCandidate(candidate: QueueCandidate): boolean {
   }
 }
 
+/**
+ * F201.12 — did F201.11's distill classify this ambient capture as pure noise?
+ * (metadata.distill === 'noise', stamped by the queue route's distill step.)
+ */
+function isAmbientNoise(candidate: QueueCandidate): boolean {
+  if (!candidate.metadata) return false;
+  try {
+    return (JSON.parse(candidate.metadata) as { distill?: string }).distill === 'noise';
+  } catch {
+    return false;
+  }
+}
+
 function threshold(): number {
   const raw = process.env.TRAIL_AUTO_APPROVE_THRESHOLD;
   if (!raw) return DEFAULT_THRESHOLD;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0 || n > 1) return DEFAULT_THRESHOLD;
   return n;
+}
+
+/**
+ * F201.12 — Ambient-tilstand auto-reject. Symmetric to `shouldAutoApprove`:
+ * when a KB opts into ambient mode (threshold set), a distilled-noise ambient
+ * capture is auto-rejected instead of parked in Pending. This is what keeps an
+ * ambient KB's Pending queue empty — the F201.11 distill already decided the
+ * window was noise (Finder folder-listing, a bare tab title), so a human
+ * clicking Reject on it adds nothing. The candidate is still persisted (status
+ * 'rejected') so the Rejected tab keeps an audit trail for tuning the distill
+ * prompt. When the threshold is null (mode off), this returns false and noise
+ * stays pending exactly as before — ship-dark preserved.
+ */
+export function shouldAutoReject(candidate: QueueCandidate, kb?: AutoApproveKbPolicy): boolean {
+  const kbThreshold = kb?.autoApproveThreshold ?? null;
+  return kbThreshold !== null && isAmbientCandidate(candidate) && isAmbientNoise(candidate);
 }
 
 export function shouldAutoApprove(candidate: QueueCandidate, kb?: AutoApproveKbPolicy): boolean {

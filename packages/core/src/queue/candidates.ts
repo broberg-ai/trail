@@ -20,7 +20,7 @@ import type {
 } from '@trail/shared';
 import { redactSecrets } from '@trail/shared';
 import { slugify } from '../slug.js';
-import { shouldAutoApprove } from './policy.js';
+import { shouldAutoApprove, shouldAutoReject } from './policy.js';
 
 /**
  * F197 — secret-scan gate. Redact any leaked credential out of a candidate's
@@ -437,7 +437,27 @@ export async function createCandidate(
     .where(eq(knowledgeBases.id, candidate.knowledgeBaseId))
     .get();
 
-  if (shouldAutoApprove(candidate, { autoApproveThreshold: kbPolicy?.autoApproveThreshold ?? null })) {
+  const kbPolicyArg = { autoApproveThreshold: kbPolicy?.autoApproveThreshold ?? null };
+
+  // F201.12 — Ambient-tilstand auto-reject. In ambient mode a distilled-noise
+  // capture never becomes a Neuron; instead of parking it in Pending (a human
+  // click that adds nothing), resolve it as rejected right here so the queue
+  // stays empty. The row survives in the Rejected tab for audit. Evaluated
+  // before auto-approve because a noise candidate (conf 0) would otherwise just
+  // fall through to a pending state.
+  if (shouldAutoReject(candidate, kbPolicyArg)) {
+    const approval = await resolveCandidate(
+      trail,
+      tenantId,
+      id,
+      actor,
+      { actionId: 'reject', reason: 'ambient-noise (auto)' },
+      { auto: true },
+    );
+    return { candidate, approval };
+  }
+
+  if (shouldAutoApprove(candidate, kbPolicyArg)) {
     // F182.5 — a supersede candidate carries no 'approve' action (its effect
     // is 'supersede'); auto-approval resolves that action instead. Everything
     // else uses the legacy default 'approve' action.

@@ -892,16 +892,16 @@
         "saved": "Indstilling gemt",
         "error": "Kunne ikke ændre indstillingen"
       },
-      "autoApprove": {
-        "title": "Auto-godkend ambient-fangst",
-        "subtitle": "Når slået til bliver destilleret viden fra Ambient-optagelser automatisk til Neuroner — ingen manuel godkendelse. Støj bliver liggende i køen til gennemsyn. Gælder kun denne Trail.",
-        "stateOff": "Manuel godkendelse",
-        "stateOn": "Auto-godkend til",
-        "turnOn": "Slå auto-godkend til",
+      "ambientMode": {
+        "title": "Ambient-tilstand",
+        "subtitle": "Én knap gør denne Trail selvstyrende: destilleret viden fra Ambient-optagelser bliver automatisk til Neuroner, ren støj afvises automatisk (ryger ud af køen, ligger i Afvist til revision), og modsigelses-lint slås fra. Resultat: køen holder sig tom uden manuelt arbejde. Gælder kun denne Trail.",
+        "stateOff": "Manuel gennemgang",
+        "stateOn": "Ambient-tilstand til",
+        "turnOn": "Slå Ambient-tilstand til",
         "turnOff": "Slå fra",
         "saving": "Gemmer…",
-        "saved": "Auto-godkend opdateret",
-        "error": "Kunne ikke opdatere auto-godkend"
+        "saved": "Ambient-tilstand opdateret",
+        "error": "Kunne ikke opdatere Ambient-tilstand"
       },
       "ingestModel": {
         "title": "Ingest-model",

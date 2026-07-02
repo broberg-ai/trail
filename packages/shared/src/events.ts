@@ -30,8 +30,9 @@ export interface CandidateCreatedEvent {
   candidateId: string;
   kind: QueueCandidateKind;
   title: string;
-  /** 'pending' when it lands in queue, 'approved' when policy auto-approved it. */
-  status: Extract<QueueCandidateStatus, 'pending' | 'approved'>;
+  /** 'pending' when it lands in queue, 'approved' when policy auto-approved it,
+   *  'rejected' when policy auto-rejected it (F201.12 ambient-noise). */
+  status: Extract<QueueCandidateStatus, 'pending' | 'approved' | 'rejected'>;
   autoApproved: boolean;
   confidence: number | null;
   /** User id if human-originated, null if machine. */

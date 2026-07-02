@@ -239,8 +239,11 @@ queueRoutes.post('/queue/candidates', async (c) => {
       candidateId: result.candidate.id,
       kind: result.candidate.kind,
       title: result.candidate.title,
-      status: result.approval ? 'approved' : 'pending',
-      autoApproved: !!result.approval,
+      // F201.12 — result.approval is a resolution that may be an approve OR a
+      // reject (ambient-noise auto-reject), so read its real status rather than
+      // assuming 'approved'. No resolution → the candidate stayed pending.
+      status: result.approval?.status ?? 'pending',
+      autoApproved: result.approval?.status === 'approved',
       confidence: result.candidate.confidence,
       createdBy: result.candidate.createdBy,
     });
