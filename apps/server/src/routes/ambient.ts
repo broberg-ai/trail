@@ -20,6 +20,7 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { ambientDeviceCodes, apiKeys, knowledgeBases, users, tenants } from '@trail/db';
 import { requireAuth, getUser, getTenant, getTrail } from '../middleware/auth.js';
 import { addBearer } from '../lib/key-index.js';
+import type { TenantPool } from '../lib/tenant-pool.js';
 import type { AppBindings } from '../app.js';
 
 export const ambientRoutes = new Hono<AppBindings>();
@@ -109,17 +110,34 @@ ambientRoutes.post('/ambient/approve', requireAuth, async (c) => {
 // Unknown → 404, expired/claimed → 410. Never a silent fallback.
 ambientRoutes.post('/ambient/token', async (c) => {
   if (!enabled()) return c.json({ error: 'Not found' }, 404);
-  const trail = getTrail(c);
 
   const body = (await c.req.json().catch(() => null)) as { code?: string } | null;
   const code = body?.code?.trim().toLowerCase() ?? '';
   if (!CODE_RE.test(code)) return c.json({ error: 'Invalid device code format' }, 400);
 
-  const row = await trail.db
-    .select()
-    .from(ambientDeviceCodes)
-    .where(eq(ambientDeviceCodes.codeHash, hashCode(code)))
-    .get();
+  // Multi-tenant: approve() ran AUTHENTICATED so it parked the code in the
+  // approving user's tenant DB. This claim is UNAUTHENTICATED (the code is
+  // the only credential), so getTrail(c) is just the primary DB and would
+  // miss a code parked in a secondary tenant. Search the whole pool by the
+  // unique, high-entropy codeHash. (Single-tenant: the pool holds only the
+  // primary → identical to the old behaviour.)
+  const codeHash = hashCode(code);
+  const pool = c.get('tenantPool') as TenantPool | undefined;
+  const dbs = pool ? [...pool.values()] : [getTrail(c)];
+  let trail = getTrail(c);
+  let row: typeof ambientDeviceCodes.$inferSelect | undefined;
+  for (const db of dbs) {
+    const found = await db.db
+      .select()
+      .from(ambientDeviceCodes)
+      .where(eq(ambientDeviceCodes.codeHash, codeHash))
+      .get();
+    if (found) {
+      row = found;
+      trail = db;
+      break;
+    }
+  }
   if (!row) return c.json({ error: 'Unknown or unapproved device code' }, 404);
   if (row.claimedAt || !row.tokenOnce) return c.json({ error: 'Device code already claimed' }, 410);
   if (row.expiresAt < new Date().toISOString()) {
