@@ -5,6 +5,7 @@
 // device is connected to, and is the entry point for settings. LSUIElement/
 // .accessory means this is the ONLY visible surface.
 import AppKit
+import Carbon.HIToolbox
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -12,8 +13,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let focusWatcher = FocusWatcher()
     private let deviceAuth = DeviceAuth()
     private let hud = HudController()
+    /// F201.6.5 — ⌃⌥R "optag nu" (capture-now) hotkey.
+    private var captureHotKey: HotKey?
 
     private var paused = false {
+        didSet { render() }
+    }
+
+    /// F201.6.5 — true while a solo capture is recording (menubar tell).
+    private var capturing = false {
         didSet { render() }
     }
 
@@ -36,6 +44,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // until granted — capture returns nil, window titles still flow.
         ScreenWatcher.requestScreenRecordingIfNeeded()
         focusWatcher.start()
+        // F201.6.5 — mic TCC + the ⌃⌥R "optag nu" capture-now hotkey. Ships dark
+        // without the grant (record() no-ops). ⌃⌥R toggles: first press records,
+        // second press transcribes on-device and drops the text next to the log.
+        AudioWatcher.requestMicIfNeeded()
+        captureHotKey = HotKey(
+            keyCode: UInt32(kVK_ANSI_R),
+            modifiers: UInt32(controlKey | optionKey),
+            id: 2
+        ) { [weak self] in self?.toggleCapture() }
+    }
+
+    /// ⌃⌥R — start a solo capture, or stop + transcribe the one in progress.
+    private func toggleCapture() {
+        Task {
+            let isRec = await AudioWatcher.shared.isRecording
+            if isRec {
+                capturing = false
+                let text = await AudioWatcher.shared.finishAndTranscribe()
+                handleTranscript(text)
+            } else {
+                let ok = await AudioWatcher.shared.record()
+                capturing = ok
+                if !ok { NSSound.beep() }   // no mic grant → audible "nothing happened"
+            }
+        }
+    }
+
+    /// Persist + surface the transcript of a finished capture. Writes it next to
+    /// the capture log (last-capture.txt) so the result is inspectable, logs a
+    /// marker, and updates the menubar tooltip. (Wiring it to a Trail candidate
+    /// is F201.6.4.)
+    private func handleTranscript(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        EventLog.shared.log(kind: trimmed.isEmpty ? "audio_capture_empty" : "audio_capture_transcribed")
+        let dir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Logs/TrailAmbient", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? (trimmed + "\n").data(using: .utf8)?
+            .write(to: dir.appendingPathComponent("last-capture.txt"))
+        if !trimmed.isEmpty { NSSound(named: "Glass")?.play() }  // done-tell
     }
 
     /// F201.9 fix — the HUD search field couldn't paste (⌘V). An .accessory
@@ -66,9 +114,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // capturing, OUTLINE while paused (the visible recording tell).
         statusItem.button?.image = TrailMark.menubarImage(filled: !paused)
         statusItem.button?.title = ""
-        statusItem.button?.toolTip = paused
-            ? "Trail Ambient — på pause (ingen capture)"
-            : "Trail Ambient — capturer aktivt"
+        statusItem.button?.toolTip = capturing
+            ? "Trail Ambient — 🎙 optager lyd (⌃⌥R for at stoppe + transskribere)"
+            : paused
+                ? "Trail Ambient — på pause (ingen capture)"
+                : "Trail Ambient — capturer aktivt"
         statusItem.menu = buildMenu()
         ensureAvatar()
     }

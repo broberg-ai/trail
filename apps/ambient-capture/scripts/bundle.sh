@@ -40,6 +40,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <!-- No Dock icon; presence lives in the menubar status item (F201.3). -->
   <key>LSUIElement</key><true/>
+  <!-- F201.6 — mic TCC. Required or AVCaptureDevice.requestAccess CRASHES.
+       Guideline 5.1.1(ii): describe WHAT + an EXAMPLE. -->
+  <key>NSMicrophoneUsageDescription</key><string>Trail Ambient bruger mikrofonen til at transskribere det du siger — på din enhed. Du kan f.eks. trykke ⌃⌥R og tale en tanke ind, som Trail gør til en søgbar note. Lyden forlader aldrig din Mac; kun teksten gemmes.</string>
 </dict>
 </plist>
 PLIST

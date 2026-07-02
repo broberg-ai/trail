@@ -10,17 +10,22 @@ final class HotKey {
     private var ref: EventHotKeyRef?
     private var handler: EventHandlerRef?
     private let onFire: @MainActor () -> Void
+    private let hotKeyId: UInt32
 
-    // kVK_ANSI_T = 0x11; control+option.
+    // kVK_ANSI_T = 0x11; control+option. `id` distinguishes multiple hotkeys —
+    // each instance installs a handler on the app event target, so without a
+    // distinct id every handler would fire for every registered combo.
     init(keyCode: UInt32 = UInt32(kVK_ANSI_T),
          modifiers: UInt32 = UInt32(controlKey | optionKey),
+         id: UInt32 = 1,
          onFire: @escaping @MainActor () -> Void) {
         self.onFire = onFire
+        self.hotKeyId = id
         install(keyCode: keyCode, modifiers: modifiers)
     }
 
     private func install(keyCode: UInt32, modifiers: UInt32) {
-        let id = EventHotKeyID(signature: OSType(0x54524149 /* "TRAI" */), id: 1)
+        let id = EventHotKeyID(signature: OSType(0x54524149 /* "TRAI" */), id: hotKeyId)
         var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
 
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
@@ -30,7 +35,7 @@ final class HotKey {
             var hkID = EventHotKeyID()
             GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
                               nil, MemoryLayout<EventHotKeyID>.size, nil, &hkID)
-            if hkID.id == 1 {
+            if hkID.id == me.hotKeyId {
                 DispatchQueue.main.async { MainActor.assumeIsolated { me.onFire() } }
             }
             return noErr

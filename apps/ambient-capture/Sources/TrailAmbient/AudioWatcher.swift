@@ -18,7 +18,7 @@ actor AudioWatcher {
 
     private var vad = VAD()
     private let engine = AVAudioEngine()
-    private var running = false
+    private var recording = false
     /// Rolling 16 kHz mono buffer of the current utterance-in-progress.
     private var buffer: [Float] = []
     /// App the deny-list is currently evaluated against (updated on focus change).
@@ -42,40 +42,71 @@ actor AudioWatcher {
     /// per-buffer AX lookup (called from the focus watcher on activation).
     func setFrontApp(_ app: String) { frontApp = app }
 
-    // MARK: Live capture (scaffold — verified interactively, needs a mic grant)
+    var isRecording: Bool { recording }
 
-    func start() {
-        guard !running else { return }
+    // MARK: Capture-now ("optag nu", ⌃⌥R) — press to record, press to transcribe.
+
+    /// Start a solo capture: mic tap → 16 kHz mono → buffer. Ships dark without a
+    /// mic grant (logs audio_watcher_untrusted, returns false). Idempotent.
+    @discardableResult
+    func record() -> Bool {
+        guard !recording else { return true }
         guard Self.isMicGranted else {
             Task { @MainActor in EventLog.shared.log(kind: "audio_watcher_untrusted") }
-            return
+            return false
         }
         let input = engine.inputNode
         let hwFormat = input.outputFormat(forBus: 0)
         guard let converter = AVAudioConverter(from: hwFormat, to: Self.mono16k) else {
             Task { @MainActor in EventLog.shared.log(kind: "audio_watcher_no_converter") }
-            return
+            return false
         }
+        buffer.removeAll(keepingCapacity: true)
         input.installTap(onBus: 0, bufferSize: 4096, format: hwFormat) { [weak self] buf, _ in
             guard let self, let mono = Self.resample(buf, with: converter) else { return }
             Task { await self.ingest(mono) }
         }
         do {
             try engine.start()
-            running = true
-            Task { @MainActor in EventLog.shared.log(kind: "audio_watcher_started") }
+            recording = true
+            Task { @MainActor in EventLog.shared.log(kind: "audio_capture_started") }
+            return true
         } catch {
+            input.removeTap(onBus: 0)
             Task { @MainActor in EventLog.shared.log(kind: "audio_watcher_start_failed") }
+            return false
         }
     }
 
-    /// Feed resampled mono frames through the deny-list guard into the buffer.
-    /// Privacy guard FIRST — a deny-listed app's audio never even buffers.
+    /// Stop recording, VAD-segment what was captured, transcribe each segment
+    /// on-device, and return the joined transcript ("" if nothing was said).
+    func finishAndTranscribe() async -> String {
+        guard recording else { return "" }
+        recording = false
+        engine.stop()
+        engine.inputNode.removeTap(onBus: 0)
+        let samples = buffer
+        buffer.removeAll(keepingCapacity: false)
+        let segments = vad.segments(samples)
+        guard !segments.isEmpty else { return "" }
+        var parts: [String] = []
+        for seg in segments {
+            let slice = Array(samples[seg.startSample ..< min(seg.endSample, samples.count)])
+            if let text = try? await Whisper.shared.transcribe(samples: slice), !text.isEmpty {
+                parts.append(text)
+            }
+        }
+        return parts.joined(separator: " ")
+    }
+
+    /// Feed resampled mono frames through the deny-list guard into the buffer,
+    /// only while recording. Privacy guard FIRST — a deny-listed app's audio
+    /// never even buffers.
     private func ingest(_ mono: [Float]) {
+        guard recording else { return }
         if Settings.isDenyListed(frontApp) { return }
         buffer.append(contentsOf: mono)
-        // Cap the in-flight buffer (~30 s) so a long silence can't grow unbounded.
-        let cap = 30 * 16_000
+        let cap = 5 * 60 * 16_000  // ~5 min cap on a single capture
         if buffer.count > cap { buffer.removeFirst(buffer.count - cap) }
     }
 
