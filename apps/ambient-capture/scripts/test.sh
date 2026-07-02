@@ -19,3 +19,6 @@ echo "[ambient-capture] --selftest (pause gate + menubar icon visibility)"
 
 echo "[ambient-capture] --ocrtest (on-device Vision OCR + delta guard)"
 "$BIN" --ocrtest
+
+echo "[ambient-capture] --audiotest (VAD segmentation + WAV round-trip + deny-list)"
+"$BIN" --audiotest
