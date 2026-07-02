@@ -17,7 +17,7 @@
 import { Hono } from 'hono';
 import { createHash, randomBytes } from 'node:crypto';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
-import { ambientDeviceCodes, apiKeys, knowledgeBases } from '@trail/db';
+import { ambientDeviceCodes, apiKeys, knowledgeBases, users, tenants } from '@trail/db';
 import { requireAuth, getUser, getTenant, getTrail } from '../middleware/auth.js';
 import { addBearer } from '../lib/key-index.js';
 import type { AppBindings } from '../app.js';
@@ -137,9 +137,30 @@ ambientRoutes.post('/ambient/token', async (c) => {
     .set({ tokenOnce: null, claimedAt: new Date().toISOString() })
     .where(and(eq(ambientDeviceCodes.id, row.id), isNull(ambientDeviceCodes.claimedAt)));
 
+  // Enrich the claim with account context so the agent's menubar can show
+  // "Forbundet: <name> · <tenant>" + a gravatar (F201.4 connected-status
+  // UX). The scoped key belongs to the approving user; join through it.
+  const kbIds = JSON.parse(row.kbIds) as string[];
+  const account = await trail.db
+    .select({ email: users.email, displayName: users.displayName, tenant: tenants.name })
+    .from(apiKeys)
+    .innerJoin(users, eq(users.id, apiKeys.userId))
+    .innerJoin(tenants, eq(tenants.id, users.tenantId))
+    .where(eq(apiKeys.id, row.apiKeyId))
+    .get();
+  const kbNames = await trail.db
+    .select({ name: knowledgeBases.name })
+    .from(knowledgeBases)
+    .where(inArray(knowledgeBases.id, kbIds))
+    .all();
+
   return c.json({
     token,
-    kbIds: JSON.parse(row.kbIds) as string[],
+    kbIds,
+    kbNames: kbNames.map((k) => k.name),
     deviceName: row.deviceName,
+    email: account?.email ?? null,
+    displayName: account?.displayName ?? null,
+    tenant: account?.tenant ?? null,
   });
 });

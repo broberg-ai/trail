@@ -12,6 +12,15 @@
 import AppKit
 import Security
 
+/// Where the connect flow currently is — drives the menubar copy so a user
+/// never re-clicks "Forbind" while a poll is already listening (the two-code
+/// bug Christian hit 2026-07-02).
+enum ConnectState: Equatable {
+    case disconnected
+    case waiting          // browser opened, polling for approval
+    case connected
+}
+
 @MainActor
 final class DeviceAuth {
     private static let connectBase = "https://app.trailmem.com"
@@ -21,21 +30,45 @@ final class DeviceAuth {
 
     private var pollTask: Task<Void, Never>?
 
+    private(set) var state: ConnectState = .disconnected
+
     var isConnected: Bool { Self.loadToken() != nil }
+
+    /// "Christian Broberg" / "cb@webhouse.dk" — whichever the engine returned.
+    var accountLabel: String {
+        UserDefaults.standard.string(forKey: "trail.displayName")
+            ?? UserDefaults.standard.string(forKey: "trail.email")
+            ?? "Trail-konto"
+    }
+
+    var accountEmail: String? { UserDefaults.standard.string(forKey: "trail.email") }
+    var tenantLabel: String? { UserDefaults.standard.string(forKey: "trail.tenant") }
+    var kbLabel: String? {
+        (UserDefaults.standard.array(forKey: "trail.kbNames") as? [String])?.joined(separator: ", ")
+    }
 
     var connectionLabel: String {
         UserDefaults.standard.string(forKey: "trail.deviceName") ?? "Trail"
     }
 
+    init() {
+        state = isConnected ? .connected : .disconnected
+    }
+
     func beginConnect(onChange: @escaping @MainActor () -> Void) {
+        // Two-code guard: if a poll is already listening, just re-open the
+        // SAME approve page instead of minting a second code the agent then
+        // ignores. This is the fix for Christian's "godkendte 2 gange" churn.
+        if state == .waiting, let code = pendingCode {
+            NSWorkspace.shared.open(connectURL(code: code))
+            return
+        }
+
         let code = Self.randomCode()
-        let device = Host.current().localizedName ?? "Mac"
-        var comps = URLComponents(string: "\(Self.connectBase)/ambient/connect")!
-        comps.queryItems = [
-            .init(name: "code", value: code),
-            .init(name: "name", value: device),
-        ]
-        NSWorkspace.shared.open(comps.url!)
+        pendingCode = code
+        state = .waiting
+        onChange()
+        NSWorkspace.shared.open(connectURL(code: code))
         EventLog.shared.log(kind: "device_auth_started")
 
         pollTask?.cancel()
@@ -44,27 +77,54 @@ final class DeviceAuth {
             for _ in 0..<200 {
                 if Task.isCancelled { return }
                 if await self?.tryClaim(code: code) == true {
-                    await MainActor.run { onChange() }
+                    await MainActor.run {
+                        self?.state = .connected
+                        self?.pendingCode = nil
+                        onChange()
+                    }
                     return
                 }
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
+            }
+            await MainActor.run {
+                // Window closed without approval — back to a clean state so
+                // the next click starts fresh instead of re-using a dead code.
+                self?.state = self?.isConnected == true ? .connected : .disconnected
+                self?.pendingCode = nil
+                onChange()
             }
             EventLog.shared.log(kind: "device_auth_timed_out")
         }
     }
 
+    private var pendingCode: String?
+
+    private func connectURL(code: String) -> URL {
+        let device = Host.current().localizedName ?? "Mac"
+        var comps = URLComponents(string: "\(Self.connectBase)/ambient/connect")!
+        comps.queryItems = [.init(name: "code", value: code), .init(name: "name", value: device)]
+        return comps.url!
+    }
+
     func disconnect() {
         pollTask?.cancel()
+        pendingCode = nil
+        state = .disconnected
         Self.deleteToken()
-        UserDefaults.standard.removeObject(forKey: "trail.deviceName")
-        UserDefaults.standard.removeObject(forKey: "trail.kbIds")
+        for key in ["trail.deviceName", "trail.kbIds", "trail.kbNames", "trail.email", "trail.displayName", "trail.tenant"] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
         EventLog.shared.log(kind: "device_auth_disconnected")
     }
 
     private struct ClaimResponse: Decodable {
         let token: String
         let kbIds: [String]
+        let kbNames: [String]?
         let deviceName: String
+        let email: String?
+        let displayName: String?
+        let tenant: String?
     }
 
     private func tryClaim(code: String) async -> Bool {
@@ -78,8 +138,13 @@ final class DeviceAuth {
         case 200:
             guard let claim = try? JSONDecoder().decode(ClaimResponse.self, from: data) else { return false }
             Self.storeToken(claim.token)
-            UserDefaults.standard.set(claim.deviceName, forKey: "trail.deviceName")
-            UserDefaults.standard.set(claim.kbIds, forKey: "trail.kbIds")
+            let d = UserDefaults.standard
+            d.set(claim.deviceName, forKey: "trail.deviceName")
+            d.set(claim.kbIds, forKey: "trail.kbIds")
+            if let names = claim.kbNames { d.set(names, forKey: "trail.kbNames") }
+            if let email = claim.email { d.set(email, forKey: "trail.email") }
+            if let name = claim.displayName { d.set(name, forKey: "trail.displayName") }
+            if let tenant = claim.tenant { d.set(tenant, forKey: "trail.tenant") }
             EventLog.shared.log(kind: "device_auth_connected")
             return true
         case 404:

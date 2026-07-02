@@ -39,6 +39,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
 
+        // ── Connected-account header (Tailscale/TrailScape style) ──────────
+        if deviceAuth.isConnected {
+            let header = NSMenuItem(title: deviceAuth.accountLabel, action: nil, keyEquivalent: "")
+            header.isEnabled = false
+            if let email = deviceAuth.accountEmail {
+                header.attributedTitle = accountAttributed(
+                    primary: deviceAuth.accountLabel,
+                    secondary: deviceAuth.tenantLabel ?? email
+                )
+                // Async gravatar — refreshes the menu when it lands.
+                Gravatar.avatar(for: email) { [weak self] img in
+                    header.image = img
+                    self?.render()
+                }
+            }
+            menu.addItem(header)
+            if let kb = deviceAuth.kbLabel {
+                let kbItem = NSMenuItem(title: "Skriver til: \(kb)", action: nil, keyEquivalent: "")
+                kbItem.isEnabled = false
+                menu.addItem(kbItem)
+            }
+            menu.addItem(.separator())
+        }
+
         let state = NSMenuItem(
             title: paused ? "På pause — ingen capture" : "Capturer aktivt",
             action: nil, keyEquivalent: ""
@@ -46,14 +70,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state.isEnabled = false
         menu.addItem(state)
 
-        let account = NSMenuItem(
-            title: deviceAuth.isConnected
-                ? "Forbundet: \(deviceAuth.connectionLabel)"
-                : "Ikke forbundet til Trail",
-            action: nil, keyEquivalent: ""
-        )
-        account.isEnabled = false
-        menu.addItem(account)
+        if !deviceAuth.isConnected {
+            let statusText: String
+            switch deviceAuth.state {
+            case .waiting: statusText = "Venter på godkendelse i browseren…"
+            default: statusText = "Ikke forbundet til Trail"
+            }
+            let account = NSMenuItem(title: statusText, action: nil, keyEquivalent: "")
+            account.isEnabled = false
+            menu.addItem(account)
+        }
         menu.addItem(.separator())
 
         let pause = NSMenuItem(
@@ -65,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if !deviceAuth.isConnected {
             let connect = NSMenuItem(
-                title: "Forbind til Trail…",
+                title: deviceAuth.state == .waiting ? "Åbn godkendelses-siden igen" : "Forbind til Trail…",
                 action: #selector(connectToTrail), keyEquivalent: ""
             )
             connect.target = self
@@ -100,6 +126,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let quit = NSMenuItem(title: "Afslut Trail Ambient", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
         return menu
+    }
+
+    /// Two-line account header — name in bold, tenant/email subdued beneath
+    /// (the Tailscale/TrailScape look Christian pointed at).
+    private func accountAttributed(primary: String, secondary: String) -> NSAttributedString {
+        let s = NSMutableAttributedString(
+            string: primary,
+            attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: NSColor.labelColor]
+        )
+        s.append(NSAttributedString(
+            string: "\n\(secondary)",
+            attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]
+        ))
+        return s
     }
 
     @objc private func togglePause() {
