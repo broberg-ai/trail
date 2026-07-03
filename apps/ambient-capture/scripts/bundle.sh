@@ -43,6 +43,11 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <!-- F201.6 — mic TCC. Required or AVCaptureDevice.requestAccess CRASHES.
        Guideline 5.1.1(ii): describe WHAT + an EXAMPLE. -->
   <key>NSMicrophoneUsageDescription</key><string>Trail Ambient bruger mikrofonen til at transskribere det du siger — på din enhed. Du kan f.eks. trykke ⌃⌥R og tale en tanke ind, som Trail gør til en søgbar note. Lyden forlader aldrig din Mac; kun teksten gemmes.</string>
+  <!-- F201.6.7 — Speech Recognition TCC (separate from the mic grant). Required
+       or SFSpeechRecognizer.requestAuthorization returns .denied and no prompt
+       appears. On-device recognition (requiresOnDeviceRecognition) keeps the
+       audio on the Mac; this string is the user-facing reason. -->
+  <key>NSSpeechRecognitionUsageDescription</key><string>Trail Ambient bruger talegenkendelse til at omsætte det du siger til tekst — på din enhed. Du kan f.eks. trykke ⌃⌥R og diktere en note, som skrives mens du taler og gemmes i din Trail. Genkendelsen sker lokalt; lyden forlader aldrig din Mac.</string>
 </dict>
 </plist>
 PLIST

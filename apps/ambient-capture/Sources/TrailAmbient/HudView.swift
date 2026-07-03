@@ -5,16 +5,18 @@
 // clicking a result opens it in the browser.
 import SwiftUI
 import AVFoundation
+import Speech
+import Combine
 
 @MainActor
 final class HudModel: ObservableObject {
     enum Mode: String, CaseIterable { case search = "Søg", ask = "Spørg" }
-    /// F201.6.5b — the in-HUD mic button's three states. `needsPermission` when
-    /// macOS hasn't granted the mic yet (tap → prompt, or → System Settings if
-    /// denied); `idle` when ready (tap → record); `recording` (tap → stop +
-    /// transcribe on-device). Discoverable + reliable-prompt companion to the
-    /// eyes-free ⌃⌥R global hotkey.
-    enum MicState { case needsPermission, idle, recording, transcribing }
+    /// F201.6.7 — the in-HUD mic button's three states. `needsPermission` when
+    /// macOS hasn't granted mic + speech yet (tap → prompt, or → System Settings
+    /// if denied); `idle` when ready (tap → dictate); `listening` (tap → stop +
+    /// save). Apple's streaming recognizer writes text live while listening, so
+    /// there's no separate "transcribing" wait (unlike the old WhisperKit batch).
+    enum MicState { case needsPermission, idle, listening }
     @Published var mode: Mode = .search
     @Published var query = ""
     @Published var loading = false
@@ -22,56 +24,100 @@ final class HudModel: ObservableObject {
     @Published var answer: ChatAnswer?
     @Published var ran = false
     /// Mic button state + the last capture's transcript (shown inline so the
-    /// user SEES what WhisperKit heard, instead of a file on disk).
-    @Published var mic: MicState = AudioWatcher.isMicGranted ? .idle : .needsPermission
+    /// user SEES what Trail heard, live as it's spoken).
+    @Published var mic: MicState = (AudioWatcher.isMicGranted && AppleSpeech.isSpeechAuthorized) ? .idle : .needsPermission
     @Published var transcript: String?
     /// F201.6.4 — where the last transcript is on its way to becoming a Neuron.
     enum SaveState { case saving, saved, duplicate, failed }
     @Published var saved: SaveState?
 
+    /// F201.6.7 — Apple's on-device streaming recognizer. Owns the mic tap while
+    /// listening and publishes the transcript live; we mirror it into `transcript`
+    /// so the banner shows words appearing as they're spoken.
+    private let speech = AppleSpeech()
+    private var cancellables = Set<AnyCancellable>()
+
+    init() {
+        // Roll any partial that survived a crash into the verbatim journal.
+        DictationJournal.recoverInflight()
+        speech.$transcript
+            .receive(on: RunLoop.main)
+            .sink { [weak self] text in
+                guard let self, self.mic == .listening else { return }
+                self.transcript = text
+                // Crash insurance: checkpoint the live words while speaking.
+                DictationJournal.checkpoint(text)
+            }
+            .store(in: &cancellables)
+    }
+
     /// Mic button tapped. Grant-first: an accessory app's launch-time prompt is
     /// unreliable (no front window), but the HUD is frontmost + app-active, so
-    /// requesting here reliably surfaces the system dialog.
+    /// requesting here reliably surfaces the system dialogs (mic AND speech).
     func micTapped() {
+        let micS = AVCaptureDevice.authorizationStatus(for: .audio).rawValue
+        let spS = SFSpeechRecognizer.authorizationStatus().rawValue
+        EventLog.shared.log(kind: "mic_tapped state=\(mic) micAuth=\(micS) speechAuth=\(spS)")
         switch mic {
         case .needsPermission:
-            let status = AVCaptureDevice.authorizationStatus(for: .audio)
-            if status == .denied || status == .restricted {
-                // Already denied — the prompt won't re-appear, so send the user
-                // to the exact Privacy pane to flip it on.
-                if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
-                    NSWorkspace.shared.open(u)
+            // Mic (AVCapture) and Speech (SFSpeechRecognizer) are two separate
+            // TCC grants — dictation needs BOTH. If either was denied the prompt
+            // won't re-appear, so deep-link to the exact Privacy pane; otherwise
+            // request both and flip to .idle only when both are granted.
+            let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+            if micStatus == .denied || micStatus == .restricted {
+                EventLog.shared.log(kind: "perm_open_privacy pane=mic")
+                openPrivacy("Privacy_Microphone"); return
+            }
+            let speechStatus = SFSpeechRecognizer.authorizationStatus()
+            if speechStatus == .denied || speechStatus == .restricted {
+                EventLog.shared.log(kind: "perm_open_privacy pane=speech")
+                openPrivacy("Privacy_SpeechRecognition"); return
+            }
+            Task {
+                let micOK = micStatus == .authorized ? true : await withCheckedContinuation { c in
+                    AVCaptureDevice.requestAccess(for: .audio) { c.resume(returning: $0) }
                 }
-            } else {
-                AVCaptureDevice.requestAccess(for: .audio) { granted in
-                    Task { @MainActor in self.mic = granted ? .idle : .needsPermission }
+                let speechOK = await self.speech.requestAuthorization()
+                await MainActor.run {
+                    EventLog.shared.log(kind: "perm_requested micOK=\(micOK) speechOK=\(speechOK)")
+                    self.mic = (micOK && speechOK) ? .idle : .needsPermission
                 }
             }
         case .idle:
-            transcript = nil
-            Task {
-                let ok = await AudioWatcher.shared.record()
-                await MainActor.run { self.mic = ok ? .recording : .needsPermission }
+            // Start dictating. Apple streams partial results, so the banner fills
+            // in live — no record-then-wait. Guard BOTH grants (mic + speech) in
+            // case one was reset out from under us — start() with an ungranted mic
+            // would otherwise crash on an invalid tap format.
+            transcript = nil; saved = nil
+            guard AudioWatcher.isMicGranted, AppleSpeech.isSpeechAuthorized else {
+                mic = .needsPermission; return
             }
-        case .recording:
-            // Stop pressed. large-v3 transcription of a long clip takes several
-            // seconds; flip to .transcribing SYNCHRONOUSLY so the button shows a
-            // spinner immediately. Without it the button stayed red during the
-            // wait, so the user pressed stop again ("det kommer langt tid efter",
-            // Christian 2026-07-03) — and the re-entry overwrote the real
-            // transcript with an empty one. This state also blocks that re-entry.
-            mic = .transcribing
+            do {
+                try speech.start()
+                mic = .listening
+            } catch {
+                // Mic wasn't actually ready — stay idle, no crash (see start()).
+                EventLog.shared.log(kind: "apple_speech_start_threw \(error.localizedDescription)")
+                mic = .idle
+            }
+        case .listening:
+            // Stop pressed. The streamed text is already on screen, so stop()
+            // returns the final transcript synchronously — flip straight to .idle
+            // and save it (no transcribing wait, no double-press race).
+            let final = speech.stop()
+            mic = .idle
+            let trimmed = (final ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            transcript = trimmed        // "" → "no speech" hint in the banner
+            guard !trimmed.isEmpty else { DictationJournal.clearInflight(); return }
+            // INTERIM CATCH (F201.6.8) — the raw words to disk VERBATIM, BEFORE the
+            // network hop, so distill / a failed POST / a crash can never lose
+            // them. This is the durable record of what was actually said.
+            DictationJournal.append(trimmed)
+            DictationJournal.clearInflight()
+            // F201.6.4 — a real transcript becomes a Trail Neuron.
+            saved = .saving
             Task {
-                let text = await AudioWatcher.shared.finishAndTranscribe()
-                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                await MainActor.run {
-                    self.mic = .idle
-                    self.transcript = text   // "" → "no speech" hint in the banner
-                    self.saved = trimmed.isEmpty ? nil : .saving
-                }
-                // F201.6.4 — a real transcript becomes a Trail Neuron. Only
-                // deliberate speech is saved; an empty capture just shows the hint.
-                guard !trimmed.isEmpty else { return }
                 let result = await TrailClient.saveNote(trimmed)
                 await MainActor.run {
                     switch result {
@@ -81,8 +127,12 @@ final class HudModel: ObservableObject {
                     }
                 }
             }
-        case .transcribing:
-            break   // ignore taps while a transcription is in flight
+        }
+    }
+
+    private func openPrivacy(_ pane: String) {
+        if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
+            NSWorkspace.shared.open(u)
         }
     }
 
@@ -109,9 +159,9 @@ final class HudModel: ObservableObject {
     func reset() {
         query = ""; hits = []; answer = nil; ran = false; loading = false
         transcript = nil; saved = nil
-        // Re-read the grant on every open (it may have been granted since).
-        if mic != .recording && mic != .transcribing {
-            mic = AudioWatcher.isMicGranted ? .idle : .needsPermission
+        // Re-read the grants on every open (they may have been granted since).
+        if mic != .listening {
+            mic = (AudioWatcher.isMicGranted && AppleSpeech.isSpeechAuthorized) ? .idle : .needsPermission
         }
     }
 }
@@ -144,7 +194,7 @@ struct HudView: View {
         VStack(spacing: 0) {
             header
             Rectangle().fill(Palette.hairline).frame(height: 1)
-            if model.mic == .recording || model.mic == .transcribing || model.transcript != nil { audioBanner }
+            if model.mic == .listening || model.transcript != nil { audioBanner }
             content
             footer
         }
@@ -192,19 +242,14 @@ struct HudView: View {
         Button { model.micTapped() } label: {
             ZStack {
                 Circle()
-                    .fill(model.mic == .recording ? Color.red.opacity(0.16) : Color.white.opacity(0.05))
+                    .fill(model.mic == .listening ? Color.red.opacity(0.16) : Color.white.opacity(0.05))
                     .frame(width: 34, height: 34)
-                if model.mic == .transcribing {
-                    ProgressView().controlSize(.small).tint(Palette.accent)
-                } else {
-                    Image(systemName: micSymbol)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(micColor)
-                }
+                Image(systemName: micSymbol)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(micColor)
             }
         }
         .buttonStyle(.plain)
-        .disabled(model.mic == .transcribing)
         .help(micHelp)
     }
 
@@ -212,45 +257,41 @@ struct HudView: View {
         switch model.mic {
         case .needsPermission: return "mic.slash"
         case .idle:            return "mic.fill"
-        case .recording:       return "stop.fill"
-        case .transcribing:    return "stop.fill"   // hidden behind the spinner
+        case .listening:       return "stop.fill"
         }
     }
     private var micColor: Color {
         switch model.mic {
         case .needsPermission: return Palette.fgMuted
         case .idle:            return Palette.accent
-        case .recording:       return .red
-        case .transcribing:    return Palette.accent
+        case .listening:       return .red
         }
     }
     private var micHelp: String {
         switch model.mic {
-        case .needsPermission: return "Giv adgang til mikrofonen for at optage tale"
-        case .idle:            return "Optag tale (⌃⌥R)"
-        case .recording:       return "Stop og transskribér"
-        case .transcribing:    return "Transskriberer…"
+        case .needsPermission: return "Giv adgang til mikrofon + tale for at diktere"
+        case .idle:            return "Diktér (⌃⌥D) — teksten skrives mens du taler"
+        case .listening:       return "Stop og gem i Trail"
         }
     }
 
-    // Recording state / last transcript, shown inline so the result is visible.
+    // Live dictation / last transcript, shown inline so the result is visible.
     private var audioBanner: some View {
         HStack(spacing: 10) {
-            if model.mic == .recording {
+            if model.mic == .listening {
                 Circle().fill(Color.red).frame(width: 9, height: 9)
                     .opacity(pulse ? 0.25 : 1)
                     .onAppear {
                         withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulse = true }
                     }
                     .onDisappear { pulse = false }
-                Text("Optager… tryk mikrofonen igen for at stoppe")
-                    .foregroundColor(Palette.fg).font(.system(size: 13))
-                Spacer()
-            } else if model.mic == .transcribing {
-                ProgressView().controlSize(.small).tint(Palette.accent)
-                Text("Transskriberer med large-v3… (et øjeblik)")
-                    .foregroundColor(Palette.fg).font(.system(size: 13))
-                Spacer()
+                let live = (model.transcript ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                Text(live.isEmpty ? "Lytter… tal frit, teksten skrives mens du taler" : live)
+                    .foregroundColor(live.isEmpty ? Palette.fgMuted : Palette.fg)
+                    .font(.system(size: 13)).lineLimit(3)
+                    .animation(.easeOut(duration: 0.15), value: live)
+                Spacer(minLength: 8)
+                Text("tryk ⏹ for at gemme").foregroundColor(Palette.fgSubtle).font(.system(size: 11))
             } else if let t = model.transcript {
                 let empty = t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 Image(systemName: "waveform").foregroundColor(Palette.accent).font(.system(size: 13))
@@ -268,7 +309,7 @@ struct HudView: View {
         }
         .padding(.horizontal, 20).padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(model.mic == .recording ? Color.red.opacity(0.08) : Palette.accent.opacity(0.07))
+        .background(model.mic == .listening ? Color.red.opacity(0.08) : Palette.accent.opacity(0.07))
         .overlay(Rectangle().fill(Palette.hairline).frame(height: 1), alignment: .bottom)
     }
 

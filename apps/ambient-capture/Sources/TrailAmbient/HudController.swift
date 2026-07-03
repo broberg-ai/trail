@@ -44,12 +44,13 @@ final class HudController {
 
     init() {
         hotKey = HotKey { [weak self] in self?.toggle() }
-        // ⌃⌥R "optag nu" — open the HUD and toggle a voice capture, so the hotkey
-        // gives the SAME visible feedback as the in-HUD mic button (Christian
-        // 2026-07-03: "åbn HUD'en automatisk ved ⌃⌥R"), instead of the old
-        // headless path that wrote to a log file with no on-screen feedback.
+        // ⌃⌥D "diktér" — open the HUD and toggle dictation, so the hotkey gives
+        // the SAME visible feedback as the in-HUD mic button. Was ⌃⌥R, but Claude
+        // Code grabbed ⌃⌥R for a terminal action (Christian 2026-07-03: "ctrl +
+        // option + r er pludselig en cc action"), which shadowed our global
+        // hotkey — D (for diktér) avoids the collision.
         captureHotKey = HotKey(
-            keyCode: UInt32(kVK_ANSI_R),
+            keyCode: UInt32(kVK_ANSI_D),
             modifiers: UInt32(controlKey | optionKey),
             id: 2
         ) { [weak self] in self?.captureToggle() }
@@ -57,9 +58,9 @@ final class HudController {
 
     func toggle() { (panel?.isVisible ?? false) ? hide() : show() }
 
-    /// ⌃⌥R — ensure the HUD is up, then start/stop a capture through the SAME mic
-    /// flow the button uses (spinner while transcribing, transcript in the
-    /// banner). First press records; second press stops + transcribes.
+    /// ⌃⌥D — ensure the HUD is up, then start/stop dictation through the SAME mic
+    /// flow the button uses (live text in the banner). First press starts
+    /// listening; second press stops + saves.
     func captureToggle() {
         guard DeviceAuth.loadToken() != nil else { NSSound.beep(); return }
         if !(panel?.isVisible ?? false) { show() }
