@@ -25,3 +25,6 @@ echo "[ambient-capture] --audiotest (VAD segmentation + WAV round-trip + deny-li
 
 echo "[ambient-capture] --dicttest (F201.14 ordbog: whole-word STT corrections + biasing terms)"
 "$BIN" --dicttest
+
+echo "[ambient-capture] --minetest (F201.14 mining: near-miss detection + no false positives)"
+"$BIN" --minetest
