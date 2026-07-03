@@ -16,8 +16,9 @@
 process.env.TRAIL_AMBIENT_SOURCES = '1'; // arm the ship-dark flag for the happy path
 import { join } from 'node:path';
 import { rmSync } from 'node:fs';
-import { createLibsqlDatabase, tenants, users, knowledgeBases, sessions, documents, documentReferences } from '@trail/db';
+import { createLibsqlDatabase, tenants, users, knowledgeBases, sessions, documents, documentReferences, apiKeys } from '@trail/db';
 import { eq, and } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
 import { createApp } from '../src/app.js';
 import { compileAmbientSource } from '../src/services/ambient-source.js';
 
@@ -94,6 +95,20 @@ const src2row = src2.id ? await trail.db.select().from(documents).where(eq(docum
 check('AC4 raw source persists after noise', src2row?.kind === 'source', `kind=${src2row?.kind}`);
 const noiseRefs = src2.id ? await trail.db.select().from(documentReferences).where(eq(documentReferences.sourceDocumentId, src2.id)).all() : [];
 check('AC4 no provenance for noise source', noiseRefs.length === 0);
+
+// Phase 3a — an 'ambient'-scoped API key (what the device uses) may now POST
+// /ambient-source (allowlist opened), but is still BLOCKED on other admin routes.
+const AMB_KEY = 'trail_' + 'a'.repeat(64);
+await trail.db.insert(apiKeys).values({ id: 'ak-f20113', tenantId: T, userId: U, name: 'ambient-dev', keyHash: createHash('sha256').update(AMB_KEY).digest('hex'), scope: 'ambient' }).run();
+const bearer = { 'Content-Type': 'application/json', Authorization: `Bearer ${AMB_KEY}` };
+const keyRes = await req(`/api/v1/knowledge-bases/${KB_SLUG}/ambient-source`, {
+  method: 'POST', headers: bearer, body: JSON.stringify({ fileType: 'ambient-speech', content: 'diktat via ambient-nøgle' }),
+});
+check('Phase3a ambient key CAN POST /ambient-source', keyRes.status === 201, `status ${keyRes.status}`);
+const blockedRes = await req(`/api/v1/knowledge-bases/${KB_SLUG}/documents/note`, {
+  method: 'POST', headers: bearer, body: JSON.stringify({ filename: 'x.md', path: '/', content: '# x' }),
+});
+check('Phase3a ambient key BLOCKED on other endpoints (403)', blockedRes.status === 403, `status ${blockedRes.status}`);
 
 // ship-dark — flag off → 404 (endpoint invisible in prod until armed).
 delete process.env.TRAIL_AMBIENT_SOURCES;

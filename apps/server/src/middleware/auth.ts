@@ -66,6 +66,9 @@ function resolveTenantDb(c: Context, tenantSlug: string): TrailDatabase | null {
  */
 const AMBIENT_ALLOWED: ReadonlyArray<{ method: string; pattern: RegExp }> = [
   { method: 'POST', pattern: /^\/api\/v1\/queue\/candidates$/ },
+  // F201.13 — the source-first ambient path. Kept alongside /queue/candidates
+  // (no naked cutover) so the app can migrate while the old path still works.
+  { method: 'POST', pattern: /^\/api\/v1\/knowledge-bases\/[^/]+\/ambient-source$/ },
   { method: 'GET', pattern: /^\/api\/v1\/knowledge-bases\/[^/]+\/search$/ },
   { method: 'POST', pattern: /^\/api\/v1\/chat$/ },
 ];
