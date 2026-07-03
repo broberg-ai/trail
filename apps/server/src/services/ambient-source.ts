@@ -17,9 +17,11 @@
  * until its env flag is set). The old /queue/candidates path keeps working until
  * the source path is proven (no naked cutover — harness contract).
  */
-import { documents, type TrailDatabase } from '@trail/db';
+import { documents, documentReferences, type TrailDatabase } from '@trail/db';
 import { eq, sql } from 'drizzle-orm';
+import { createCandidate, type Actor } from '@trail/core';
 import { chunkText, storeChunks } from './chunker.js';
+import { distillAmbientCapture, type DistillAi } from './ambient-distill.js';
 
 /** The three ambient source fileTypes (open-text on `documents.file_type`). */
 export const AMBIENT_SOURCE_FILE_TYPES = ['ambient-speech', 'ambient-ocr', 'ambient-image'] as const;
@@ -95,4 +97,78 @@ export async function createAmbientSource(
 function firstLine(s: string): string | undefined {
   const line = s.split('\n').map((l) => l.trim()).find((l) => l.length > 0);
   return line ? line.slice(0, 120) : undefined;
+}
+
+export interface CompileAmbientResult {
+  verdict: 'knowledge' | 'noise';
+  /** The emitted Neuron's id when distill=knowledge AND it auto-approved; else null. */
+  neuronId: string | null;
+  candidateId: string | null;
+}
+
+/**
+ * F201.13 Phase 2 — run the ambient distill as the SOURCE's compile step.
+ *
+ * The source row is created + persisted by `createAmbientSource` BEFORE this runs,
+ * so a distill failure or a 'noise' verdict can never lose the raw. On 'knowledge'
+ * the distilled bullets flow through the NORMAL candidate → F201.8/.12 auto-approval
+ * path (so the per-KB policy still governs whether it lands approved — unchanged),
+ * and when it approves we record `document_references` provenance (Neuron → source).
+ * On 'noise' nothing is emitted — the raw source itself is the durable audit record.
+ */
+export async function compileAmbientSource(
+  trail: TrailDatabase,
+  ctx: { tenantId: string; kbId: string; userId: string },
+  source: { id: string; title: string | null; content: string | null },
+  aiClient?: DistillAi,
+): Promise<CompileAmbientResult> {
+  const distilled = await distillAmbientCapture(
+    { title: source.title ?? '', content: source.content ?? '' },
+    { tenantId: ctx.tenantId, kbId: ctx.kbId },
+    aiClient,
+  );
+  if (distilled.verdict === 'noise') {
+    return { verdict: 'noise', neuronId: null, candidateId: null };
+  }
+
+  // 'system' actor → createdBy stays null (this is a machine capture, not a
+  // curator's click); the ambient auto-approval bypass (policy.ts) governs it.
+  const actor: Actor = { id: ctx.userId, kind: 'system' };
+  const { candidate, approval } = await createCandidate(
+    trail,
+    ctx.tenantId,
+    {
+      knowledgeBaseId: ctx.kbId,
+      kind: 'external-feed',
+      title: distilled.title,
+      content: distilled.content,
+      confidence: distilled.confidence,
+      metadata: JSON.stringify({
+        connector: 'trail-ambient-capture',
+        distill: 'knowledge',
+        sourceDocumentId: source.id,
+      }),
+    },
+    actor,
+  );
+
+  let neuronId: string | null = null;
+  if (approval?.status === 'approved' && approval.documentId) {
+    neuronId = approval.documentId;
+    // Provenance: link the emitted Neuron back to its ambient source. Idempotent
+    // on the (wiki, source, anchor) unique index, so a re-compile is safe.
+    await trail.db
+      .insert(documentReferences)
+      .values({
+        id: `ref_${crypto.randomUUID().slice(0, 12)}`,
+        tenantId: ctx.tenantId,
+        knowledgeBaseId: ctx.kbId,
+        wikiDocumentId: neuronId,
+        sourceDocumentId: source.id,
+        claimAnchor: null,
+      })
+      .run()
+      .catch(() => { /* idempotent on idx_refs_triple */ });
+  }
+  return { verdict: 'knowledge', neuronId, candidateId: candidate.id };
 }

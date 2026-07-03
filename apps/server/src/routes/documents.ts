@@ -12,7 +12,8 @@ import { eq, and, inArray, asc, desc, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { submitCuratorEdit, VersionConflictError, resolveKbId, createCandidateQueueAPI, type WriteArgs } from '@trail/core';
 import { requireAuth, getUser, getTenant, getTrail } from '../middleware/auth.js';
-import { createAmbientSource, isAmbientSourcesEnabled, AMBIENT_SOURCE_FILE_TYPES } from '../services/ambient-source.js';
+import { createAmbientSource, compileAmbientSource, isAmbientSourcesEnabled, AMBIENT_SOURCE_FILE_TYPES } from '../services/ambient-source.js';
+import { isAmbientDistillEnabled } from '../services/ambient-distill.js';
 import { chunkText, storeChunks } from '../services/chunker.js';
 import {
   processPdfAsync,
@@ -423,6 +424,17 @@ documentRoutes.post('/knowledge-bases/:kbId/ambient-source', async (c) => {
     { tenantId: tenant.id, kbId, userId: user.id },
     parsed.data,
   );
+  // F201.13 Phase 2 — compile the source (distill → Neuron + provenance) in the
+  // BACKGROUND so the capture POST returns immediately. The raw source is already
+  // persisted above, so a distill failure never loses it. Gated by
+  // TRAIL_AMBIENT_DISTILL; noise → no Neuron, the source is the audit record.
+  if (doc && isAmbientDistillEnabled()) {
+    compileAmbientSource(
+      trail,
+      { tenantId: tenant.id, kbId, userId: user.id },
+      { id: doc.id, title: doc.title, content: doc.content },
+    ).catch((err) => console.error('[ambient-source] compile failed', err));
+  }
   return c.json(doc, 201);
 });
 
