@@ -406,6 +406,9 @@ importers:
       '@broberg/secret-scan':
         specifier: ^0.1.5
         version: 0.1.5
+      '@broberg/speech-dictionary':
+        specifier: 0.1.1
+        version: 0.1.1
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -715,6 +718,9 @@ packages:
 
   '@broberg/secret-scan@0.1.5':
     resolution: {integrity: sha512-O04fe9so0a1r0VcD7msEQ2nnBx8xMJgOmFSDBjhOkH4u8OSgQrcOVF4a1cVRlwU74bw5GV6evEC3RhkauclLgQ==}
+
+  '@broberg/speech-dictionary@0.1.1':
+    resolution: {integrity: sha512-m8tIchrZhW16zFmAitRTIkryYDk/JwWw4qf+bg0tltJnPwdhaL/LGIdU+rtEF9WROALqfImDvFO+PRfcldXzGg==}
 
   '@crxjs/vite-plugin@2.4.0':
     resolution: {integrity: sha512-bDLdq0W2V1SkMQDJjrcYyjK9/uKtdl4joT7GRImcootCjZdKRiRYt+cv9z8tJoU/tK3o1lX48LTqN7JMsk5AQg==}
@@ -4030,6 +4036,8 @@ snapshots:
   '@broberg/mail@0.1.0': {}
 
   '@broberg/secret-scan@0.1.5': {}
+
+  '@broberg/speech-dictionary@0.1.1': {}
 
   '@crxjs/vite-plugin@2.4.0(vite@5.4.21(@types/node@22.19.17)(lightningcss@1.32.0))':
     dependencies:
