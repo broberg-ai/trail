@@ -137,14 +137,21 @@ final class HudModel: ObservableObject {
             // (the cardmem Agents composer, iTerm, …) instead of saving to Trail.
             // Hide the HUD FIRST so focus returns to the target field, then type.
             if PromptMode.shared.enabled {
+                // F201.13 — also persist the prompt dictation as a Source (flagged
+                // source:"prompt" so it's filterable), so "all dictations" land in
+                // Trail. Fire-and-forget — the words already reach the session, and
+                // the Source is a bonus that lands once the engine source path is up.
+                Task { _ = await TrailClient.saveSource(content: corrected, rawTranscript: raw, source: "prompt", allowFallback: false) }
                 onDismiss?()
                 PromptMode.shared.inject(corrected)
                 return
             }
-            // Extraction mode — a real transcript becomes a Trail Neuron (F201.6.4).
+            // Extraction mode — the capture becomes a first-class Trail Source
+            // (F201.13), falling back to the legacy candidate path until the engine
+            // source path is deployed (no naked cutover).
             saved = .saving
             Task {
-                let result = await TrailClient.saveNote(corrected)
+                let result = await TrailClient.saveSource(content: corrected, rawTranscript: raw, source: "audio", allowFallback: true)
                 await MainActor.run {
                     switch result {
                     case .saved:     self.saved = .saved

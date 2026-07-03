@@ -131,6 +131,45 @@ enum TrailClient {
         return .failed
     }
 
+    // MARK: Save a capture as a first-class Source (F201.13 — source-first)
+
+    /// POST a finished capture to the source-first ambient path. The engine stores
+    /// the raw VERBATIM as a kind='source' document and (Phase 2) compiles it into a
+    /// Neuron with provenance — the raw is never rewritten or lost. `source`
+    /// distinguishes capture origin ("audio" = Extraction, "prompt" = Prompt-Mode
+    /// dual-write) so prompt dictations are filterable.
+    ///
+    /// Falls back to the legacy candidate path on 404 (engine hasn't enabled the
+    /// source path yet) when `allowFallback` — so a deliberate Extraction save is
+    /// never lost across the server rollout (no naked cutover). Prompt dual-writes
+    /// pass allowFallback:false: the words already reached the session via inject,
+    /// so the Source is a bonus that simply lands once the engine is deployed.
+    static func saveSource(
+        fileType: String = "ambient-speech",
+        content: String,
+        rawTranscript: String? = nil,
+        source: String = "audio",
+        allowFallback: Bool = true
+    ) async -> SaveResult {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let token, let kb = kbId,
+              let url = URL(string: "\(engine)/api/v1/knowledge-bases/\(kb)/ambient-source") else { return .failed }
+        var body: [String: Any] = ["fileType": fileType, "content": trimmed, "source": source]
+        // Only carry the raw when a correction actually changed the words.
+        if let rawTranscript, rawTranscript != trimmed { body["rawTranscript"] = rawTranscript }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let code = (resp as? HTTPURLResponse)?.statusCode else { return .failed }
+        if code == 201 { return .saved }
+        // Source path not enabled on the engine yet → legacy candidate path.
+        if code == 404 && allowFallback { return await saveNote(trimmed) }
+        return .failed
+    }
+
     /// A readable fallback title = first sentence (to a period/newline), ≤80 chars.
     /// The engine's distill may replace it; this is what shows if it doesn't.
     private static func noteTitle(from text: String) -> String {
