@@ -176,6 +176,19 @@ final class AppleSpeech: ObservableObject {
         let oldRequest = replacingExisting ? request : nil
         let oldTask = replacingExisting ? task : nil
 
+        // Freeze everything spoken so far into `accumulated` BEFORE swapping the
+        // request. On a proactive (45s) or config-change restart the old task's
+        // final callback is dropped by the `request === newReq` guard below, so
+        // without this commit the WHOLE in-flight segment is lost on every restart
+        // — long speeches were truncated to just their last segment ("længere
+        // speeches blev afkortet", Christian 2026-07-03). transcript =
+        // combine(accumulated, currentPartial), so this preserves the full text.
+        if replacingExisting {
+            accumulated = transcript
+            isFinal = false
+            EventLog.shared.log(kind: "apple_speech_restart accumulated_chars=\(accumulated.count)")
+        }
+
         let newReq = SFSpeechAudioBufferRecognitionRequest()
         newReq.shouldReportPartialResults = true
         newReq.taskHint = .dictation
