@@ -9,8 +9,10 @@ import {
   canonicaliseTagString,
 } from '@trail/shared';
 import { eq, and, inArray, asc, desc, sql, type SQL } from 'drizzle-orm';
+import { z } from 'zod';
 import { submitCuratorEdit, VersionConflictError, resolveKbId, createCandidateQueueAPI, type WriteArgs } from '@trail/core';
 import { requireAuth, getUser, getTenant, getTrail } from '../middleware/auth.js';
+import { createAmbientSource, isAmbientSourcesEnabled, AMBIENT_SOURCE_FILE_TYPES } from '../services/ambient-source.js';
 import { chunkText, storeChunks } from '../services/chunker.js';
 import {
   processPdfAsync,
@@ -388,6 +390,39 @@ documentRoutes.post('/knowledge-bases/:kbId/documents/note', async (c) => {
   }
 
   const doc = await trail.db.select().from(documents).where(eq(documents.id, id)).get();
+  return c.json(doc, 201);
+});
+
+// F201.13 — create a first-class Source from raw ambient material (dictated
+// speech / screen OCR / screen image). The body is stored VERBATIM as a
+// kind='source' document; distill is NOT applied to it (that's the Phase 2
+// compile step, which emits a separate Neuron). Ship-dark behind
+// TRAIL_AMBIENT_SOURCES=1 → 404 until armed, so the new path never surfaces in
+// prod before it's proven.
+const CreateAmbientSourceSchema = z.object({
+  fileType: z.enum(AMBIENT_SOURCE_FILE_TYPES),
+  content: z.string().min(1),
+  title: z.string().max(500).optional(),
+  rawTranscript: z.string().optional(),
+  source: z.string().max(40).optional(),
+});
+
+documentRoutes.post('/knowledge-bases/:kbId/ambient-source', async (c) => {
+  if (!isAmbientSourcesEnabled()) return c.json({ error: 'not found' }, 404);
+  const trail = getTrail(c);
+  const user = getUser(c);
+  const tenant = getTenant(c);
+  const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
+  if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
+  const parsed = CreateAmbientSourceSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    return c.json({ error: 'invalid request body', details: parsed.error.issues }, 400);
+  }
+  const doc = await createAmbientSource(
+    trail,
+    { tenantId: tenant.id, kbId, userId: user.id },
+    parsed.data,
+  );
   return c.json(doc, 201);
 });
 
