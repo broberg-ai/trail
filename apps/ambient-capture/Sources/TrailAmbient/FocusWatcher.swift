@@ -38,8 +38,12 @@ final class FocusWatcher {
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             let name = app.localizedName ?? "Unknown"
             let pid = app.processIdentifier
+            let bundleId = app.bundleIdentifier
             Task { @MainActor [weak self] in
                 self?.appDidActivate(name: name, pid: pid)
+                // F201.15 — immediate target update on app switch (the poll
+                // handles tab switches within the same app).
+                PromptMode.shared.noteActivation(app: name, pid: pid, bundleId: bundleId)
             }
         }
         // Surface the Accessibility trust state in the log so a missing
@@ -82,7 +86,9 @@ final class FocusWatcher {
 
     /// Focused window title via the Accessibility API. Returns nil without
     /// the TCC permission (the event still logs with the app name alone).
-    private static func focusedWindowTitle(pid: pid_t) -> String? {
+    /// Internal (not private) so PromptMode (F201.15) can read the focused
+    /// window title of an arbitrary app to resolve its dictate target.
+    static func focusedWindowTitle(pid: pid_t) -> String? {
         let appElement = AXUIElementCreateApplication(pid)
         var window: CFTypeRef?
         guard AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &window) == .success,

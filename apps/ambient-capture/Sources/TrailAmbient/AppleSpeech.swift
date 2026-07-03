@@ -35,16 +35,21 @@ final class AppleSpeech: ObservableObject {
     @Published private(set) var transcript: String = ""
     /// True once the recognizer has committed the current segment.
     @Published private(set) var isFinal: Bool = false
+    /// Live mic input level (0…1 peak) from the tap — drives the HUD level meter
+    /// so it's VISIBLE whether audio is actually reaching the engine.
+    @Published private(set) var inputLevel: Float = 0
 
     static var isSpeechAuthorized: Bool {
         SFSpeechRecognizer.authorizationStatus() == .authorized
     }
 
     private let recognizer: SFSpeechRecognizer? = SFSpeechRecognizer(locale: Locale(identifier: "da-DK"))
-    private let audioEngine = AVAudioEngine()
+    private var audioEngine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var proactiveRestartTimer: Timer?
+    private var configObserver: NSObjectProtocol?
+    private var configRebuilds = 0
 
     /// Text locked in from earlier recognition tasks in THIS dictation session
     /// (see the 45s-restart note above). Only stop() clears it.
@@ -63,15 +68,38 @@ final class AppleSpeech: ObservableObject {
 
     func start() throws {
         guard state != .listening else { return }
+        transcript = ""; accumulated = ""; isFinal = false; userHolding = true
+        configRebuilds = 0
+        do {
+            try buildEngineAndTap()
+        } catch {
+            userHolding = false
+            throw error
+        }
+        spawnTask(replacingExisting: false)
+        startProactiveRestartTimer()
+        state = .listening
+    }
 
+    /// Build a FRESH audio engine bound to the CURRENT input device + format,
+    /// install the level-metering tap, start it, and observe device changes.
+    ///
+    /// Two fixes live here:
+    /// 1. Fresh engine + format guard. AVAudioEngine caches the input format at
+    ///    graph-setup time; a stale one (or an invalid 0-ch/0-Hz one when the mic
+    ///    isn't ready) makes installTap raise an Obj-C NSException Swift can't
+    ///    catch → SIGABRT. Read the live format and validate first.
+    /// 2. Config-change observer. AirPods flip A2DP (48 kHz) → HFP (24 kHz) the
+    ///    instant the mic activates — AFTER we read the format — so the tap stays
+    ///    on 48 kHz while the device delivers 24 kHz → the recognizer hears
+    ///    NOTHING, or captures only the part before the flip ("opfanger intet" /
+    ///    "ikke det hele kom med", Christian 2026-07-03; recording worked only
+    ///    with Noise-Cancellation forcing a stable profile). On the change we
+    ///    rebuild the graph at the new format so capture continues seamlessly.
+    private func buildEngineAndTap() throws {
+        if let o = configObserver { NotificationCenter.default.removeObserver(o); configObserver = nil }
+        audioEngine = AVAudioEngine()
         let input = audioEngine.inputNode
-        // outputFormat(forBus:) reflects the LIVE hardware input. When the mic
-        // isn't ready (not granted, no default input device, held by another
-        // process) it comes back with 0 channels / 0 Hz — and installTap then
-        // raises an Obj-C NSException, NOT a Swift error, so `try`/`catch` can't
-        // catch it and the WHOLE APP aborts (SIGABRT — observed 2026-07-03:
-        // "6 tryk på mikrofonen uden resultat", så crash). Validate FIRST and
-        // throw a real Swift error so the caller recovers instead of dying.
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else {
             state = .error("mikrofon ikke klar")
@@ -79,29 +107,54 @@ final class AppleSpeech: ObservableObject {
             throw NSError(domain: "AppleSpeech", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "Mikrofonen er ikke klar (intet gyldigt input-format)"])
         }
-
-        transcript = ""; accumulated = ""; isFinal = false; userHolding = true
         input.removeTap(onBus: 0)
-        // The tap forwards buffers to whatever request is currently active, so a
-        // recognizer restart picks up mid-stream without dropping audio.
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            Task { @MainActor in self?.request?.append(buffer) }
+            let peak = Self.peakLevel(buffer)
+            Task { @MainActor in
+                self?.request?.append(buffer)
+                self?.inputLevel = peak
+            }
         }
         audioEngine.prepare()
-        do {
-            try audioEngine.start()
-        } catch {
-            input.removeTap(onBus: 0)
-            userHolding = false
-            state = .error("kunne ikke starte lyd")
-            EventLog.shared.log(kind: "apple_speech_engine_start_failed")
-            throw error
+        try audioEngine.start()
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: audioEngine, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.handleConfigChange() }
         }
-
-        spawnTask(replacingExisting: false)
-        startProactiveRestartTimer()
-        state = .listening
         EventLog.shared.log(kind: "apple_speech_listening sr=\(Int(format.sampleRate)) ch=\(format.channelCount)")
+    }
+
+    /// The input device/format changed mid-capture (AirPods profile flip, device
+    /// swap). Rebuild the audio graph at the NEW format + a fresh recognizer,
+    /// preserving the text so far. Capped so a flapping route can't loop forever.
+    private func handleConfigChange() {
+        guard userHolding, state == .listening else { return }
+        configRebuilds += 1
+        guard configRebuilds <= 4 else {
+            EventLog.shared.log(kind: "apple_speech_config_change_giveup")
+            return
+        }
+        EventLog.shared.log(kind: "apple_speech_config_change rebuild=\(configRebuilds)")
+        audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
+        do {
+            try buildEngineAndTap()               // fresh engine at the NEW format
+            spawnTask(replacingExisting: true)     // fresh recognizer, keeps `accumulated`
+        } catch {
+            userHolding = false
+            stopInternal()
+        }
+    }
+
+    /// Peak amplitude (0…1) of a capture buffer — drives the input-level meter.
+    private static func peakLevel(_ buffer: AVAudioPCMBuffer) -> Float {
+        guard let ch = buffer.floatChannelData, buffer.frameLength > 0 else { return 0 }
+        let n = Int(buffer.frameLength)
+        var peak: Float = 0
+        let data = ch[0]
+        for i in 0..<n { peak = max(peak, abs(data[i])) }
+        return min(1, peak)
     }
 
     /// Stop capturing and return the final transcript ("" → nil).
@@ -126,6 +179,9 @@ final class AppleSpeech: ObservableObject {
         let newReq = SFSpeechAudioBufferRecognitionRequest()
         newReq.shouldReportPartialResults = true
         newReq.taskHint = .dictation
+        // F201.14 pre-STT biasing — nudge the recogniser toward canonical dev/
+        // product/person names BEFORE it mishears them (Apple's initialPrompt).
+        newReq.contextualStrings = SpeechDictionary.contextualStrings
         // Privacy: keep audio on-device when supported (Trail egress guarantee).
         if recognizer?.supportsOnDeviceRecognition == true {
             newReq.requiresOnDeviceRecognition = true
@@ -161,6 +217,7 @@ final class AppleSpeech: ObservableObject {
 
     private func stopInternal() {
         stopProactiveRestartTimer()
+        if let o = configObserver { NotificationCenter.default.removeObserver(o); configObserver = nil }
         if audioEngine.isRunning {
             audioEngine.stop()
             audioEngine.inputNode.removeTap(onBus: 0)
@@ -168,6 +225,7 @@ final class AppleSpeech: ObservableObject {
         request?.endAudio()
         task?.finish()
         request = nil; task = nil
+        inputLevel = 0
         if state == .listening { state = .idle }
     }
 

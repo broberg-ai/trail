@@ -164,6 +164,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(connect)
         }
 
+        // F201.15 — Prompt Mode toggle. Off = Extraction (dictation → Trail).
+        // On = dictation relays to the focused cc-session. The live target is
+        // shown here + in the HUD footer so a mis-send is visibly impossible.
+        menu.addItem(.separator())
+        let promptItem = NSMenuItem(title: "Prompt Mode — diktér til session", action: #selector(togglePromptMode), keyEquivalent: "")
+        promptItem.target = self
+        promptItem.state = PromptMode.shared.enabled ? .on : .off
+        menu.addItem(promptItem)
+        if PromptMode.shared.enabled {
+            let t = PromptMode.shared.session ?? (PromptMode.shared.targetApp.isEmpty ? "—" : PromptMode.shared.targetApp)
+            let target = NSMenuItem(title: "  Target: \(t)", action: nil, keyEquivalent: "")
+            target.isEnabled = false
+            menu.addItem(target)
+            let autoEnter = NSMenuItem(title: "  Send automatisk (Enter)", action: #selector(toggleAutoEnter), keyEquivalent: "")
+            autoEnter.target = self
+            autoEnter.state = PromptMode.shared.autoEnter ? .on : .off
+            menu.addItem(autoEnter)
+        }
+
         // Settings — deny-list is enforced by the gate from F201.4; the
         // submenu makes today's defaults visible where users expect them.
         let settingsMenu = NSMenu()
@@ -225,6 +244,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         paused.toggle()
         focusWatcher.paused = paused
         EventLog.shared.log(kind: paused ? "capture_paused" : "capture_resumed")
+    }
+
+    @objc private func togglePromptMode() {
+        PromptMode.shared.enabled.toggle()
+        EventLog.shared.log(kind: PromptMode.shared.enabled ? "prompt_mode_on" : "prompt_mode_off")
+        render()
+    }
+
+    @objc private func toggleAutoEnter() {
+        PromptMode.shared.autoEnter.toggle()
+        render()
     }
 
     @objc private func connectToTrail() {

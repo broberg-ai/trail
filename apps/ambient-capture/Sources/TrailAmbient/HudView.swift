@@ -27,9 +27,15 @@ final class HudModel: ObservableObject {
     /// user SEES what Trail heard, live as it's spoken).
     @Published var mic: MicState = (AudioWatcher.isMicGranted && AppleSpeech.isSpeechAuthorized) ? .idle : .needsPermission
     @Published var transcript: String?
+    /// F201.15 — live mic input level (0…1), mirrored from AppleSpeech for the
+    /// HUD level meter (so it's visible whether audio is reaching the engine).
+    @Published var inputLevel: Float = 0
     /// F201.6.4 — where the last transcript is on its way to becoming a Neuron.
     enum SaveState { case saving, saved, duplicate, failed }
     @Published var saved: SaveState?
+    /// F201.15 — set by HudController so Prompt Mode can hide the HUD (returning
+    /// focus to the target field) before it injects the dictation.
+    var onDismiss: (() -> Void)?
 
     /// F201.6.7 — Apple's on-device streaming recognizer. Owns the mic tap while
     /// listening and publishes the transcript live; we mirror it into `transcript`
@@ -42,12 +48,19 @@ final class HudModel: ObservableObject {
         DictationJournal.recoverInflight()
         speech.$transcript
             .receive(on: RunLoop.main)
-            .sink { [weak self] text in
+            .sink { [weak self] raw in
                 guard let self, self.mic == .listening else { return }
-                self.transcript = text
-                // Crash insurance: checkpoint the live words while speaking.
-                DictationJournal.checkpoint(text)
+                // F201.14 — restore misheard terms live, so the banner shows the
+                // true words as spoken. Display = corrected; journal = RAW.
+                self.transcript = SpeechDictionary.applyCorrections(raw)
+                // Crash insurance + mining corpus: checkpoint the RAW words (the
+                // corrected form is always re-derivable from raw; the reverse isn't).
+                DictationJournal.checkpoint(raw)
             }
+            .store(in: &cancellables)
+        speech.$inputLevel
+            .receive(on: RunLoop.main)
+            .sink { [weak self] lvl in self?.inputLevel = lvl }
             .store(in: &cancellables)
     }
 
@@ -107,18 +120,31 @@ final class HudModel: ObservableObject {
             // and save it (no transcribing wait, no double-press race).
             let final = speech.stop()
             mic = .idle
-            let trimmed = (final ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            transcript = trimmed        // "" → "no speech" hint in the banner
-            guard !trimmed.isEmpty else { DictationJournal.clearInflight(); return }
-            // INTERIM CATCH (F201.6.8) — the raw words to disk VERBATIM, BEFORE the
+            let raw = (final ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !raw.isEmpty else { transcript = ""; DictationJournal.clearInflight(); return }
+            // INTERIM CATCH (F201.6.8) — the RAW words to disk VERBATIM, BEFORE the
             // network hop, so distill / a failed POST / a crash can never lose
-            // them. This is the durable record of what was actually said.
-            DictationJournal.append(trimmed)
+            // them. Raw (not corrected) is the durable record: the corrected form
+            // is always re-derivable via applyCorrections; the reverse is not, and
+            // raw is also the corpus F201.14 mining reads for unknown mishearings.
+            DictationJournal.append(raw)
             DictationJournal.clearInflight()
-            // F201.6.4 — a real transcript becomes a Trail Neuron.
+            // F201.14 — restore the terms Apple misheard before the text goes
+            // anywhere (injected into a session, or saved as a Neuron).
+            let corrected = SpeechDictionary.applyCorrections(raw)
+            transcript = corrected      // show the restored words in the banner
+            // F201.15 — Prompt Mode: inject the dictation into the focused field
+            // (the cardmem Agents composer, iTerm, …) instead of saving to Trail.
+            // Hide the HUD FIRST so focus returns to the target field, then type.
+            if PromptMode.shared.enabled {
+                onDismiss?()
+                PromptMode.shared.inject(corrected)
+                return
+            }
+            // Extraction mode — a real transcript becomes a Trail Neuron (F201.6.4).
             saved = .saving
             Task {
-                let result = await TrailClient.saveNote(trimmed)
+                let result = await TrailClient.saveNote(corrected)
                 await MainActor.run {
                     switch result {
                     case .saved:     self.saved = .saved
@@ -181,6 +207,8 @@ private enum Palette {
 
 struct HudView: View {
     @ObservedObject var model: HudModel
+    /// F201.15 — the live Prompt-Mode target, shown in the footer.
+    @ObservedObject private var prompt = PromptMode.shared
     var onClose: () -> Void
     /// When set (off-screen preview only), the query renders as static text
     /// instead of the live TextField — ImageRenderer can't rasterize an
@@ -291,7 +319,8 @@ struct HudView: View {
                     .font(.system(size: 13)).lineLimit(3)
                     .animation(.easeOut(duration: 0.15), value: live)
                 Spacer(minLength: 8)
-                Text("tryk ⏹ for at gemme").foregroundColor(Palette.fgSubtle).font(.system(size: 11))
+                InputLevelMeter(level: model.inputLevel)
+                Text("tryk ⏹").foregroundColor(Palette.fgSubtle).font(.system(size: 11))
             } else if let t = model.transcript {
                 let empty = t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 Image(systemName: "waveform").foregroundColor(Palette.accent).font(.system(size: 13))
@@ -423,11 +452,32 @@ struct HudView: View {
             hintKey("⇥", "skift felt")
             hintKey("esc", "luk")
             Spacer()
-            Text("Ambient Test").font(.system(size: 10.5, design: .monospaced)).foregroundColor(Palette.fgSubtle)
+            footerRight
         }
         .padding(.horizontal, 18).padding(.vertical, 10)
         .background(Color.black.opacity(0.18))
         .overlay(Rectangle().fill(Palette.hairline).frame(height: 1), alignment: .top)
+    }
+
+    /// F201.15 — footer right side. In Prompt Mode it shows the LIVE dictate
+    /// target (auto-updating as focus moves) — both the safety indicator (a
+    /// mis-send is visibly impossible) and the debug read-out for the
+    /// focus→session resolver. Extraction mode shows the KB label as before.
+    @ViewBuilder private var footerRight: some View {
+        if prompt.enabled {
+            // iTerm tab → session name; a browser/other app → the app name. Both
+            // are valid injection targets (text goes to the focused field there).
+            let target = prompt.session ?? (prompt.targetApp.isEmpty ? nil : prompt.targetApp)
+            HStack(spacing: 5) {
+                LucideSpeech(size: 12, color: target == nil ? Palette.fgSubtle : Palette.accent)
+                Text("Target: \(target ?? "—")")
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundColor(target == nil ? Palette.fgSubtle : Palette.accent)
+            }
+            .help(prompt.rawTitle.map { "Fra: \(prompt.targetApp) — \($0)" } ?? "Intet fokuseret felt")
+        } else {
+            Text("Ambient Test").font(.system(size: 10.5, design: .monospaced)).foregroundColor(Palette.fgSubtle)
+        }
     }
 
     private func hintKey(_ key: String, _ label: String) -> some View {
@@ -476,6 +526,26 @@ private struct TrailMarkView: View {
             Circle().stroke(Palette.accent.opacity(0.55), lineWidth: size * 0.03).padding(size * 0.22)
             Circle().fill(Palette.accent).frame(width: size * 0.22, height: size * 0.22)
         }.frame(width: size, height: size)
+    }
+}
+
+/// F201.15 — macOS-Sound-settings-style input level meter: a row of bars that
+/// fill with the live mic peak. Makes it VISIBLE whether audio is reaching the
+/// engine (Christian 2026-07-03: "en gauge der kan vise input level som i
+/// settings"). Shown while listening; can later move behind a settings icon.
+private struct InputLevelMeter: View {
+    var level: Float          // 0…1
+    private let bars = 12
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<bars, id: \.self) { i in
+                let on = level >= Float(i + 1) / Float(bars)
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(on ? Palette.accent : Palette.fg.opacity(0.14))
+                    .frame(width: 3, height: 9)
+            }
+        }
+        .animation(.linear(duration: 0.05), value: level)
     }
 }
 

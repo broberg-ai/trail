@@ -22,3 +22,6 @@ echo "[ambient-capture] --ocrtest (on-device Vision OCR + delta guard)"
 
 echo "[ambient-capture] --audiotest (VAD segmentation + WAV round-trip + deny-list)"
 "$BIN" --audiotest
+
+echo "[ambient-capture] --dicttest (F201.14 ordbog: whole-word STT corrections + biasing terms)"
+"$BIN" --dicttest

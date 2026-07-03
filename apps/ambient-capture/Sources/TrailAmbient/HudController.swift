@@ -43,6 +43,9 @@ final class HudController {
     private var escMonitor: Any?
 
     init() {
+        // F201.15 — Prompt Mode hides the HUD (returning focus to the target
+        // field) before injecting the dictation.
+        model.onDismiss = { [weak self] in self?.hide() }
         hotKey = HotKey { [weak self] in self?.toggle() }
         // ⌃⌥D "diktér" — open the HUD and toggle dictation, so the hotkey gives
         // the SAME visible feedback as the in-HUD mic button. Was ⌃⌥R, but Claude
