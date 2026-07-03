@@ -89,4 +89,54 @@ enum TrailClient {
         }
         return ChatAnswer(answer: (root["answer"] as? String) ?? "(tomt svar)", citations: cites)
     }
+
+    // MARK: Save a voice note as a Trail candidate (F201.6.4)
+
+    enum SaveResult { case saved, duplicate, failed }
+
+    /// POST a finished voice transcript to the queue as an ambient candidate.
+    /// Mirrors @trail/ambient-gate's body shape (kind `external-feed`, connector
+    /// `trail-ambient-capture`) so it flows through the SAME engine pipeline:
+    /// F197 secret-redaction (server-side in createCandidate), F201.11 distill
+    /// (raw transcript → clean titled knowledge, or noise-filtered), and the
+    /// F201.8/.12 auto-approval policy. The ambient-scoped token is allow-listed
+    /// for exactly this endpoint (auth.ts AMBIENT_ALLOWED).
+    static func saveNote(_ text: String) async -> SaveResult {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let token, let kb = kbId,
+              let url = URL(string: "\(engine)/api/v1/queue/candidates") else { return .failed }
+        let meta: [String: Any] = [
+            "connector": "trail-ambient-capture",
+            "source": "audio",
+            "capturedAt": ISO8601DateFormatter().string(from: Date()),
+        ]
+        let metaStr = (try? JSONSerialization.data(withJSONObject: meta))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{\"connector\":\"trail-ambient-capture\"}"
+        let body: [String: Any] = [
+            "knowledgeBaseId": kb,
+            "kind": "external-feed",
+            "title": noteTitle(from: trimmed),
+            "content": trimmed,
+            "metadata": metaStr,
+        ]
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        guard let (_, resp) = try? await URLSession.shared.data(for: req),
+              let code = (resp as? HTTPURLResponse)?.statusCode else { return .failed }
+        if code == 201 { return .saved }
+        if code == 409 { return .duplicate }  // engine-side external-feed de-dup
+        return .failed
+    }
+
+    /// A readable fallback title = first sentence (to a period/newline), ≤80 chars.
+    /// The engine's distill may replace it; this is what shows if it doesn't.
+    private static func noteTitle(from text: String) -> String {
+        let firstSentence = text.split(whereSeparator: { $0 == "." || $0 == "\n" || $0 == "?" || $0 == "!" })
+            .first.map(String.init)?.trimmingCharacters(in: .whitespaces) ?? text
+        let base = firstSentence.isEmpty ? text : firstSentence
+        return base.count <= 80 ? base : String(base.prefix(79)) + "…"
+    }
 }

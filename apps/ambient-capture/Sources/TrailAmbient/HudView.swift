@@ -25,6 +25,9 @@ final class HudModel: ObservableObject {
     /// user SEES what WhisperKit heard, instead of a file on disk).
     @Published var mic: MicState = AudioWatcher.isMicGranted ? .idle : .needsPermission
     @Published var transcript: String?
+    /// F201.6.4 — where the last transcript is on its way to becoming a Neuron.
+    enum SaveState { case saving, saved, duplicate, failed }
+    @Published var saved: SaveState?
 
     /// Mic button tapped. Grant-first: an accessory app's launch-time prompt is
     /// unreliable (no front window), but the HUD is frontmost + app-active, so
@@ -60,9 +63,22 @@ final class HudModel: ObservableObject {
             mic = .transcribing
             Task {
                 let text = await AudioWatcher.shared.finishAndTranscribe()
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 await MainActor.run {
                     self.mic = .idle
                     self.transcript = text   // "" → "no speech" hint in the banner
+                    self.saved = trimmed.isEmpty ? nil : .saving
+                }
+                // F201.6.4 — a real transcript becomes a Trail Neuron. Only
+                // deliberate speech is saved; an empty capture just shows the hint.
+                guard !trimmed.isEmpty else { return }
+                let result = await TrailClient.saveNote(trimmed)
+                await MainActor.run {
+                    switch result {
+                    case .saved:     self.saved = .saved
+                    case .duplicate: self.saved = .duplicate
+                    case .failed:    self.saved = .failed
+                    }
                 }
             }
         case .transcribing:
@@ -92,7 +108,7 @@ final class HudModel: ObservableObject {
 
     func reset() {
         query = ""; hits = []; answer = nil; ran = false; loading = false
-        transcript = nil
+        transcript = nil; saved = nil
         // Re-read the grant on every open (it may have been granted since).
         if mic != .recording && mic != .transcribing {
             mic = AudioWatcher.isMicGranted ? .idle : .needsPermission
@@ -236,14 +252,16 @@ struct HudView: View {
                     .foregroundColor(Palette.fg).font(.system(size: 13))
                 Spacer()
             } else if let t = model.transcript {
+                let empty = t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 Image(systemName: "waveform").foregroundColor(Palette.accent).font(.system(size: 13))
-                Text(t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                     ? "Ingen tale opfanget — prøv igen tættere på mikrofonen."
-                     : t)
-                    .foregroundColor(t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Palette.fgMuted : Palette.fg)
-                    .font(.system(size: 13)).lineLimit(3).textSelection(.enabled)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(empty ? "Ingen tale opfanget — prøv igen tættere på mikrofonen." : t)
+                        .foregroundColor(empty ? Palette.fgMuted : Palette.fg)
+                        .font(.system(size: 13)).lineLimit(3).textSelection(.enabled)
+                    if let s = model.saved { savedLine(s) }
+                }
                 Spacer(minLength: 8)
-                Button { model.transcript = nil } label: {
+                Button { model.transcript = nil; model.saved = nil } label: {
                     Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)).foregroundColor(Palette.fgSubtle)
                 }.buttonStyle(.plain)
             }
@@ -252,6 +270,23 @@ struct HudView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(model.mic == .recording ? Color.red.opacity(0.08) : Palette.accent.opacity(0.07))
         .overlay(Rectangle().fill(Palette.hairline).frame(height: 1), alignment: .bottom)
+    }
+
+    /// F201.6.4 — the transcript's journey into Trail, shown under the text.
+    @ViewBuilder private func savedLine(_ s: HudModel.SaveState) -> some View {
+        switch s {
+        case .saving:
+            HStack(spacing: 5) {
+                ProgressView().controlSize(.mini).tint(Palette.fgMuted)
+                Text("Gemmer i Trail…").font(.system(size: 11)).foregroundColor(Palette.fgMuted)
+            }
+        case .saved:
+            Text("✓ Gemt i Trail").font(.system(size: 11, weight: .medium)).foregroundColor(Palette.accent)
+        case .duplicate:
+            Text("Allerede gemt (dublet)").font(.system(size: 11)).foregroundColor(Palette.fgMuted)
+        case .failed:
+            Text("Kunne ikke gemme i Trail — prøv igen").font(.system(size: 11)).foregroundColor(Color.red.opacity(0.85))
+        }
     }
 
     private var modeToggle: some View {
