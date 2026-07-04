@@ -44,6 +44,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Pre-warm Whisper in the background so the first capture doesn't wait on
         // the one-time model download.
         Task { await Whisper.shared.prewarm() }
+        // F201.13 — refresh the KB name from the engine so the menubar "writing to"
+        // label reflects a rename in admin (cached name is only set at connect time).
+        Task {
+            if await TrailClient.refreshKbName() != nil {
+                await MainActor.run { self.render() }
+            }
+        }
     }
 
     /// F201.9 fix — the HUD search field couldn't paste (⌘V). An .accessory

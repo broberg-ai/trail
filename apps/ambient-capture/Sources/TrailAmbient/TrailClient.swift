@@ -35,6 +35,31 @@ enum TrailClient {
             ?? (UserDefaults.standard.array(forKey: "trail.kbIds") as? [String])?.first
     }
 
+    /// F201.13 — fetch the KB's CURRENT name from the engine and cache it into
+    /// UserDefaults `trail.kbNames` (the store both the menubar label and the HUD
+    /// footer read). Lets a rename in admin appear without a device reconnect.
+    /// Silent no-op on any failure — the cached name stays. Returns the name.
+    @discardableResult
+    static func refreshKbName() async -> String? {
+        guard let token, let kb = kbId,
+              let url = URL(string: "\(engine)/api/v1/knowledge-bases/\(kb)/name") else { return nil }
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let name = (root["name"] as? String), !name.isEmpty else { return nil }
+        UserDefaults.standard.set([name], forKey: "trail.kbNames")
+        return name
+    }
+
+    /// The cached KB name (menubar + HUD footer), or a neutral fallback.
+    static var cachedKbName: String {
+        let names = (UserDefaults.standard.array(forKey: "trail.kbNames") as? [String])?
+            .filter { !$0.isEmpty } ?? []
+        return names.isEmpty ? "Trail" : names.joined(separator: ", ")
+    }
+
     /// Admin deep-link for a Neuron slug (opens in the browser).
     static func neuronURL(slug: String) -> URL? {
         guard let kb = kbId else { return nil }

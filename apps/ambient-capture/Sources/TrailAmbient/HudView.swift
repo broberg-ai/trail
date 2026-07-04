@@ -32,6 +32,10 @@ final class HudModel: ObservableObject {
     /// user SEES what Trail heard, live as it's spoken).
     @Published var mic: MicState = (AudioWatcher.isMicGranted && AppleSpeech.isSpeechAuthorized) ? .idle : .needsPermission
     @Published var transcript: String?
+    /// F201.13 — the KB the device writes to, shown in the Extraction-mode footer.
+    /// Seeded from the cached name (set at connect), refreshed live from the engine
+    /// on each HUD open so a rename in admin appears without reconnecting.
+    @Published var kbName: String = TrailClient.cachedKbName
     /// F201.15 — live mic input level (0…1), mirrored from AppleSpeech for the
     /// HUD level meter (so it's visible whether audio is reaching the engine).
     @Published var inputLevel: Float = 0
@@ -112,7 +116,8 @@ final class HudModel: ObservableObject {
                 mic = .needsPermission; return
             }
             do {
-                try speech.start()
+                // Prompt Mode is session-only — don't record its audio to disk.
+                try speech.start(record: !PromptMode.shared.enabled)
                 mic = .listening
             } catch {
                 // Mic wasn't actually ready — stay idle, no crash (see start()).
@@ -216,6 +221,13 @@ final class HudModel: ObservableObject {
         // Re-read the grants on every open (they may have been granted since).
         if mic != .listening {
             mic = (AudioWatcher.isMicGranted && AppleSpeech.isSpeechAuthorized) ? .idle : .needsPermission
+        }
+        // F201.13 — pull the KB's current name so a rename in admin shows live.
+        kbName = TrailClient.cachedKbName
+        Task {
+            if let name = await TrailClient.refreshKbName() {
+                await MainActor.run { self.kbName = name }
+            }
         }
     }
 }
@@ -509,7 +521,7 @@ struct HudView: View {
             }
             .help(prompt.rawTitle.map { "\(S.fromPrefix) \(prompt.targetApp) — \($0)" } ?? S.noFocusedField)
         } else {
-            Text("Ambient Test").font(.system(size: 10.5, design: .monospaced)).foregroundColor(Palette.fgSubtle)
+            Text(model.kbName).font(.system(size: 10.5, design: .monospaced)).foregroundColor(Palette.fgSubtle)
         }
     }
 
