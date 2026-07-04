@@ -74,9 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // capturing, OUTLINE while paused (the visible recording tell).
         statusItem.button?.image = TrailMark.menubarImage(filled: !paused)
         statusItem.button?.title = ""
-        statusItem.button?.toolTip = paused
-            ? "Trail Ambient — på pause (ingen capture)"
-            : "Trail Ambient — capturer aktivt"
+        statusItem.button?.toolTip = paused ? S.tooltipPaused : S.tooltipActive
         statusItem.menu = buildMenu()
         ensureAvatar()
     }
@@ -114,7 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             menu.addItem(header)
             if let kb = deviceAuth.kbLabel {
-                let kbItem = NSMenuItem(title: "Skriver til: \(kb)", action: nil, keyEquivalent: "")
+                let kbItem = NSMenuItem(title: "\(S.writingToPrefix) \(kb)", action: nil, keyEquivalent: "")
                 kbItem.isEnabled = false
                 menu.addItem(kbItem)
             }
@@ -122,7 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let state = NSMenuItem(
-            title: paused ? "På pause — ingen capture" : "Capturer aktivt",
+            title: paused ? S.statePaused : S.stateActive,
             action: nil, keyEquivalent: ""
         )
         state.isEnabled = false
@@ -131,8 +129,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !deviceAuth.isConnected {
             let statusText: String
             switch deviceAuth.state {
-            case .waiting: statusText = "Venter på godkendelse i browseren…"
-            default: statusText = "Ikke forbundet til Trail"
+            case .waiting: statusText = S.waitingApproval
+            default: statusText = S.notConnected
             }
             let account = NSMenuItem(title: statusText, action: nil, keyEquivalent: "")
             account.isEnabled = false
@@ -141,7 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         if deviceAuth.isConnected {
-            let lookup = NSMenuItem(title: "Slå op i Trail…", action: #selector(openHud), keyEquivalent: "t")
+            let lookup = NSMenuItem(title: S.lookUpInTrail, action: #selector(openHud), keyEquivalent: "t")
             lookup.keyEquivalentModifierMask = [.control, .option]
             lookup.target = self
             menu.addItem(lookup)
@@ -149,7 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let pause = NSMenuItem(
-            title: paused ? "Genoptag capture" : "Pause capture",
+            title: paused ? S.resumeCapture : S.pauseCapture,
             action: #selector(togglePause), keyEquivalent: "p"
         )
         pause.target = self
@@ -157,7 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if !deviceAuth.isConnected {
             let connect = NSMenuItem(
-                title: deviceAuth.state == .waiting ? "Åbn godkendelses-siden igen" : "Forbind til Trail…",
+                title: deviceAuth.state == .waiting ? S.reopenApproval : S.connectToTrail,
                 action: #selector(connectToTrail), keyEquivalent: ""
             )
             connect.target = self
@@ -168,16 +166,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // On = dictation relays to the focused cc-session. The live target is
         // shown here + in the HUD footer so a mis-send is visibly impossible.
         menu.addItem(.separator())
-        let promptItem = NSMenuItem(title: "Prompt Mode — diktér til session", action: #selector(togglePromptMode), keyEquivalent: "")
+        let promptItem = NSMenuItem(title: S.promptModeItem, action: #selector(togglePromptMode), keyEquivalent: "")
         promptItem.target = self
         promptItem.state = PromptMode.shared.enabled ? .on : .off
         menu.addItem(promptItem)
         if PromptMode.shared.enabled {
             let t = PromptMode.shared.session ?? (PromptMode.shared.targetApp.isEmpty ? "—" : PromptMode.shared.targetApp)
-            let target = NSMenuItem(title: "  Target: \(t)", action: nil, keyEquivalent: "")
+            let target = NSMenuItem(title: "  \(S.targetPrefix) \(t)", action: nil, keyEquivalent: "")
             target.isEnabled = false
             menu.addItem(target)
-            let autoEnter = NSMenuItem(title: "  Send automatisk (Enter)", action: #selector(toggleAutoEnter), keyEquivalent: "")
+            let autoEnter = NSMenuItem(title: "  \(S.autoEnter)", action: #selector(toggleAutoEnter), keyEquivalent: "")
             autoEnter.target = self
             autoEnter.state = PromptMode.shared.autoEnter ? .on : .off
             menu.addItem(autoEnter)
@@ -186,7 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Settings — deny-list is enforced by the gate from F201.4; the
         // submenu makes today's defaults visible where users expect them.
         let settingsMenu = NSMenu()
-        let denyHeader = NSMenuItem(title: "Capturer aldrig fra:", action: nil, keyEquivalent: "")
+        let denyHeader = NSMenuItem(title: S.denyHeader, action: nil, keyEquivalent: "")
         denyHeader.isEnabled = false
         settingsMenu.addItem(denyHeader)
         for app in Settings.denyList {
@@ -198,9 +196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // a one-glance diagnosis of a missing Screen Recording permission).
         settingsMenu.addItem(.separator())
         let ocrStatus = NSMenuItem(
-            title: ScreenWatcher.isScreenRecordingGranted
-                ? "Skærm-OCR: aktiv (on-device)"
-                : "Skærm-OCR: kræver Skærmoptagelse-tilladelse",
+            title: ScreenWatcher.isScreenRecordingGranted ? S.ocrActive : S.ocrNeedsPermission,
             action: nil, keyEquivalent: ""
         )
         ocrStatus.isEnabled = false
@@ -208,18 +204,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if deviceAuth.isConnected {
             settingsMenu.addItem(.separator())
             let disconnect = NSMenuItem(
-                title: "Frakobl fra Trail",
+                title: S.disconnect,
                 action: #selector(disconnectFromTrail), keyEquivalent: ""
             )
             disconnect.target = self
             settingsMenu.addItem(disconnect)
         }
-        let settings = NSMenuItem(title: "Indstillinger", action: nil, keyEquivalent: "")
+        let settings = NSMenuItem(title: S.settings, action: nil, keyEquivalent: "")
         menu.addItem(settings)
         menu.setSubmenu(settingsMenu, for: settings)
 
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Afslut Trail Ambient", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: S.quit, action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
         return menu
     }

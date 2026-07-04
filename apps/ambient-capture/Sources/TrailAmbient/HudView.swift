@@ -10,7 +10,12 @@ import Combine
 
 @MainActor
 final class HudModel: ObservableObject {
-    enum Mode: String, CaseIterable { case search = "Søg", ask = "Spørg" }
+    enum Mode: String, CaseIterable {
+        case search, ask
+        /// Display label (localised via `S`); the rawValue stays a stable id.
+        var label: String { self == .search ? S.searchMode : S.askMode }
+        var placeholder: String { self == .search ? S.searchPlaceholder : S.askPlaceholder }
+    }
     /// F201.6.7 — the in-HUD mic button's three states. `needsPermission` when
     /// macOS hasn't granted mic + speech yet (tap → prompt, or → System Settings
     /// if denied); `idle` when ready (tap → dictate); `listening` (tap → stop +
@@ -31,7 +36,7 @@ final class HudModel: ObservableObject {
     /// HUD level meter (so it's visible whether audio is reaching the engine).
     @Published var inputLevel: Float = 0
     /// F201.6.4 — where the last transcript is on its way to becoming a Neuron.
-    enum SaveState { case saving, saved, duplicate, failed }
+    enum SaveState { case transcribing, saving, saved, duplicate, failed }
     @Published var saved: SaveState?
     /// F201.15 — set by HudController so Prompt Mode can hide the HUD (returning
     /// focus to the target field) before it injects the dictation.
@@ -137,21 +142,37 @@ final class HudModel: ObservableObject {
             // (the cardmem Agents composer, iTerm, …) instead of saving to Trail.
             // Hide the HUD FIRST so focus returns to the target field, then type.
             if PromptMode.shared.enabled {
-                // F201.13 — also persist the prompt dictation as a Source (flagged
-                // source:"prompt" so it's filterable), so "all dictations" land in
-                // Trail. Fire-and-forget — the words already reach the session, and
-                // the Source is a bonus that lands once the engine source path is up.
-                Task { _ = await TrailClient.saveSource(content: corrected, rawTranscript: raw, source: "prompt", allowFallback: false) }
+                // F201.15 — Prompt Mode is SESSION-ONLY. The dictation goes to the
+                // focused agent and is NEVER saved to Trail. (An earlier "all
+                // dictations → sources" dual-write turned a PRIVATE spoken opinion —
+                // dictated while in a Messages conversation — into a permanent
+                // Neuron. Prompt-Mode content is a prompt, often private/ephemeral;
+                // only Extraction mode's deliberate "save to Trail" persists.
+                // Christian 2026-07-04.)
                 onDismiss?()
                 PromptMode.shared.inject(corrected)
                 return
             }
-            // Extraction mode — the capture becomes a first-class Trail Source
-            // (F201.13), falling back to the legacy candidate path until the engine
-            // source path is deployed (no naked cutover).
-            saved = .saving
+            // Extraction mode — faithful: batch-transcribe the FULL recording
+            // (WhisperKit, in the background) so long dictations land WHOLE. The
+            // 45s-restart streaming text drops ~half of a multi-minute speech; the
+            // batch pass over the kept audio does not. Streaming `corrected` is the
+            // fallback when there's no recording or batch fails. The capture then
+            // becomes a first-class Trail Source (F201.13), with the legacy
+            // candidate path as the 404 fallback.
+            let audioPath = speech.lastRecordingURL?.path
+            saved = audioPath != nil ? .transcribing : .saving
             Task {
-                let result = await TrailClient.saveSource(content: corrected, rawTranscript: raw, source: "audio", allowFallback: true)
+                var text = corrected
+                var rawFinal = raw
+                if let audioPath,
+                   let batch = try? await Whisper.shared.transcribe(path: audioPath, language: "da"),
+                   !batch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    rawFinal = batch
+                    text = SpeechDictionary.applyCorrections(batch)
+                    await MainActor.run { self.transcript = text; self.saved = .saving }
+                }
+                let result = await TrailClient.saveSource(content: text, rawTranscript: rawFinal, source: "audio", allowFallback: true)
                 await MainActor.run {
                     switch result {
                     case .saved:     self.saved = .saved
@@ -252,12 +273,12 @@ struct HudView: View {
         HStack(spacing: 13) {
             TrailMarkView(size: 22)
             if let preview = previewText {
-                Text(preview.isEmpty ? (model.mode == .search ? "Søg i din Trail…" : "Spørg din Trail…") : preview)
+                Text(preview.isEmpty ? model.mode.placeholder : preview)
                     .font(.system(size: 19))
                     .foregroundColor(preview.isEmpty ? Palette.fgSubtle : Palette.fg)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                TextField("", text: $model.query, prompt: Text(model.mode == .search ? "Søg i din Trail…" : "Spørg din Trail…").foregroundColor(Palette.fgSubtle))
+                TextField("", text: $model.query, prompt: Text(model.mode.placeholder).foregroundColor(Palette.fgSubtle))
                     .textFieldStyle(.plain)
                     .font(.system(size: 19, weight: .regular))
                     .foregroundColor(Palette.fg)
@@ -304,9 +325,9 @@ struct HudView: View {
     }
     private var micHelp: String {
         switch model.mic {
-        case .needsPermission: return "Giv adgang til mikrofon + tale for at diktere"
-        case .idle:            return "Diktér (⌃⌥D) — teksten skrives mens du taler"
-        case .listening:       return "Stop og gem i Trail"
+        case .needsPermission: return S.micHelpNeedsPermission
+        case .idle:            return S.micHelpIdle
+        case .listening:       return S.micHelpListening
         }
     }
 
@@ -321,18 +342,18 @@ struct HudView: View {
                     }
                     .onDisappear { pulse = false }
                 let live = (model.transcript ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                Text(live.isEmpty ? "Lytter… tal frit, teksten skrives mens du taler" : live)
+                Text(live.isEmpty ? S.listeningHint : live)
                     .foregroundColor(live.isEmpty ? Palette.fgMuted : Palette.fg)
                     .font(.system(size: 13)).lineLimit(3)
                     .animation(.easeOut(duration: 0.15), value: live)
                 Spacer(minLength: 8)
                 InputLevelMeter(level: model.inputLevel)
-                Text("tryk ⏹").foregroundColor(Palette.fgSubtle).font(.system(size: 11))
+                Text(S.stopHint).foregroundColor(Palette.fgSubtle).font(.system(size: 11))
             } else if let t = model.transcript {
                 let empty = t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 Image(systemName: "waveform").foregroundColor(Palette.accent).font(.system(size: 13))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(empty ? "Ingen tale opfanget — prøv igen tættere på mikrofonen." : t)
+                    Text(empty ? S.noSpeech : t)
                         .foregroundColor(empty ? Palette.fgMuted : Palette.fg)
                         .font(.system(size: 13)).lineLimit(3).textSelection(.enabled)
                     if let s = model.saved { savedLine(s) }
@@ -352,17 +373,22 @@ struct HudView: View {
     /// F201.6.4 — the transcript's journey into Trail, shown under the text.
     @ViewBuilder private func savedLine(_ s: HudModel.SaveState) -> some View {
         switch s {
+        case .transcribing:
+            HStack(spacing: 5) {
+                ProgressView().controlSize(.mini).tint(Palette.fgMuted)
+                Text(S.transcribing).font(.system(size: 11)).foregroundColor(Palette.fgMuted)
+            }
         case .saving:
             HStack(spacing: 5) {
                 ProgressView().controlSize(.mini).tint(Palette.fgMuted)
-                Text("Gemmer i Trail…").font(.system(size: 11)).foregroundColor(Palette.fgMuted)
+                Text(S.saving).font(.system(size: 11)).foregroundColor(Palette.fgMuted)
             }
         case .saved:
-            Text("✓ Gemt i Trail").font(.system(size: 11, weight: .medium)).foregroundColor(Palette.accent)
+            Text(S.saved).font(.system(size: 11, weight: .medium)).foregroundColor(Palette.accent)
         case .duplicate:
-            Text("Allerede gemt (dublet)").font(.system(size: 11)).foregroundColor(Palette.fgMuted)
+            Text(S.duplicate).font(.system(size: 11)).foregroundColor(Palette.fgMuted)
         case .failed:
-            Text("Kunne ikke gemme i Trail — prøv igen").font(.system(size: 11)).foregroundColor(Color.red.opacity(0.85))
+            Text(S.saveFailed).font(.system(size: 11)).foregroundColor(Color.red.opacity(0.85))
         }
     }
 
@@ -373,7 +399,7 @@ struct HudView: View {
                 Button {
                     model.mode = m; model.hits = []; model.answer = nil; model.ran = false
                 } label: {
-                    Text(m.rawValue)
+                    Text(m.label)
                         .font(.system(size: 12.5, weight: on ? .semibold : .medium))
                         .foregroundColor(on ? Color(red: 0.10, green: 0.08, blue: 0.06) : Palette.fgMuted)
                         .padding(.horizontal, 13).padding(.vertical, 6)
@@ -392,12 +418,12 @@ struct HudView: View {
 
     @ViewBuilder private var content: some View {
         if model.loading {
-            centered { ProgressView().controlSize(.small).tint(Palette.accent); Text("Slår op…").foregroundColor(Palette.fgMuted) }
+            centered { ProgressView().controlSize(.small).tint(Palette.accent); Text(S.lookingUp).foregroundColor(Palette.fgMuted) }
         } else if model.mode == .search {
             if model.ran && model.hits.isEmpty {
-                centered { hintMark("Ingen Neuroner matcher endnu.") }
+                centered { hintMark(S.noNeurons) }
             } else if model.hits.isEmpty {
-                centered { hintMark("Skriv og tryk ↵ for at søge i din viden.") }
+                centered { hintMark(S.searchHint) }
             } else {
                 scroll(maxHeight: 400) { VStack(spacing: 7) { ForEach(model.hits) { hitRow($0) } }.padding(14) }
             }
@@ -406,14 +432,14 @@ struct HudView: View {
                 scroll(maxHeight: 420) { VStack(alignment: .leading, spacing: 14) {
                     Text(a.answer).foregroundColor(Palette.fg).font(.system(size: 14.5)).lineSpacing(3).textSelection(.enabled)
                     if !a.citations.isEmpty {
-                        Text("KILDER").font(.system(size: 10.5, weight: .semibold)).tracking(0.8).foregroundColor(Palette.fgSubtle)
+                        Text(S.sourcesLabel).font(.system(size: 10.5, weight: .semibold)).tracking(0.8).foregroundColor(Palette.fgSubtle)
                         VStack(alignment: .leading, spacing: 5) { ForEach(a.citations) { citationRow($0) } }
                     }
                 }.padding(18) }
             } else if model.ran {
-                centered { hintMark("Intet svar.") }
+                centered { hintMark(S.noAnswer) }
             } else {
-                centered { hintMark("Stil et spørgsmål, tryk ↵ — Trail svarer med kilder.") }
+                centered { hintMark(S.askHint) }
             }
         }
     }
@@ -455,9 +481,9 @@ struct HudView: View {
 
     private var footer: some View {
         HStack(spacing: 16) {
-            hintKey("↵", "udfør")
-            hintKey("⇥", "skift felt")
-            hintKey("esc", "luk")
+            hintKey("↵", S.footerRun)
+            hintKey("⇥", S.footerSwitchField)
+            hintKey("esc", S.footerClose)
             Spacer()
             footerRight
         }
@@ -477,11 +503,11 @@ struct HudView: View {
             let target = prompt.session ?? (prompt.targetApp.isEmpty ? nil : prompt.targetApp)
             HStack(spacing: 5) {
                 LucideSpeech(size: 12, color: target == nil ? Palette.fgSubtle : Palette.accent)
-                Text("Target: \(target ?? "—")")
+                Text("\(S.targetPrefix) \(target ?? "—")")
                     .font(.system(size: 10.5, design: .monospaced))
                     .foregroundColor(target == nil ? Palette.fgSubtle : Palette.accent)
             }
-            .help(prompt.rawTitle.map { "Fra: \(prompt.targetApp) — \($0)" } ?? "Intet fokuseret felt")
+            .help(prompt.rawTitle.map { "\(S.fromPrefix) \(prompt.targetApp) — \($0)" } ?? S.noFocusedField)
         } else {
             Text("Ambient Test").font(.system(size: 10.5, design: .monospaced)).foregroundColor(Palette.fgSubtle)
         }
