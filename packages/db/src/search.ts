@@ -64,6 +64,7 @@ const CHUNKS_SQL = `
    WHERE chunks_fts MATCH ?
      AND dc.knowledge_base_id = ?
      AND dc.tenant_id = ?
+     AND pd.archived = 0
    ${rankOrderBy('pd.created_at')}
    LIMIT ?
 `;
