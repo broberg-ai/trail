@@ -1,11 +1,17 @@
 // F201.6 — records the live mic audio to a file during dictation, so the SAVED
 // transcript is produced by BATCH transcription (WhisperKit, faithful over the
 // whole clip) at stop instead of the lossy 45s-restart streaming recognizer
-// (which dropped ~half of a real 2m49s dictation). Every tap buffer is converted
-// to a fixed 16 kHz mono WAV, so an AirPods A2DP↔HFP format flip mid-dictation
-// can't corrupt the single output file (WhisperKit wants 16 kHz mono anyway). The
-// .wav is ALSO kept as the truest raw source — re-transcribable with a better
-// model later (Christian 2026-07-03).
+// (which dropped ~half of a real 2m49s dictation). The .wav is ALSO kept as the
+// truest raw source — re-transcribable with a better model later (Christian
+// 2026-07-03).
+//
+// The file is written as 16 kHz mono Int16 ON DISK (what WhisperKit wants). But
+// AVAudioFile.write(from:) expects buffers in the file's *processingFormat* —
+// which AVAudioFile makes Float32, NOT the on-disk Int16. Writing an Int16
+// buffer traps inside Core Audio (CAAssertRtn → SIGTRAP → app crash, seen
+// 2026-07-04). So every tap buffer is converted to `file.processingFormat`
+// (Float32 16 kHz mono) and written; the file converts float→Int16 on disk. The
+// converter also absorbs an AirPods A2DP↔HFP sample-rate flip mid-dictation.
 import AVFoundation
 
 final class AudioRecorder {
@@ -13,39 +19,50 @@ final class AudioRecorder {
     private var file: AVAudioFile?
     private var converter: AVAudioConverter?
     private var converterInput: AVAudioFormat?
-    private static let target = AVAudioFormat(
-        commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: false)!
+    /// The format AVAudioFile.write(from:) requires — Float32 at the file's
+    /// sample rate/channels, NOT the on-disk Int16. Read from the created file.
+    private var writeFormat: AVAudioFormat?
 
     init?(url: URL) {
         self.url = url
-        do { file = try AVAudioFile(forWriting: url, settings: Self.target.settings) }
-        catch { return nil }
+        // 16 kHz mono Int16 on disk (WhisperKit-friendly).
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: 16_000,
+            AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsNonInterleaved: false,
+        ]
+        guard let f = try? AVAudioFile(forWriting: url, settings: settings) else { return nil }
+        file = f
+        writeFormat = f.processingFormat
     }
 
-    /// Append one tap buffer (any format), converting to the fixed target format.
+    /// Append one tap buffer (any format), converting to the file's write format.
     func append(_ buffer: AVAudioPCMBuffer) {
-        guard let file, buffer.frameLength > 0 else { return }
-        if buffer.format == Self.target {
+        guard let file, let writeFormat, buffer.frameLength > 0 else { return }
+        if buffer.format == writeFormat {
             try? file.write(from: buffer)
             return
         }
         if converter == nil || converterInput != buffer.format {
-            converter = AVAudioConverter(from: buffer.format, to: Self.target)
+            converter = AVAudioConverter(from: buffer.format, to: writeFormat)
             converterInput = buffer.format
         }
         guard let converter else { return }
-        let ratio = Self.target.sampleRate / buffer.format.sampleRate
-        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 32
-        guard let out = AVAudioPCMBuffer(pcmFormat: Self.target, frameCapacity: capacity) else { return }
+        let ratio = writeFormat.sampleRate / buffer.format.sampleRate
+        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 1024
+        guard let out = AVAudioPCMBuffer(pcmFormat: writeFormat, frameCapacity: capacity) else { return }
         var supplied = false
         var err: NSError?
-        converter.convert(to: out, error: &err) { _, status in
-            if supplied { status.pointee = .noDataNow; return nil }
+        let status = converter.convert(to: out, error: &err) { _, s in
+            if supplied { s.pointee = .noDataNow; return nil }
             supplied = true
-            status.pointee = .haveData
+            s.pointee = .haveData
             return buffer
         }
-        if err == nil, out.frameLength > 0 { try? file.write(from: out) }
+        if status != .error, err == nil, out.frameLength > 0 { try? file.write(from: out) }
     }
 
     /// Close the file. Returns the URL only if audio was actually written.

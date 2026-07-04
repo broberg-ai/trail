@@ -5,6 +5,7 @@
 // TCC grant + real speech, so it's proven interactively; the risky logic (VAD +
 // resample) is proven here, deterministic — the same split as F201.5's --ocrtest.
 import Foundation
+import AVFoundation
 
 enum AudioTest {
     static func run() -> Never {
@@ -56,6 +57,35 @@ enum AudioTest {
         // gates on) matches a deny-listed app and passes a normal one.
         check("deny-list matches 1Password", Settings.isDenyListed("1Password"))
         check("deny-list passes a normal app", !Settings.isDenyListed("Google Chrome"))
+
+        // AC4 (F201.6 crash regression) — AudioRecorder must accept the LIVE mic
+        // tap format (24 kHz float32 mono — the exact format that trapped inside
+        // Core Audio on 2026-07-04) and write a valid 16 kHz Int16 WAV WITHOUT
+        // crashing. The old code converted to Int16 and wrote that to an
+        // AVAudioFile whose processingFormat is Float32 → CAAssertRtn/SIGTRAP.
+        // With the fix this converts to the file's write format and succeeds; a
+        // regression would SIGTRAP this test binary and fail the gate.
+        let recURL = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("audiorec-\(ProcessInfo.processInfo.processIdentifier).wav")
+        if let rec = AudioRecorder(url: recURL),
+           let micFmt = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 24_000, channels: 1, interleaved: false),
+           let pcm = AVAudioPCMBuffer(pcmFormat: micFmt, frameCapacity: 12_000) {
+            let samples = tone(freq: 440, seconds: 0.5, amp: 0.3, sr: 24_000)
+            pcm.frameLength = AVAudioFrameCount(samples.count)
+            samples.withUnsafeBufferPointer { src in
+                pcm.floatChannelData![0].update(from: src.baseAddress!, count: samples.count)
+            }
+            for _ in 0..<4 { rec.append(pcm) }   // old Int16 write would SIGTRAP here
+            let out = rec.finish()
+            check("AudioRecorder: 24kHz float tap → WAV, no crash", out != nil, out == nil ? "no frames written" : "")
+            if let out, let f = try? AVAudioFile(forReading: out) {
+                let ok = f.length > 0 && f.fileFormat.sampleRate == 16_000
+                check("AudioRecorder WAV = 16kHz Int16, frames>0", ok, "sr=\(Int(f.fileFormat.sampleRate)) len=\(f.length)")
+            }
+            try? FileManager.default.removeItem(at: recURL)
+        } else {
+            check("AudioRecorder: 24kHz float tap → WAV, no crash", false, "could not build recorder/buffer")
+        }
 
         // AC2 (optional) — segment a real WAV passed after --audiotest.
         if let i = CommandLine.arguments.firstIndex(of: "--audiotest"),

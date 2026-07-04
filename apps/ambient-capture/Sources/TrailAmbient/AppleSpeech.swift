@@ -71,12 +71,16 @@ final class AppleSpeech: ObservableObject {
         }
     }
 
-    func start() throws {
+    /// `record` = keep the full mic audio to a file for batch transcription
+    /// (Extraction mode). Prompt Mode passes false: its dictation is session-only
+    /// (injected into a cc-session, never saved to Trail), so there is nothing to
+    /// batch-transcribe AND the private audio must not be left on disk.
+    func start(record: Bool = true) throws {
         guard state != .listening else { return }
         transcript = ""; accumulated = ""; isFinal = false; userHolding = true
         configRebuilds = 0
         lastRecordingURL = nil
-        recorder = AudioRecorder(url: AudioRecorder.newRecordingURL())
+        recorder = record ? AudioRecorder(url: AudioRecorder.newRecordingURL()) : nil
         do {
             try buildEngineAndTap()
         } catch {
