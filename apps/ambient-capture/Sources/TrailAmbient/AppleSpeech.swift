@@ -50,6 +50,11 @@ final class AppleSpeech: ObservableObject {
     private var proactiveRestartTimer: Timer?
     private var configObserver: NSObjectProtocol?
     private var configRebuilds = 0
+    /// F201.6 — records the full mic audio so the SAVED transcript can be produced
+    /// by faithful BATCH transcription at stop (the streaming text is preview only).
+    private var recorder: AudioRecorder?
+    /// The kept .wav of the last dictation (nil if nothing was recorded).
+    private(set) var lastRecordingURL: URL?
 
     /// Text locked in from earlier recognition tasks in THIS dictation session
     /// (see the 45s-restart note above). Only stop() clears it.
@@ -70,6 +75,8 @@ final class AppleSpeech: ObservableObject {
         guard state != .listening else { return }
         transcript = ""; accumulated = ""; isFinal = false; userHolding = true
         configRebuilds = 0
+        lastRecordingURL = nil
+        recorder = AudioRecorder(url: AudioRecorder.newRecordingURL())
         do {
             try buildEngineAndTap()
         } catch {
@@ -112,6 +119,7 @@ final class AppleSpeech: ObservableObject {
             let peak = Self.peakLevel(buffer)
             Task { @MainActor in
                 self?.request?.append(buffer)
+                self?.recorder?.append(buffer)   // keep the full audio for batch STT
                 self?.inputLevel = peak
             }
         }
@@ -235,6 +243,8 @@ final class AppleSpeech: ObservableObject {
             audioEngine.stop()
             audioEngine.inputNode.removeTap(onBus: 0)
         }
+        lastRecordingURL = recorder?.finish()
+        recorder = nil
         request?.endAudio()
         task?.finish()
         request = nil; task = nil

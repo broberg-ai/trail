@@ -28,6 +28,9 @@ struct TrailAmbientMain {
         if CommandLine.arguments.contains("--minetest") {
             MineTool.runTest()
         }
+        if CommandLine.arguments.contains("--transcribefile") {
+            TranscribeFileTest.run()
+        }
         if CommandLine.arguments.contains("--mine") {
             MineTool.run()
         }

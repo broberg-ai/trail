@@ -1,3 +1,7 @@
 .build/
 dist/
 *.xcodeproj
+
+# F201.6 batch-STT test fixtures (local audio, not committed)
+fixtures/*.m4a
+fixtures/*.wav
