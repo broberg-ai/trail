@@ -71,6 +71,10 @@ const AMBIENT_ALLOWED: ReadonlyArray<{ method: string; pattern: RegExp }> = [
   { method: 'POST', pattern: /^\/api\/v1\/knowledge-bases\/[^/]+\/ambient-source$/ },
   { method: 'GET', pattern: /^\/api\/v1\/knowledge-bases\/[^/]+\/search$/ },
   { method: 'POST', pattern: /^\/api\/v1\/chat$/ },
+  // F201.13 — read the KB's own name/slug so the menubar app can refresh its
+  // "writing to" label after a rename (name + slug only — NOT the full-row
+  // GET /knowledge-bases/:id, which would expose settings the device shouldn't read).
+  { method: 'GET', pattern: /^\/api\/v1\/knowledge-bases\/[^/]+\/name$/ },
 ];
 
 function scopeAllows(scope: string, method: string, path: string): boolean {

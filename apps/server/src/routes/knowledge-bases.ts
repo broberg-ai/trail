@@ -63,6 +63,27 @@ kbRoutes.get('/knowledge-bases/:id', async (c) => {
   return c.json(kb);
 });
 
+// F201.13 — minimal KB name lookup for the ambient device. The device's
+// scoped key is allow-listed for THIS endpoint only (not the full-row
+// GET /knowledge-bases/:id, which exposes settings the device shouldn't
+// read). Lets the menubar app refresh its "writing to" label after the KB
+// is renamed in admin, without a device reconnect. Returns name + slug only.
+kbRoutes.get('/knowledge-bases/:id/name', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const kbId = await resolveKbId(trail, tenant.id, c.req.param('id'));
+  if (!kbId) return c.json({ error: 'Not found' }, 404);
+
+  const kb = await trail.db
+    .select({ id: knowledgeBases.id, name: knowledgeBases.name, slug: knowledgeBases.slug })
+    .from(knowledgeBases)
+    .where(and(eq(knowledgeBases.id, kbId), eq(knowledgeBases.tenantId, tenant.id)))
+    .get();
+
+  if (!kb) return c.json({ error: 'Not found' }, 404);
+  return c.json(kb);
+});
+
 /**
  * F92 — per-KB tag aggregate. Returns every distinct tag present on
  * non-archived Neurons + its Neuron count, descending by count. Used
