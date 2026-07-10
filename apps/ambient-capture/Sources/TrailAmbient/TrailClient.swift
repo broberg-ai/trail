@@ -10,6 +10,7 @@ struct NeuronHit: Identifiable {
     let path: String
     let filename: String
     let highlight: String
+    let kind: String        // "source" (raw capture) | "wiki" (compiled Neuron)
     var slug: String { filename.hasSuffix(".md") ? String(filename.dropLast(3)) : filename }
 }
 
@@ -17,6 +18,7 @@ struct Citation: Identifiable {
     let id: String          // documentId
     let path: String
     let filename: String
+    let kind: String        // "source" | "wiki" (chat cites Neurons, but be safe)
     var slug: String { filename.hasSuffix(".md") ? String(filename.dropLast(3)) : filename }
 }
 
@@ -60,9 +62,17 @@ enum TrailClient {
         return names.isEmpty ? "Trail" : names.joined(separator: ", ")
     }
 
-    /// Admin deep-link for a Neuron slug (opens in the browser).
-    static func neuronURL(slug: String) -> URL? {
+    /// Admin deep-link for a search/chat hit, routed by kind (opens in the
+    /// browser). A raw ambient Source (a dictation, kind="source") opens the
+    /// source view; a compiled Neuron (kind="wiki") opens the Neuron reader.
+    /// Sending a source to /neurons/<slug> shows "No Neuron matches slug" —
+    /// F201.18.
+    static func docURL(id: String, slug: String, kind: String) -> URL? {
         guard let kb = kbId else { return nil }
+        if kind == "source" {
+            let encId = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id
+            return URL(string: "\(app)/kb/\(kb)/sources?expanded=\(encId)")
+        }
         let encoded = slug.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? slug
         return URL(string: "\(app)/kb/\(kb)/neurons/\(encoded)")
     }
@@ -86,7 +96,8 @@ enum TrailClient {
                 title: (d["title"] as? String) ?? (d["filename"] as? String) ?? "Neuron",
                 path: (d["path"] as? String) ?? "",
                 filename: (d["filename"] as? String) ?? "",
-                highlight: (d["highlight"] as? String) ?? ""
+                highlight: (d["highlight"] as? String) ?? "",
+                kind: (d["kind"] as? String) ?? "wiki"
             )
         }
     }
@@ -110,7 +121,7 @@ enum TrailClient {
         }
         let cites = (root["citations"] as? [[String: Any]] ?? []).compactMap { c -> Citation? in
             guard let id = c["documentId"] as? String else { return nil }
-            return Citation(id: id, path: (c["path"] as? String) ?? "", filename: (c["filename"] as? String) ?? "")
+            return Citation(id: id, path: (c["path"] as? String) ?? "", filename: (c["filename"] as? String) ?? "", kind: (c["kind"] as? String) ?? "wiki")
         }
         return ChatAnswer(answer: (root["answer"] as? String) ?? "(tomt svar)", citations: cites)
     }

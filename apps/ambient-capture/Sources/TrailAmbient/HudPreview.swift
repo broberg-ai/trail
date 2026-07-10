@@ -21,11 +21,11 @@ enum HudPreview {
         searchModel.ran = true
         searchModel.hits = [
             NeuronHit(id: "1", title: "Acme — pricing-samtale", path: "/neurons/entities/", filename: "acme-pricing.md",
-                      highlight: "Kunden var <mark>nervøs for levering</mark>; aftalt at vende tilbage torsdag med et revideret tilbud."),
+                      highlight: "Kunden var <mark>nervøs for levering</mark>; aftalt at vende tilbage torsdag med et revideret tilbud.", kind: "wiki"),
             NeuronHit(id: "2", title: "Arbejdssession 14:20 — Acme CRM", path: "/neurons/sessions/", filename: "session-1420.md",
-                      highlight: "Gennemgik <mark>Acme</mark>-dealen i CRM; noterede rabat-ønske på 10%."),
+                      highlight: "Gennemgik <mark>Acme</mark>-dealen i CRM; noterede rabat-ønske på 10%.", kind: "wiki"),
             NeuronHit(id: "3", title: "Beslutning: månedlig plan", path: "/neurons/decisions/", filename: "monthly-plan.md",
-                      highlight: "Vi valgte den <mark>månedlige</mark> plan i stedet for årlig fakturering."),
+                      highlight: "Vi valgte den <mark>månedlige</mark> plan i stedet for årlig fakturering.", kind: "wiki"),
         ]
         write(model: searchModel, name: "hud-search", to: base)
 
@@ -37,8 +37,8 @@ enum HudPreview {
         chatModel.answer = ChatAnswer(
             answer: "Du lovede Acme at vende tilbage torsdag med et revideret tilbud, der adresserer deres bekymring om levering. De bad også om 10% rabat, som endnu ikke er bekræftet.",
             citations: [
-                Citation(id: "1", path: "/neurons/entities/", filename: "acme-pricing.md"),
-                Citation(id: "2", path: "/neurons/sessions/", filename: "session-1420.md"),
+                Citation(id: "1", path: "/neurons/entities/", filename: "acme-pricing.md", kind: "wiki"),
+                Citation(id: "2", path: "/neurons/sessions/", filename: "session-1420.md", kind: "wiki"),
             ]
         )
         write(model: chatModel, name: "hud-chat", to: base)

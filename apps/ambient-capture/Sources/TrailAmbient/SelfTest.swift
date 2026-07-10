@@ -39,8 +39,21 @@ enum SelfTest {
         let lightPx = visiblePixels(appearance: .aqua)
         let darkPx = visiblePixels(appearance: .darkAqua)
 
-        print("SELFTEST paused_emitted=\(sawPaused) resumed_emitted=\(sawResumed) icon_light_px=\(lightPx) icon_dark_px=\(darkPx)")
-        let ok = !sawPaused && sawResumed && lightPx > 40 && darkPx > 40
+        // F201.18 — docURL routes by kind: a raw ambient Source opens the
+        // source view, a compiled Neuron opens the reader. Sending a source to
+        // /neurons/<slug> is what produced "No Neuron matches slug". Needs a
+        // kbId in defaults; set a throwaway one and restore.
+        let priorKb = UserDefaults.standard.string(forKey: "trail.kbId")
+        UserDefaults.standard.set("test-kb", forKey: "trail.kbId")
+        let srcURL = TrailClient.docURL(id: "D1", slug: "ambient-speech-1", kind: "source")?.absoluteString ?? ""
+        let wikiURL = TrailClient.docURL(id: "D2", slug: "split-brain", kind: "wiki")?.absoluteString ?? ""
+        if let priorKb { UserDefaults.standard.set(priorKb, forKey: "trail.kbId") }
+        else { UserDefaults.standard.removeObject(forKey: "trail.kbId") }
+        let routeOk = srcURL.contains("/kb/test-kb/sources?expanded=D1")
+            && wikiURL.contains("/kb/test-kb/neurons/split-brain")
+
+        print("SELFTEST paused_emitted=\(sawPaused) resumed_emitted=\(sawResumed) icon_light_px=\(lightPx) icon_dark_px=\(darkPx) route_ok=\(routeOk)")
+        let ok = !sawPaused && sawResumed && lightPx > 40 && darkPx > 40 && routeOk
         print(ok ? "SELFTEST PASS" : "SELFTEST FAIL")
         exit(ok ? 0 : 1)
     }

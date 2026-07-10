@@ -457,7 +457,7 @@ struct HudView: View {
     }
 
     private func hitRow(_ hit: NeuronHit) -> some View {
-        HoverButton { open(slug: hit.slug); onClose() } content: { hovering in
+        HoverButton { open(id: hit.id, slug: hit.slug, kind: hit.kind); onClose() } content: { hovering in
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(hit.title).foregroundColor(Palette.fg).font(.system(size: 14.5, weight: .medium)).lineLimit(1)
@@ -476,7 +476,7 @@ struct HudView: View {
     }
 
     private func citationRow(_ c: Citation) -> some View {
-        HoverButton { open(slug: c.slug); onClose() } content: { hovering in
+        HoverButton { open(id: c.id, slug: c.slug, kind: c.kind); onClose() } content: { hovering in
             HStack(spacing: 7) {
                 Image(systemName: "doc.text.fill").foregroundColor(Palette.accent).font(.system(size: 11))
                 Text(c.filename.replacingOccurrences(of: ".md", with: "")).foregroundColor(hovering ? Palette.accent : Palette.fg).font(.system(size: 12.5)).lineLimit(1)
@@ -556,7 +556,7 @@ struct HudView: View {
             Text(s).foregroundColor(Palette.fgSubtle).font(.system(size: 13))
         }
     }
-    private func open(slug: String) { if let u = TrailClient.neuronURL(slug: slug) { NSWorkspace.shared.open(u) } }
+    private func open(id: String, slug: String, kind: String) { if let u = TrailClient.docURL(id: id, slug: slug, kind: kind) { NSWorkspace.shared.open(u) } }
     private func stripMarks(_ s: String) -> String {
         s.replacingOccurrences(of: "<mark>", with: "").replacingOccurrences(of: "</mark>", with: "")
     }

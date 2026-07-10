@@ -207,6 +207,7 @@
     "backToTrails": "Back to Trails"
   },
   "wikiReader": {
+    "notFoundTitle": "Neuron not found",
     "userNote": {
       "heading": "Your take",
       "hint": "Write in your own words. The act of formulating, not reading, makes ideas stick. Your take lives separately from the Neuron's LLM body and is never overwritten by a re-ingest. Default private — tick the box below to share it with chat and external integrations as 'your own formulation'.",

@@ -207,6 +207,7 @@
     "backToTrails": "Tilbage til Trails"
   },
   "wikiReader": {
+    "notFoundTitle": "Neuron ikke fundet",
     "userNote": {
       "heading": "Din tanke",
       "hint": "Skriv i dine egne ord. Det er handlingen — ikke at læse — der får ideer til at sidde fast. Din tanke gemmes adskilt fra Neuronens LLM-indhold og overskrives aldrig af en re-ingest. Default privat — tikker du boksen nedenfor deles den med chat og eksterne integrationer som 'din egen formulering'.",
