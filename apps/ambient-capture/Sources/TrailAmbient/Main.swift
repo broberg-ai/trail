@@ -22,6 +22,9 @@ struct TrailAmbientMain {
         if CommandLine.arguments.contains("--speechtest") {
             SpeechTest.run()
         }
+        if CommandLine.arguments.contains("--speakertest") {
+            SpeakerTest.run()
+        }
         if CommandLine.arguments.contains("--dicttest") {
             DictTest.run()
         }
