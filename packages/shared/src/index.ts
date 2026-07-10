@@ -15,3 +15,4 @@ export * from './neuron-types.js';
 export * from './upmetrics.js';
 export * from './secret-scan.js';
 export * from './speech-dictionary.js';
+export * from './safe-return-path.js';

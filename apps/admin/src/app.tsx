@@ -14,6 +14,23 @@ import { ambientRoute } from './lib/ambient-store';
 import { routeFromPath } from './lib/route-to-ambient';
 import { useKbResolution } from './lib/kb-cache';
 import { useLocale } from './lib/i18n';
+import { safeReturnPath } from '@trail/shared';
+
+// F201.17 — post-login resume. A logged-out deep-link (e.g. an Ambient Neuron
+// click) is preserved in the `trail-return-to` cookie at the login gate; the SPA
+// reads it once it boots authed and navigates there. Provider-agnostic.
+function readReturnToCookie(): string | null {
+  const m = document.cookie.match(/(?:^|; )trail-return-to=([^;]*)/);
+  if (!m) return null;
+  try {
+    return decodeURIComponent(m[1]!);
+  } catch {
+    return null;
+  }
+}
+function clearReturnToCookie(): void {
+  document.cookie = 'trail-return-to=; path=/; max-age=0; samesite=lax';
+}
 
 /**
  * F186 — admin shell. TopNav (logo + tenant-switcher + ⌘K + user-menu),
@@ -124,10 +141,28 @@ export function App({ children }: { children: ComponentChildren }) {
 
   useEffect(() => {
     fetchAuthMe()
-      .then((data) => setMe(data))
+      .then((data) => {
+        setMe(data);
+        // F201.17 — if this login started from a deep-link, resume to it now
+        // that we're authed. All providers converge here (SPA boots authed).
+        const raw = readReturnToCookie();
+        if (raw) {
+          clearReturnToCookie();
+          const dest = safeReturnPath(raw);
+          const here = window.location.pathname + window.location.search;
+          if (dest && dest !== here) window.location.replace(dest);
+        }
+      })
       .catch(() => {
-        // Not authed — redirect to admin-server's /login (which renders
-        // the three-method login UI: Google, GitHub, magic-link).
+        // Not authed — preserve where we were headed (covers a session that
+        // expired while the SPA was already open; the gate sets this cookie
+        // server-side for fresh loads), then redirect to admin-server's /login
+        // (three-method UI: Google, GitHub, magic-link).
+        const here = window.location.pathname + window.location.search;
+        const safe = safeReturnPath(here);
+        if (safe) {
+          document.cookie = `trail-return-to=${encodeURIComponent(safe)}; path=/; max-age=1800; samesite=lax`;
+        }
         // F186 dev-mode: hit engine's dev-login shortcut for local work.
         const target = import.meta.env.DEV
           ? '/api/auth/dev-login?session=dev'

@@ -13,7 +13,8 @@ import { apiKeyRoutes } from './keys.js';
 import { proxyToEngine } from './proxy.js';
 import { lensReadOnlyGuard, lensSessionRoute } from './lens-session.js';
 import { init as upInit, captureException, setTag } from '@upmetrics/sdk';
-import { UPMETRICS_DSN, reportDeploy } from '@trail/shared';
+import { setCookie } from 'hono/cookie';
+import { UPMETRICS_DSN, reportDeploy, safeReturnPath } from '@trail/shared';
 
 // Upmetrics fleet-dogfooding — server-side error capture for app.trailmem.com.
 // DSN is the single source from @trail/shared (compiled in). Gated on
@@ -386,6 +387,20 @@ if (hasSpa) {
     const cookieHeader = c.req.header('Cookie') ?? '';
     const hasSession = /(?:^|; )trail-session=/.test(cookieHeader);
     if (!hasSession) {
+      // F201.17 — preserve the intended deep-link (e.g. an Ambient Neuron
+      // link /kb/<kb>/neurons/<slug>) so we can land the user there after
+      // login. Consumed by the SPA once it boots authed (provider-agnostic).
+      // Validated to prevent open-redirect.
+      const intended = safeReturnPath(c.req.path + new URL(c.req.url).search);
+      if (intended) {
+        setCookie(c, 'trail-return-to', intended, {
+          httpOnly: false, // SPA reads it via document.cookie to resume
+          secure: new URL(c.req.url).protocol === 'https:',
+          sameSite: 'Lax',
+          path: '/',
+          maxAge: 1800,
+        });
+      }
       return c.redirect('/login', 302);
     }
     return c.html(indexHtml);
