@@ -16,6 +16,12 @@
 # Source-maps blow up context size by 10× (apps/admin/dist .map = 12 MB)
 *.map
 
+# Swift/native app build output — never part of a web-service image. The
+# ambient-capture .build dir is ~1GB of SwiftPM artefacts and its dist is the
+# compiled .app bundle (~7MB); either one stalls the depot context upload.
+apps/ambient-capture/.build
+apps/ambient-capture/dist
+
 # All node_modules — Fly's remote builder runs install fresh
 node_modules
 **/node_modules

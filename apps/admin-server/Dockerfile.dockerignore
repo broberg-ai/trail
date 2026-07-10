@@ -27,3 +27,36 @@ packages/core
 # (460 KB) are now INCLUDED in the deploy context. Christian wants
 # trail-sound feature on prod. F173 (Tigris) is the long-term answer
 # for static media; until then we eat the 8 MB context cost per deploy.
+
+# ─── Critical heavy excludes (F201.19) ────────────────────────────────
+# BuildKit uses the per-Dockerfile ignore EXCLUSIVELY when present (it does
+# NOT reliably merge the repo-root .dockerignore), so the big paths that
+# root normally strips MUST be repeated here — otherwise /data (755 MB) and
+# apps/ambient-capture/.build (1 GB Swift artefacts) land in the context and
+# the transfer crawls past the builder deadline. None of these are COPYed by
+# this Dockerfile (it needs only apps/admin-server, packages/shared,
+# apps/admin/dist, and the lockfiles).
+node_modules
+**/node_modules
+.git
+.turbo
+coverage
+*.log
+*.tsbuildinfo
+*.map
+/data
+*.db
+*.db-shm
+*.db-wal
+docs
+apps/ambient-capture
+apps/landing
+apps/widget
+apps/docs
+apps/mcp
+apps/model-lab
+apps/onboarding
+apps/web-clipper
+apps/agent
+apps/feedback-widget
+adapters

@@ -75,19 +75,23 @@ export function SourcesPanel() {
   const route = useRoute();
   const kbId = route.params.kbId ?? '';
   useLocale();
-  const [filter, setFilter] = useState<FilterStatus>('active');
-  // Always the full unfiltered list (archived=all). The displayed list
-  // and the tab counts are both derived from it via narrowByFilter.
-  const [allDocs, setAllDocs] = useState<Document[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  // F163 — when navigated from the image-gallery's "Open source" link
-  // (?expanded=docId), pre-fill expanded-set so the row is open + can
-  // be scrolled into view.
+  // F163 — when navigated from a "?expanded=docId" deep-link (the image
+  // gallery's "Open source", or F201.18's ambient source-hit routing),
+  // pre-fill expanded-set so the row is open + can be scrolled into view.
   const expandedFromUrl = useMemo(() => {
     if (typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
     return params.get('expanded');
   }, []);
+  // F201.19 — a deep-linked Source can live in ANY status (a dictation is
+  // usually 'success' or 'archived', not the default 'active' tab). Start on
+  // 'all' when deep-linked so the targeted row actually renders (else it's
+  // filtered out of the DOM → nothing to expand/scroll → empty 'active' tab).
+  const [filter, setFilter] = useState<FilterStatus>(expandedFromUrl ? 'all' : 'active');
+  // Always the full unfiltered list (archived=all). The displayed list
+  // and the tab counts are both derived from it via narrowByFilter.
+  const [allDocs, setAllDocs] = useState<Document[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     return expandedFromUrl ? new Set([expandedFromUrl]) : new Set();
   });
