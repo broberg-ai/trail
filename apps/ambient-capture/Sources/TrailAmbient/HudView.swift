@@ -40,7 +40,7 @@ final class HudModel: ObservableObject {
     /// HUD level meter (so it's visible whether audio is reaching the engine).
     @Published var inputLevel: Float = 0
     /// F201.6.4 — where the last transcript is on its way to becoming a Neuron.
-    enum SaveState { case transcribing, saving, saved, duplicate, failed }
+    enum SaveState { case transcribing, saving, saved, duplicate, failed, notOwner }
     @Published var saved: SaveState?
     /// F201.15 — set by HudController so Prompt Mode can hide the HUD (returning
     /// focus to the target field) before it injects the dictation.
@@ -176,6 +176,18 @@ final class HudModel: ObservableObject {
                     rawFinal = batch
                     text = SpeechDictionary.applyCorrections(batch)
                     await MainActor.run { self.transcript = text; self.saved = .saving }
+                }
+                // F201.6.6 — speaker gate: only the enrolled owner's speech
+                // becomes a Trail Neuron. Fail-open until enrolled. The raw words
+                // are already in DictationJournal (above), so a gated-out
+                // utterance is never lost — it just doesn't reach Trail.
+                if let audioPath, let buf = AudioWatcher.decodeToMono16k(path: audioPath) {
+                    let verdict = await SpeakerGate.isOwner(buf)
+                    EventLog.shared.log(kind: "speaker_gate owner=\(verdict.owner) sim=\(String(format: "%.3f", verdict.similarity))")
+                    if !verdict.owner {
+                        await MainActor.run { self.saved = .notOwner }
+                        return
+                    }
                 }
                 let result = await TrailClient.saveSource(content: text, rawTranscript: rawFinal, source: "audio", allowFallback: true)
                 await MainActor.run {
@@ -401,6 +413,8 @@ struct HudView: View {
             Text(S.duplicate).font(.system(size: 11)).foregroundColor(Palette.fgMuted)
         case .failed:
             Text(S.saveFailed).font(.system(size: 11)).foregroundColor(Color.red.opacity(0.85))
+        case .notOwner:
+            Text(S.notYourVoice).font(.system(size: 11)).foregroundColor(Palette.fgMuted)
         }
     }
 

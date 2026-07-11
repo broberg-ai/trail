@@ -14,10 +14,11 @@ struct VoicePrint: Codable {
     var threshold: Float       // cosine acceptance threshold (tunable)
     var updatedAt: String
 
-    /// Conservative default: high enough to reject clearly-different voices,
-    /// low enough not to reject the owner across normal day-to-day variation.
-    /// Tuned with data (the F201.6.6 corpus) as evidence accrues.
-    static let defaultThreshold: Float = 0.55
+    /// Neural (WeSpeaker 256-d) cosine threshold. Measured on real audio: the
+    /// owner scores ~0.93 same-recording, a different person ~0.01–0.09 — a huge
+    /// margin, so 0.4 rejects non-owners with headroom while tolerating the
+    /// owner's cross-session variation. Tunable per-print; sims are logged.
+    static let defaultThreshold: Float = 0.4
 }
 
 enum SpeakerGate {
@@ -40,24 +41,15 @@ enum SpeakerGate {
     /// Remove the enrolled print (re-enroll from scratch / privacy reset).
     static func clear() { try? FileManager.default.removeItem(at: printURL) }
 
-    /// Enroll (or re-enroll) from owner sample utterances (each a 16 kHz mono
-    /// buffer). Averages their embeddings into an L2-normalised centroid and
-    /// persists it. Returns the stored print, or nil if none of the samples had
-    /// enough voiced audio to embed.
+    /// Enroll (or re-enroll) from a live owner recording (16 kHz mono). The
+    /// neural embedder (NeuralSpeaker) windows + averages internally, so we pass
+    /// the whole take. Returns the stored print, or nil if the models aren't
+    /// available yet or there's too little speech.
     @discardableResult
-    static func enroll(fromSamples samples: [[Float]],
-                       threshold: Float = VoicePrint.defaultThreshold) -> VoicePrint? {
-        let embs = samples.compactMap { SpeakerEmbedding.embed($0) }
-        guard let first = embs.first else { return nil }
-
-        var centroid = [Float](repeating: 0, count: first.count)
-        for e in embs { for i in 0..<centroid.count { centroid[i] += e[i] } }
-        var norm: Float = 0
-        for v in centroid { norm += v * v }
-        norm = norm.squareRoot()
-        if norm > 1e-9 { for i in 0..<centroid.count { centroid[i] /= norm } }
-
-        let print = VoicePrint(embedding: centroid, sampleCount: embs.count,
+    static func enroll(_ samples: [Float],
+                       threshold: Float = VoicePrint.defaultThreshold) async -> VoicePrint? {
+        guard let emb = await NeuralSpeaker.shared.embed(samples) else { return nil }
+        let print = VoicePrint(embedding: emb, sampleCount: 1,
                                threshold: threshold,
                                updatedAt: ISO8601DateFormatter().string(from: Date()))
         if let data = try? JSONEncoder().encode(print) { try? data.write(to: printURL) }
@@ -65,12 +57,12 @@ enum SpeakerGate {
     }
 
     /// The gate. Is this utterance the owner? Fails OPEN (owner=true) when not
-    /// enrolled yet or when the clip is too short to embed — so we never drop the
+    /// enrolled yet or when the clip can't be embedded — so we never drop the
     /// owner's real speech on uncertainty; only a confident non-match is rejected.
-    static func isOwner(_ samples: [Float]) -> (owner: Bool, similarity: Float) {
-        guard let print = loadPrint() else { return (true, 1) }            // not enrolled → inert
-        guard let emb = SpeakerEmbedding.embed(samples) else { return (true, 0) }  // too short → keep
-        let sim = SpeakerEmbedding.cosine(emb, print.embedding)
+    static func isOwner(_ samples: [Float]) async -> (owner: Bool, similarity: Float) {
+        guard let print = loadPrint() else { return (true, 1) }                       // not enrolled → inert
+        guard let emb = await NeuralSpeaker.shared.embed(samples) else { return (true, 0) }  // no models/too short → keep
+        let sim = NeuralSpeaker.similarity(emb, print.embedding)
         return (sim >= print.threshold, sim)
     }
 }

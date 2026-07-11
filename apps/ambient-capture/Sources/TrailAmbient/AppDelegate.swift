@@ -41,6 +41,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // app's launch-time prompt does not). ⌃⌥R capture-now lives on the HUD now
         // (HudController) so it opens the HUD + shows the transcript, like the button.
         AudioWatcher.requestMicIfNeeded()
+        // F201.6.6 — re-render the menu whenever voice-enrollment state changes.
+        SpeakerEnroll.shared.onChange = { [weak self] in self?.render() }
         // Pre-warm Whisper in the background so the first capture doesn't wait on
         // the one-time model download.
         Task { await Whisper.shared.prewarm() }
@@ -188,6 +190,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(autoEnter)
         }
 
+        // F201.6.6 — voice enrollment (speaker gate). Only when connected; the
+        // gate filters non-owner speech once the owner enrols (ship-dark until
+        // then — no print means every voice passes, exactly as before).
+        if deviceAuth.isConnected {
+            menu.addItem(.separator())
+            let vfStatus = NSMenuItem(
+                title: SpeakerEnroll.shared.isEnrolled ? S.voiceFilterEnrolled : S.voiceFilterNone,
+                action: nil, keyEquivalent: ""
+            )
+            vfStatus.isEnabled = false
+            menu.addItem(vfStatus)
+
+            let enroll = NSMenuItem(
+                title: SpeakerEnroll.shared.recording ? S.enrollFinish
+                    : (SpeakerEnroll.shared.isEnrolled ? S.enrollReEnroll : S.enrollVoice),
+                action: #selector(toggleEnroll), keyEquivalent: ""
+            )
+            enroll.target = self
+            menu.addItem(enroll)
+
+            if let result = SpeakerEnroll.shared.lastResult {
+                let r = NSMenuItem(title: "  \(result)", action: nil, keyEquivalent: "")
+                r.isEnabled = false
+                menu.addItem(r)
+            }
+            if SpeakerEnroll.shared.isEnrolled && !SpeakerEnroll.shared.recording {
+                let clear = NSMenuItem(title: S.clearVoicePrint, action: #selector(clearVoicePrint), keyEquivalent: "")
+                clear.target = self
+                menu.addItem(clear)
+            }
+        }
+
         // Settings — deny-list is enforced by the gate from F201.4; the
         // submenu makes today's defaults visible where users expect them.
         let settingsMenu = NSMenu()
@@ -240,6 +274,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ))
         return s
     }
+
+    @objc private func toggleEnroll() { SpeakerEnroll.shared.toggle() }
+    @objc private func clearVoicePrint() { SpeakerEnroll.shared.clear() }
 
     @objc private func openHud() { hud.toggle() }
 

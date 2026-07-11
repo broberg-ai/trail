@@ -30,6 +30,7 @@ struct UIStrings {
     let saved: String
     let duplicate: String
     let saveFailed: String
+    let notYourVoice: String
 
     // HUD — content area hints
     let lookingUp: String
@@ -70,6 +71,19 @@ struct UIStrings {
     let disconnect: String
     let settings: String
     let quit: String
+
+    // menubar — voice enrollment (F201.6.6 speaker gate)
+    let voiceFilterEnrolled: String
+    let voiceFilterNone: String
+    let enrollVoice: String
+    let enrollFinish: String
+    let enrollReEnroll: String
+    let clearVoicePrint: String
+    let enrollNeedsMic: String
+    let enrollFailed: String
+    let enrollTooShort: String
+    let enrollBuilding: String
+    let enrollDoneFmt: String
 }
 
 extension UIStrings {
@@ -92,6 +106,7 @@ extension UIStrings {
         saved: "✓ Saved to Trail",
         duplicate: "Already saved (duplicate)",
         saveFailed: "Couldn't save to Trail — try again",
+        notYourVoice: "Not saved — this isn't your enrolled voice",
 
         lookingUp: "Looking up…",
         noNeurons: "No Neurons match yet.",
@@ -127,7 +142,19 @@ extension UIStrings {
         ocrNeedsPermission: "Screen OCR: needs Screen Recording permission",
         disconnect: "Disconnect from Trail",
         settings: "Settings",
-        quit: "Quit Trail Ambient"
+        quit: "Quit Trail Ambient",
+
+        voiceFilterEnrolled: "Voice filter: on (your voice enrolled)",
+        voiceFilterNone: "Voice filter: off — enroll to capture only your voice",
+        enrollVoice: "Enroll my voice…",
+        enrollFinish: "Finish recording — speak now",
+        enrollReEnroll: "Re-enroll my voice…",
+        clearVoicePrint: "Remove my voice-print",
+        enrollNeedsMic: "Grant microphone access to enroll",
+        enrollFailed: "Couldn't start recording — try again",
+        enrollTooShort: "Not enough speech — hold longer and try again",
+        enrollBuilding: "Building your voice-print…",
+        enrollDoneFmt: "✓ Voice-print saved (%.0fs)"
     )
 
     /// Original Danish — preserved so the UI can flip back with one line.
@@ -149,6 +176,7 @@ extension UIStrings {
         saved: "✓ Gemt i Trail",
         duplicate: "Allerede gemt (dublet)",
         saveFailed: "Kunne ikke gemme i Trail — prøv igen",
+        notYourVoice: "Ikke gemt — dette er ikke din stemme",
 
         lookingUp: "Slår op…",
         noNeurons: "Ingen Neuroner matcher endnu.",
@@ -184,7 +212,19 @@ extension UIStrings {
         ocrNeedsPermission: "Skærm-OCR: kræver Skærmoptagelse-tilladelse",
         disconnect: "Frakobl fra Trail",
         settings: "Indstillinger",
-        quit: "Afslut Trail Ambient"
+        quit: "Afslut Trail Ambient",
+
+        voiceFilterEnrolled: "Stemmefilter: til (din stemme er optaget)",
+        voiceFilterNone: "Stemmefilter: fra — optag for kun at fange din stemme",
+        enrollVoice: "Optag min stemme…",
+        enrollFinish: "Afslut optagelse — tal nu",
+        enrollReEnroll: "Optag min stemme igen…",
+        clearVoicePrint: "Slet mit stemme-aftryk",
+        enrollNeedsMic: "Giv mikrofon-adgang for at optage",
+        enrollFailed: "Kunne ikke starte optagelse — prøv igen",
+        enrollTooShort: "Ikke nok tale — hold længere og prøv igen",
+        enrollBuilding: "Bygger dit stemme-aftryk…",
+        enrollDoneFmt: "✓ Stemme-aftryk gemt (%.0fs)"
     )
 }
 

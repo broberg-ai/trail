@@ -116,6 +116,18 @@ actor AudioWatcher {
         }
     }
 
+    /// Stop capture and return the raw 16 kHz mono buffer WITHOUT transcribing —
+    /// used by voice enrollment (F201.6.6), which needs the samples, not text.
+    func finishAndReturnSamples() -> [Float] {
+        guard recording else { return [] }
+        recording = false
+        engine.stop()
+        engine.inputNode.removeTap(onBus: 0)
+        let samples = buffer
+        buffer.removeAll(keepingCapacity: false)
+        return samples
+    }
+
     /// Feed resampled mono frames through the deny-list guard into the buffer,
     /// only while recording. Privacy guard FIRST — a deny-listed app's audio
     /// never even buffers.
