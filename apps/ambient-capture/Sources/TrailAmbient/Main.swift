@@ -37,6 +37,10 @@ struct TrailAmbientMain {
         if CommandLine.arguments.contains("--mine") {
             MineTool.run()
         }
+        if let i = CommandLine.arguments.firstIndex(of: "--loginitem"),
+           i + 1 < CommandLine.arguments.count {
+            LoginItem.runCLI(CommandLine.arguments[i + 1])
+        }
         if let i = CommandLine.arguments.firstIndex(of: "--genicon"),
            i + 1 < CommandLine.arguments.count {
             IconGen.write(toDir: CommandLine.arguments[i + 1])

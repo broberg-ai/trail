@@ -43,6 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AudioWatcher.requestMicIfNeeded()
         // F201.6.6 — re-render the menu whenever voice-enrollment state changes.
         SpeakerEnroll.shared.onChange = { [weak self] in self?.render() }
+        // F201.20 — a background agent must survive a Mac restart. Opts in on the
+        // first run; afterwards only repairs a registration a rebuild invalidated.
+        LoginItem.syncAtLaunch()
         // Pre-warm Whisper in the background so the first capture doesn't wait on
         // the one-time model download.
         Task { await Whisper.shared.prewarm() }
@@ -225,6 +228,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Settings — deny-list is enforced by the gate from F201.4; the
         // submenu makes today's defaults visible where users expect them.
         let settingsMenu = NSMenu()
+        // F201.20 — start at login. The checkmark is read from the OS, so
+        // revoking the item in System Settings shows up here truthfully.
+        let launchAtLogin = NSMenuItem(
+            title: S.startAtLogin,
+            action: #selector(toggleLaunchAtLogin), keyEquivalent: ""
+        )
+        launchAtLogin.target = self
+        launchAtLogin.state = LoginItem.isEnabled ? .on : .off
+        settingsMenu.addItem(launchAtLogin)
+        settingsMenu.addItem(.separator())
         let denyHeader = NSMenuItem(title: S.denyHeader, action: nil, keyEquivalent: "")
         denyHeader.isEnabled = false
         settingsMenu.addItem(denyHeader)
@@ -277,6 +290,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func toggleEnroll() { SpeakerEnroll.shared.toggle() }
     @objc private func clearVoicePrint() { SpeakerEnroll.shared.clear() }
+    /// F201.20 — flip the login item, then re-render so the checkmark shows the
+    /// state the OS actually ended up in (not the state we asked for).
+    @objc private func toggleLaunchAtLogin() {
+        LoginItem.setEnabled(!LoginItem.isEnabled)
+        render()
+    }
 
     @objc private func openHud() { hud.toggle() }
 

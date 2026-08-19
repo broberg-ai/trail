@@ -72,6 +72,9 @@ struct UIStrings {
     let settings: String
     let quit: String
 
+    // menubar — start at login (F201.20)
+    let startAtLogin: String
+
     // menubar — voice enrollment (F201.6.6 speaker gate)
     let voiceFilterEnrolled: String
     let voiceFilterNone: String
@@ -144,6 +147,8 @@ extension UIStrings {
         settings: "Settings",
         quit: "Quit Trail Ambient",
 
+        startAtLogin: "Start at login",
+
         voiceFilterEnrolled: "Voice filter: on (your voice enrolled)",
         voiceFilterNone: "Voice filter: off — enroll to capture only your voice",
         enrollVoice: "Enroll my voice…",
@@ -213,6 +218,8 @@ extension UIStrings {
         disconnect: "Frakobl fra Trail",
         settings: "Indstillinger",
         quit: "Afslut Trail Ambient",
+
+        startAtLogin: "Start ved login",
 
         voiceFilterEnrolled: "Stemmefilter: til (din stemme er optaget)",
         voiceFilterNone: "Stemmefilter: fra — optag for kun at fange din stemme",
