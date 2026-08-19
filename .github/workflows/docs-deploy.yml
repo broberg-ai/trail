@@ -47,6 +47,10 @@ jobs:
 
       - name: Deploy to Fly
         working-directory: apps/docs
-        run: flyctl deploy --remote-only --config fly.toml .
+        # F196.3 — the sha MUST be baked in. Without it report-deploy.sh posts
+        # sha="unknown" with deploy_id "unknown-<site>", and because the
+        # registry is idempotent on deploy_id that lie is written ONCE and can
+        # never be corrected. The local `pnpm ship:*` path already passes it.
+        run: flyctl deploy --remote-only --config fly.toml --build-arg GIT_SHA="${GITHUB_SHA::7}" .
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
