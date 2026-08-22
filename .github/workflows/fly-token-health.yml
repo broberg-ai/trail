@@ -1,0 +1,56 @@
+# F204.1 — is the Fly deploy token alive?
+#
+# The FLY_API_TOKEN secret expired silently in May 2026 and nobody noticed for
+# three and a half months. Every deploy job failed identically the whole time,
+# so "red" stopped carrying information: there was no green run to contrast
+# against, and a red row next to three months of red rows tells you nothing.
+#
+# This job exists to make the NEXT expiry loud. It authenticates against Fly
+# and deploys nothing, which is what makes it safe to run on a schedule and
+# safe to run on demand — it can prove the GitHub-secret -> flyctl chain works
+# without shipping a single byte of application code.
+#
+# Note on the alarm: a check like this normally belongs on
+# cronjobs.webhouse.net (the fleet's durable external clock). This one runs in
+# GitHub Actions on purpose, because the thing being tested is whether a
+# GitHub secret still works from inside a GitHub runner — testing it anywhere
+# else would test a different chain. A failing scheduled run mails the repo
+# owner, which is the "loud" part.
+name: Fly token health
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Mondays 06:00 UTC. Weekly is enough: this catches a dead token within
+    # days instead of months, which is the entire gap being closed.
+    - cron: '0 6 * * 1'
+
+jobs:
+  check:
+    name: Verify the deploy token authenticates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Authenticate against Fly (no deploy)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FLY_API_TOKEN:-}" ]; then
+            echo "::error::FLY_API_TOKEN secret is empty or unset."
+            exit 1
+          fi
+          # A bad/expired token makes this exit non-zero with
+          # "Authenticate: token validation error" — the exact failure that
+          # went unseen from May to August.
+          flyctl apps list > apps.txt
+          # Exit code alone is not enough: assert the token actually reaches
+          # the org we deploy into, so an org-less or wrongly-scoped token
+          # fails here rather than at the next real deploy.
+          if ! grep -q 'trail-docs' apps.txt; then
+            echo "::error::Token authenticated but cannot see trail-docs — wrong org scope?"
+            cat apps.txt
+            exit 1
+          fi
+          echo "Deploy token is valid and scoped to the org holding trail-docs."
