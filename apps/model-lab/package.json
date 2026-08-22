@@ -20,6 +20,7 @@
   "devDependencies": {
     "@preact/preset-vite": "^2.9.0",
     "@tailwindcss/vite": "^4.1.15",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/bun": "^1.1.0",
     "preact": "^10.23.0",
     "preact-iso": "^2.9.0",

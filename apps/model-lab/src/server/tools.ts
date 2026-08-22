@@ -1,4 +1,5 @@
 import { readFile, writeFile, mkdir, readdir, stat, unlink } from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
 import { join, dirname } from 'node:path';
 
 export interface SimulatedKB {
@@ -196,7 +197,7 @@ async function toolSearch(kb: SimulatedKB, args: Record<string, unknown>): Promi
 
   if (mode === 'source' || args.kind === 'source') {
     const sourcesDir = join(kb.rootDir, dirname(kb.sourceFile));
-    let entries;
+    let entries: Dirent[];
     try {
       entries = await readdir(sourcesDir, { withFileTypes: true });
     } catch {

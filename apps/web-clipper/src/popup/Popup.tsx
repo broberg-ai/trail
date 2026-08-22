@@ -18,7 +18,7 @@ type ClipState = 'idle' | 'extracting' | 'uploading' | 'success' | 'error'
 const DEFAULT_SERVER = 'http://127.0.0.1:58031'
 const DEFAULT_TOKEN = 'trail_95d866ec7ac5629017d08aa0e3ff312aee6a6f145a2c5cff4414f0efddf5e288'
 
-function loadConfig(): Config {
+function loadConfig(): Promise<Config> {
   return new Promise((resolve) => {
     chrome.storage.local.get(['serverUrl', 'token'], (result) => {
       resolve({
@@ -237,7 +237,7 @@ export function Popup() {
       h('select',
         {
           value: selectedKb,
-          onChange: (e) => setSelectedKb((e.target as HTMLSelectElement).value),
+          onChange: (e: Event) => setSelectedKb((e.target as HTMLSelectElement).value),
           disabled: !isConnected,
         },
         [

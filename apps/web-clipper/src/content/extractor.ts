@@ -25,7 +25,9 @@ function extractPageContent(): { title: string; content: string } | null {
       replacement: () => '',
     })
 
-    const markdown = turndown.turndown(article.content)
+    // Readability types `content` as string | null | undefined — an article it
+    // could not parse yields nothing to convert, and turndown would throw.
+    const markdown = turndown.turndown(article.content ?? '')
 
     return {
       title: article.title || document.title || 'Untitled',

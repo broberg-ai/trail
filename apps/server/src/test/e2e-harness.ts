@@ -79,9 +79,13 @@ export async function startE2E(): Promise<E2EContext> {
     id: seed.tenantId, slug: seed.tenantSlug, name: 'Acme',
   }).run?.();
   await trail.db.insert(users).values({
-    id: seed.userId, tenantId: seed.tenantId, email: 'cb@webhouse.dk', role: 'admin',
+    id: seed.userId, tenantId: seed.tenantId, email: 'cb@webhouse.dk', role: 'owner',
   }).run?.();
-  for (const [id, name] of [[seed.kbA, 'KB A'], [seed.kbB, 'KB B']] as const) {
+  const kbSeeds: Array<{ id: string; name: string }> = [
+    { id: seed.kbA, name: 'KB A' },
+    { id: seed.kbB, name: 'KB B' },
+  ];
+  for (const { id, name } of kbSeeds) {
     await trail.db.insert(knowledgeBases).values({
       id, tenantId: seed.tenantId, slug: id, name, createdBy: seed.userId,
     }).run?.();
@@ -111,8 +115,10 @@ export async function startE2E(): Promise<E2EContext> {
       }).run?.();
       return raw;
     },
-    call(path, key, init = {}) {
-      return app.request(path, {
+    async call(path, key, init = {}) {
+      // Hono's request() is typed Response | Promise<Response>; await normalises
+      // it so every caller can simply `await e2e.call(...)`.
+      return await app.request(path, {
         ...init,
         headers: { authorization: `Bearer ${key}`, ...(init.headers ?? {}) },
       });
