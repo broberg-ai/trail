@@ -1,0 +1,61 @@
+# F206.2 — the gate.
+#
+# The repo had seven test files and nothing that ran them. That is the shape
+# CLAUDE.md calls theatre: "Wire your own gate. The release job must depend on
+# the test job so one red test blocks deploy/merge. Tests nothing runs are
+# theatre."
+#
+# It matters now because F205.1 added an auth boundary — a partner key that
+# must be refused on search, on Neuron reads, on key minting and on other
+# knowledge bases. A future change that quietly widens that access would
+# otherwise look exactly like a passing build.
+#
+# `workflow_call` is what lets the deploy workflows depend on this rather than
+# merely run alongside it. A green-or-red run nobody has wired to anything is
+# the same theatre in a new costume — see F204, where three months of red
+# carried no information because nothing depended on it.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_call:
+
+jobs:
+  test:
+    name: typecheck + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # The suite runs on bun (`turbo run test` → `bun test` in each package),
+      # so the runner needs it even though installs go through pnpm.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # --frozen-lockfile so a green run describes the dependency set we
+      # actually committed. A plain `pnpm install` may resolve something newer
+      # than the lockfile and report green for a tree that is not in the repo.
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # No continue-on-error, no `|| true`. A red test is the job failing —
+      # that is the entire point of the file.
+      - name: Test
+        run: pnpm test

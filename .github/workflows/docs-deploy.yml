@@ -20,7 +20,13 @@ on:
   workflow_dispatch:
 
 jobs:
+  # F206.2 — the gate. The deploy job below `needs` this, so a red test
+  # BLOCKS the release instead of merely being visible next to it.
+  test:
+    uses: ./.github/workflows/ci.yml
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
