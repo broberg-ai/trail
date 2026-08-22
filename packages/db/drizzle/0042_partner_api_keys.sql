@@ -1,0 +1,17 @@
+-- F205.1 — bind a partner API key to a single knowledge base.
+--
+-- Until now `scope` had exactly two meanings: 'full' (the column default,
+-- unrestricted) and 'ambient' (the capture device). Every key minted through
+-- Settings → Developer got 'full', because the mint call never set the column
+-- at all — so handing that key to an external partner would hand them the
+-- whole tenant: every Neuron, settings, source deletion, and the ability to
+-- mint more keys.
+--
+-- 'partner' is the third meaning: upload-only, and confined to the ONE
+-- knowledge base named here. The partner upload endpoint deliberately takes
+-- no kbId of its own, so the target cannot be changed by the caller — it is
+-- read from this row.
+--
+-- NULL for every non-partner key, so existing rows are untouched and keep
+-- behaving exactly as before (no naked cutover of a live auth path).
+ALTER TABLE `api_keys` ADD `kb_id` text REFERENCES knowledge_bases(id) ON DELETE cascade;

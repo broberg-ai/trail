@@ -787,7 +787,14 @@ export const apiKeys = sqliteTable(
     keyHash: text('key_hash').notNull(),
     // F201.2 — 'full' (default, unrestricted) or 'ambient' (candidates-write
     // + search/chat read only; enforced by requireAuth's scope gate).
+    // F205.1 — 'partner': an EXTERNAL app's key. Upload-only, and bound to the
+    // single KB named by `kbId`. The Developer page mints 'full' keys that act
+    // AS THE USER across the tenant; a partner must never get one of those.
     scope: text('scope').notNull().default('full'),
+    // F205.1 — the one knowledge base a 'partner' key may write to. NULL for
+    // every other scope. This is what the request CANNOT override: the partner
+    // upload endpoint takes no kbId, so there is no path segment to tamper with.
+    kbId: text('kb_id').references(() => knowledgeBases.id, { onDelete: 'cascade' }),
     lastUsedAt: text('last_used_at'),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
     revokedAt: text('revoked_at'),

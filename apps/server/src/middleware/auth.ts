@@ -2,6 +2,7 @@ import type { Context, Next } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { sessions, users, tenants, apiKeys, type TrailDatabase } from '@trail/db';
+import { PARTNER_SCOPE, partnerAllows } from './partner-scope.js';
 import { and, eq, gt, isNull } from 'drizzle-orm';
 import { INGEST_USER_ID } from '../bootstrap/ingest-user.js';
 import { resolveBearer, resolveSession } from '../lib/key-index.js';
@@ -77,9 +78,25 @@ const AMBIENT_ALLOWED: ReadonlyArray<{ method: string; pattern: RegExp }> = [
   { method: 'GET', pattern: /^\/api\/v1\/knowledge-bases\/[^/]+\/name$/ },
 ];
 
-function scopeAllows(scope: string, method: string, path: string): boolean {
-  if (scope !== 'ambient') return true;
-  return AMBIENT_ALLOWED.some((r) => r.method === method && r.pattern.test(path));
+/**
+ * F205.1 — returns a DECISION rather than a boolean so a refusal can say why.
+ * An opaque 403 leaves an external partner integrator guessing; they cannot
+ * read our source to work it out.
+ *
+ * `kbId` is the knowledge base a 'partner' key is bound to (NULL for every
+ * other scope). Unknown scopes still fall through to unrestricted, which is
+ * what keeps every pre-existing key behaving exactly as before.
+ */
+function scopeAllows(
+  scope: string,
+  kbId: string | null,
+  method: string,
+  path: string,
+): { allowed: boolean; reason?: string } {
+  if (scope === PARTNER_SCOPE) return partnerAllows(kbId, method, path);
+  if (scope !== 'ambient') return { allowed: true };
+  const ok = AMBIENT_ALLOWED.some((r) => r.method === method && r.pattern.test(path));
+  return ok ? { allowed: true } : { allowed: false, reason: 'ambient key scope' };
 }
 
 export async function requireAuth(c: Context, next: Next): Promise<Response | void> {
@@ -116,7 +133,7 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
           return c.json({ error: 'Invalid or revoked API key' }, 401);
         }
         const row = await tenantDb.db
-          .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS, keyId: apiKeys.id, scope: apiKeys.scope })
+          .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS, keyId: apiKeys.id, scope: apiKeys.scope, kbId: apiKeys.kbId })
           .from(apiKeys)
           .innerJoin(users, eq(users.id, apiKeys.userId))
           .innerJoin(tenants, eq(tenants.id, users.tenantId))
@@ -126,9 +143,13 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
           // Indexed but the per-tenant row went missing — treat as 401.
           return c.json({ error: 'Invalid or revoked API key' }, 401);
         }
-        if (!scopeAllows(row.scope, c.req.method, c.req.path)) {
-          return c.json({ error: 'API key scope does not allow this endpoint' }, 403);
+        const decision = scopeAllows(row.scope, row.kbId, c.req.method, c.req.path);
+        if (!decision.allowed) {
+          return c.json({ error: `API key scope does not allow this endpoint${decision.reason ? `: ${decision.reason}` : ''}` }, 403);
         }
+        // F205.1 — the KB a partner key is confined to. Read from the KEY, so
+        // the upload endpoint never takes a kbId the caller could tamper with.
+        c.set('partnerKbId', row.kbId);
         c.set('trail', tenantDb);
         trail = tenantDb;
         c.set('user', row.user);
@@ -146,7 +167,7 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
       // Single-tenant path (TRAIL_MULTI_TENANT unset): historical
       // F40.1 behaviour, query the primary DB directly.
       const row = await trail.db
-        .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS, keyId: apiKeys.id, scope: apiKeys.scope })
+        .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS, keyId: apiKeys.id, scope: apiKeys.scope, kbId: apiKeys.kbId })
         .from(apiKeys)
         .innerJoin(users, eq(users.id, apiKeys.userId))
         .innerJoin(tenants, eq(tenants.id, users.tenantId))
@@ -155,9 +176,11 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
       if (!row) {
         return c.json({ error: 'Invalid or revoked API key' }, 401);
       }
-      if (!scopeAllows(row.scope, c.req.method, c.req.path)) {
-        return c.json({ error: 'API key scope does not allow this endpoint' }, 403);
+      const decision = scopeAllows(row.scope, row.kbId, c.req.method, c.req.path);
+      if (!decision.allowed) {
+        return c.json({ error: `API key scope does not allow this endpoint${decision.reason ? `: ${decision.reason}` : ''}` }, 403);
       }
+      c.set('partnerKbId', row.kbId);
       c.set('user', row.user);
       c.set('tenant', row.tenant);
       c.set('authType', 'bearer');

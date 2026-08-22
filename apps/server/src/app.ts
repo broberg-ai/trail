@@ -66,6 +66,14 @@ export interface AppBindings {
     user?: import('./middleware/auth.js').AuthUser;
     tenant?: import('./middleware/auth.js').AuthTenant;
     /**
+     * F205.1 — the single knowledge base a 'partner' API key is confined to,
+     * read from the key row by the auth middleware. The partner upload
+     * endpoint takes NO kbId of its own and reads this instead, so an external
+     * caller cannot retarget another knowledge base by editing the request.
+     * Undefined for every non-partner caller.
+     */
+    partnerKbId?: string | null;
+    /**
      * F160 — how the request was authenticated. Lets routes pick
      * sane defaults for audience-aware behaviour: external Bearer
      * callers default to `tool` audience (no admin-only docs, no
