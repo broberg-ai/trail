@@ -1,6 +1,38 @@
 # F209 — Ambient clips the article you are reading
 
-**Owner:** trail · **Status:** planned, 2026-08-23
+**Owner:** trail · **Status:** **DROPPED 2026-08-23, same day it was planned.**
+Cards archived (`trail-F209` + three stories). No code was written.
+
+> **Christian, 2026-08-23:** *"Vi dropper den feature, vi har web clipper i
+> browser, den er perfekt til det den skal."*
+>
+> **He is right, and the argument against it is in this document's own Phase 1
+> section.** A server-side fetch has no session, so paywalls, internal wikis,
+> Notion and mail all return a sign-in wall — and that is a large share of what
+> anyone actually clips. The extension already solves exactly that by reading
+> the DOM inside the user's authenticated browser, which no server can imitate.
+> F209 Phase 1 would have shipped a second, weaker path to the same feature, and
+> Phase 2 — the version that would have matched the extension — depends on a
+> per-browser setting that is off by default.
+>
+> The gain was never extraction quality. It was avoiding a per-browser
+> extension. That is a real cost, but it is paid once per browser and the Chrome
+> one is already built and submitted.
+>
+> **Kept as a record so this is not re-proposed from scratch.** If it returns,
+> the entry point is Phase 2 (ask the browser for its own rendered DOM over
+> AppleScript), NOT Phase 1 — and the measurements below still hold:
+> `ScreenWatcher` captures one frame of the frontmost window, and `FocusWatcher`
+> reads the window title but not the URL.
+>
+> **Untouched by this decision:** clipping NON-browser surfaces — a PDF in
+> Preview, a Figma board, a Slack thread — where there is no DOM and the
+> extension can never reach. That stays as idea `01a02ea2`, unarchived, and it
+> is a separate question from this one.
+
+**Superseded status below — kept verbatim as it was written.**
+
+**Original status:** planned, 2026-08-23
 **Origin:** Christian, 2026-08-23 — *"Ambient Mac app, kan den ikke få integreret
 Web Clipper funktionalitet også … vi har jo lavet det sådan at den kan aflæse
 hvilken app og skærm vi er på."* Then, after the scope discussion:
