@@ -3,8 +3,9 @@
 Klip en hvilken som helst webside direkte ind i din Trail-videnbase med ét klik.
 
 > **Status i dag (23. august 2026):** udvidelsen er endnu ikke udgivet i Chrome
-> Web Store, så den installeres manuelt fra den byggede mappe. Når den er
-> udgivet, bliver trin 1 til "klik installér", og resten er uændret.
+> Web Store. Indtil da hentes den som zip herunder — intet byggeværktøj
+> nødvendigt, men stadig Developer mode. Når butiks-udgaven er godkendt, bliver
+> trin 1 til "klik installér", advarslen forsvinder, og resten er uændret.
 > Se `docs/features/F208-publish-web-clipper.md`.
 
 ---
