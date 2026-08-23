@@ -14,36 +14,52 @@ arrives as a Source that Trail compiles into Neurons like any other upload.
 It is idle until you click it. It does not follow your browsing.
 
 > **Availability.** The extension is not in the Chrome Web Store yet — it is
-> being submitted. Until then it installs from a build folder, described below.
-> A Safari version follows as a signed Mac app, because Safari does not accept
-> bare web extensions.
+> being submitted. Until it is approved, there is a **download** below; it
+> installs in four steps and needs no development tools. A Safari version
+> follows as a signed Mac app, because Safari does not accept bare web
+> extensions.
 
-## Install (Chrome, Edge, Brave)
+## Install (Chrome, Edge, Brave, Arc)
 
-Any Chromium browser will load it.
+Any Chromium browser will load it. You do not need the repository, and you do
+not need to build anything.
 
-1. Build the extension, if you have the repository:
-   ```bash
-   cd apps/web-clipper && pnpm build
-   ```
-   This produces `apps/web-clipper/dist`.
+1. **[Download trail-web-clipper-0.1.0.zip](https://github.com/broberg-ai/trail/releases/latest)**
+   and unzip it. Put the folder somewhere permanent — see the warning below.
 2. Open `chrome://extensions`.
 3. Turn on **Developer mode** (top right).
-4. Click **Load unpacked** and choose the `dist` folder.
+4. Click **Load unpacked** and choose the unzipped folder.
 5. Pin Trail Web Clipper to the toolbar from the puzzle-piece menu.
 
-**Choose `dist` itself, not the folder above it.** The folder above holds the
-source, which is TypeScript — a browser cannot run it, so the extension loads
-but its background script never starts and the panel opens empty. There is no
-error to click on; it simply does nothing. The source folder no longer contains
-a `manifest.json`, so Chrome now refuses it outright with *"Manifest file is
-missing or unreadable"* rather than half-loading it.
+**Chrome will warn you about developer mode on every startup** — *"Disable
+developer mode extensions"*. That is Chrome objecting to any extension not
+installed from its own store, not a fault in this one. It stops once the store
+version is live, which is the main reason the store submission is worth waiting
+for.
 
-**If the extension disappears later**, the folder it was loaded from is gone —
-`dist` is a build artefact, not committed, and a clean removes it. Chrome drops
-an unpacked extension whose folder no longer exists, usually noticed after a
-restart. Rebuild and load it again. A store install removes this problem for
-good.
+**Keep the folder, and do not move it.** Chrome runs the extension *from* that
+folder rather than copying it. Delete it, move it, or empty your Downloads and
+Chrome silently drops the extension — usually noticed after a restart, when the
+icon is simply gone. A store install removes this problem permanently, because
+Chrome then owns the copy.
+
+**This download does not update itself.** When the store version is approved,
+remove this one and install from the store instead.
+
+### Building it yourself (optional)
+
+Only if you have the repository and want to change something:
+
+```bash
+cd apps/web-clipper && pnpm build
+```
+
+This produces `apps/web-clipper/dist`, and that is the folder to load —
+**not the folder above it**. The folder above holds TypeScript source, which no
+browser can run: the extension loads, its background script never starts, and
+the panel opens empty with no error to click on. The source folder deliberately
+contains no `manifest.json`, so Chrome refuses it outright with *"Manifest file
+is missing or unreadable"* rather than half-loading it into a silent failure.
 
 ## Point it at your Trail
 
