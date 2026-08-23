@@ -1,9 +1,11 @@
+// F207 — seed the server URL only. A token must NEVER be baked into the
+// extension: this file used to ship a real full-access Trail key, and this
+// repo is public, so it was a published credential for four months. The token
+// is entered once in the popup's settings and lives in chrome.storage.local
+// on the user's own machine.
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
-    chrome.storage.local.set({
-      serverUrl: 'http://127.0.0.1:58031',
-      token: 'trail_95d866ec7ac5629017d08aa0e3ff312aee6a6f145a2c5cff4414f0efddf5e288',
-    })
+    chrome.storage.local.set({ serverUrl: 'https://app.trailmem.com' })
   }
 })
 

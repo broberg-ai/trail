@@ -27,7 +27,7 @@ const key = keyBytes;
 
 // ── 2. Round-trip seal + unseal ──────────────────────────────────
 console.log('\n[2] seal + unseal roundtrip');
-const plaintext = 'sk-or-v1-abcdef0123456789';
+const plaintext = 'sk-or-v1-abcdef0123456789';  // secret-scan:allow — synthetic fixture, this file EXISTS to test the detector
 const sealed = sealSecret(plaintext, key);
 assert(sealed.includes(':'), 'sealed blob has colon separators');
 assert(sealed.split(':').length === 3, 'sealed blob has exactly 3 parts (nonce:ciphertext:tag)');

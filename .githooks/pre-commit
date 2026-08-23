@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# F207.2 — refuse a commit that carries a credential.
+#
+# Committed to the repo (not .git/hooks, which nothing can share) and activated
+# with `git config core.hooksPath .githooks`. `scripts/install-hooks.sh` does
+# that, and CI runs the same scan so a machine without the hook installed still
+# cannot land a secret — the hook is the fast feedback, not the only guard.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+if ! command -v bun >/dev/null 2>&1; then
+  # Fail loudly rather than pretending the check ran. A silent skip is exactly
+  # how a key stayed in this public repo for four months.
+  echo "[pre-commit] bun not found — CANNOT scan for secrets."
+  echo "[pre-commit] install bun, or commit with --no-verify and accept that CI will catch it."
+  exit 1
+fi
+
+bun run scripts/scan-secrets.ts --staged

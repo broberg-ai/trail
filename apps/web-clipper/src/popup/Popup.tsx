@@ -15,8 +15,17 @@ interface KnowledgeBase {
 
 type ClipState = 'idle' | 'extracting' | 'uploading' | 'success' | 'error'
 
-const DEFAULT_SERVER = 'http://127.0.0.1:58031'
-const DEFAULT_TOKEN = 'trail_95d866ec7ac5629017d08aa0e3ff312aee6a6f145a2c5cff4414f0efddf5e288'
+// F208.1 — the cloud is the default. Pointing at the dev server meant a clip
+// was lost whenever the Mac happened to be off, and for anyone but its author
+// the extension pointed at nothing at all. The local server stays one click
+// away in settings.
+const CLOUD_SERVER = 'https://app.trailmem.com'
+const LOCAL_SERVER = 'http://127.0.0.1:58031'
+const DEFAULT_SERVER = CLOUD_SERVER
+// F207 — no default token, on purpose. There used to be a real full-access
+// Trail key here, in a PUBLIC repo. An empty token means "not configured yet",
+// which the UI says out loud rather than failing with an opaque 401.
+const DEFAULT_TOKEN = ''
 
 function loadConfig(): Promise<Config> {
   return new Promise((resolve) => {
@@ -39,10 +48,21 @@ function saveConfig(config: Config): Promise<void> {
 }
 
 async function fetchKnowledgeBases(serverUrl: string, token: string): Promise<KnowledgeBase[]> {
-  const res = await fetch(`${serverUrl}/api/v1/knowledge-bases`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  if (!res.ok) throw new Error(`Failed to fetch KBs: ${res.status} ${res.statusText}`)
+  // F208.1 — "could not reach it" and "it refused me" are different problems
+  // with different fixes, and the popup used to show neither. A wrong port and
+  // a dead token looked identical: an empty panel saying "Not configured".
+  let res: Response
+  try {
+    res = await fetch(`${serverUrl}/api/v1/knowledge-bases`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  } catch {
+    throw new Error(`Can't reach ${serverUrl} — is it running, and is the address right?`)
+  }
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(`${serverUrl} refused the API token (${res.status}). Check the token in settings.`)
+  }
+  if (!res.ok) throw new Error(`${serverUrl} answered ${res.status} ${res.statusText}`)
   return res.json()
 }
 
@@ -141,6 +161,8 @@ export function Popup() {
   const [clippedUrl, setClippedUrl] = useState('')
   const [tempServerUrl, setTempServerUrl] = useState('')
   const [tempToken, setTempToken] = useState('')
+  // F208.1 — why we are not connected, in words the user can act on.
+  const [connError, setConnError] = useState<string | null>(null)
 
   useEffect(() => {
     loadConfig().then((cfg) => {
@@ -155,10 +177,11 @@ export function Popup() {
       fetchKnowledgeBases(config.serverUrl, config.token)
         .then((result) => {
           setKbs(result)
+          setConnError(null)
           if (result.length === 1) setSelectedKb(result[0].id)
         })
-        .catch((err) => {
-          console.error('Failed to fetch KBs:', err)
+        .catch((err: Error) => {
+          setConnError(err.message)
         })
     }
   }, [config])
@@ -280,8 +303,15 @@ export function Popup() {
       isConnected
         ? h('div', { class: 'connected-dot' })
         : h('div', { class: 'disconnected-dot' }),
-      isConnected ? `${kbs.length} KB(s) connected` : 'Not configured',
+      isConnected
+        ? `${kbs.length} KB(s) · ${config.serverUrl.replace(/^https?:\/\//, '')}`
+        : connError
+          ? 'Not connected'
+          : 'Not configured — add your API token in settings',
     ]),
+
+    // F208.1 — the actual reason, not a silent empty panel.
+    connError && h('div', { class: 'conn-error' }, connError),
 
     h('div', { class: 'settings-toggle', onClick: () => setShowSettings(!showSettings) },
       showSettings ? 'Hide settings' : 'Settings'
@@ -295,7 +325,7 @@ export function Popup() {
             type: 'text',
             value: tempServerUrl,
             onInput: (e) => setTempServerUrl((e.target as HTMLInputElement).value),
-            placeholder: 'http://127.0.0.1:58031',
+            placeholder: CLOUD_SERVER,
           }),
         ]),
       ]),
@@ -309,6 +339,21 @@ export function Popup() {
             placeholder: 'trail_xxx',
           }),
         ]),
+      ]),
+      // F208.1 — the two servers anyone actually uses, one click each. Typing a
+      // URL by hand is where a trailing slash or a wrong port silently costs an
+      // afternoon.
+      h('div', { class: 'btn-group' }, [
+        h('button', {
+          class: 'btn',
+          onClick: () => setTempServerUrl(CLOUD_SERVER),
+          disabled: tempServerUrl === CLOUD_SERVER,
+        }, 'Use cloud'),
+        h('button', {
+          class: 'btn',
+          onClick: () => setTempServerUrl(LOCAL_SERVER),
+          disabled: tempServerUrl === LOCAL_SERVER,
+        }, 'Use local'),
       ]),
       h('div', { class: 'btn-group' }, [
         h('button', { class: 'btn btn-primary', onClick: handleSaveSettings }, 'Save & Connect'),

@@ -45,11 +45,11 @@ const SAMPLES: Array<[label: string, sample: string]> = [
   ['google-oauth-secret', 'GOCSPX-' + 'D'.repeat(28)],
   ['aws-access-key-id', 'AKIA' + 'EXAMPLE0123456789'.slice(0, 16)],
   ['github-token', 'ghp_' + 'f'.repeat(36)],
-  ['slack-token', 'xoxb-1234567890-abcdefghij'],
+  ['slack-token', 'xoxb-1234567890-abcdefghij'],  // secret-scan:allow — synthetic fixture, this file EXISTS to test the detector
   ['stripe-secret-key', 'sk_live_' + 'g'.repeat(24)],
-  ['resend-api-key', 're_AbCdEf12GhIjKl34MnOpQr56StUvWx'],
+  ['resend-api-key', 're_AbCdEf12GhIjKl34MnOpQr56StUvWx'],  // secret-scan:allow — synthetic fixture, this file EXISTS to test the detector
   ['supabase-access-token', 'sbp_' + 'a1b2c3d4'.repeat(5)], // sbp_ + 40 hex
-  ['supabase-secret-key', 'sb_secret_AbCdEf1234567890GhIjKl'],
+  ['supabase-secret-key', 'sb_secret_AbCdEf1234567890GhIjKl'],  // secret-scan:allow — synthetic fixture, this file EXISTS to test the detector
   ['npm-token', 'npm_' + 'a'.repeat(36)],
   ['fly-api-token', 'FlyV1 fm2_' + 'h'.repeat(40)],
   ['upmetrics-key', 'uk_' + 'a1b2c3d4'.repeat(6)], // uk_ + 48 hex
@@ -71,7 +71,7 @@ for (const [label, sample] of SAMPLES) {
   );
 }
 const jwt =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcDEFghiJKLmnoPQRstuv';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcDEFghiJKLmnoPQRstuv';  // secret-scan:allow — synthetic fixture, this file EXISTS to test the detector
 assert(redactSecrets(jwt).redacted.includes('[REDACTED:jwt]'), 'jwt redacted');
 // buddy #4339 — the Anthropic OAuth variant (sk-ant-oat01-) must be caught by
 // the same anthropic rule, not just sk-ant-api03-.
@@ -81,7 +81,7 @@ assert(
   'anthropic OAuth token (sk-ant-oat01-) redacted',
 );
 const pem =
-  '-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA1234\n-----END RSA PRIVATE KEY-----';
+  '-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA1234\n-----END RSA PRIVATE KEY-----';  // secret-scan:allow — synthetic fixture, this file EXISTS to test the detector
 assert(redactSecrets(pem).redacted.includes('[REDACTED:private-key]'), 'private-key block redacted');
 const labeled = 'CMS_JWT_SECRET=' + 'f'.repeat(64);
 const labeledR = redactSecrets(labeled);

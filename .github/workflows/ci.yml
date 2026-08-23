@@ -52,6 +52,12 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # F207.2 — the same shared detector the pre-commit hook runs. A machine
+      # without the hook installed still cannot land a credential. Runs BEFORE
+      # typecheck: a leaked key is worth failing on before anything slower.
+      - name: Secret scan
+        run: pnpm scan:secrets
+
       - name: Typecheck
         run: pnpm typecheck
 

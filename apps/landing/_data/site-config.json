@@ -1,5 +1,5 @@
 {
-  "calendarSecret": "6f43fca46be2103e91e7e26881d7e5dffa760456af6ddb926b8516e06f399f2f",
+  "calendarSecret": "",
   "deployAppName": "cbroberg/trail-site",
   "deployProductionUrl": "https://trail.webhouse.app",
   "previewSiteUrl": "https://www.trailmem.com/",
@@ -79,6 +79,6 @@
   "geoOrganizationName": "",
   "geoOrganizationUrl": "",
   "geoOrganizationLogo": "",
-  "psiApiKey": "AIzaSyCaSLSeT9STPaE4sFWngpsQTS3loN_l1U4",
+  "psiApiKey": "",
   "resolvedContentDir": "/Users/cb/Apps/broberg/trail/apps/landing/content"
 }

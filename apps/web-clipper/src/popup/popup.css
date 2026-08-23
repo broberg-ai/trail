@@ -273,6 +273,21 @@ textarea {
   margin-top: 8px;
 }
 
+/* F208.1 — the reason we are not connected, in words. It used to go to
+   console.error, where a user never looks. Uses the existing disconnected-dot
+   token so it reads as the same state, not as a new kind of alarm. */
+.conn-error {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--dot-disconnected) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dot-disconnected) 35%, transparent);
+  overflow-wrap: anywhere;
+}
+
 .spinner {
   width: 14px;
   height: 14px;

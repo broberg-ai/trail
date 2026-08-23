@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@trail/shared':
+        specifier: workspace:^
+        version: link:packages/shared
       turbo:
         specifier: ^2.0.0
         version: 2.9.6

@@ -19,9 +19,12 @@
     "ship:docs": "cd apps/docs && BUILD_OUT_DIR=deploy npm run build && flyctl deploy --remote-only --build-arg GIT_SHA=$(git rev-parse --short HEAD) --config fly.toml .",
     "ship:widget": "cd apps/widget && npm run build && flyctl deploy --remote-only --build-arg GIT_SHA=$(git rev-parse --short HEAD) --config fly.toml .",
     "ship": "pnpm ship:engine",
-    "verify:dockerignore": "bun run scripts/verify-dockerignore.ts"
+    "verify:dockerignore": "bun run scripts/verify-dockerignore.ts",
+    "scan:secrets": "bun run scripts/scan-secrets.ts",
+    "prepare": "bash scripts/install-hooks.sh"
   },
   "devDependencies": {
+    "@trail/shared": "workspace:^",
     "turbo": "^2.0.0",
     "typescript": "^5.5.0"
   },
