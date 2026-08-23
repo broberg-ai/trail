@@ -88,11 +88,45 @@ land.
 ## Non-goals
 
 - A public, searchable listing. Explicitly decided against.
-- Firefox. A `.xpi` and a `browser_specific_settings.gecko` block already exist
-  from April; Chrome ignores the block and it stays. Publishing to AMO is a
-  separate decision.
+- Firefox and Edge. A `.xpi` and a `browser_specific_settings.gecko` block
+  already exist from April; Chrome ignores the block and it stays, so a Firefox
+  build stays cheap if it is ever wanted. Edge is skipped deliberately: it can
+  install straight from the Chrome Web Store, so a second listing buys nothing
+  but a second review queue.
 - Rewriting the clipper's UI. The popup already reports "Not configured"
   honestly; this epic changes where it points, not how it looks.
+
+## Safari (decided 2026-08-23)
+
+Christian clips in **Chrome and Safari**, and holds an Apple Developer
+membership already — so Safari is in scope, as **F208.5**.
+
+Safari refuses a bare web extension: it must be wrapped in a native Mac app
+(`xcrun safari-web-extension-converter`, present here with Xcode 26.3). But
+there are two ways to ship that app, and the cheaper one fits this decision far
+better:
+
+| Route | Review | Fits "unlisted"? |
+|---|---|---|
+| **Developer ID + notarised** | none | yes — ship in minutes, update instantly |
+| Mac App Store | full review per update | poorly — no real unlisted tier for Mac |
+
+**Developer ID is the route.** One blocker, measured today:
+
+```
+security find-identity -v -p codesigning
+  "Apple Development: Christian Broberg (2U79XQP6RM)"
+  "Apple Development: Christian Broberg (WPC2C5BBAU)"
+  "Apple Distribution: WebHouse (7NAG4UJCT9)"      ← App Store only
+```
+
+There is **no `Developer ID Application` certificate**, and that is the one
+required to distribute a Mac app outside the App Store. It is free to create
+with the existing membership — but on a company account only the Account Holder
+can create it, so it is Christian's step, not one a session can take.
+
+The Safari build must come from the **same `dist/`** Chrome uses. A hand-kept
+second copy of the extension is how two browsers quietly stop behaving the same.
 
 ## Breakdown
 
@@ -100,3 +134,4 @@ land.
 - **F208.2** — Ask for the narrowest permissions clipping actually needs
 - **F208.3** — Privacy policy live at a stable URL
 - **F208.4** — Package and submit the unlisted listing
+- **F208.5** — Safari: wrap as a Developer ID-signed Mac app (no App Store review)

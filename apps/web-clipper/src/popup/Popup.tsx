@@ -117,9 +117,11 @@ async function uploadClip(
 }
 
 async function extractFromTab(tabId: number): Promise<{ title: string; content: string }> {
-  const manifest = chrome.runtime.getManifest()
-  const contentScriptPath = manifest.content_scripts?.[0]?.js?.[0]
-  if (!contentScriptPath) throw new Error('Content script not configured in manifest')
+  // F208.2 — the extractor is no longer DECLARED in the manifest (it used to
+  // register on every page the user visits, at document_idle). It is built to a
+  // fixed path and injected on click, so the path is a constant rather than a
+  // manifest lookup — reading content_scripts here would now throw.
+  const contentScriptPath = 'content/extractor.js'
 
   // Try sending to existing content script first
   try {

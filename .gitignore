@@ -185,3 +185,6 @@ apps/widget/playwright-report/
 
 # Backup of .mcp.json — may contain credentials, never track (cardmem #15442)
 .mcp.json.bak
+
+# F208.4 — store zip is a build artefact; regenerate with apps/web-clipper/scripts/package.sh
+apps/web-clipper/*.zip
