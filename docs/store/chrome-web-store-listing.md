@@ -130,25 +130,25 @@ All three certification checkboxes can be ticked truthfully.
 
 ---
 
-## Screenshots — 1280×800, at least one required
+## Screenshots — 1280×800, ready
 
-**These need the extension running in Chrome.** Suggested set, in order:
+In `apps/web-clipper/store-screenshots/`, captured 2026-08-23 from a real
+connected install and converted to exactly 1280×800. Upload in this order:
 
-1. **The popup, connected** — knowledge-base menu open, status bar showing
-   `N KB(s) · app.trailmem.com`. This is the whole product in one frame.
-2. **The popup over a real article** — so the reader sees it is clipping what
-   they are reading.
-3. **Settings** — the two server buttons (Use cloud / Use local) and the token
-   field, which is the "you choose the server" claim made visible.
+| File | Shows |
+|---|---|
+| `01-popup.png` | The product in one frame — knowledge base picked, tags, `Clip to Trail`, and the status line naming the destination **before** the click |
+| `02-settings.png` | The "you choose the server" claim made visible — Use cloud / Use local, the token field, Save & Connect |
+| `03-in-context.png` | The popup over a real page, so it is obvious what is being clipped |
 
-Do not screenshot a page with anything private in it — the store listing is
-public even when the extension is unlisted.
+**A store listing is public even when the extension is unlisted.** The first
+attempt at the context shot carried the browser's bookmark bar — folder names
+included — and had to be redone. Check any replacement for the same thing.
 
 ---
 
 ## What is NOT ready
 
-- **Screenshots** — must be captured from a running install.
 - **Small promo tile (440×280)** — optional; the listing publishes without it.
 
 ## Submission is a browser step
