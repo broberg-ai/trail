@@ -125,6 +125,47 @@ right credential for it, instead of a personal token that can do everything.
 Not a blocker (F205.2's endpoint is not built yet), but it is where this should
 land.
 
+## When Chrome approves — the trigger list
+
+**Christian, 2026-08-23: the real documentation waits for the store.** Install
+instructions change completely once it is one click, so rewriting them now would
+be writing them twice.
+
+This list exists because these obligations otherwise live only in one session's
+context, and that context does not survive. Approval is the trigger; do all of
+it the same day:
+
+1. **Tell cms-core, with the Web Store URL.** They have the article written and
+   held as a draft in the CMS (`posts/web-clipper` on broberg-ai), deliberately
+   unpublished — Christian decided an article that cannot be installed sells
+   nothing. Our notification is the ONLY thing that releases it. They will swap
+   the build-folder paragraph for the store link and write the English version.
+2. **Rewrite `apps/docs/content/docs/web-clipper.md`** around the store install:
+   one click, Chrome owns the copy, it updates itself. Delete the developer-mode
+   warning, the "do not move the folder" warning and the "does not update
+   itself" note — all three exist only because of the zip.
+3. **Rewrite `docs/web-clipper-install.md`** (the Danish note) the same way.
+4. **Amend the GitHub release** (`web-clipper-v0.1.0`) to point at the store
+   rather than read as the recommended path. Do not delete it — someone may have
+   it installed from that zip and the notes tell them how to move over.
+5. **F208.6** — the admin page on app.trailmem.com: install link plus a
+   one-click clipper key. It has no card yet; it needs one before it is built.
+
+## Still blocking submission (as of 2026-08-23)
+
+- **Three screenshots, 1280×800.** Not producible from a session: Lens cannot
+  load a browser extension (gap filed, idea `01a02ead`, tagged `lens-gap`), and
+  serving `popup.html` over http photographs a stub rather than the product.
+  Christian has the extension installed and connected — that is the state the
+  store needs to see.
+- **The upload and Submit click**, in the Developer Dashboard signed in as
+  cb@webhouse.dk. No API credential exists in this repo, and creating one is
+  itself a dashboard step.
+
+Everything else is done: the gated zip (also published as a GitHub release so a
+tester needs no build tools), the listing copy including a justification per
+permission, and the privacy policy live at `https://www.trailmem.com/privacy/`.
+
 ## Non-goals
 
 - A public, searchable listing. Explicitly decided against.
