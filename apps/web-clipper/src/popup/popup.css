@@ -322,3 +322,112 @@ textarea {
   margin-top: 4px;
   font-style: italic;
 }
+
+/* ── Custom select (@trail/ui BauhausSelect) ──────────────────────────────
+ * The native <select> is banned here: it cannot be styled, it ignores this
+ * palette, and macOS renders it as a system control inside a dark panel. It
+ * was also the reason the form looked misaligned — `input, select { flex: 1 }`
+ * does nothing to a block-level child, so the picker sized to its content
+ * while the button spanned the panel.
+ *
+ * Only styling lives here. The behaviour (keyboard, ARIA, click-outside,
+ * type-ahead) comes from @trail/ui, shared with the onboarding app so there is
+ * one implementation rather than two that drift apart.
+ */
+.section input,
+.section .bauhaus-select {
+  width: 100%;
+}
+
+.bauhaus-select {
+  position: relative;
+}
+
+.bauhaus-select__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.bauhaus-select__trigger:hover { border-color: var(--text-muted); }
+.bauhaus-select__trigger:focus-visible,
+.bauhaus-select[data-open="true"] .bauhaus-select__trigger {
+  outline: none;
+  border-color: #e8a87c;
+}
+/* House rule: anything clickable acknowledges the press. */
+.bauhaus-select__trigger:active { background: var(--bg-secondary); }
+
+.bauhaus-select__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bauhaus-select__chevron {
+  flex: none;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+.bauhaus-select[data-open="true"] .bauhaus-select__chevron { transform: rotate(180deg); }
+
+/* IN THE FLOW, not absolutely positioned — and that is specific to a browser
+ * extension popup. Chrome sizes the popup window to the DOCUMENT height, and an
+ * absolutely-positioned element contributes nothing to it. An overlay menu would
+ * therefore be silently CLIPPED by the window edge the moment the list is longer
+ * than the space below the trigger — which at ten knowledge bases it is. Letting
+ * the menu push the content down makes the popup grow instead. The onboarding
+ * app keeps its overlay; it lives in a full page where the constraint does not
+ * exist. Not verified in a browser (Lens cannot load an extension) — chosen
+ * because it cannot fail this way, rather than measured to work.
+ */
+.bauhaus-select__menu {
+  position: static;
+  margin-top: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 4px;
+  margin: 0;
+  list-style: none;
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+  background: var(--input-bg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.28);
+}
+
+.bauhaus-select__option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.bauhaus-select__option[data-active="true"] { background: var(--bg-secondary); }
+
+.bauhaus-select__check {
+  flex: none;
+  width: 12px;
+  color: #e8a87c;
+}
+
+.bauhaus-select__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

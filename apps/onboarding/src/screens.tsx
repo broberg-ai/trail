@@ -3,7 +3,7 @@
 
 import type { ComponentChildren, VNode } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { BauhausSelect } from './components/bauhaus-select';
+import { BauhausSelect } from '@trail/ui';
 import type { Copy, Lang, TemplateKey } from './copy';
 import {
   ChatDiagram,

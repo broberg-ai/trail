@@ -1,5 +1,10 @@
 import { h } from 'preact'
 import { useState, useEffect, useCallback } from 'preact/hooks'
+// F086 + house rule: no native <select>. It cannot be styled, ignores the
+// design system, and renders as a macOS system control inside a dark panel.
+// Shared with the onboarding app so the keyboard + ARIA behaviour has one
+// implementation rather than two that drift.
+import { BauhausSelect } from '@trail/ui'
 
 interface Config {
   serverUrl: string
@@ -251,7 +256,7 @@ export function Popup() {
   const isConnected = !!config.token && kbs.length > 0
   const canClip = isConnected && selectedKb && clipState !== 'uploading' && clipState !== 'extracting'
 
-  return h('div', {}, [
+  return h('div', { 'data-testid': 'clipper-root' }, [
     h('div', { class: 'header' }, [
       h('div', { class: 'header-logo' }),
       h('h1', {}, 'Trail Clipper'),
@@ -259,25 +264,24 @@ export function Popup() {
 
     h('div', { class: 'section' }, [
       h('div', { class: 'section-title' }, 'Knowledge Base'),
-      h('select',
-        {
-          value: selectedKb,
-          onChange: (e: Event) => setSelectedKb((e.target as HTMLSelectElement).value),
-          disabled: !isConnected,
-        },
-        [
-          h('option', { value: '' }, kbs.length === 0 ? 'No KBs found' : 'Select a KB...'),
-          ...kbs.map((kb) =>
-            h('option', { value: kb.id }, kb.name)
-          ),
-        ]
-      ),
+      h(BauhausSelect, {
+        value: selectedKb,
+        testid: 'clipper-kb-select',
+        class: 'clipper-select',
+        ariaLabel: 'Knowledge base',
+        onChange: (v: string) => setSelectedKb(v),
+        options: [
+          { value: '', label: kbs.length === 0 ? 'No KBs found' : 'Select a KB…' },
+          ...kbs.map((kb) => ({ value: kb.id, label: kb.name })),
+        ],
+      }),
     ]),
 
     h('div', { class: 'section' }, [
       h('div', { class: 'section-title' }, 'Tags (optional)'),
       h('input', {
         type: 'text',
+        'data-testid': 'clipper-tags-input',
         value: tags,
         onInput: (e) => setTags((e.target as HTMLInputElement).value),
         placeholder: 'e.g. research, article, ai',
@@ -287,6 +291,7 @@ export function Popup() {
     h('button',
       {
         class: 'btn btn-primary',
+        'data-testid': 'clipper-clip-button',
         disabled: !canClip,
         onClick: handleClip,
       },
@@ -301,7 +306,7 @@ export function Popup() {
 
     toast && h('div', { class: `toast toast-${toast.type}` }, toast.message),
 
-    h('div', { class: 'status-bar' }, [
+    h('div', { class: 'status-bar', 'data-testid': 'clipper-status-bar' }, [
       isConnected
         ? h('div', { class: 'connected-dot' })
         : h('div', { class: 'disconnected-dot' }),
@@ -315,7 +320,7 @@ export function Popup() {
     // F208.1 — the actual reason, not a silent empty panel.
     connError && h('div', { class: 'conn-error' }, connError),
 
-    h('div', { class: 'settings-toggle', onClick: () => setShowSettings(!showSettings) },
+    h('div', { class: 'settings-toggle', 'data-testid': 'clipper-settings-toggle', role: 'button', tabIndex: 0, onClick: () => setShowSettings(!showSettings) },
       showSettings ? 'Hide settings' : 'Settings'
     ),
 
@@ -325,6 +330,7 @@ export function Popup() {
           h('label', {}, 'Server URL'),
           h('input', {
             type: 'text',
+            'data-testid': 'clipper-server-url-input',
             value: tempServerUrl,
             onInput: (e) => setTempServerUrl((e.target as HTMLInputElement).value),
             placeholder: CLOUD_SERVER,
@@ -336,6 +342,7 @@ export function Popup() {
           h('label', {}, 'API Token'),
           h('input', {
             type: 'password',
+            'data-testid': 'clipper-api-token-input',
             value: tempToken,
             onInput: (e) => setTempToken((e.target as HTMLInputElement).value),
             placeholder: 'trail_xxx',
@@ -348,17 +355,19 @@ export function Popup() {
       h('div', { class: 'btn-group' }, [
         h('button', {
           class: 'btn',
+          'data-testid': 'clipper-use-cloud-button',
           onClick: () => setTempServerUrl(CLOUD_SERVER),
           disabled: tempServerUrl === CLOUD_SERVER,
         }, 'Use cloud'),
         h('button', {
           class: 'btn',
+          'data-testid': 'clipper-use-local-button',
           onClick: () => setTempServerUrl(LOCAL_SERVER),
           disabled: tempServerUrl === LOCAL_SERVER,
         }, 'Use local'),
       ]),
       h('div', { class: 'btn-group' }, [
-        h('button', { class: 'btn btn-primary', onClick: handleSaveSettings }, 'Save & Connect'),
+        h('button', { class: 'btn btn-primary', 'data-testid': 'clipper-save-connect-button', onClick: handleSaveSettings }, 'Save & Connect'),
       ]),
     ]),
   ])

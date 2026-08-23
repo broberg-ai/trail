@@ -210,6 +210,9 @@ importers:
 
   apps/onboarding:
     dependencies:
+      '@trail/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       preact:
         specifier: ^10.23.0
         version: 10.29.1
@@ -296,6 +299,9 @@ importers:
       '@mozilla/readability':
         specifier: ^0.6.0
         version: 0.6.0
+      '@trail/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       preact:
         specifier: ^10.23.0
         version: 10.29.1
@@ -438,6 +444,16 @@ importers:
       '@types/node':
         specifier: ^20.14.0
         version: 20.19.39
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  packages/ui:
+    dependencies:
+      preact:
+        specifier: ^10.23.0
+        version: 10.29.1
+    devDependencies:
       typescript:
         specifier: ^5.5.0
         version: 5.9.3

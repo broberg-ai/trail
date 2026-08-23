@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@trail/ui": "workspace:*",
     "preact": "^10.23.0"
   },
   "devDependencies": {

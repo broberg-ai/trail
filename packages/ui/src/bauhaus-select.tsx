@@ -36,6 +36,14 @@ interface Props<T extends string> {
   /** Optional extra class on the root. */
   class?: string;
   ariaLabel?: string;
+  /**
+   * Lens anchor (F086). Set it and the widget exposes three stable hooks:
+   * `<testid>` on the root, `<testid>-trigger` on the button, and
+   * `<testid>-option` on every row. Without it a custom select is a control
+   * Lens can neither click nor assert — which is worse than the native one it
+   * replaces, because at least that had a role the driver understood.
+   */
+  testid?: string;
 }
 
 export function BauhausSelect<T extends string>({
@@ -45,6 +53,7 @@ export function BauhausSelect<T extends string>({
   name,
   class: klass,
   ariaLabel,
+  testid,
 }: Props<T>): preact.JSX.Element {
   const [open, setOpen] = useState(false);
   // Index of the keyboard-focused option while open. Mouse hover updates this
@@ -148,6 +157,7 @@ export function BauhausSelect<T extends string>({
     <div
       class={`bauhaus-select${klass ? ' ' + klass : ''}`}
       data-open={open ? 'true' : 'false'}
+      data-testid={testid}
       ref={rootRef}
     >
       {/* Hidden input so <form>-submit consumers pick up the value without
@@ -157,6 +167,7 @@ export function BauhausSelect<T extends string>({
       <button
         type="button"
         class="bauhaus-select__trigger"
+        data-testid={testid ? `${testid}-trigger` : undefined}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
@@ -192,6 +203,8 @@ export function BauhausSelect<T extends string>({
                 role="option"
                 aria-selected={selected}
                 data-active={active ? 'true' : 'false'}
+                data-value={o.value}
+                data-testid={testid ? `${testid}-option` : undefined}
                 class="bauhaus-select__option"
                 onMouseEnter={() => setActiveIdx(i)}
                 onClick={() => commit(o.value)}
