@@ -20,8 +20,15 @@ Byggemappen ligger her:
 1. Åbn `chrome://extensions`
 2. Slå **Developer mode** til (kontakten øverst til højre)
 3. Klik **Load unpacked**
-4. Vælg mappen ovenfor
+4. Vælg mappen ovenfor — **`dist`, ikke mappen over den**
 5. Klik puslespils-ikonet i værktøjslinjen og **fastgør** Trail Web Clipper
+
+> **Fælden, målt 23. august 2026.** Vælger man mappen OVER `dist`, loader Chrome
+> kildekoden. Den er TypeScript, som ingen browser kan køre — udvidelsen bliver
+> installeret, men baggrundskoden starter aldrig, og panelet åbner tomt uden en
+> eneste besked. Kildemappen har derfor ikke længere en `manifest.json`, så
+> Chrome afviser den nu direkte med *"Manifest file is missing or unreadable"*
+> i stedet for at halv-installere den.
 
 **Findes mappen ikke?** Så er den ryddet væk — den er et byggeprodukt og ligger
 med vilje ikke i git. Byg den igen:

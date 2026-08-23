@@ -68,6 +68,46 @@ real page with the reduced set, and see. If a broad permission genuinely turns
 out to be necessary, the manifest stays as it is and the plan records the case
 that forced it — an unjustified `<all_urls>` is not left in by default.
 
+### What the narrowing was blamed for, wrongly (2026-08-23)
+
+Right after the permissions were narrowed, the popup opened blank. It was
+diagnosed three times without measuring anything — stale hashed filenames, then
+the narrowed permissions themselves, then rebuilding beneath a loaded extension
+— and on the second guess the whole narrowing was **reverted**. None of the
+three was the cause.
+
+The cause was in the error the browser had been showing the entire time:
+
+```
+Service worker registration failed. Status code: 11
+"service_worker": "src/background/main.ts"      <- raw TypeScript
+```
+
+`src/background/main.ts` appears only in the SOURCE manifest; the built one says
+`service-worker-loader.js`. So the browser had been pointed at
+`apps/web-clipper/`, not `apps/web-clipper/dist/`. Confirmed arithmetically
+rather than by eye: Chrome derives an unpacked extension's id from the absolute
+path it was loaded from (first 16 bytes of `sha256(path)`, each hex nibble
+mapped `0..f` to `a..p`), and the id on screen resolved to the source folder:
+
+| path | id |
+|---|---|
+| `…/apps/web-clipper` | `naekfdonaambbcgbokomilidoeblcfma` ← the one on screen |
+| `…/apps/web-clipper/dist` | `hapdkbiohbjfopmcadpaniipkhldijic` |
+
+The narrowing was therefore restored. Two things are worth keeping from this:
+
+- **A wrong folder and a wrong permission set fail identically** — an empty
+  panel, no message. Nothing in the panel distinguishes them, which is why
+  guessing between them was cheap and wrong three times running.
+- **The reminder was already written and did not work.** Every doc said `dist`.
+  So the fix is mechanical, not editorial: the source manifest is now
+  `manifest.config.json`, which leaves no `manifest.json` in the source folder,
+  and the browser refuses it outright — *"Manifest file is missing or
+  unreadable"* — instead of half-loading it into a silent failure. `pnpm build`
+  also prints the absolute folder to load. The wrong folder is now unloadable
+  rather than merely discouraged.
+
 ## Security note — what nearly shipped
 
 Until yesterday this extension carried a **real full-access Trail API key** in

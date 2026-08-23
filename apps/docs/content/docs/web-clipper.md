@@ -32,6 +32,13 @@ Any Chromium browser will load it.
 4. Click **Load unpacked** and choose the `dist` folder.
 5. Pin Trail Web Clipper to the toolbar from the puzzle-piece menu.
 
+**Choose `dist` itself, not the folder above it.** The folder above holds the
+source, which is TypeScript — a browser cannot run it, so the extension loads
+but its background script never starts and the panel opens empty. There is no
+error to click on; it simply does nothing. The source folder no longer contains
+a `manifest.json`, so Chrome now refuses it outright with *"Manifest file is
+missing or unreadable"* rather than half-loading it.
+
 **If the extension disappears later**, the folder it was loaded from is gone —
 `dist` is a build artefact, not committed, and a clean removes it. Chrome drops
 an unpacked extension whose folder no longer exists, usually noticed after a
@@ -109,6 +116,11 @@ The extension tells you what actually failed rather than showing an empty panel:
 | `Can't reach <address>` | the server did not answer | is it running? is the address right? |
 | `<address> refused the API token (401)` | the server answered and rejected the token | the token is revoked, or belongs to the other server — generate a new one |
 | `Content script did not respond` | the page did not answer in time | reload the page and clip again |
+
+An extension that shows an **empty panel with no message at all** is a different
+problem: its background script failed to start. Open `chrome://extensions`, look
+for the red **Errors** button on the Trail card, and check that the folder you
+loaded is `dist`.
 
 Browser-internal pages (`chrome://…`), the extension store itself, and PDF
 viewers cannot be clipped. Browsers do not let extensions read them, and no

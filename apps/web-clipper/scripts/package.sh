@@ -13,7 +13,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION=$(node -p "require('./manifest.json').version")
+VERSION=$(node -p "require('./manifest.config.json').version")
 OUT="trail-web-clipper-${VERSION}.zip"
 
 echo "[package] building v${VERSION} …"

@@ -1,6 +1,19 @@
-# Privacy Policy — draft for trailmem.com/privacy
+# Privacy Policy — published at trailmem.com/privacy
 
-**Status:** DRAFT, awaiting Christian's GO. Not published.
+**Status:** PUBLISHED 2026-08-23 — live at <https://www.trailmem.com/privacy/>.
+Christian gave GO; cms-core created it as `pages/privacy` on site `trail`
+(NOT `trail-landing` — that is the display name; the id is short, and the wrong
+id would have written to a different site and still returned 200).
+
+Verified independently from both ends, on the delivered HTML rather than on a
+success message: HTTP 200, and `DK21221198`, `Web House ApS`, `Riberhusvej 9`,
+`cb@broberg.ai`, `Datatilsynet`, the training promise and the date all present.
+Negative control: no `DRAFT`, `UDKAST` or internal note leaked into the page.
+The live bytes are identical to what is on the `gh-pages` branch.
+
+**This file is the record of what was published. If the policy changes, change
+it in the CMS — this copy does not publish anything.**
+
 **Why it exists:** the Chrome Web Store refuses a listing without a privacy
 policy URL when an extension handles user data, and the Trail Web Clipper reads
 page content. `trailmem.com/privacy` currently returns 404 (F208.3).
@@ -21,8 +34,9 @@ anywhere in `apps/web-clipper/src`.
 
 _Last updated: 23 August 2026_
 
-Trail is made by **WebHouse ApS**, Denmark. This policy covers the Trail service
-at trailmem.com and the **Trail Web Clipper** browser extension.
+Trail is made by **broberg.ai**, a product of **Web House ApS** (CVR
+DK21221198), Denmark. This policy covers the Trail service at trailmem.com and
+the **Trail Web Clipper** browser extension.
 
 ### The short version
 
@@ -74,7 +88,7 @@ shared with other customers, and not used to train third-party models.
 
 You can delete individual documents from Trail at any time, and you can ask us
 to delete your account and everything in it. Write to
-**[cb@webhouse.dk](mailto:cb@webhouse.dk)** and we will remove it.
+**[cb@broberg.ai](mailto:cb@broberg.ai)** and we will remove it.
 
 You can also remove the extension's stored settings by uninstalling it, which
 clears its local storage.
@@ -92,16 +106,18 @@ clears its local storage.
 
 ### Your rights (GDPR)
 
-WebHouse ApS is the data controller. You have the right to access, correct,
+**Web House ApS**, CVR DK21221198, Riberhusvej 9, 9492 Blokhus, Denmark, is the
+data controller for broberg.ai and Trail. You have the right to access, correct,
 export and delete your personal data, and to object to processing. Contact
-**cb@webhouse.dk**. You may also complain to the Danish Data Protection Agency
+**cb@broberg.ai**. You may also complain to the Danish Data Protection Agency
 (Datatilsynet).
 
 ### Contact
 
-**WebHouse ApS**
-Denmark
-[cb@webhouse.dk](mailto:cb@webhouse.dk)
+**broberg.ai** — a product of **Web House ApS**
+CVR DK21221198
+Riberhusvej 9, 9492 Blokhus, Denmark
+[cb@broberg.ai](mailto:cb@broberg.ai)
 
 ### Changes
 

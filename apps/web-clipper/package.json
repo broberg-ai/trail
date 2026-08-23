@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite build --watch --mode development",
     "build": "vite build --mode production",
+    "postbuild": "printf '\\n  Load unpacked  \\342\\206\\222  %s/dist\\n  (that folder \\342\\200\\224 not its parent)\\n\\n' \"$PWD\"",
     "typecheck": "tsc --noEmit",
     "package": "bash scripts/package.sh"
   },
