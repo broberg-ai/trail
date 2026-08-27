@@ -5,6 +5,7 @@ import {
   switchTenant,
   listInvitations,
   createInvitation,
+  createTenant,
   revokeInvitation,
   type AuthMe,
   type AuthTenant,
@@ -37,6 +38,12 @@ export function ManageTenantsPanel() {
   const [toast, setToast] = useState<string | null>(null);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
 
+  // F210.1 — create a tenant for a customer.
+  const [newOpen, setNewOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
   function loadInvitations() {
     listInvitations()
       .then((r) => setInvitations(r.invitations))
@@ -65,6 +72,46 @@ export function ManageTenantsPanel() {
   }
   function showComingSoon() {
     showToast(t('comingSoonToast'));
+  }
+
+  /** Mirror of the server's slugify — shown BEFORE submit because the slug
+   *  names the customer's data directory on the engine and cannot be renamed
+   *  afterwards. Preview only; the server derives the real one. */
+  function previewSlug(name: string): string {
+    return name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+
+  async function submitNewTenant() {
+    const name = newName.trim();
+    if (!name || creating) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const created = await createTenant({ name });
+      setNewOpen(false);
+      setNewName('');
+      showToast(isDa ? `Oprettet: ${created.name}` : `Created: ${created.name}`);
+      // Re-read from the server rather than pushing the new tenant into local
+      // state: the switcher must show what the server actually stored.
+      const fresh = await fetchAuthMe();
+      setMe(fresh);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setCreateError(
+        /409|taken/i.test(msg)
+          ? (isDa
+              ? `Navnet er optaget — "${previewSlug(name)}" findes allerede.`
+              : `That name is taken — "${previewSlug(name)}" already exists.`)
+          : msg,
+      );
+    } finally {
+      setCreating(false);
+    }
   }
 
   const pendingCount = invitations.filter((i) => i.status === 'pending').length;
@@ -101,9 +148,9 @@ export function ManageTenantsPanel() {
           <button
             type="button"
             class="btn btn-primary"
-            disabled
-            style={{ flex: '0 0 auto', opacity: 0.5 }}
-            title={t('comingSoonToast')}
+            data-testid="tenants-new-button"
+            style={{ flex: '0 0 auto' }}
+            onClick={() => { setNewOpen((v) => !v); setCreateError(null); }}
           >
             <Icons.Plus size={13} />
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
@@ -111,6 +158,72 @@ export function ManageTenantsPanel() {
             </span>
           </button>
         </div>
+
+        {/* F210.1 — create-tenant form. Inline rather than a modal: it is two
+            fields and the page behind it is the list the new row lands in. */}
+        {newOpen ? (
+          <div
+            data-testid="tenants-new-form"
+            style={{
+              marginTop: 20,
+              padding: '18px 20px',
+              background: 'var(--color-bg-card)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-lg)',
+            }}
+          >
+            <div style={{ fontFamily: 'var(--font-serif)', fontSize: 16, marginBottom: 2 }}>
+              {isDa ? 'Ny konto' : 'New tenant'}
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--color-fg-muted)', marginBottom: 16 }}>
+              {isDa
+                ? 'Til en kunde. Du bliver ejer af den med det samme.'
+                : 'For a customer. You become its owner immediately.'}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 12 }}>
+              <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+                <input
+                  class="input"
+                  data-testid="tenants-new-name-input"
+                  type="text"
+                  autocomplete="off"
+                  placeholder={isDa ? 'F.eks. FD Aalborg' : 'e.g. FD Aalborg'}
+                  value={newName}
+                  onInput={(e) => { setNewName((e.target as HTMLInputElement).value); setCreateError(null); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void submitNewTenant(); }}
+                />
+                {newName.trim() ? (
+                  <div
+                    class="mono"
+                    data-testid="tenants-new-slug-preview"
+                    style={{ marginTop: 6, fontSize: 11.5, color: 'var(--color-fg-subtle)' }}
+                  >
+                    {isDa ? 'Kort navn: ' : 'Slug: '}
+                    {previewSlug(newName) || (isDa ? '(ugyldigt)' : '(invalid)')}
+                  </div>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                class="btn btn-primary"
+                data-testid="tenants-new-submit"
+                disabled={!previewSlug(newName) || creating}
+                style={{ flex: '0 0 auto', opacity: !previewSlug(newName) || creating ? 0.55 : 1 }}
+                onClick={() => void submitNewTenant()}
+              >
+                <span>{creating ? (isDa ? 'Opretter…' : 'Creating…') : (isDa ? 'Opret' : 'Create')}</span>
+              </button>
+            </div>
+            {createError ? (
+              <div
+                data-testid="tenants-new-error"
+                style={{ marginTop: 12, fontSize: 12.5, color: 'var(--color-danger)' }}
+              >
+                {createError}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </header>
 
       {/* Stat strip */}

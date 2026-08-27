@@ -5,7 +5,7 @@ Dashboard asks for them. Nothing here is a placeholder — where a value is a
 decision rather than text, it is marked **DECISION**.
 
 - **Publisher:** cb@webhouse.dk · publisher id `ebca6e54-f6f9-4cb8-907b-5e2f099d67e8`
-- **Package:** `apps/web-clipper/trail-web-clipper-0.1.0.zip` (38 KB, built by
+- **Package:** `apps/web-clipper/trail-web-clipper-0.1.0.zip` (40K, rebuilt 2026-08-27 18:15 — the 23 Aug build predated the custom knowledge-base picker; built by
   `pnpm --filter @trail/web-clipper package`, which refuses to produce a zip
   containing a credential or broad host permissions)
 - **Privacy policy URL:** `https://www.trailmem.com/privacy/` (live, verified 200)
@@ -23,10 +23,10 @@ Trail Web Clipper
 ### Summary (max 132) — shown under the name in the store
 
 ```
-Clip the page you are reading straight into your Trail knowledge base. One click, article text only, nothing running in the background.
+Clip the page you're reading straight into your Trail knowledge base. One click, article text only, nothing runs in the background.
 ```
 
-*(131 characters.)*
+*(131 characters — measured, not estimated. The 23 Aug text was 135 and the dashboard would have rejected it at the counter.)*
 
 ### Description (max 16,000)
 

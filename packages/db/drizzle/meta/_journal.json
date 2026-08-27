@@ -302,6 +302,13 @@
       "when": 1787500000000,
       "tag": "0042_partner_api_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "6",
+      "when": 1787850000000,
+      "tag": "0043_confidence_row_rewrite",
+      "breakpoints": true
     }
   ]
 }

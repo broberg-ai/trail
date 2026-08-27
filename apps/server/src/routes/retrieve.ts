@@ -38,6 +38,40 @@ import type { AppBindings } from '../app.js';
 export const retrieveRoutes = new Hono<AppBindings>();
 retrieveRoutes.use('*', requireAuth);
 
+/**
+ * F213.1 — normalise `documents.updated_at` to ISO-8601 UTC.
+ *
+ * The column holds two formats, written by two different code paths, in the
+ * same table. Measured on prod 2026-08-27:
+ *
+ *   schema default `datetime('now')`  ->  '2026-06-22 12:07:09'      5760 rows
+ *   app code `new Date().toISOString()` -> '2026-04-16T16:31:49.278Z' 589 rows
+ *
+ * BOTH are UTC. Only one says so. A consumer doing the obvious
+ * `new Date(value)` parses the space-separated form as LOCAL time per the
+ * ECMAScript spec, so 93 % of rows would silently land two hours off in
+ * Copenhagen summer while the rest are exact — two wrong answers that look
+ * identical from the caller's side.
+ *
+ * So the space-separated form is LABELLED, not converted: we append the `T`
+ * and the `Z` that the stored value already means. `new Date(v).toISOString()`
+ * would shift it by the local offset and is the bug this function exists to
+ * avoid — see the test that asserts the exact string.
+ *
+ * Anything unparseable yields null. For a freshness field a wrong date is
+ * worse than no date, so we never guess.
+ */
+export function normaliseUpdatedAt(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const v = value.trim();
+  // Already ISO-8601 with an explicit UTC marker — hand it back untouched.
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/.test(v)) return v;
+  // SQLite `datetime('now')`: 'YYYY-MM-DD HH:MM:SS', already UTC, unlabelled.
+  const sqlite = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})$/.exec(v);
+  if (sqlite) return `${sqlite[1]}T${sqlite[2]}.000Z`;
+  return null;
+}
+
 const DEFAULT_TOP_K = 5;
 const DEFAULT_MAX_CHARS = 2000;
 const HARD_TOP_K_CAP = 25;
@@ -132,6 +166,9 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
       // here even when the column is set.
       userNote: documents.userNote,
       userNoteShare: documents.userNoteShare,
+      // F213.1 — source freshness, so a consumer can say "as of 13/8"
+      // instead of restating a decision that has since moved.
+      updatedAt: documents.updatedAt,
     })
     .from(documents)
     .where(
@@ -169,6 +206,8 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
      * markers if those ever leak into a note.
      */
     userNote: string | null;
+    /** F213.1 — parent document's last edit, ISO-8601 UTC, null if unparseable. */
+    updatedAt: string | null;
   }> = [];
 
   for (const chunk of rawChunks) {
@@ -200,6 +239,7 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
       headerBreadcrumb: chunk.headerBreadcrumb,
       rank: chunk.rank,
       userNote: sharedUserNote,
+      updatedAt: normaliseUpdatedAt(doc.updatedAt),
     });
     if (filtered.length >= topK) break;
   }

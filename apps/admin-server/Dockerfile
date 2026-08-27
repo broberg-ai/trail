@@ -19,6 +19,13 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml* package.json ./
 COPY apps/admin-server/package.json apps/admin-server/
 COPY packages/shared/package.json packages/shared/
 
+# Root package.json's `prepare` runs scripts/install-hooks.sh on every
+# pnpm install, including this one. The script is a no-op outside a git
+# checkout, but pnpm still has to be able to FIND it — without this COPY,
+# every deploy fails on "No such file or directory" and the app keeps
+# serving its previous image.
+COPY scripts/install-hooks.sh scripts/
+
 # BuildKit cache-mount keeps pnpm's content-addressable store between
 # builds. First build downloads, subsequent builds re-link instantly.
 # Cuts pnpm install from ~3-5 min to ~10-30 s on warm cache.

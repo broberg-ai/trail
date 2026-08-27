@@ -9,6 +9,7 @@ import { runMigrations } from './migrations.js';
 import { authRoutes } from './auth.js';
 import { oauthRoutes } from './oauth.js';
 import { inviteRoutes } from './invite.js';
+import { tenantRoutes } from './tenants.js';
 import { apiKeyRoutes } from './keys.js';
 import { proxyToEngine } from './proxy.js';
 import { lensReadOnlyGuard, lensSessionRoute } from './lens-session.js';
@@ -105,6 +106,8 @@ app.get('/logout', logoutHandler);
 // Invite — operator UI for adding teammates. POST endpoint mounted at
 // /api/control/invite + HTML form at /invite. Both auth-gated.
 app.route('/api/control', inviteRoutes);
+// F210.1 — create a tenant for a customer + list the caller's tenants.
+app.route('/api/control', tenantRoutes);
 
 // F188 — personal API keys. /api/control/api-keys (GET/POST/DELETE).
 app.route('/api/control', apiKeyRoutes);
@@ -184,12 +187,15 @@ document.getElementById('f').addEventListener('submit', async (e) => {
 // finishes. Falls through to the legacy redirect below if the env
 // secrets aren't configured (returns 503 with a clear "OAuth not
 // configured" message rather than a confusing 404).
-app.route('/api/auth', oauthRoutes);
-
-// Legacy stub: SPA's dev-only path (apps/admin/src/app.tsx redirects
-// here in import.meta.env.DEV mode). On prod admin we don't run that
-// path, but redirect to /login as a safety net.
+// SPA's dev-only path (apps/admin/src/app.tsx redirects here in
+// import.meta.env.DEV). MUST be declared BEFORE the oauth routes: those
+// mount `/:provider`, which happily matches the literal segment
+// "dev-login" and answers 404 "unknown provider". Declared after them,
+// this route is unreachable — which is exactly what it was, so a local
+// admin bounced between a blank SPA and a 404 with no way in.
 app.get('/api/auth/dev-login', (c) => c.redirect('/login', 302));
+
+app.route('/api/auth', oauthRoutes);
 
 // F186 — server-rendered login page, 1:1 with docs/design/trail_app/src/login.jsx.
 // Three methods (Google, GitHub, Magic-link) per F186 plan-doc Q1.1.

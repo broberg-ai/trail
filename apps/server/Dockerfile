@@ -36,6 +36,13 @@ COPY packages/storage/package.json packages/storage/
 
 # Engine doesn't need admin/sdk/mcp/onboarding/web-clipper/model-lab —
 # trim the workspace to just what trail-server imports.
+# Root package.json's `prepare` runs scripts/install-hooks.sh on every
+# pnpm install, including this one. The script is a no-op outside a git
+# checkout, but pnpm still has to be able to FIND it — without this COPY,
+# every deploy fails on "No such file or directory" and the app keeps
+# serving its previous image. That is exactly what happened between
+# 2026-08-23 and 2026-08-27.
+COPY scripts/install-hooks.sh scripts/
 RUN pnpm install --frozen-lockfile --filter @trail/server... \
     || pnpm install --filter @trail/server...
 

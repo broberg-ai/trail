@@ -12,6 +12,16 @@ export default defineConfig({
       // Proxy /api → engine so the admin can send cookies without CORS ceremony
       // during dev. In prod the admin sits behind the same base domain as the
       // engine so no proxy is needed.
+      // The control plane serves these itself (they are server-rendered
+      // HTML, not SPA routes). Without them here Vite answers /login with
+      // the SPA, which sees 401, redirects to /api/auth/dev-login, gets
+      // 302'd back to /login — and loops forever with nothing on screen.
+      ...Object.fromEntries(
+        ['/login', '/logout', '/invite'].map((path) => [
+          path,
+          { target: API_URL, changeOrigin: true, cookieDomainRewrite: 'localhost' },
+        ]),
+      ),
       '/api': {
         target: API_URL,
         changeOrigin: true,

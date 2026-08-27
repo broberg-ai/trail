@@ -1,4 +1,5 @@
 import { client } from './db.js';
+import { ownerIdentitiesSqlList, OWNER_IDENTITIES } from '@trail/shared';
 
 /**
  * Bootstrap migrations for control.db. Idempotent — runs every boot,
@@ -160,14 +161,27 @@ export async function runMigrations(): Promise<void> {
     console.log(`[migrations] backfilled bearer for tenant ${slug} from ${envKey}`);
   }
 
-  // F187.4 — seed memberships. Additive + idempotent:
+  // F187.4 + F210.4 — seed memberships. Additive + idempotent:
   //   1) every existing user × tenant-in-same-org pair gets a `member` row
   //      (so each user shows a real role on every tenant they can see). This
   //      matches today's pre-RBAC reality where org-membership = full access;
   //      `member` is honest (no false elevation) and never reduces access.
-  //   2) cb@webhouse.dk is FORCED to `owner` on every membership row — the
-  //      repo-owner is always owner (UFRAVIGELIG). Runs every boot, so a stray
-  //      demotion self-heals. Never deletes/lowers cb; only raises to owner.
+  //   2) EVERY owner identity is forced to `owner` on EVERY tenant — not just
+  //      the ones in their own organisation. See @trail/shared's
+  //      owner-identities.ts for the list and why it lives in git.
+  //
+  // F210.4 fixed three holes this block used to have, all measured 2026-08-27:
+  //   · it named ONE address as a SQL literal, so the owner's other two
+  //     identities got nothing;
+  //   · step 1's `JOIN … ON t.organization_id = u.organization_id` meant a
+  //     tenant in another organisation never reached him at all — so the
+  //     promote in step 3 had no row to raise;
+  //   · it ran only here, at boot, so a tenant created at runtime did not
+  //     reach him until someone restarted. That third one is fixed at the
+  //     write sites (tenant-creation + login), not here; this remains the
+  //     self-heal.
+  const OWNERS = ownerIdentitiesSqlList();
+
   const seeded = await client.execute(
     `INSERT INTO control_memberships (user_id, tenant_id, role)
      SELECT u.id, t.id, 'member'
@@ -181,12 +195,37 @@ export async function runMigrations(): Promise<void> {
   if (seeded.rowsAffected > 0) {
     console.log(`[migrations] F187.4 seeded ${seeded.rowsAffected} membership row(s)`);
   }
+
+  // Owner identities are the deliberate EXCEPTION to one-user-one-org: they
+  // get a row on every tenant regardless of organization_id. Cross-org is the
+  // whole point — a customer tenant may not live in the owner's organisation.
+  const ownerSeeded = await client.execute(
+    `INSERT INTO control_memberships (user_id, tenant_id, role)
+     SELECT u.id, t.id, 'owner'
+       FROM control_users u
+       CROSS JOIN control_tenants t
+      WHERE lower(trim(u.email)) IN (${OWNERS})
+        AND NOT EXISTS (
+          SELECT 1 FROM control_memberships m
+           WHERE m.user_id = u.id AND m.tenant_id = t.id
+        )`,
+  );
+  if (ownerSeeded.rowsAffected > 0) {
+    console.log(`[migrations] F210.4 seeded ${ownerSeeded.rowsAffected} owner membership row(s)`);
+  }
+
+  // …and raise any that already exist but sit below owner. Never lowers.
   const promoted = await client.execute(
     `UPDATE control_memberships SET role = 'owner'
       WHERE role != 'owner'
-        AND user_id IN (SELECT id FROM control_users WHERE email = 'cb@webhouse.dk')`,
+        AND user_id IN (
+          SELECT id FROM control_users WHERE lower(trim(email)) IN (${OWNERS})
+        )`,
   );
   if (promoted.rowsAffected > 0) {
-    console.log(`[migrations] F187.4 enforced cb@webhouse.dk=owner on ${promoted.rowsAffected} tenant(s)`);
+    console.log(
+      `[migrations] F210.4 enforced owner on ${promoted.rowsAffected} membership row(s) ` +
+        `across ${OWNER_IDENTITIES.length} identities`,
+    );
   }
 }

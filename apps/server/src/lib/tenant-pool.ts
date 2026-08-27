@@ -17,11 +17,13 @@
  *   - background services (F40.2a-E): iterate `for (const [slug, db]
  *     of pool)`.
  *
- * Hot-add (a new tenant directory appearing at runtime) is OUT OF
- * SCOPE for F40.2a. F40.2b adds provisioning endpoints that mutate
- * the pool. For now the pool is frozen at boot.
+ * Hot-add: F210.2 added `provisionTenant()` below, so a tenant created
+ * at runtime is live immediately. Before it, the pool was frozen at
+ * boot — a tenant could be created in the control plane, appear in the
+ * admin, and answer 401 to every request until someone restarted the
+ * engine, with nothing on screen explaining why.
  */
-import { readdirSync, statSync, existsSync } from 'node:fs';
+import { readdirSync, statSync, existsSync, mkdirSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 import { createLibsqlDatabase, type TrailDatabase } from '@trail/db';
 
@@ -116,4 +118,51 @@ export async function openTenantPool(args: OpenTenantPoolArgs): Promise<TenantPo
     `[multi-tenant] pool ready with ${pool.size} tenants: ${[...pool.keys()].join(', ')}`,
   );
   return pool;
+}
+
+
+/**
+ * F210.2 — create a brand-new tenant on disk and add it to the LIVE pool.
+ *
+ * Creates `/data/<slug>/`, opens `trail.db`, runs the caller's boot sequence
+ * against it (migrations + FTS + the one-shots a tenant gets at startup), and
+ * only then publishes it into the pool.
+ *
+ * `pool.set` happens LAST on purpose: a request that arrives mid-provision
+ * must not find a half-migrated database. Until the last line, the slug simply
+ * does not resolve, which the auth middleware already treats as 401 — the same
+ * answer it gave before this function existed.
+ *
+ * Refuses an existing directory rather than adopting it. Adopting would mean a
+ * typo'd slug could silently attach a customer to another customer's data.
+ */
+export async function provisionTenant(args: {
+  pool: TenantPool;
+  slug: string;
+  boot: (db: TrailDatabase) => Promise<void>;
+}): Promise<{ slug: string; path: string }> {
+  const { pool, slug, boot } = args;
+
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
+    throw new Error(`invalid tenant slug: ${slug}`);
+  }
+  if (pool.has(slug)) {
+    throw new Error(`tenant already live: ${slug}`);
+  }
+
+  const dir = join(DATA_DIR, slug);
+  if (existsSync(dir)) {
+    throw new Error(`data directory already exists: ${dir}`);
+  }
+
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, 'trail.db');
+
+  const db = await createLibsqlDatabase({ path });
+  await boot(db);
+
+  pool.set(slug, db);
+  console.log(`[multi-tenant] provisioned ${slug} → live in pool (${pool.size} tenants)`);
+
+  return { slug, path };
 }

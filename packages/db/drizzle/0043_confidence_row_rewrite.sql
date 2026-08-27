@@ -1,0 +1,31 @@
+-- F212.1 — Repair the row records that have blocked EVERY backup since 2026-06-03.
+--
+-- Migration 0035 (F182.1) ran:
+--
+--     ALTER TABLE `documents` ADD `confidence` real DEFAULT 0.7 NOT NULL;
+--
+-- SQLite does not rewrite existing rows on ADD COLUMN. The stored records
+-- stay short and the default is materialised at read time, so at SQL level
+-- everything is correct: `SELECT confidence` returns 0.7 and
+-- `WHERE confidence IS NULL` matches zero rows.
+--
+-- `PRAGMA integrity_check` reads the RAW record, sees a missing value where
+-- the schema says NOT NULL, and reports "NULL value in documents.confidence"
+-- for every pre-0035 row. `snapshotDb` treats that as corruption and refuses
+-- the snapshot — so 68 consecutive backup attempts failed, and the engine's
+-- only off-machine copy stopped existing.
+--
+-- Measured 2026-08-27, isolating the trigger to one column type:
+--
+--     integer NOT NULL DEFAULT 0 / 1 / false  -> ok
+--     text    NOT NULL DEFAULT 'cites'        -> ok
+--     real    NOT NULL DEFAULT 0.7            -> violation on every old row
+--
+-- `documents.confidence` is the only REAL NOT NULL column added by ALTER in
+-- the whole schema, which is why this is a one-line repair and not a sweep.
+--
+-- The fix is to make the rows physically carry the value. An UPDATE rewrites
+-- each record in full; COALESCE keeps it correct even if a genuine NULL ever
+-- slipped in. Values do not change (0.7 stays 0.7), and re-running is a no-op,
+-- so this is safe under the runner's retry-on-partial-failure behaviour.
+UPDATE `documents` SET `confidence` = COALESCE(`confidence`, 0.7);

@@ -1,6 +1,6 @@
 import { createLibsqlDatabase, DEFAULT_DB_PATH, type TrailDatabase } from '@trail/db';
 import { createApp } from './app.js';
-import { openTenantPool, inferPrimarySlug } from './lib/tenant-pool.js';
+import { openTenantPool, inferPrimarySlug, provisionTenant } from './lib/tenant-pool.js';
 import { ensureIngestUser } from './bootstrap/ingest-user.js';
 import { recoverZombieIngests } from './bootstrap/zombie-ingest.js';
 import { rewriteWikiToNeurons } from './bootstrap/rewrite-wiki-paths.js';
@@ -202,6 +202,55 @@ for (const [slug, db] of tenantPool) {
 }
 
 const app = createApp(trail, tenantPool);
+
+// F210.2 — provision a brand-new tenant and make it live WITHOUT a restart.
+//
+// Called by the control plane right after it writes the control_tenants row.
+// Before this existed the pool was frozen at boot, so a tenant created in the
+// admin answered 401 to every request until someone restarted the engine —
+// and nothing on screen said why.
+//
+// Ships dark: with TRAIL_PROVISION_SECRET unset the route refuses everything
+// with 503, so an engine that has not been given the secret cannot have
+// directories created on its volume by anyone who can reach it.
+app.post('/api/admin/tenants', async (c) => {
+  const secret = process.env.TRAIL_PROVISION_SECRET;
+  if (!secret) {
+    return c.json({ error: 'provisioning not configured' }, 503);
+  }
+  const auth = c.req.header('authorization') ?? '';
+  const presented = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  // Length-independent compare would be better; Bun has no timingSafeEqual on
+  // strings, and this secret is machine-to-machine over the private network.
+  if (presented !== secret) {
+    return c.json({ error: 'unauthorized' }, 401);
+  }
+
+  let body: { slug?: string } = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    /* validated below */
+  }
+  const slug = body.slug?.trim();
+  if (!slug) return c.json({ error: 'slug required' }, 400);
+
+  try {
+    const result = await provisionTenant({
+      pool: tenantPool,
+      slug,
+      boot: bootTenant,
+    });
+    return c.json({ ok: true, slug: result.slug, live: tenantPool.has(result.slug) }, 201);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // "already exists" is a conflict, not a server fault — the caller can
+    // tell a name clash from a broken engine.
+    const conflict = /already (exists|live)/.test(msg);
+    console.error(`[provision] ${slug}: ${msg}`);
+    return c.json({ error: msg }, conflict ? 409 : 400);
+  }
+});
 
 const server = Bun.serve({
   port: PORT,

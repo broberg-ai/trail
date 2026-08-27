@@ -76,6 +76,17 @@ export interface RetrieveChunk {
   content: string;
   headerBreadcrumb: string | null;
   rank: number;
+  /**
+   * F213.1 — when the parent Neuron was last edited, ISO-8601 UTC (…Z).
+   *
+   * Use it to qualify an answer whose source may have moved since ("as of
+   * 13/8") rather than restating it as current. Null when the stored value
+   * could not be parsed — treat that as "unknown", never as "now".
+   *
+   * Always normalised server-side: the column holds two historical formats
+   * and the raw value is NOT safe to pass to `new Date()`.
+   */
+  updatedAt: string | null;
 }
 
 /**

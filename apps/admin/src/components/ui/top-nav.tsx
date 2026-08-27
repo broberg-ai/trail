@@ -57,7 +57,12 @@ export function TopNav({ me, onOpenPalette }: TopNavProps) {
         </a>
 
         {/* Tenant switcher */}
-        {me.tenants.length > 0 ? (
+        {/* F211.1 — read defensively. A body without `tenants` must render a
+            usable bar, not a blank page: this line crashed the whole SPA on
+            2026-08-27 when it was served a response shape it did not expect.
+            The 401 upstream is the fix; this is the guard that keeps a single
+            missing field from taking the entire admin down again. */}
+        {me.tenants && me.tenants.length > 0 ? (
           <TenantSwitcher tenants={me.tenants} />
         ) : null}
 

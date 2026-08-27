@@ -138,9 +138,44 @@ export function unlinkProvider(provider: string): Promise<{ ok: true; provider: 
   return api(`/api/auth/${provider}/identity`, { method: 'DELETE' });
 }
 
+/**
+ * F211.1 — does this payload actually describe a signed-in admin session?
+ *
+ * The SPA talks to the CONTROL PLANE's /api/auth/me. The ENGINE has a route at
+ * the same path that answers a different shape entirely — no `tenants`, no
+ * `organizationId`, no `engineUrl`. Point the SPA at the engine (a wrong
+ * API_URL is all it takes) and the fetch succeeds, `me` is set to a body that
+ * satisfies none of the app's assumptions, and the first component to read a
+ * missing field takes the whole page down with it. That is the 2026-08-27
+ * blank screen, and the status code was only half of why it happened: the
+ * other half is that nothing ever asked whether the body was the right body.
+ *
+ * So: a payload that is not a signed-in session is treated as NOT SIGNED IN —
+ * which routes through the existing catch to the login page. Deliberately not
+ * a lenient guard that lets the app limp on with defaults: an admin shell with
+ * an empty tenant list looks like "you have no trails", which is a worse lie
+ * than a crash because nobody reports it.
+ */
+export function isAuthMe(value: unknown): value is AuthMe {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  if (!v.user || typeof v.user !== 'object') return false;
+  if (typeof (v.user as Record<string, unknown>).id !== 'string') return false;
+  // The field whose absence killed the page. Required, not defaulted.
+  if (!Array.isArray(v.tenants)) return false;
+  if (typeof v.organizationId !== 'string') return false;
+  return true;
+}
+
 /** Fetch the user + their full tenant list from admin-server. */
-export function fetchAuthMe(): Promise<AuthMe> {
-  return api('/api/auth/me');
+export async function fetchAuthMe(): Promise<AuthMe> {
+  const data = await api<unknown>('/api/auth/me');
+  if (!isAuthMe(data)) {
+    // Rejecting here means the caller's existing not-signed-in path runs,
+    // rather than the app rendering a shell around a body it cannot use.
+    throw new Error('not a signed-in admin session');
+  }
+  return data;
 }
 
 /** Switch the active tenant; cookie-based, takes effect on next request. */
@@ -175,6 +210,29 @@ export interface Invitation {
 /** List the org's invitations (pending first, then most recent). */
 export function listInvitations(): Promise<{ invitations: Invitation[] }> {
   return api('/api/control/invitations');
+}
+
+/**
+ * F210.1 — create a tenant for a customer.
+ *
+ * 409 when the slug is taken; the server writes nothing in that case, so a
+ * failed call is safe to retry with a different name.
+ */
+export function createTenant(body: {
+  name: string;
+  slug?: string;
+  language?: string;
+}): Promise<{
+  id: string;
+  slug: string;
+  name: string;
+  organizationId: string;
+  ownerRowsWritten: number;
+}> {
+  return api('/api/control/tenants', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }
 
 /** Send an invite — creates/refreshes a pending invitation + magic-link email. */

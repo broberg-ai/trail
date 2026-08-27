@@ -9,7 +9,7 @@
     "lib": ["es2022", "dom", "dom.iterable"],
     "noEmit": true,
     "allowImportingTsExtensions": false,
-    "types": ["node", "vite/client"],
+    "types": ["node", "vite/client", "bun"],
     "paths": {
       "react": ["./node_modules/preact/compat/"],
       "react-dom": ["./node_modules/preact/compat/"]

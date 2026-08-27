@@ -336,11 +336,32 @@ authRoutes.get('/dev-login', async (c) => {
   return c.redirect(APP_URL);
 });
 
+/**
+ * F211.1 — a missing or expired session answers 401, not 200.
+ *
+ * This route used to return `200 {user: null}` in both cases. That reads as
+ * a successful call, so every client whose "not signed in" branch hangs off
+ * `!response.ok` sailed straight past it and then crashed on the first field
+ * it expected the body to have. That is exactly what happened on 2026-08-27:
+ * the admin SPA was pointed at the engine instead of the control plane, its
+ * redirect-to-login never fired because the call "succeeded", and the top bar
+ * died reading `me.tenants.length` on a body that has no `tenants`. The owner
+ * saw a blank page and nothing anywhere said why.
+ *
+ * The control plane's own /me (apps/admin-server/src/auth.ts) has always
+ * 401'd here. This makes the two agree, so a client cannot be right about one
+ * and wrong about the other.
+ *
+ * The body still carries `user: null` so anything reading the shape keeps
+ * working; only the status changes. Nothing in this repo consumes this route
+ * — the SPA talks to the control plane — so the blast radius is a browser
+ * session hitting the engine's own legacy login directly.
+ */
 authRoutes.get('/me', async (c) => {
   const trail = getTrail(c);
   const sessionId = getCookie(c, 'session');
   if (!sessionId) {
-    return c.json({ user: null });
+    return c.json({ user: null, error: 'not signed in' }, 401);
   }
 
   const now = new Date().toISOString();
@@ -362,7 +383,10 @@ authRoutes.get('/me', async (c) => {
     .where(and(eq(sessions.id, sessionId), gt(sessions.expiresAt, now)))
     .get();
 
-  return c.json({ user: result ?? null });
+  if (!result) {
+    return c.json({ user: null, error: 'session expired' }, 401);
+  }
+  return c.json({ user: result });
 });
 
 async function nextAvailableSlug(trail: TrailDatabase, base: string): Promise<string> {

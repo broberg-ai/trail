@@ -188,3 +188,4 @@ apps/widget/playwright-report/
 
 # F208.4 — store zip is a build artefact; regenerate with apps/web-clipper/scripts/package.sh
 apps/web-clipper/*.zip
+.provision-secret
