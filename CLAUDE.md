@@ -360,21 +360,41 @@ haven't checked. Don't do it.
 
 | Area | Path | Notes |
 |---|---|---|
-| Server | `apps/server/` | Bun + Hono. REST + MCP at `POST /mcp` + bot adapters. Dev port `7474`. Entry: `apps/server/src/index.ts`. |
-| Web (SPA) | `apps/web/` | Vite 5.4 + Preact 10 + TypeScript. Dev port `3019`. Entry: `apps/web/src/app.tsx`. Vite proxies `/health` + `/api/*` to the server. |
-| Daemon | `apps/agent/` | Local-side automation (launchd-managed, `127.0.0.1:7475`). Forwards `card_moved` to buddy, scaffold-write, project sync. |
-| Feedback widget | `apps/feedback-widget/` | Embedded vanilla JS SDK for capturing ideas from third-party sites. Phase 4. |
-| Schema | `packages/db/` | Drizzle schema + migrations. Local SQLite (`./local.db`), prod libSQL on Fly volume with Litestream → Tigris. |
-| Shared types | `packages/shared/` | Zod schemas + shared TS types. Used on every boundary (MCP args, API bodies, env). |
-| MCP tools | `packages/mcp-tools/` | Tool definitions registered with the server. One file per tool under `src/tools/`. |
-| GitHub integration | `packages/github/` | Octokit + GitHub App wrapper. Plan-doc commits, repo scanning. |
-| Bot adapters | `packages/bot-core/` | Discord + Slack adapters. Phase 4. |
-| Plans + features | `docs/features/` | One `F<n>-<slug>.md` per feature. Authored by the `feature` skill, committed via GitHub App. |
-| Design refs | `docs/design-references/` | UI visual refs. See `README.md` for the index. |
-| Skills | `.claude/skills/` | Project-local cc skills (feature, queue-drain, inbox, pickup, handoff, board, refresh). |
-| Hooks | `.claude/hooks/` | PostToolUse / SessionStart / PreCompact hooks. |
-| MCP config | `.mcp.json` | Declares the cardmem MCP server endpoint + auth header. |
-| Authoritative spec | `docs/PLAN.md` | Source of truth for cross-cutting decisions. |
+| **Engine** | `apps/server/` | Bun + Hono. The Trail itself: REST + MCP at `POST /mcp`, ingest, chat, search. One `trail.db` per tenant under `/data/<slug>/`. Entry: `apps/server/src/index.ts`. |
+| **Control plane** | `apps/admin-server/` | Bun + Hono, its own `control.db`. Owns login (Google OAuth + magic-link), sessions, **tenants, invitations, `control_memberships`**, API keys, the Lens mint, and the proxy the Admin SPA talks through. **If a question is about accounts, users, roles or access, the answer is here — not in `apps/server/`.** |
+| **Admin SPA** | `apps/admin/` | Vite + Preact. The app at `app.trailmem.com`. Panels under `src/panels/`, reusable primitives under `src/components/ui/`. |
+| **Onboarding** | `apps/onboarding/` | The 7-step signup wizard (F134). |
+| **Ingest Station** | `apps/ingest-station/` | Drop-a-source surface; shows what is parked awaiting local compile. |
+| **MCP server** | `apps/mcp/` | Standalone stdio MCP for cc sessions. |
+| **Web Clipper** | `apps/web-clipper/` | Chrome extension (F208). Source manifest is `manifest.config.json` — a build artefact, never load the source folder unpacked. Store assets in `store-screenshots/`. |
+| **Widget** | `apps/widget/` | Embeddable chat/search widget for third-party sites. |
+| **Landing** | `apps/landing/` | `trailmem.com`, GitHub Pages. **Content is authored via `webhouse.app/admin`, never locally** — see the hard rule above. |
+| **Docs site** | `apps/docs/` | `docs.trailmem.com` (F185). Standalone, content in-repo. |
+| **Ambient capture** | `apps/ambient-capture/` | Swift macOS menubar agent (F201) — screen/audio capture, on-device gate. |
+| **Model lab** | `apps/model-lab/` | F202 pipeline-comparison runner. |
+| **Schema** | `packages/db/` | Drizzle schema + migrations for the **engine** DB. The control plane's schema is separate, in `apps/admin-server/src/migrations.ts`. |
+| **Core** | `packages/core/` | Engine domain logic: ingest, compile, queue/candidates, KB, lint, activity. |
+| **Shared types** | `packages/shared/` | Zod schemas + shared TS types used on every boundary. |
+| **UI primitives** | `packages/ui/` | `@trail/ui` — shared Preact components (e.g. `BauhausSelect`). Used by web-clipper + onboarding. |
+| **Pipelines** | `packages/pipelines/` | Per-format source parsers: pdf, docx, image, audio. |
+| **Storage** | `packages/storage/` | File-storage facade (local today). |
+| **SDK** | `packages/sdk/` | TypeScript client for the Trail HTTP API — retrieval, knowledge-prose, render-ready chat. |
+| **Ambient gate** | `packages/ambient-gate/` | On-device relevance gate + redaction for ambient capture. |
+| **Plans + features** | `docs/features/` | One `F<n>-<slug>.md` per feature. |
+| **Design refs** | `docs/design-references/` | UI visual refs. |
+| **Skills** | `.claude/skills/` | Project-local cc skills. |
+| **Hooks** | `.claude/hooks/` | PostToolUse / SessionStart / PreCompact hooks. |
+| **MCP config** | `.mcp.json` | Declares the cardmem MCP server endpoint + auth header. |
+| **Authoritative spec** | `docs/PLAN.md` | Source of truth for cross-cutting decisions. |
+
+> **This table was measured against `ls apps/ packages/` on 2026-08-27 and is
+> the state of the repo, not its history.** The previous version listed
+> `apps/web/`, `apps/agent/`, `apps/feedback-widget/`, `packages/mcp-tools/`,
+> `packages/github/` and `packages/bot-core/` — none of which exist — and
+> omitted `apps/admin-server/`, the control plane. A session answering "can
+> Trail invite a user?" searched the two apps the table named, found nothing,
+> and told the owner the feature did not exist. It did. Re-measure before
+> editing this table; do not extend it from memory.
 
 UI components live under `apps/web/src/components/` (route shells + cards) and `apps/web/src/components/ui/` (reusable primitives: custom select, modal, date-picker — no native browser controls).
 
@@ -535,9 +555,12 @@ const { text, usage } = await ai.chat({ prompt: "Hej", tier: "smart" });
 ```
 
 **Route by tier, not by model-string.** Tiers → current model (overridable per call):
-`fast`=claude-haiku-4-5 · `smart`=claude-sonnet-4-6 · `powerful`=claude-opus-4-8 · `cheap`=mistral-small-latest (cheapest GDPR-safe cloud model) · `vision`=claude-sonnet-4-6 · `video`=gemini-2.5-flash-lite · `embedding`=text-embedding-3-small.
+**Every text tier is Mistral EU** (F030, v0.21+) — Claude is override-only:
+`fast`=mistral-small-latest · `smart`=mistral-large-latest · `powerful`=mistral-large-latest · `cheap`=mistral-small-latest · `vision`=mistral-small-latest · `video`=gemini-2.5-flash-lite (US) · `embedding`=text-embedding-3-small (US).
 
-**Cost & provider policy.** Anthropic/Claude is what we **build and code with** (Claude Code) — it is *not* the reflexive API default. For cost-sensitive / high-volume cloud-API workloads, default to the **cheapest model that's good enough** (start cheap, only move up if a real test shows it's needed) — that's what the `cheap` tier is for. `claude -p` is retired as a route; don't reach for the Anthropic API just because it's familiar. The quality tiers (`smart`/`powerful`) resolve to Claude because that's the quality bar — override down for volume.
+> This block named Claude for `smart`/`powerful`/`vision` for ~3 months after F030 moved them. Nobody was endangered — it UNDERSTATED how EU-safe the defaults are — but the same drift also lived in code (`resolveModel('smart')` answered claude-sonnet-4-6 while the call went to Mistral), and there it was dangerous: that lookup is what a reasonable person would use to show or decide where data goes. Fixed in v0.29 by deriving the registry's tier aliases from the router. **`video` and `embedding` still leave the EU** — do not send personal data through them.
+
+**Cost & provider policy.** Anthropic/Claude is what we **build and code with** (Claude Code) — it is *not* the reflexive API default. For cost-sensitive / high-volume cloud-API workloads, default to the **cheapest model that's good enough** (start cheap, only move up if a real test shows it's needed) — that's what the `cheap` tier is for. `claude -p` is retired as a route; don't reach for the Anthropic API just because it's familiar. The quality tiers (`smart`/`powerful`) resolve to **Mistral Large** (EU), not Claude — reach for Claude only via an explicit `override`, and never for personal data.
 
 **Model-availability gate (F022, v0.11+).** Before launching/spawning on a model, gate it — a suspended tier (e.g. Fable 5, globally disabled 2026-06-12) then degrades instead of erroring at the user:
 ```ts
@@ -545,6 +568,39 @@ import { resolveModel, listModels } from "@broberg/ai-sdk";          // browser 
 const r = resolveModel("fable", { fallback: "claude-opus-4-8" });    // sync, zero-I/O → { ok, model, fellBack, status, reason }
 listModels();  // [{ id, alias?, provider, available, status, note? }] — grey out dead tiers in a picker
 ```
+
+**If you are GATING, pass `requireKnown: true` (v0.29+).** By default an id the
+registry does not track is fail-open — `ok:true`, `status:"unknown"`, and `model`
+is your own input echoed back. That is right for liveness (never block a model we
+simply do not track) and wrong for a gate: cms measured a consumer following the
+instruction above, passing the gate, and then sending the literal string `"cheap"`
+to a provider as a model id. A success-shaped non-answer is worse than an error,
+because an error gets handled and a shape does not.
+```ts
+resolveModel("smrt", { requireKnown: true });  // → { ok:false, status:"unknown", reason: "…not a model this registry knows…" }
+```
+
+**`resolveModel` does NOT tell you where data goes.** It reports provider + model,
+never region — and `video`/`embedding` leave the EU. For residency, read
+`usage.provider`/`usage.model` off the RESPONSE (the route that actually answered);
+a response with no `tier` means a fallback was taken.
+
+**Prompt caching is ON by default (v0.31+).** Mistral caches a repeated prompt prefix
+at 10% of the input rate, but only when the request carries a cache key — we used to
+drop it, so every consumer paid full price for an identical system instruction on every
+message. Now the SDK derives one automatically from the system prompt's content
+(content-derived on purpose: a key collision then implies the content was identical, so
+sharing a cached prefix cannot leak). Measured: an 8,810-token instruction costs
+$0.004411 the first time and $0.000458 every time after — **90% off**.
+```ts
+ai.chat({ system, prompt })                              // cached automatically
+ai.chat({ system, prompt, promptCache: false })          // opt out for this call
+ai.chat({ system, prompt, promptCacheKey: `${tenant}:${conversation}` })  // your own key
+createAI({ promptCache: false })                         // opt out client-wide
+```
+**Pass your own key when one system prompt serves several tenants** — the key is a
+shared-prefix identity, so derive it from (tenant, conversation), never the conversation
+alone. Only Mistral takes a key; openai/deepseek/gemini cache automatically.
 
 **GDPR:** for any client/personal/health data, use the EU tier — `override:{ provider:"mistral", model:"mistral-large-latest" }` (Mistral, Paris-hosted, no Schrems II). Never route personal data through US/CN models.
 
@@ -763,3 +819,45 @@ Each project has a **Decision Register**: a short list of choices the owner has 
 The four do not compete — a decision can be registered AND have its reasoning saved in Trail. What must not happen is a fourth overlapping store nobody maintains. The register stays small on purpose (only `active` entries are delivered, capped, pinned first) precisely so it stays read: a long register is not more coverage, it is a list nobody reads that still LOOKS like coverage.
 
 **Never DELETE a reversed decision** — supersede it, pointing at what replaced it, so a session that finds the old entry is told where the truth moved. `revisit` marks "no longer trusted" without pretending the decision was never made.
+
+## Communications — a draft belongs in cardmem, never in TextMate (F011.6)
+
+> **Canonical section per F057 multi-project convention.** Copied verbatim into every
+> cardmem-compatible repo (owner rule, Christian 2026-08-25).
+
+**Anything you write for a human OUTSIDE the fleet — a mail to a customer, a letter,
+an offer, a reply to a supplier — goes into that project's Assets → Comms folder, and
+you hand Christian the cardmem link.** Not a `.md` file on your machine. Not TextMate.
+Not Read.md.
+
+```
+cardmem_create_communication({ project_id, session_id, title, markdown, status: 'draft' })
+  → { id, name, open_in_cardmem }      ← give him THAT link (/assets#asset=<id>)
+cardmem_list_communications({ project_id })   ← read what we have already written
+cardmem_mark_communication({ asset_id, status: 'sent' })   ← once it has actually gone
+```
+
+**The folder is not a parameter.** The tool files it, so a draft cannot land somewhere
+he will not look. That is deliberate: the fleet already had a tool that *could* file it
+correctly, and what was missing was one where filing it wrongly is impossible.
+
+**Why the old habit was wrong even when it worked.** Opening a draft in TextMate meant
+the only copy lived on one Mac, in a window that had to be verified to exist, with no
+history and nothing the next session could find. The precedent this rule replaces is on
+the books: a customer mail was written, revised three times, reported "ready, waiting
+only for your GO" — and existed solely in a session scratchpad. Christian went looking
+for it and there was nothing to find.
+
+**The original is immutable.** Editing a communication in cardmem writes version 2, 3 …
+and v1 — what we first wrote — can never be overwritten or rotated away. So a correction
+is always visible AS a correction, and "what did we actually send them?" has an answer.
+
+**It is a record, not an outbox.** A communication that has been sent STAYS, marked
+`sent`. Before writing a new one to the same person, read what was already said —
+`cardmem_list_communications` exists for exactly that, and a follow-up that contradicts
+the last letter is worse than a slow one.
+
+**Unchanged:** outgoing customer mail is still sent only on Christian's direct order,
+and he still gets a copy of everything that leaves the house (`cc: cb@webhouse.dk`).
+This rule changes WHERE the draft lives while he reads it — nothing else.
+
