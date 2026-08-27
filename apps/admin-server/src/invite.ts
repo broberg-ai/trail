@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { getCookie } from 'hono/cookie';
 import { db, schema } from './db.js';
 import { sendMagicLink } from './email.js';
+import { isOwnerIdentity } from '@trail/shared';
 
 /**
  * F33-precursor of F172 — operator-driven invite.
@@ -60,14 +61,8 @@ inviteRoutes.post('/invite', async (c) => {
   const inviter = await resolveInviter(c);
   if (!inviter) return c.json({ error: 'not signed in' }, 401);
 
-  // Get inviter's tenant — Phase 1B: one tenant per org, pick first
-  const tenant = await db.query.controlTenants.findFirst({
-    where: eq(schema.controlTenants.organizationId, inviter.organizationId),
-  });
-  if (!tenant) return c.json({ error: 'inviter has no tenant' }, 400);
-
   // Parse + validate input
-  let body: { email?: string; name?: string; role?: string } = {};
+  let body: { email?: string; name?: string; role?: string; tenantId?: string } = {};
   try {
     body = await c.req.json();
   } catch {
@@ -76,6 +71,53 @@ inviteRoutes.post('/invite', async (c) => {
   const email = body.email?.trim().toLowerCase();
   const name = body.name?.trim() || null;
   const role = (body.role ?? 'admin').trim();
+  const wantedTenantId = body.tenantId?.trim() || null;
+
+  /**
+   * F210.3 — the invitation is AIMED, not defaulted.
+   *
+   * Without `tenantId` this keeps the pre-F210.3 behaviour exactly: the
+   * inviter's own first tenant. That matters because the standalone /invite
+   * form still posts without one, and a route that started refusing it would
+   * break a working page to add a feature.
+   *
+   * WITH `tenantId`, the caller must be able to administer THAT tenant. This
+   * is the one permission gate in an epic that otherwise ships no RBAC — and
+   * it is not optional: without it any signed-in user could post the id of a
+   * customer's tenant and write a person of their choosing into it.
+   */
+  let tenant;
+  if (wantedTenantId) {
+    tenant = await db.query.controlTenants.findFirst({
+      where: eq(schema.controlTenants.id, wantedTenantId),
+    });
+    if (!tenant) return c.json({ error: 'no such tenant' }, 404);
+
+    let allowed = isOwnerIdentity(inviter.email);
+    if (!allowed) {
+      const m = await db.query.controlMemberships.findFirst({
+        where: and(
+          eq(schema.controlMemberships.userId, inviter.id),
+          eq(schema.controlMemberships.tenantId, wantedTenantId),
+        ),
+      });
+      allowed = m?.role === 'owner' || m?.role === 'admin';
+    }
+    // Refuse BEFORE anything is written — AC2 measures the invitations row
+    // count either side of this call and it must not move.
+    if (!allowed) {
+      return c.json({ error: 'not an owner or admin of this tenant' }, 403);
+    }
+  } else {
+    tenant = await db.query.controlTenants.findFirst({
+      where: eq(schema.controlTenants.organizationId, inviter.organizationId),
+    });
+    if (!tenant) return c.json({ error: 'inviter has no tenant' }, 400);
+  }
+  // Everything below writes into the TENANT's organisation, not the
+  // inviter's. When no tenantId was given the two are the same, so the old
+  // behaviour is unchanged.
+  const targetOrgId = tenant.organizationId;
 
   if (!email || !/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(email)) {
     return c.json({ error: 'valid email required' }, 400);
@@ -94,7 +136,9 @@ inviteRoutes.post('/invite', async (c) => {
   let action: 'created' | 'reinvited';
 
   if (existing) {
-    if (existing.organizationId !== inviter.organizationId) {
+    // One email still belongs to one organisation — except the owner's own
+    // identities, which are deliberately allowed everywhere (F210.4).
+    if (existing.organizationId !== targetOrgId && !isOwnerIdentity(email)) {
       return c.json(
         { error: 'this email is already a member of another organization' },
         400,
@@ -108,7 +152,7 @@ inviteRoutes.post('/invite', async (c) => {
     const newId = `u-${newToken(8)}`;
     await db.insert(schema.controlUsers).values({
       id: newId,
-      organizationId: inviter.organizationId,
+      organizationId: targetOrgId,
       email,
       name,
       onboarded: false,
@@ -147,7 +191,7 @@ inviteRoutes.post('/invite', async (c) => {
   const expiresAt = isoFromNow(INVITATION_TTL_DAYS * 24 * 60 * 60);
   const existingInvite = await db.query.invitations.findFirst({
     where: and(
-      eq(schema.invitations.organizationId, inviter.organizationId),
+      eq(schema.invitations.organizationId, targetOrgId),
       eq(schema.invitations.email, email),
     ),
   });
@@ -170,7 +214,7 @@ inviteRoutes.post('/invite', async (c) => {
     invitationId = `inv-${newToken(8)}`;
     await db.insert(schema.invitations).values({
       id: invitationId,
-      organizationId: inviter.organizationId,
+      organizationId: targetOrgId,
       email,
       role,
       invitedByUserId: inviter.id,
@@ -179,8 +223,32 @@ inviteRoutes.post('/invite', async (c) => {
     });
   }
 
+  /**
+   * F210.3 — write the membership on the TENANT now, not on accept.
+   *
+   * The member list has to show the invitee immediately: the surface a
+   * curator looks at after inviting someone is the member list, and an
+   * invite that leaves no trace there reads as an invite that failed. The
+   * pending state comes from the invitation row, which the list joins.
+   *
+   * An owner identity is never demoted by this: their row stays `owner`.
+   */
+  const already = await db.query.controlMemberships.findFirst({
+    where: and(
+      eq(schema.controlMemberships.userId, targetUserId),
+      eq(schema.controlMemberships.tenantId, tenant.id),
+    ),
+  });
+  if (!already) {
+    await db.insert(schema.controlMemberships).values({
+      userId: targetUserId,
+      tenantId: tenant.id,
+      role: isOwnerIdentity(email) ? 'owner' : role,
+    });
+  }
+
   console.log(
-    `[invite] ${inviter.email} ${action} ${email} (role=${role}) → magic-link sent, invitation ${invitationId} pending`,
+    `[invite] ${inviter.email} ${action} ${email} (role=${role}) → tenant ${tenant.slug}, magic-link sent, invitation ${invitationId} pending`,
   );
   return c.json({
     ok: true,
@@ -189,6 +257,7 @@ inviteRoutes.post('/invite', async (c) => {
     targetUserId,
     role,
     invitationId,
+    tenantId: tenant.id,
   });
 });
 

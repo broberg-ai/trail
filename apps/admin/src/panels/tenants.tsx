@@ -623,7 +623,15 @@ function TenantRow({
                   <span>{isDa ? 'Skift til denne' : 'Switch to this'}</span>
                 </button>
               ) : null}
-              <button type="button" class="menu-item" onClick={() => { onMenuClose(); onComingSoon(); }}>
+              {/* F210.3 — this fired a Coming-soon toast naming F186, which
+                  sent the owner looking at an epic that had deliberately
+                  stubbed it. It goes to the real surface now. */}
+              <button
+                type="button"
+                class="menu-item"
+                data-testid={`tenant-menu-members-${tenant.slug}`}
+                onClick={() => { onMenuClose(); window.location.href = `/tenants/${tenant.id}/members`; }}
+              >
                 <Icons.User size={13} style={{ color: 'var(--color-fg-subtle)' }} />
                 <span>{isDa ? 'Medlemmer' : 'Members'}</span>
               </button>

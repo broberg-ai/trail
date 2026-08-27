@@ -60,6 +60,27 @@ export function addBearer(args: {
   );
 }
 
+/**
+ * F210.5 — read a bearer back OUT of the index.
+ *
+ * `addBearer` is a silent no-op when the index file is absent (legitimate in
+ * single-tenant local dev). That is fine for a key minted into an already-
+ * reachable tenant, and NOT fine at provisioning time, where the index row is
+ * the only thing that tells auth which database to open. So the provisioning
+ * path writes and then asks — rather than trusting a call that cannot fail.
+ *
+ * Returns null when there is no index at all (so a caller can tell "no index
+ * on this host" from "the write did not land").
+ */
+export function lookupBearer(keyHash: string): { tenantSlug: string } | null | undefined {
+  const db = openIndex();
+  if (!db) return undefined; // no index on this host
+  const row = db
+    .query('SELECT tenant_slug AS tenantSlug FROM api_key_index WHERE key_hash = ? AND revoked_at IS NULL')
+    .get(keyHash) as { tenantSlug: string } | undefined;
+  return row ?? null;
+}
+
 export function revokeBearer(keyHash: string): void {
   const db = openIndex();
   if (!db) return;

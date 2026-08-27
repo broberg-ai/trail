@@ -16,6 +16,7 @@ import { PlayPanel } from './panels/play';
 import { SettingsTrailPanel } from './panels/settings-trail';
 import { SettingsAccountPanel } from './panels/settings-account';
 import { ManageTenantsPanel } from './panels/tenants';
+import { TenantMembersPanel } from './panels/tenant-members';
 import { CostPanel } from './panels/cost';
 import { QualityComparePanel } from './panels/quality-compare';
 import { LinkReportPanel } from './panels/link-report';
@@ -67,6 +68,7 @@ function Main() {
           <Route path="/settings" component={SettingsAccountPanel} />
           <Route path="/ambient/connect" component={AmbientConnectPanel} />
           <Route path="/tenants" component={ManageTenantsPanel} />
+          <Route path="/tenants/:tenantId/members" component={TenantMembersPanel} />
           <Route path="/glossary" component={GlossaryPanel} />
           <Route path="/jobs" component={JobsPanel} />
           <Route path="/activity" component={ActivityPanel} />

@@ -27,6 +27,8 @@ export function Dropdown({
   buttonClass,
   menuClass,
   disabled,
+  testid,
+  hintInMenuOnly,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -38,6 +40,17 @@ export function Dropdown({
   /** Extra classes on the popover (typically width). */
   menuClass?: string;
   disabled?: boolean;
+  /** F210.3 — stable anchor for Lens. Rendered as data-testid on the button. */
+  testid?: string;
+  /**
+   * F210.3 — show the hint only inside the menu, not on the closed button.
+   *
+   * The button states the CURRENT value; the hint explains a CHOICE, and it
+   * is only a choice while the menu is open. In a narrow table cell the
+   * combined string truncates mid-word ("Ejer — Ful…"), which reads as a
+   * rendering bug rather than a deliberate abbreviation.
+   */
+  hintInMenuOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -71,6 +84,7 @@ export function Dropdown({
   return (
     <div class="relative inline-block" ref={wrapRef}>
       <button
+        data-testid={testid}
         type="button"
         onClick={() => !disabled && setOpen((v) => !v)}
         disabled={disabled}
@@ -82,7 +96,7 @@ export function Dropdown({
         aria-expanded={open}
       >
         <span class="truncate flex-1 min-w-0">
-          {current?.hint ? (
+          {current?.hint && !hintInMenuOnly ? (
             <>
               {current.label}{' '}
               <span class="text-[color:var(--color-fg-subtle)]">— {current.hint}</span>
@@ -106,6 +120,7 @@ export function Dropdown({
           {options.map((opt) => (
             <button
               key={opt.value}
+              data-testid={testid ? `${testid}-option-${opt.value}` : undefined}
               type="button"
               role="option"
               aria-selected={opt.value === value}

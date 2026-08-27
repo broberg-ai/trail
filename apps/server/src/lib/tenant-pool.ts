@@ -140,6 +140,23 @@ export async function provisionTenant(args: {
   pool: TenantPool;
   slug: string;
   boot: (db: TrailDatabase) => Promise<void>;
+  /**
+   * F210.5 — seed the new database so the tenant is USABLE, not merely
+   * present.
+   *
+   * Without this the engine created a fully-migrated 44-table database with
+   * an empty `tenants` table and an empty `api_keys` table, and the control
+   * plane minted a bearer the engine had never heard of. Every request then
+   * answered "Invalid or revoked API key" — measured on prod 2026-08-28,
+   * reported by the owner the moment he opened the customer he had just
+   * created. A tenant that exists and cannot be reached is worse than one
+   * that failed to create, because the failure surfaces later and somewhere
+   * else.
+   *
+   * Runs AFTER boot (which migrates) and BEFORE the pool insert, so the
+   * tenant only goes live once it can actually answer.
+   */
+  seed?: (db: TrailDatabase) => Promise<void>;
 }): Promise<{ slug: string; path: string }> {
   const { pool, slug, boot } = args;
 
@@ -160,6 +177,7 @@ export async function provisionTenant(args: {
 
   const db = await createLibsqlDatabase({ path });
   await boot(db);
+  if (args.seed) await args.seed(db);
 
   pool.set(slug, db);
   console.log(`[multi-tenant] provisioned ${slug} → live in pool (${pool.size} tenants)`);

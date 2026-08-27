@@ -235,15 +235,77 @@ export function createTenant(body: {
   });
 }
 
-/** Send an invite — creates/refreshes a pending invitation + magic-link email. */
+/**
+ * Send an invite — creates/refreshes a pending invitation + magic-link email.
+ *
+ * F210.3 — `tenantId` AIMS the invitation. Omitted, the server keeps its old
+ * behaviour (the inviter's own first tenant), which is what the standalone
+ * /invite form still relies on. Passed, the person lands in THAT customer's
+ * account instead of yours — the whole point of the Members surface.
+ */
 export function createInvitation(body: {
   email: string;
   role: InvitationRole;
-}): Promise<{ ok: true; action: 'created' | 'reinvited'; invitationId: string }> {
+  tenantId?: string;
+}): Promise<{ ok: true; action: 'created' | 'reinvited'; invitationId: string; tenantId?: string }> {
   return api('/api/control/invite', {
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+/** F210.3 — one member of a tenant, as the control plane reports them. */
+export interface TenantMember {
+  userId: string;
+  email: string;
+  name: string | null;
+  role: 'owner' | 'admin' | 'member';
+  joinedAt: string;
+  /** True for an owner identity: the role control renders disabled. */
+  locked: boolean;
+  isSelf: boolean;
+}
+
+/** F210.3 — an invitation that has been sent but not accepted. */
+export interface PendingInvite {
+  email: string;
+  role: string;
+  invitedAt: string;
+  expiresAt: string;
+}
+
+export interface TenantMembers {
+  tenant: { id: string; slug: string; name: string };
+  members: TenantMember[];
+  pending: PendingInvite[];
+}
+
+/** F210.3 — who is in this tenant. 403 unless you administer it. */
+export function fetchTenantMembers(tenantId: string): Promise<TenantMembers> {
+  return api(`/api/control/tenants/${encodeURIComponent(tenantId)}/members`);
+}
+
+/** F210.3 — change a member's role. Refused on an owner identity. */
+export function updateMemberRole(
+  tenantId: string,
+  userId: string,
+  role: TenantMember['role'],
+): Promise<{ ok: true; userId: string; role: string }> {
+  return api(
+    `/api/control/tenants/${encodeURIComponent(tenantId)}/members/${encodeURIComponent(userId)}`,
+    { method: 'PATCH', body: JSON.stringify({ role }) },
+  );
+}
+
+/** F210.3 — remove a member. Refused on an owner identity or the last owner. */
+export function removeMember(
+  tenantId: string,
+  userId: string,
+): Promise<{ ok: true; removed: string }> {
+  return api(
+    `/api/control/tenants/${encodeURIComponent(tenantId)}/members/${encodeURIComponent(userId)}`,
+    { method: 'DELETE' },
+  );
 }
 
 /** Revoke a pending invitation. */

@@ -2,6 +2,7 @@ import { createLibsqlDatabase, DEFAULT_DB_PATH, type TrailDatabase } from '@trai
 import { createApp } from './app.js';
 import { openTenantPool, inferPrimarySlug, provisionTenant } from './lib/tenant-pool.js';
 import { ensureIngestUser } from './bootstrap/ingest-user.js';
+import { seedTenantIdentity } from './bootstrap/seed-tenant.js';
 import { recoverZombieIngests } from './bootstrap/zombie-ingest.js';
 import { rewriteWikiToNeurons } from './bootstrap/rewrite-wiki-paths.js';
 import { cleanupExternalOrphans } from './bootstrap/F98-cleanup-external-orphans.js';
@@ -226,7 +227,12 @@ app.post('/api/admin/tenants', async (c) => {
     return c.json({ error: 'unauthorized' }, 401);
   }
 
-  let body: { slug?: string } = {};
+  let body: {
+    slug?: string;
+    name?: string;
+    ownerEmail?: string;
+    keyHash?: string;
+  } = {};
   try {
     body = await c.req.json();
   } catch {
@@ -234,12 +240,33 @@ app.post('/api/admin/tenants', async (c) => {
   }
   const slug = body.slug?.trim();
   if (!slug) return c.json({ error: 'slug required' }, 400);
+  const name = body.name?.trim() || slug;
+  const ownerEmail = body.ownerEmail?.trim().toLowerCase();
+  const keyHash = body.keyHash?.trim();
+
+  /**
+   * F210.5 — a provisioned tenant must be REACHABLE.
+   *
+   * `keyHash` is the sha256 of the bearer the control plane minted and will
+   * forward on this tenant's behalf. The raw key never crosses this wire —
+   * the engine only ever stores hashes, so sending the hash is both
+   * sufficient and the smaller thing to leak.
+   *
+   * Refused when absent rather than provisioning a tenant that cannot be
+   * reached: the failure this replaces was a database that existed, migrated
+   * cleanly, reported 201, and answered every subsequent request with
+   * "Invalid or revoked API key".
+   */
+  if (!keyHash || !ownerEmail) {
+    return c.json({ error: 'keyHash and ownerEmail are required to provision a reachable tenant' }, 400);
+  }
 
   try {
     const result = await provisionTenant({
       pool: tenantPool,
       slug,
       boot: bootTenant,
+      seed: (db) => seedTenantIdentity(db, { slug, name, ownerEmail, keyHash }),
     });
     return c.json({ ok: true, slug: result.slug, live: tenantPool.has(result.slug) }, 201);
   } catch (err) {

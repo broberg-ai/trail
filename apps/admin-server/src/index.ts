@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { logger } from 'hono/logger';
 import { serveStatic } from 'hono/bun';
-import { eq, sql } from 'drizzle-orm';
+import { eq, and, gt, sql } from 'drizzle-orm';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { db, schema } from './db.js';
@@ -193,7 +193,43 @@ document.getElementById('f').addEventListener('submit', async (e) => {
 // "dev-login" and answers 404 "unknown provider". Declared after them,
 // this route is unreachable — which is exactly what it was, so a local
 // admin bounced between a blank SPA and a 404 with no way in.
-app.get('/api/auth/dev-login', (c) => c.redirect('/login', 302));
+app.get('/api/auth/dev-login', async (c) => {
+  /**
+   * F211.1 follow-up — this used to redirect to /login unconditionally, so a
+   * route the SPA calls "dev-login" logged nobody in. Making it REACHABLE
+   * (F211) fixed the 404 and left it useless: a local admin still bounced to
+   * the sign-in wall it was supposed to skip.
+   *
+   * It now signs in as an EXISTING session row, and only outside production.
+   * That grants nothing a valid cookie would not: the caller must already
+   * know a live session id, which IS the cookie value. The production guard
+   * is belt-and-braces so a misread of that sentence can never become a
+   * backdoor.
+   */
+  if (process.env.NODE_ENV === 'production') return c.redirect('/login', 302);
+
+  const sessionId = c.req.query('session');
+  if (!sessionId) return c.redirect('/login', 302);
+
+  const row = await db.query.sessions.findFirst({
+    where: and(
+      eq(schema.sessions.id, sessionId),
+      gt(schema.sessions.expiresAt, new Date().toISOString()),
+    ),
+  });
+  // An unknown or expired id lands on the real sign-in page rather than
+  // pretending — the failure this whole epic is about is a surface that
+  // reports success while nothing happened.
+  if (!row) return c.redirect('/login', 302);
+
+  setCookie(c, 'trail-session', sessionId, {
+    httpOnly: true,
+    sameSite: 'Lax',
+    path: '/',
+    maxAge: 60 * 60 * 24,
+  });
+  return c.redirect(c.req.query('returnTo') ?? '/', 302);
+});
 
 app.route('/api/auth', oauthRoutes);
 
