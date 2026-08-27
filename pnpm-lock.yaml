@@ -419,8 +419,8 @@ importers:
   packages/shared:
     dependencies:
       '@broberg/secret-scan':
-        specifier: ^0.1.5
-        version: 0.1.5
+        specifier: ^0.5.0
+        version: 0.5.0
       '@broberg/speech-dictionary':
         specifier: 0.1.1
         version: 0.1.1
@@ -749,8 +749,8 @@ packages:
   '@broberg/mail@0.1.0':
     resolution: {integrity: sha512-H8Trh+EN3tqCFdZrfRQsWQJFjVeg8S7se1hJbIEjxiez6zlN9PMdjsD9QuOiUNsShyWdw9MGzihqMdQfx5IIZg==}
 
-  '@broberg/secret-scan@0.1.5':
-    resolution: {integrity: sha512-O04fe9so0a1r0VcD7msEQ2nnBx8xMJgOmFSDBjhOkH4u8OSgQrcOVF4a1cVRlwU74bw5GV6evEC3RhkauclLgQ==}
+  '@broberg/secret-scan@0.5.0':
+    resolution: {integrity: sha512-3GHD2kmJMysOXBigyeM/SRAxl1O6/nkkkZx8P2vQLMzh1nAr6jwM2nM+tFSusMKNpROfr9IJKL2YW5hvCKa6ZQ==}
 
   '@broberg/speech-dictionary@0.1.1':
     resolution: {integrity: sha512-m8tIchrZhW16zFmAitRTIkryYDk/JwWw4qf+bg0tltJnPwdhaL/LGIdU+rtEF9WROALqfImDvFO+PRfcldXzGg==}
@@ -4075,7 +4075,7 @@ snapshots:
 
   '@broberg/mail@0.1.0': {}
 
-  '@broberg/secret-scan@0.1.5': {}
+  '@broberg/secret-scan@0.5.0': {}
 
   '@broberg/speech-dictionary@0.1.1': {}
 
