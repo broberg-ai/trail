@@ -12,6 +12,7 @@ import { inviteRoutes } from './invite.js';
 import { tenantRoutes } from './tenants.js';
 import { apiKeyRoutes } from './keys.js';
 import { proxyToEngine } from './proxy.js';
+import { meTenantRoutes } from './me-tenants.js';
 import { lensReadOnlyGuard, lensSessionRoute } from './lens-session.js';
 import { init as upInit, captureException, setTag } from '@upmetrics/sdk';
 import { setCookie } from 'hono/cookie';
@@ -391,6 +392,11 @@ app.get('/login', (c) =>
 </script>
 </body></html>`),
 );
+
+// F215.1 — MUST come before the /api/v1/* proxy below. Memberships live only
+// in control.db; forwarded to an engine this would 404 (or worse, be answered
+// by a tenant that has no idea which OTHER tenants the caller may pick).
+app.route('/api', meTenantRoutes);
 
 // Reverse-proxy /api/v1/* to the user's engine. Resolves session cookie
 // → tenant → engine URL → injects Bearer key. Engine doesn't speak

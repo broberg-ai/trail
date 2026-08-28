@@ -9,6 +9,14 @@ import { BauhausSelect } from '@trail/ui'
 interface Config {
   serverUrl: string
   token: string
+  /** F215.1 — the tenant the last clip went to. Re-validated on open. */
+  tenant: string
+}
+
+interface Tenant {
+  slug: string
+  name: string
+  home: boolean
 }
 
 interface KnowledgeBase {
@@ -34,10 +42,11 @@ const DEFAULT_TOKEN = ''
 
 function loadConfig(): Promise<Config> {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['serverUrl', 'token'], (result) => {
+    chrome.storage.local.get(['serverUrl', 'token', 'tenant'], (result) => {
       resolve({
         serverUrl: result.serverUrl || DEFAULT_SERVER,
         token: result.token || DEFAULT_TOKEN,
+        tenant: result.tenant || '',
       })
     })
   })
@@ -46,20 +55,58 @@ function loadConfig(): Promise<Config> {
 function saveConfig(config: Config): Promise<void> {
   return new Promise((resolve) => {
     chrome.storage.local.set(
-      { serverUrl: config.serverUrl, token: config.token },
+      { serverUrl: config.serverUrl, token: config.token, tenant: config.tenant },
       () => resolve()
     )
   })
 }
 
-async function fetchKnowledgeBases(serverUrl: string, token: string): Promise<KnowledgeBase[]> {
+/**
+ * F215.1 — which tenants may this key select? Answered by the control plane
+ * from the SAME membership set the proxy enforces, so the picker cannot offer
+ * a slug that would be refused at clip time.
+ */
+async function fetchTenants(serverUrl: string, token: string): Promise<Tenant[]> {
+  let res: Response
+  try {
+    res = await fetch(`${serverUrl}/api/v1/me/tenants`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  } catch {
+    throw new Error(`Can't reach ${serverUrl} — is it running, and is the address right?`)
+  }
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(`${serverUrl} refused the API token (${res.status}). Check the token in settings.`)
+  }
+  // An older server has no such route. That is not a reason to refuse to clip:
+  // fall back to "one tenant, no picker", which is exactly how the extension
+  // behaved before this feature.
+  if (res.status === 404) return []
+  if (!res.ok) throw new Error(`${serverUrl} answered ${res.status} ${res.statusText}`)
+  const body = (await res.json()) as { tenants?: Tenant[] }
+  return Array.isArray(body.tenants) ? body.tenants : []
+}
+
+/** Headers for a tenant-scoped call. An empty slug sends no header, so the
+ *  server falls back to the key's home tenant — the pre-F215.1 behaviour. */
+function authHeaders(token: string, tenant: string): Record<string, string> {
+  const h: Record<string, string> = { Authorization: `Bearer ${token}` }
+  if (tenant) h['X-Trail-Tenant'] = tenant
+  return h
+}
+
+async function fetchKnowledgeBases(
+  serverUrl: string,
+  token: string,
+  tenant: string,
+): Promise<KnowledgeBase[]> {
   // F208.1 — "could not reach it" and "it refused me" are different problems
   // with different fixes, and the popup used to show neither. A wrong port and
   // a dead token looked identical: an empty panel saying "Not configured".
   let res: Response
   try {
     res = await fetch(`${serverUrl}/api/v1/knowledge-bases`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: authHeaders(token, tenant),
     })
   } catch {
     throw new Error(`Can't reach ${serverUrl} — is it running, and is the address right?`)
@@ -74,6 +121,7 @@ async function fetchKnowledgeBases(serverUrl: string, token: string): Promise<Kn
 async function uploadClip(
   serverUrl: string,
   token: string,
+  tenant: string,
   kbId: string,
   title: string,
   content: string,
@@ -107,7 +155,7 @@ async function uploadClip(
   const res = await fetch(`${serverUrl}/api/v1/knowledge-bases/${kbId}/documents/upload`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...authHeaders(token, tenant),
       'Content-Type': `multipart/form-data; boundary=${boundary}`,
     },
     body: bodyBytes,
@@ -162,6 +210,11 @@ export function Popup() {
   const [showSettings, setShowSettings] = useState(false)
   const [kbs, setKbs] = useState<KnowledgeBase[]>([])
   const [selectedKb, setSelectedKb] = useState('')
+  // F215.1 — the tenant picker. `tenants` is [] when the server has no such
+  // route (older build) or the key spans exactly one tenant; the picker is
+  // hidden in both cases, so a single-tenant user sees no change at all.
+  const [tenants, setTenants] = useState<Tenant[]>([])
+  const [selectedTenant, setSelectedTenant] = useState('')
   const [tags, setTags] = useState('')
   const [clipState, setClipState] = useState<ClipState>('idle')
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
@@ -179,35 +232,88 @@ export function Popup() {
     })
   }, [])
 
+  // Resolve which tenant we are clipping into BEFORE asking for its Trails.
+  // A remembered tenant is re-validated against the live list: a membership
+  // that has been revoked must fall back visibly here, not fail at clip time
+  // when the user has already chosen a Trail and pressed the button.
   useEffect(() => {
-    if (config?.token && config.serverUrl) {
-      fetchKnowledgeBases(config.serverUrl, config.token)
-        .then((result) => {
-          setKbs(result)
-          setConnError(null)
-          if (result.length === 1) setSelectedKb(result[0].id)
-        })
-        .catch((err: Error) => {
-          setConnError(err.message)
-        })
+    if (!config?.token || !config.serverUrl) return
+    let cancelled = false
+    fetchTenants(config.serverUrl, config.token)
+      .then((list) => {
+        if (cancelled) return
+        setTenants(list)
+        setConnError(null)
+        const remembered = list.find((t) => t.slug === config.tenant)
+        if (config.tenant && !remembered && list.length > 0) {
+          setToast({
+            type: 'info',
+            message: `You no longer have access to "${config.tenant}" — switched to ${(list.find((t) => t.home) ?? list[0]).name}.`,
+          })
+        }
+        setSelectedTenant(remembered?.slug ?? (list.find((t) => t.home) ?? list[0])?.slug ?? '')
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setConnError(err.message)
+      })
+    return () => {
+      cancelled = true
     }
   }, [config])
 
+  useEffect(() => {
+    if (!config?.token || !config.serverUrl) return
+    // Wait for the tenant to be resolved when there IS one to resolve —
+    // otherwise the first KB fetch races the tenant list and lists the home
+    // tenant's Trails under the remembered tenant's name.
+    if (tenants.length > 0 && !selectedTenant) return
+    let cancelled = false
+    fetchKnowledgeBases(config.serverUrl, config.token, selectedTenant)
+      .then((result) => {
+        if (cancelled) return
+        setKbs(result)
+        setConnError(null)
+        setSelectedKb(result.length === 1 ? result[0].id : '')
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setConnError(err.message)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [config, selectedTenant, tenants.length])
+
+  // Clearing the KB is not tidiness — it is the guard against clipping into
+  // the wrong customer. A KB id belongs to ONE tenant; sent with a different
+  // tenant header it 404s at best, and at worst matches something in the new
+  // tenant while the Clipper reports success. Cleared here, synchronously,
+  // rather than waiting for the new list to arrive.
+  const handleTenantChange = useCallback(
+    (slug: string) => {
+      if (slug === selectedTenant) return
+      setSelectedKb('')
+      setKbs([])
+      setSelectedTenant(slug)
+      if (config) {
+        const next = { ...config, tenant: slug }
+        void saveConfig(next)
+      }
+    },
+    [selectedTenant, config],
+  )
+
   const handleSaveSettings = useCallback(async () => {
-    const newConfig = { serverUrl: tempServerUrl, token: tempToken }
+    // A different server (or token) means a different set of tenants, so the
+    // remembered slug cannot carry over — it would be re-validated against a
+    // list it was never in and produce a confusing "no longer have access".
+    const newConfig = { serverUrl: tempServerUrl, token: tempToken, tenant: '' }
     await saveConfig(newConfig)
     setConfig(newConfig)
     setShowSettings(false)
     setKbs([])
     setSelectedKb('')
-    fetchKnowledgeBases(newConfig.serverUrl, newConfig.token)
-      .then((result) => {
-        setKbs(result)
-        if (result.length === 1) setSelectedKb(result[0].id)
-      })
-      .catch((err) => {
-        setToast({ type: 'error', message: `Could not connect: ${err.message}` })
-      })
+    setTenants([])
+    setSelectedTenant('')
   }, [tempServerUrl, tempToken])
 
   const handleClip = useCallback(async () => {
@@ -231,6 +337,7 @@ export function Popup() {
       await uploadClip(
         config.serverUrl,
         config.token,
+        selectedTenant,
         selectedKb,
         extracted.title,
         frontmatter + extracted.content,
@@ -244,7 +351,7 @@ export function Popup() {
       setClipState('error')
       setToast({ type: 'error', message: err instanceof Error ? err.message : 'Unknown error' })
     }
-  }, [config, selectedKb, tags])
+  }, [config, selectedKb, selectedTenant, tags])
 
   if (!config) {
     return h('div', { class: 'status-bar' }, [
@@ -261,6 +368,23 @@ export function Popup() {
       h('div', { class: 'header-logo' }),
       h('h1', {}, 'Trail Clipper'),
     ]),
+
+    // Ship dark for single-tenant keys: no picker when there is nothing to
+    // pick. `tenants` is [] on an older server too, so the extension keeps
+    // working against a build that has no /me/tenants route.
+    tenants.length > 1
+      ? h('div', { class: 'section' }, [
+          h('div', { class: 'section-title' }, 'Tenant'),
+          h(BauhausSelect, {
+            value: selectedTenant,
+            testid: 'clipper-tenant-select',
+            class: 'clipper-select',
+            ariaLabel: 'Tenant',
+            onChange: handleTenantChange,
+            options: tenants.map((t) => ({ value: t.slug, label: t.name })),
+          }),
+        ])
+      : null,
 
     h('div', { class: 'section' }, [
       h('div', { class: 'section-title' }, 'Knowledge Base'),
