@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { captureException } from '@upmetrics/sdk';
+import { ZodError } from 'zod';
 import type { TrailDatabase } from '@trail/db';
 import type { TenantPool } from './lib/tenant-pool.js';
 import { healthRoutes } from './routes/health.js';
@@ -214,7 +215,38 @@ export function createApp(trail: TrailDatabase, tenantPool: TenantPool): Hono<Ap
 
   // Upmetrics — capture unhandled route errors (no-op unless UPMETRICS_DSN was
   // set at boot in index.ts), then preserve Hono's default 500 response.
+  //
+  // F214.1 — a ZodError is NOT a server error. Six routes call
+  // `Schema.parse(await c.req.json())` directly, so any body the schema
+  // rejects threw straight into this handler and came back as a bare
+  // `Internal Server Error` with no field, no limit and no log line. The
+  // owner hit it on Settings → a description longer than the schema's 500
+  // characters, and the surface could only say "500" about text he had just
+  // spent minutes writing. A 400 that names the field is the difference
+  // between "fix this word" and "something broke, good luck".
+  //
+  // Handled here rather than at each call site on purpose: the same bug
+  // exists identically at all six, and a per-route try/catch would have to
+  // be remembered at the seventh.
   app.onError((err, c) => {
+    if (err instanceof ZodError) {
+      const issues = err.issues.map((i) => ({
+        field: i.path.join('.') || '(body)',
+        message: i.message,
+      }));
+      const first = issues[0];
+      return c.json(
+        {
+          error: first ? `${first.field}: ${first.message}` : 'Invalid request body',
+          issues,
+        },
+        400,
+      );
+    }
+    // Anything else IS a server error — and must leave a trace. Without this
+    // line the 500 above was invisible in `flyctl logs`: the request line
+    // said 500 and nothing said why.
+    console.error(`[error] ${c.req.method} ${c.req.url}`, err);
     captureException(err, { request: { url: c.req.url, method: c.req.method } });
     return c.text('Internal Server Error', 500);
   });

@@ -48,9 +48,18 @@ export const KnowledgeBaseSchema = z.object({
   updatedAt: z.string(),
 });
 
+// F214.1 — the field limits the Settings form must honour. ONE source: the
+// schema validates against these and the SPA's inputs cap against the same
+// constants, so a field cannot accept text the server will reject. Before
+// this, `description` had no cap in the form and 500 in the schema — the
+// owner wrote past it and got a bare 500 back.
+export const KB_NAME_MAX = 100;
+export const KB_DESCRIPTION_MAX = 500;
+export const KB_PERSONA_MAX = 4000;
+
 export const CreateKBSchema = z.object({
-  name: z.string().min(1).max(100),
-  description: z.string().max(500).nullable().optional(),
+  name: z.string().min(1).max(KB_NAME_MAX),
+  description: z.string().max(KB_DESCRIPTION_MAX).nullable().optional(),
   language: z.string().optional(),
 });
 
@@ -58,15 +67,15 @@ export const LintPolicyEnum = z.enum(['trusting', 'strict']);
 export type LintPolicy = z.infer<typeof LintPolicyEnum>;
 
 export const UpdateKBSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  description: z.string().max(500).nullable().optional(),
+  name: z.string().min(1).max(KB_NAME_MAX).optional(),
+  description: z.string().max(KB_DESCRIPTION_MAX).nullable().optional(),
   language: z.string().optional(),
   lintPolicy: LintPolicyEnum.optional(),
   // F160 Phase 2 — per-KB persona overrides. Send null to clear, omit
   // to leave unchanged. Each capped at 4000 chars to keep system-prompt
   // size sane (a 4KB persona will already crowd the context budget).
-  chatPersonaTool: z.string().max(4000).nullable().optional(),
-  chatPersonaPublic: z.string().max(4000).nullable().optional(),
+  chatPersonaTool: z.string().max(KB_PERSONA_MAX).nullable().optional(),
+  chatPersonaPublic: z.string().max(KB_PERSONA_MAX).nullable().optional(),
   // F176 — per-KB lint cadence in days. null clears the override
   // (KB falls back to the global TRAIL_LINT_SCHEDULE_DAYS default).
   // omit to leave unchanged. CHECK constraint at the DB layer

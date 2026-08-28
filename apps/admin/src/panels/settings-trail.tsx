@@ -2,7 +2,15 @@ import { useEffect, useState } from 'preact/hooks';
 import { Modal, ModalButton } from '../components/modal';
 import { useRoute } from 'preact-iso';
 import type { KnowledgeBase } from '@trail/shared';
-import { INGEST_MODELS, CHAT_MODELS, type IngestModel, type ChatModel } from '@trail/shared';
+import {
+  INGEST_MODELS,
+  CHAT_MODELS,
+  KB_NAME_MAX,
+  KB_DESCRIPTION_MAX,
+  KB_PERSONA_MAX,
+  type IngestModel,
+  type ChatModel,
+} from '@trail/shared';
 import {
   listKnowledgeBases,
   updateKnowledgeBase,
@@ -360,7 +368,7 @@ export function SettingsTrailPanel() {
             value={name}
             data-testid="settings-name-input"
             onInput={(e) => setName((e.target as HTMLInputElement).value)}
-            maxLength={100}
+            maxLength={KB_NAME_MAX}
             class={
               'w-full px-3 py-2 rounded-md border bg-transparent text-sm ' +
               (nameValid
@@ -385,9 +393,16 @@ export function SettingsTrailPanel() {
             data-testid="settings-description-input"
             onInput={(e) => setDescription((e.target as HTMLTextAreaElement).value)}
             placeholder={t('settings.trail.descriptionPlaceholder')}
+            maxLength={KB_DESCRIPTION_MAX}
             rows={3}
             class="w-full px-3 py-2 rounded-md border border-[color:var(--color-border)] bg-transparent text-sm resize-y"
           />
+          <p
+            data-testid="settings-description-count"
+            class="mt-1 text-[11px] text-right text-[color:var(--color-fg-subtle)]"
+          >
+            {description.length} / {KB_DESCRIPTION_MAX}
+          </p>
         </section>
 
         <section>
@@ -1005,7 +1020,7 @@ function PersonaEditor({
         value={value}
         onInput={(e) => onChange((e.target as HTMLTextAreaElement).value)}
         placeholder={placeholder}
-        maxLength={4000}
+        maxLength={KB_PERSONA_MAX}
         rows={12}
         class="w-full px-3 py-2 rounded-md border border-[color:var(--color-border)] bg-transparent text-sm font-mono leading-relaxed resize-y focus:outline-none focus:border-[color:var(--color-accent)] transition"
       />
@@ -1033,7 +1048,7 @@ function PersonaEditor({
             value={draft}
             onInput={(e) => setDraft((e.target as HTMLTextAreaElement).value)}
             placeholder={placeholder}
-            maxLength={4000}
+            maxLength={KB_PERSONA_MAX}
             class="w-full px-3 py-2 rounded-md border border-[color:var(--color-border)] bg-transparent text-sm font-mono leading-relaxed focus:outline-none focus:border-[color:var(--color-accent)] transition"
             style={{ flex: 1, resize: 'none' }}
           />
