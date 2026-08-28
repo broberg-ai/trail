@@ -234,10 +234,32 @@ export async function proxyToEngine(c: Context, next: Next): Promise<Response | 
     return next();
   }
 
-  // Session cookie (admin UI) OR personal API key (F188, headless callers).
-  const route = (await resolveSession(c)) ?? (await resolveApiKey(c));
+  // F215.4 — an explicitly presented key WINS over an ambient session cookie.
+  //
+  // The old order was `resolveSession(c) ?? resolveApiKey(c)`, and it cost the
+  // Web Clipper's whole tenant picker. A Chrome extension holding
+  // host_permissions for app.trailmem.com sends the signed-in user's cookies,
+  // so every Clipper call arrived with BOTH credentials and the cookie won —
+  // and resolveSession takes its tenant from `trail-active-tenant`, never from
+  // X-Trail-Tenant. The picker therefore set a header nobody on the winning
+  // path read: it named Broberg.ai and the request went to Sanne Andersen.
+  // Measured on prod: the key the owner had just minted showed
+  // last_used_at = null while the popup was listing Trails.
+  //
+  // Presenting a bearer is an instruction to act AS that key, so it is not a
+  // fallback: a `trail_` bearer that fails to resolve is a 401, never a quiet
+  // demotion to the cookie's identity. That demotion is what let a REVOKED key
+  // keep listing Trails — the owner's first web-clipper key was revoked at
+  // 14:38 and the popup never noticed.
+  const presentsKey = /^bearer\s+trail_/i.test(c.req.header('authorization') ?? '');
+  const route = presentsKey ? await resolveApiKey(c) : await resolveSession(c);
   if (!route) {
-    return c.json({ error: 'not signed in or no tenant route' }, 401);
+    return c.json(
+      presentsKey
+        ? { error: 'Invalid or revoked API key' }
+        : { error: 'not signed in or no tenant route' },
+      401,
+    );
   }
 
   const url = new URL(path + (c.req.url.includes('?') ? '?' + c.req.url.split('?')[1] : ''), route.engineUrl);

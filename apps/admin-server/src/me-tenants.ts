@@ -23,6 +23,10 @@
  *
  * MUST be mounted BEFORE `app.use('/api/v1/*', proxyToEngine)`, or the proxy
  * forwards it to an engine that knows nothing about memberships.
+ *
+ * F215.3 — the membership query itself now lives in `tenant-selection.ts`,
+ * shared with `/api/control/my-tenants`. This route only projects it onto the
+ * wire shape the Web Clipper parses.
  */
 
 import { Hono } from 'hono';
@@ -30,66 +34,14 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { getCookie } from 'hono/cookie';
 import { db, schema } from './db.js';
 import { hashApiKey } from './keys.js';
+import { selectableTenants, type SelectableTenant } from './tenant-selection.js';
 
 export const meTenantRoutes = new Hono();
 
 const COOKIE_NAME = 'trail-session';
 
-export interface SelectableTenant {
-  slug: string;
-  name: string;
-  /** True for the tenant used when no X-Trail-Tenant header is sent. */
-  home: boolean;
-}
-
-/**
- * The tenants `userId` may select, home first, then alphabetical so a picker
- * has a stable order across reloads.
- *
- * `homeTenantId` is the tenant used when no header is sent. For an API key
- * that is the key's own tenant. For a browser session there is no such column
- * — control_users belongs to an ORGANISATION, not a tenant — so the caller
- * passes the tenant the proxy would fall back to, and null means "no home,
- * just list the memberships".
- */
-export async function selectableTenants(
-  userId: string,
-  homeTenantId: string | null,
-  spansAll: boolean,
-): Promise<SelectableTenant[]> {
-  const home = homeTenantId
-    ? ((await db
-        .select({ slug: schema.controlTenants.slug, name: schema.controlTenants.name })
-        .from(schema.controlTenants)
-        .where(eq(schema.controlTenants.id, homeTenantId))
-        .get()) ?? null)
-    : null;
-
-  // A key that does not span tenants can only ever reach its home, so listing
-  // the user's other memberships would offer choices the proxy refuses.
-  if (!spansAll) return home ? [{ slug: home.slug, name: home.name, home: true }] : [];
-
-  const rows = await db
-    .select({ slug: schema.controlTenants.slug, name: schema.controlTenants.name })
-    .from(schema.controlTenants)
-    .innerJoin(
-      schema.controlMemberships,
-      eq(schema.controlMemberships.tenantId, schema.controlTenants.id),
-    )
-    .where(eq(schema.controlMemberships.userId, userId))
-    .all();
-
-  const seen = new Set<string>();
-  const unique = rows.filter((r) => !seen.has(r.slug) && seen.add(r.slug));
-  const others = unique
-    .filter((r) => r.slug !== home?.slug)
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  return [
-    ...(home ? [{ slug: home.slug, name: home.name, home: true }] : []),
-    ...others.map((r) => ({ slug: r.slug, name: r.name, home: false })),
-  ];
-}
+/** What the Web Clipper parses. `role` is deliberately not on this shape. */
+const onTheWire = (t: SelectableTenant) => ({ slug: t.slug, name: t.name, home: t.home });
 
 meTenantRoutes.get('/v1/me/tenants', async (c) => {
   const authHeader = c.req.header('authorization');
@@ -105,9 +57,8 @@ meTenantRoutes.get('/v1/me/tenants', async (c) => {
       ),
     });
     if (!key) return c.json({ error: 'Invalid or revoked API key' }, 401);
-    return c.json({
-      tenants: await selectableTenants(key.userId, key.tenantId, key.scope === 'all'),
-    });
+    const tenants = await selectableTenants(key.userId, key.tenantId, key.scope === 'all');
+    return c.json({ tenants: tenants.map(onTheWire) });
   }
 
   // Cookie path, so the Admin SPA can use the same endpoint. A browser session
@@ -127,7 +78,6 @@ meTenantRoutes.get('/v1/me/tenants', async (c) => {
     .where(eq(schema.controlMemberships.userId, session.userId))
     .get();
 
-  return c.json({
-    tenants: await selectableTenants(session.userId, first?.tenantId ?? null, true),
-  });
+  const tenants = await selectableTenants(session.userId, first?.tenantId ?? null, true);
+  return c.json({ tenants: tenants.map(onTheWire) });
 });

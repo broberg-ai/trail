@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { generateKey, hashKey, makeKeyPreview } from '@broberg/apikey';
 import { getCookie } from 'hono/cookie';
 import { db, schema } from './db.js';
+import { selectableTenants } from './tenant-selection.js';
 
 /**
  * F188 — personal API keys, admin-level.
@@ -178,10 +179,17 @@ apiKeyRoutes.get('/api-keys', async (c) => {
 /**
  * F191.6 — list the tenants the KEY's user can drop into, for the Ingest
  * Station's tenant picker. Key-authed (the Station has no session cookie), and
- * NOT proxied to an engine — it answers from control.db directly. A
- * `scope='all'` key returns every tenant the user has a `control_memberships`
- * row for; any other (single-tenant) key returns ONLY its home tenant, so a
- * legacy key can't enumerate the user's whole tenant set.
+ * NOT proxied to an engine — it answers from control.db directly.
+ *
+ * F215.3 — the membership query moved to `selectableTenants`, shared with
+ * `GET /api/v1/me/tenants` (the Web Clipper's picker). Two hand-written JOINs
+ * answering the same question had already drifted: different ordering, and a
+ * single-tenant key got `role: 'member'` as a hardcoded LITERAL, which the
+ * Station renders next to the tenant name. It now reads the caller's real role.
+ *
+ * The response SHAPE is deliberately unchanged — the Station is a separately
+ * built app parsing `{scope, tenants:[{slug,name,role}]}` today, and replacing
+ * a working contract before its consumer ships is a naked cutover.
  */
 apiKeyRoutes.get('/my-tenants', async (c) => {
   const authHeader = c.req.header('authorization');
@@ -199,31 +207,11 @@ apiKeyRoutes.get('/my-tenants', async (c) => {
   });
   if (!key) return c.json({ error: 'invalid key' }, 401);
 
-  if (key.scope !== 'all') {
-    const home = await db.query.controlTenants.findFirst({
-      where: eq(schema.controlTenants.id, key.tenantId),
-    });
-    return c.json({
-      scope: key.scope,
-      tenants: home ? [{ slug: home.slug, name: home.name, role: 'member' }] : [],
-    });
-  }
-
-  const rows = await db
-    .select({
-      slug: schema.controlTenants.slug,
-      name: schema.controlTenants.name,
-      role: schema.controlMemberships.role,
-    })
-    .from(schema.controlMemberships)
-    .innerJoin(
-      schema.controlTenants,
-      eq(schema.controlTenants.id, schema.controlMemberships.tenantId),
-    )
-    .where(eq(schema.controlMemberships.userId, key.userId))
-    .all();
-
-  return c.json({ scope: 'all', tenants: rows });
+  const tenants = await selectableTenants(key.userId, key.tenantId, key.scope === 'all');
+  return c.json({
+    scope: key.scope,
+    tenants: tenants.map((t) => ({ slug: t.slug, name: t.name, role: t.role })),
+  });
 });
 
 /** Soft-revoke a key the caller owns. */

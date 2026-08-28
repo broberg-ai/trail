@@ -71,6 +71,7 @@ async function fetchTenants(serverUrl: string, token: string): Promise<Tenant[]>
   try {
     res = await fetch(`${serverUrl}/api/v1/me/tenants`, {
       headers: { Authorization: `Bearer ${token}` },
+      credentials: 'omit',
     })
   } catch {
     throw new Error(`Can't reach ${serverUrl} — is it running, and is the address right?`)
@@ -87,8 +88,19 @@ async function fetchTenants(serverUrl: string, token: string): Promise<Tenant[]>
   return Array.isArray(body.tenants) ? body.tenants : []
 }
 
-/** Headers for a tenant-scoped call. An empty slug sends no header, so the
- *  server falls back to the key's home tenant — the pre-F215.1 behaviour. */
+/**
+ * Headers for a tenant-scoped call. An empty slug sends no header, so the
+ * server falls back to the key's home tenant — the pre-F215.1 behaviour.
+ *
+ * F215.4 — every call in this file also sets `credentials: 'omit'`. The Clipper
+ * holds host_permissions for the Trail origin, so without it Chrome attaches
+ * the signed-in user's app.trailmem.com cookies, and the server used to let
+ * that ambient session outrank the key: the picker said Broberg.ai and the
+ * request went to whichever customer the browser tab was last looking at. The
+ * Clipper acts as its KEY and has no business carrying a browser session.
+ * Do not remove it — the server-side fix and this one guard the same hole from
+ * opposite ends.
+ */
 function authHeaders(token: string, tenant: string): Record<string, string> {
   const h: Record<string, string> = { Authorization: `Bearer ${token}` }
   if (tenant) h['X-Trail-Tenant'] = tenant
@@ -107,6 +119,7 @@ async function fetchKnowledgeBases(
   try {
     res = await fetch(`${serverUrl}/api/v1/knowledge-bases`, {
       headers: authHeaders(token, tenant),
+      credentials: 'omit',
     })
   } catch {
     throw new Error(`Can't reach ${serverUrl} — is it running, and is the address right?`)
@@ -159,6 +172,7 @@ async function uploadClip(
       'Content-Type': `multipart/form-data; boundary=${boundary}`,
     },
     body: bodyBytes,
+    credentials: 'omit',
   })
 
   if (!res.ok) {
