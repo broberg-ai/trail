@@ -317,10 +317,16 @@ export function revokeInvitation(id: string): Promise<{ ok: true; id: string }> 
 
 // ── Personal API keys (F188) ─────────────────────────────────────
 
+/** F215.2 — 'full' reaches only the tenant it was minted in; 'all' may select
+ *  among the tenants its user is a member of. A SELECTOR, not a grant: access
+ *  is still decided per request against control_memberships. */
+export type ApiKeyScope = 'full' | 'all';
+
 export interface ApiKey {
   id: string;
   name: string;
   prefix: string;
+  scope: ApiKeyScope;
   createdAt: string;
   lastUsedAt: string | null;
 }
@@ -330,11 +336,16 @@ export function listApiKeys(): Promise<{ keys: ApiKey[] }> {
   return api('/api/control/api-keys');
 }
 
-/** Create a key — the raw `key` is returned ONCE and never again. */
-export function createApiKey(name: string): Promise<{ id: string; name: string; prefix: string; key: string }> {
+/** Create a key — the raw `key` is returned ONCE and never again.
+ *  `scope` defaults to 'full' server-side; pass 'all' for a key that can pick
+ *  among the tenants you belong to (what the Web Clipper's picker needs). */
+export function createApiKey(
+  name: string,
+  scope: ApiKeyScope = 'full',
+): Promise<{ id: string; name: string; scope: ApiKeyScope; prefix: string; key: string }> {
   return api('/api/control/api-keys', {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, scope }),
   });
 }
 

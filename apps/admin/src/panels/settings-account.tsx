@@ -4,6 +4,7 @@ import {
   fetchAuthMe,
   listApiKeys,
   createApiKey,
+  type ApiKeyScope,
   revokeApiKey,
   unlinkProvider,
   type AuthMe,
@@ -535,7 +536,7 @@ function DeveloperSection() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 150px 110px 110px 90px',
+              gridTemplateColumns: '1fr 120px 150px 110px 110px 90px',
               padding: '10px 16px',
               background: 'var(--color-bg-sunk)',
               borderBottom: '1px solid var(--color-border)',
@@ -548,6 +549,7 @@ function DeveloperSection() {
             }}
           >
             <div>{t('accountPrefs.developer.colName')}</div>
+            <div>{t('accountPrefs.developer.colScope')}</div>
             <div>{t('accountPrefs.developer.colPrefix')}</div>
             <div>{t('accountPrefs.developer.colCreated')}</div>
             <div>{t('accountPrefs.developer.colLastUsed')}</div>
@@ -558,7 +560,7 @@ function DeveloperSection() {
               key={k.id}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr 150px 110px 110px 90px',
+                gridTemplateColumns: '1fr 120px 150px 110px 110px 90px',
                 padding: '12px 16px',
                 gap: 12,
                 alignItems: 'center',
@@ -566,6 +568,24 @@ function DeveloperSection() {
               }}
             >
               <div style={{ fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{k.name}</div>
+              {/* F215.2 — without this the list cannot tell a key that spans
+                  customers from one that cannot, which is why the only such key
+                  carried its scope in its NAME: "local-ingest (all tenants)". */}
+              <div data-testid={`apikey-row-scope-${k.id}`} style={{ fontSize: 11.5 }}>
+                <span
+                  style={{
+                    padding: '2px 7px',
+                    borderRadius: 999,
+                    border: '1px solid var(--color-border)',
+                    color: k.scope === 'all' ? 'var(--color-accent)' : 'var(--color-fg-subtle)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {k.scope === 'all'
+                    ? t('accountPrefs.developer.scope.badgeAll')
+                    : t('accountPrefs.developer.scope.badgeFull')}
+                </span>
+              </div>
               <div class="mono" style={{ fontSize: 11.5, color: 'var(--color-fg-muted)' }}>{k.prefix}…</div>
               <div class="mono" style={{ fontSize: 11, color: 'var(--color-fg-subtle)' }}>{formatDate(k.createdAt)}</div>
               <div class="mono" style={{ fontSize: 11, color: 'var(--color-fg-subtle)' }}>
@@ -605,13 +625,17 @@ function formatDate(iso: string): string {
 
 function GenerateKeyModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [name, setName] = useState('');
+  // F215.2 — defaults to the NARROW option on purpose. A key that reaches more
+  // than the person expected is the failure worth designing against; a key that
+  // reaches too little fails loudly and is re-minted in ten seconds.
+  const [scope, setScope] = useState<ApiKeyScope>('full');
   const [creating, setCreating] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [rawKey, setRawKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   function reset() {
-    setName(''); setCreating(false); setErr(null); setRawKey(null); setCopied(false);
+    setName(''); setScope('full'); setCreating(false); setErr(null); setRawKey(null); setCopied(false);
   }
   function close() { reset(); onClose(); }
 
@@ -621,7 +645,7 @@ function GenerateKeyModal({ open, onClose }: { open: boolean; onClose: () => voi
     if (creating) return;
     setCreating(true); setErr(null);
     try {
-      const res = await createApiKey(value);
+      const res = await createApiKey(value, scope);
       setRawKey(res.key);
     } catch {
       setErr(t('accountPrefs.developer.createError'));
@@ -696,11 +720,51 @@ function GenerateKeyModal({ open, onClose }: { open: boolean; onClose: () => voi
             class="input"
             type="text"
             autocomplete="off"
+            data-testid="apikey-name-input"
             placeholder={t('accountPrefs.developer.namePlaceholder')}
             value={name}
             onInput={(e) => { setName((e.target as HTMLInputElement).value); setErr(null); }}
             onKeyDown={(e) => { if (e.key === 'Enter') create(); }}
           />
+
+          {/* F215.2 — which customers this key may reach. Same segmented
+              pattern as the Trail settings panel; no native <select>. */}
+          <label style={{ fontSize: 12.5, color: 'var(--color-fg-muted)', marginTop: 6 }}>
+            {t('accountPrefs.developer.scopeLabel')}
+          </label>
+          <div
+            class="inline-flex items-center rounded-md border border-[color:var(--color-border)] overflow-hidden"
+            role="group"
+            data-testid="apikey-scope-group"
+          >
+            {(['full', 'all'] as const).map((s) => {
+              const active = s === scope;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  data-testid={`apikey-scope-${s}`}
+                  onClick={() => setScope(s)}
+                  class={
+                    'px-3 py-1.5 text-xs transition ' +
+                    (active
+                      ? 'bg-[color:var(--color-accent)] text-[color:var(--color-accent-fg)]'
+                      : 'text-[color:var(--color-fg-muted)] hover:text-[color:var(--color-fg)] hover:bg-[color:var(--color-bg-card)]')
+                  }
+                  aria-pressed={active}
+                >
+                  {t(`accountPrefs.developer.scope.${s}`)}
+                </button>
+              );
+            })}
+          </div>
+          <p
+            data-testid="apikey-scope-hint"
+            style={{ margin: 0, fontSize: 11, color: 'var(--color-fg-subtle)', lineHeight: 1.5 }}
+          >
+            {t(`accountPrefs.developer.scope.${scope}Hint`)}
+          </p>
+
           {err ? <div style={{ fontSize: 12, color: 'var(--color-danger)' }}>{err}</div> : null}
         </div>
       )}

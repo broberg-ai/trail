@@ -93,7 +93,7 @@ apiKeyRoutes.post('/api-keys', async (c) => {
   const ctx = await resolveContext(c);
   if (!ctx) return c.json({ error: 'not signed in' }, 401);
 
-  let body: { name?: string } = {};
+  let body: { name?: string; scope?: string } = {};
   try {
     body = await c.req.json();
   } catch {
@@ -101,6 +101,32 @@ apiKeyRoutes.post('/api-keys', async (c) => {
   }
   const name = body.name?.trim();
   if (!name) return c.json({ error: 'name is required' }, 400);
+
+  // F215.2 — the caller may ask for a key that spans the tenants they are
+  // ALREADY a member of. Until today this was hardcoded to 'full', so the only
+  // 'all' key in existence was one minted before the route was written and
+  // impossible to reproduce — which made F215.1's tenant picker correct and
+  // unreachable, since it renders only when the caller can see more than one.
+  //
+  // SELECTOR, NOT GRANT. 'all' confers no access: every request still resolves
+  // the tenant against control_memberships (proxy.ts resolveApiKey, and
+  // /my-tenants below). Revoke the membership and this key narrows on the next
+  // request, untouched. So the choice widens what a key may ASK for, never what
+  // its user may reach.
+  //
+  // The default stays 'full'. A caller that omits the field must get exactly
+  // the key it got yesterday — silently widening every script written before
+  // this change is the failure worth engineering against. And an unrecognised
+  // value is a 400, never a coerce-to-default: handing back a NARROWER key than
+  // was asked for produces a failure later, somewhere else, looking like an
+  // access problem (the shape of F210.5 and F214.1, both this week).
+  const scope = body.scope ?? 'full';
+  if (scope !== 'full' && scope !== 'all') {
+    return c.json(
+      { error: `scope: must be 'full' (this tenant only) or 'all' (every tenant you are a member of)` },
+      400,
+    );
+  }
 
   const raw = generateRawKey();
   const id = `key-${newToken(8)}`;
@@ -110,13 +136,13 @@ apiKeyRoutes.post('/api-keys', async (c) => {
     userId: ctx.user.id,
     prefix: makeKeyPreview(raw, KEY_PREFIX_LEN),
     keyHash: hashApiKey(raw),
-    scope: 'full',
+    scope,
     name,
   });
 
-  console.log(`[api-keys] ${ctx.user.email} created key "${name}" (${id})`);
+  console.log(`[api-keys] ${ctx.user.email} created key "${name}" (${id}, scope=${scope})`);
   // raw key is returned ONCE — never retrievable again.
-  return c.json({ id, name, prefix: makeKeyPreview(raw, KEY_PREFIX_LEN), key: raw }, 201);
+  return c.json({ id, name, scope, prefix: makeKeyPreview(raw, KEY_PREFIX_LEN), key: raw }, 201);
 });
 
 /** List the user's non-revoked keys. Never returns the hash or raw key. */
@@ -129,6 +155,10 @@ apiKeyRoutes.get('/api-keys', async (c) => {
       id: schema.controlApiKeys.id,
       name: schema.controlApiKeys.name,
       prefix: schema.controlApiKeys.prefix,
+      // F215.2 — without this the list cannot distinguish a key that spans
+      // tenants from one that does not, which is why the only such key in the
+      // product carried its scope in its NAME ("local-ingest (all tenants)").
+      scope: schema.controlApiKeys.scope,
       createdAt: schema.controlApiKeys.createdAt,
       lastUsedAt: schema.controlApiKeys.lastUsedAt,
     })

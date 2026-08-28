@@ -129,7 +129,17 @@
       "usageHint": "Use it as a bearer token: Authorization: Bearer <key>",
       "copy": "Copy",
       "copied": "Copied",
-      "done": "Done"
+      "done": "Done",
+      "scopeLabel": "Which customers may this key reach?",
+      "colScope": "SCOPE",
+      "scope": {
+        "full": "This customer only",
+        "all": "All my customers",
+        "fullHint": "The key works only in the customer you are in now. Choose this if unsure.",
+        "allHint": "The key can pick among the customers you belong to — what the Web Clipper’s picker needs. It grants nothing new: lose a membership and the key narrows by itself.",
+        "badgeFull": "One customer",
+        "badgeAll": "All customers"
+      }
     }
   },
   "manageTenants": {

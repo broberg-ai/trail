@@ -129,7 +129,17 @@
       "usageHint": "Brug den som bearer-token: Authorization: Bearer <nøgle>",
       "copy": "Kopiér",
       "copied": "Kopieret",
-      "done": "Færdig"
+      "done": "Færdig",
+      "scopeLabel": "Hvilke kunder må nøglen nå?",
+      "colScope": "RÆKKEVIDDE",
+      "scope": {
+        "full": "Kun denne kunde",
+        "all": "Alle mine kunder",
+        "fullHint": "Nøglen virker kun i den kunde du står i nu. Vælg denne hvis du er i tvivl.",
+        "allHint": "Nøglen kan vælge mellem de kunder du er medlem af — det Web Clipperens kundevælger kræver. Den giver ikke adgang til noget nyt: mistes et medlemskab, indsnævres nøglen af sig selv.",
+        "badgeFull": "Én kunde",
+        "badgeAll": "Alle kunder"
+      }
     }
   },
   "manageTenants": {
