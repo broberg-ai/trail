@@ -50,6 +50,32 @@ export async function reportDeploy(): Promise<void> {
   const base = env.UPMETRICS_BASE_URL ?? UPMETRICS_BASE_URL;
   const originator = env.UPMETRICS_ORIGINATOR ?? 'trail';
 
+  // F196.5 — say it out loud when this deploy cannot name its own commit.
+  //
+  // Every piece of F196 works, but the ONE path where it silently does not
+  // looks exactly like the path where it does: `flyctl deploy` by hand is the
+  // same command as `pnpm ship:*` minus `--build-arg GIT_SHA`, with the same
+  // green output and the same successful report. The Dockerfile's
+  // `ARG GIT_SHA=unknown` default then wins and the register records a deploy
+  // that cannot be traced to a commit.
+  //
+  // Measured 2026-08-29: the engine sat on sha="unknown" for four hours, and
+  // when a fix had to be proven live on production the register — the only
+  // outside view of what is running, since /health and /version both 404 —
+  // could not answer. The fix WAS live; it could not be shown to be.
+  //
+  // The report still goes out. A deploy that happened must always be recorded:
+  // trading a vague row for NO row is strictly worse, and this is telemetry, so
+  // it may degrade but must never block or vanish. The warning is the part that
+  // reaches a human.
+  if (!env.GIT_SHA || sha === 'unknown') {
+    console.warn(
+      `[deploy] WARN ${site}: GIT_SHA is unset — reporting sha="unknown", so this ` +
+        `deploy cannot be traced to a commit. Deploy with \`pnpm ship:*\` (it passes ` +
+        `--build-arg GIT_SHA), not a bare \`flyctl deploy\`.`,
+    );
+  }
+
   try {
     await fetch(`${base}/api/deploys`, {
       method: 'POST',
