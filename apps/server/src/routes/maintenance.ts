@@ -111,8 +111,11 @@ maintenanceRoutes.post('/maintenance/repair-backwards-supersessions', async (c) 
  * upload / mcp:* keep their own connectors and are left untouched).
  *
  * Safe to run on a schedule (cronjobs.webhouse.net daily). Audit by default;
- * POST {"apply": true} to actually reject. Optional `kbId` (slug or uuid)
- * scopes to one KB; optional `olderThanDays` only rejects stale backlog.
+ * POST {"apply": true} to actually reject. `scanned` and `rejected` mean the
+ * same thing in both modes — how many match, and how many would be / were
+ * rejected — so the audit run is a real preview of the apply run (F212.4).
+ * Optional `kbId` (slug or uuid) scopes to one KB; optional `olderThanDays`
+ * only rejects stale backlog.
  * Tenant-scoped (the engine DB handle is the requested tenant's).
  */
 maintenanceRoutes.post('/maintenance/drain-lint-candidates', async (c) => {
@@ -168,7 +171,20 @@ maintenanceRoutes.post('/maintenance/drain-lint-candidates', async (c) => {
     .where(and(...filters))
     .all();
 
-  let rejected = 0;
+  // F212.4 — `rejected` reports the SAME number in both modes: with apply=false
+  // it is how many WOULD be rejected, with apply=true how many were. It used to
+  // be hard-zero unless applying, and that made the preview unreadable: a reader
+  // takes `rejected` as "how many are going", so "nothing matched" and "I am not
+  // allowed to tell you" arrived as the identical answer. Measured 2026-08-29 on
+  // a fixture with three matching candidates — the dry run still said 0.
+  //
+  // `scanned` was never gated (matching is computed above, before this branch),
+  // which is worth stating because the card that produced this fix claimed it
+  // was: two production runs both answered {scanned: 0, rejected: 0} and I read
+  // a blind instrument into what was simply an empty queue. The fixture is what
+  // told the two apart, and it is why the check below exists rather than a
+  // second reading of prod.
+  const rejected = matching.length;
   if (apply && matching.length > 0) {
     await trail.db
       .update(queueCandidates)
@@ -179,7 +195,6 @@ maintenanceRoutes.post('/maintenance/drain-lint-candidates', async (c) => {
       })
       .where(and(...filters))
       .run();
-    rejected = matching.length;
     console.log(
       `[maintenance] F200.2 drained ${rejected} lint candidate(s) for tenant ${tenant.id}${kbId ? ` kb ${kbId}` : ''}`,
     );
