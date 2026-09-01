@@ -1621,11 +1621,61 @@ function inferConnectorFromKind(
 
 // ── Read-side API ──────────────────────────────────────────────────
 
-export async function listCandidates(
+/** Thrown when `?cursor=` is present but not a cursor we issued. */
+export class InvalidCursorError extends Error {
+  constructor() {
+    super('cursor: not a valid cursor — pass the `nextCursor` from the previous response, or omit it to start from the newest row');
+    this.name = 'InvalidCursorError';
+  }
+}
+
+/**
+ * F214.2 — the cursor is a COMPOSITE of (createdAt, id), not a timestamp.
+ *
+ * `createdAt` is second-resolution and it collides: measured on prod
+ * 2026-08-29, 200 sampled rows held only 190 distinct values — 10 collisions.
+ * Batch writers (an ingest run, a lint sweep) produce same-second rows, so
+ * the collisions CLUSTER rather than scatter. A cursor keyed on the timestamp
+ * alone would skip or repeat rows at exactly those boundaries, silently, and
+ * only under load. A keyset cursor is correct only over a TOTAL order, so `id`
+ * is the tiebreak — in the cursor and in the ORDER BY.
+ */
+export function encodeCursor(createdAt: string, id: string): string {
+  return Buffer.from(`${createdAt}|${id}`, 'utf8').toString('base64url');
+}
+
+function decodeCursor(raw: string): { createdAt: string; id: string } {
+  let decoded: string;
+  try {
+    decoded = Buffer.from(raw, 'base64url').toString('utf8');
+  } catch {
+    throw new InvalidCursorError();
+  }
+  const sep = decoded.indexOf('|');
+  if (sep <= 0 || sep === decoded.length - 1) throw new InvalidCursorError();
+  return { createdAt: decoded.slice(0, sep), id: decoded.slice(sep + 1) };
+}
+
+export interface CandidatePage {
+  items: QueueCandidate[];
+  /** A cursor when a further page exists; null when this page is the last. */
+  nextCursor: string | null;
+}
+
+/**
+ * Read a page of candidates, newest first.
+ *
+ * `nextCursor` is a FACT read off the database, not an inference: we fetch
+ * `limit + 1` rows and return at most `limit`. Deciding "there is more" from
+ * `items.length === limit` is wrong precisely when the total is an exact
+ * multiple of the page size — the case a caller is most likely to hit while
+ * draining a queue in even batches.
+ */
+export async function listCandidatePage(
   trail: TrailDatabase,
   tenantId: string,
   query: ListQueueQuery,
-): Promise<QueueCandidate[]> {
+): Promise<CandidatePage> {
   const filters = [eq(queueCandidates.tenantId, tenantId)];
   if (query.knowledgeBaseId) {
     filters.push(eq(queueCandidates.knowledgeBaseId, query.knowledgeBaseId));
@@ -1635,14 +1685,48 @@ export async function listCandidates(
   const connectorFilter = connectorFilterClause(query.connector);
   if (connectorFilter) filters.push(connectorFilter);
 
+  if (query.cursor) {
+    const c = decodeCursor(query.cursor);
+    // Strictly "older than the cursor row" in the (createdAt, id) order.
+    filters.push(
+      or(
+        sql`${queueCandidates.createdAt} < ${c.createdAt}`,
+        and(
+          eq(queueCandidates.createdAt, c.createdAt),
+          sql`${queueCandidates.id} < ${c.id}`,
+        ),
+      )!,
+    );
+  }
+
   const rows = await trail.db
     .select()
     .from(queueCandidates)
     .where(and(...filters))
-    .orderBy(desc(queueCandidates.createdAt))
-    .limit(query.limit)
+    .orderBy(desc(queueCandidates.createdAt), desc(queueCandidates.id))
+    .limit(query.limit + 1)
     .all();
-  return rows.map(hydrate);
+
+  const hasMore = rows.length > query.limit;
+  const page = hasMore ? rows.slice(0, query.limit) : rows;
+  const last = page[page.length - 1];
+  return {
+    items: page.map(hydrate),
+    nextCursor:
+      hasMore && last ? encodeCursor(String(last.createdAt), String(last.id)) : null,
+  };
+}
+
+/**
+ * Back-compatible read: the items of one page, without the paging metadata.
+ * Kept because callers inside the engine use it and do not page.
+ */
+export async function listCandidates(
+  trail: TrailDatabase,
+  tenantId: string,
+  query: ListQueueQuery,
+): Promise<QueueCandidate[]> {
+  return (await listCandidatePage(trail, tenantId, query)).items;
 }
 
 /**

@@ -12,6 +12,8 @@ import {
   reopenCandidate,
   resolveActions,
   listCandidates,
+  listCandidatePage,
+  InvalidCursorError,
   countCandidates,
   getCandidate,
   resolveKbId,
@@ -282,13 +284,26 @@ queueRoutes.get('/queue', async (c) => {
     resolved = { ...query.data, knowledgeBaseId: kbId };
   }
 
-  // `count` is the TOTAL matching filter — independent of `limit`. Callers
-  // that want the length of the paginated page just use items.length.
-  const [items, count] = await Promise.all([
-    listCandidates(trail, tenant.id, resolved),
-    countCandidates(trail, tenant.id, resolved),
-  ]);
-  return c.json({ items, count });
+  // `count` is the TOTAL matching filter — independent of `limit` AND of
+  // `cursor`. Callers that want the length of the paginated page just use
+  // items.length. This field was already correct before F214.2 and is the
+  // regression control in the verify script.
+  //
+  // F214.2 — `nextCursor` is the page's own answer to "is there more?".
+  // Before it, `?cursor=` was accepted by the schema and never read, so a
+  // paging loop re-read page 1 forever at 200 OK. A malformed cursor is a
+  // 400 naming the field: silently restarting from the newest row is the
+  // same silent-wrong-answer this card exists to remove.
+  try {
+    const [page, count] = await Promise.all([
+      listCandidatePage(trail, tenant.id, resolved),
+      countCandidates(trail, tenant.id, resolved),
+    ]);
+    return c.json({ items: page.items, count, nextCursor: page.nextCursor });
+  } catch (err) {
+    if (err instanceof InvalidCursorError) return c.json({ error: err.message }, 400);
+    throw err;
+  }
 });
 
 queueRoutes.get('/queue/:id', async (c) => {

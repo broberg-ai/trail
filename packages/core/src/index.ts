@@ -4,6 +4,8 @@ export {
   resolveCandidate,
   reopenCandidate,
   listCandidates,
+  listCandidatePage,
+  InvalidCursorError,
   countCandidates,
   getCandidate,
   resolveActions,

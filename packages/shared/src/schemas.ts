@@ -390,6 +390,20 @@ export const ListQueueQuerySchema = z.object({
    */
   connector: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
+  /**
+   * F214.2 — keyset paging cursor, opaque to the caller. Base64url of
+   * `<createdAt>|<id>`, taken from `nextCursor` on the previous response.
+   *
+   * This field existed for months and was NEVER READ: the query was
+   * `.orderBy(desc(createdAt)).limit(n)` and nothing else, so a caller who
+   * wrote a paging loop from this schema got 200 OK and page 1, forever.
+   * 200 of 7,403 rows were reachable and nothing failed. A declared
+   * parameter that does nothing is worse than a missing one — the missing
+   * one produces a 400 and sends the author to the docs.
+   *
+   * A malformed value is a 400 naming this field, never a silent restart
+   * from page 1 — that would be the original bug in a new costume.
+   */
   cursor: z.string().optional(),
 });
 
