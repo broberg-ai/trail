@@ -16,7 +16,6 @@ import { join } from 'node:path';
 import { rmSync } from 'node:fs';
 import { createLibsqlDatabase, tenants, users, knowledgeBases, sessions, queueCandidates } from '@trail/db';
 import { createApp } from '../app.js';
-import type { Hono } from 'hono';
 
 const T = 't-qp', U = 'u-qp', KB = 'kb-qp';
 const SAME = '2026-08-20 12:00:00';
@@ -28,7 +27,7 @@ const ROWS = [
   ['r11', '2026-08-19 10:00:00'], ['r12', '2026-08-18 10:00:00'],
 ] as const;
 
-let app: Hono;
+let app: ReturnType<typeof createApp>;
 
 beforeAll(async () => {
   const p = join(process.env.TMPDIR ?? '/tmp', `qp-${process.env.USER ?? 'x'}-${process.pid}.db`);
