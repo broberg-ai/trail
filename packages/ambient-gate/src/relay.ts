@@ -21,6 +21,7 @@ import { join } from 'node:path';
 import { scoreChunk } from './gate.js';
 import { postCandidate } from './candidate.js';
 import { windowEvents, summarizeWindow, DEFAULT_WINDOW_OPTIONS, type RelayEvent } from './session-window.js';
+import { hasSubstance, RecentWindows } from './substance.js';
 
 const LOG_PATH = process.env.TRAIL_AMBIENT_LOG
   ?? join(homedir(), 'Library/Logs/TrailAmbient/focus.jsonl');
@@ -70,8 +71,38 @@ function parseLine(line: string): RelayEvent | null {
   }
 }
 
+/**
+ * F201.22 — what has already been sent. Lives for the relay's lifetime, which is
+ * the process launchd keeps alive, so a window looked at all afternoon is
+ * compiled once rather than once per glance.
+ */
+const recent = new RecentWindows();
+
 async function flushWindow(events: RelayEvent[], kb: string, token: string): Promise<void> {
   const summary = summarizeWindow(events);
+
+  // F201.22 — filter HERE, before Trail ever sees it (the owner's instruction:
+  // ambient collects, so ambient filters, before compilation). Two rejections,
+  // both measured on the day this shipped:
+  //
+  //   only-names   a window carrying nothing but its own app + title. The
+  //                distiller would fill the gap from the title and hedge while
+  //                doing it ("muligvis relateret til") — a guess stored as fact.
+  //   duplicate    the same unchanged window seen again. Twelve of these became
+  //                twelve Neurons about one sidebar in Notes.
+  //
+  // Rejecting here rather than downstream also means no cloud distill call is
+  // spent on a window we were never going to keep.
+  const substance = hasSubstance(summary);
+  if (!substance.keep) {
+    console.log(`[relay] skipped (${substance.reason}, ${substance.words} content words): ${summary.title}`);
+    return;
+  }
+  if (recent.isDuplicate(summary)) {
+    console.log(`[relay] skipped (duplicate of a window already sent): ${summary.title}`);
+    return;
+  }
+
   const gate = scoreChunk(summary.content);
   const result = await postCandidate(
     {
