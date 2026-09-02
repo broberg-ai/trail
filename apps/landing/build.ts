@@ -1692,6 +1692,21 @@ function renderLogo(size: number, label: string): string {
   return `<img src="${esc(bp(logo))}" alt="${esc(label)}" width="${size}" height="${size}">`;
 }
 const navLinks = (global.navLinks as Array<{ label: string; href: string }>) ?? [];
+/**
+ * The footer's copyright names broberg.ai but rendered it as plain text, so the
+ * one place every page points home was not clickable. The string itself is CMS
+ * content and stays that way — the copyright year and wording belong to the
+ * editor — so the link is applied at render instead of being baked into the
+ * text. Escaping happens FIRST and this only ever inserts an anchor around an
+ * already-escaped literal, so content can never inject markup here.
+ */
+function linkifyBroberg(escaped: string): string {
+  return escaped.replace(
+    /broberg\.ai/g,
+    '<a href="https://broberg.ai" target="_blank" rel="noopener">broberg.ai</a>',
+  );
+}
+
 const signInLabel = String(global.signInLabel ?? "Sign In");
 // The app lives at app.trailmem.com. Defaulting to "#" made the header's
 // "Sign In" a DEAD LINK on every page — it rendered, it was styled, it
@@ -1869,7 +1884,7 @@ function layout(title: string, content: string, metaDesc?: string): string {
           .map((l) => `<a href="${esc(bp(l.href))}">${esc(l.label)}</a>`)
           .join("\n        ")}
       </div>
-      <div class="footer-copy">${esc(footerCopyright)}${footerTagline ? ` ${esc(footerTagline)}` : ""} Site built by <a href="https://webhouse.app" target="_blank" rel="noopener">@webhouse/cms</a></div>
+      <div class="footer-copy">${linkifyBroberg(esc(footerCopyright))}${footerTagline ? ` ${esc(footerTagline)}` : ""} Site built with <a href="https://webhouse.app" target="_blank" rel="noopener">@webhouse/cms</a></div>
     </div>
   </footer>
   <script>${CANVAS_SCRIPT}</script>
