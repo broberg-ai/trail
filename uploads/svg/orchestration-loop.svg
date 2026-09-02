@@ -1,0 +1,60 @@
+<svg viewBox="0 0 900 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The orchestration loop: idea, plan, board, build, check, live — with a failed check returning the work to build, and the loop closing back to idea">
+  <defs>
+    <marker id="ol-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L8 4 L0 8 z" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <!-- the six steps -->
+  <g fill="none" stroke="currentColor" stroke-width="1">
+    <rect x="20"  y="90" width="118" height="54" rx="3"/>
+    <rect x="178" y="90" width="118" height="54" rx="3"/>
+    <rect x="336" y="90" width="118" height="54" rx="3"/>
+    <rect x="494" y="90" width="118" height="54" rx="3"/>
+    <rect x="652" y="90" width="118" height="54" rx="3"/>
+  </g>
+  <!-- LIVE is the outcome, not another step: drawn as a rounded terminal -->
+  <rect x="810" y="90" width="70" height="54" rx="27" fill="none" stroke="currentColor" stroke-width="1.5"/>
+
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="currentColor" text-anchor="middle">
+    <text x="79"  y="113">IDEA</text>
+    <text x="237" y="113">PLAN</text>
+    <text x="395" y="113">BOARD</text>
+    <text x="553" y="113">BUILD</text>
+    <text x="711" y="113">CHECK</text>
+    <text x="845" y="122" font-size="13">LIVE</text>
+  </g>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5" fill="currentColor" opacity="0.62" text-anchor="middle">
+    <text x="79"  y="132">captured</text>
+    <text x="237" y="132">before code</text>
+    <text x="395" y="132">visible to all</text>
+    <text x="553" y="132">one agent</text>
+    <text x="711" y="132">real browser</text>
+  </g>
+
+  <!-- forward arrows -->
+  <g fill="none" stroke="currentColor" stroke-width="1" marker-end="url(#ol-arrow)">
+    <line x1="138" y1="117" x2="170" y2="117"/>
+    <line x1="296" y1="117" x2="328" y2="117"/>
+    <line x1="454" y1="117" x2="486" y2="117"/>
+    <line x1="612" y1="117" x2="644" y2="117"/>
+    <line x1="770" y1="117" x2="802" y2="117"/>
+  </g>
+
+  <!-- a failed check sends the work BACK. This is the arrow that makes it a
+       loop rather than a pipeline. -->
+  <path d="M711 90 C 711 52, 553 52, 553 88" fill="none" stroke="currentColor" stroke-width="1"
+        stroke-dasharray="4 3" marker-end="url(#ol-arrow)"/>
+  <text x="632" y="46" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5"
+        fill="currentColor" opacity="0.62" text-anchor="middle">failed check sends it back</text>
+
+  <!-- and round again -->
+  <path d="M845 146 C 845 232, 500 250, 79 250 C 79 250, 79 250, 79 148" fill="none" stroke="currentColor"
+        stroke-width="1" marker-end="url(#ol-arrow)"/>
+  <text x="462" y="268" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5"
+        fill="currentColor" opacity="0.62" text-anchor="middle">and round again</text>
+
+  <!-- the scale claim, stated as the diagram's frame rather than a caption -->
+  <text x="20" y="300" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9.5"
+        fill="currentColor" opacity="0.62">15+ agents run this loop at once, across a dozen repositories</text>
+</svg>
