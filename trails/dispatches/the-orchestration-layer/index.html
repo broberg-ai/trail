@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dispatches — trail</title>
-  <meta name="description" content="Releases, announcements, and observations from the broader knowledge-infrastructure landscape — what's shipping, what's shifting, what's worth watching.">
-  <meta property="og:title" content="Dispatches">
-  <meta property="og:description" content="Releases, announcements, and observations from the broader knowledge-infrastructure landscape — what's shipping, what's shifting, what's worth watching.">
+  <title>The Orchestration Layer: How broberg.ai Builds Software With Fifteen Agents — trail</title>
+  <meta name="description" content="Most companies bolted AI onto systems that already existed. broberg.ai built AI-native from the foundation — and then applied the same principle to its own production process. This is what came out: cardmem, an orchestration engine where plans come before code, quality checks happen in a real browser, and the reasoning survives the session.">
+  <meta property="og:title" content="The Orchestration Layer: How broberg.ai Builds Software With Fifteen Agents">
+  <meta property="og:description" content="Most companies bolted AI onto systems that already existed. broberg.ai built AI-native from the foundation — and then applied the same principle to its own production process. This is what came out: cardmem, an orchestration engine where plans come before code, quality checks happen in a real browser, and the reasoning survives the session.">
   <meta property="og:type" content="website">
   <link rel="icon" type="image/svg+xml" href="/uploads/favicon.svg">
   <link rel="apple-touch-icon" href="/uploads/memx-logo.svg">
@@ -666,12 +666,12 @@ body[data-menu-open="true"] { overflow: hidden; }
 
   <!-- webhouse.app enrichment -->
   <meta name="generator" content="webhouse.app" />
-  <link rel="canonical" href="https://www.trailmem.com/trails/dispatches/" />
-  <meta property="og:url" content="https://www.trailmem.com/trails/dispatches/" />
+  <link rel="canonical" href="https://www.trailmem.com/trails/dispatches/the-orchestration-layer/" />
+  <meta property="og:url" content="https://www.trailmem.com/trails/dispatches/the-orchestration-layer/" />
   <meta property="og:site_name" content="trail-landing" />
   <meta name="twitter:card" content="summary" />
-  <meta name="twitter:title" content="Dispatches | Latest News &amp; Updates" />
-  <meta name="twitter:description" content="Stay informed with our dispatches covering breaking news, updates, and latest developments. Read timely reports and current events." />
+  <meta name="twitter:title" content="The Orchestration Layer: How broberg.ai Builds Software With Fifteen Agents" />
+  <meta name="twitter:description" content="Most companies bolted AI onto systems that already existed. broberg.ai built AI-native from the foundation — and then applied the same principle to its own production process. This is what came out: cardmem, an orchestration engine where plans come before code, quality checks happen in a real browser, and the reasoning survives the session." />
   <link rel="manifest" href="/manifest.json" />
 </head>
 <body>
@@ -810,15 +810,67 @@ body[data-menu-open="true"] { overflow: hidden; }
     }
   </script>
   <article class="article container"><header class="article-header">
-    <div class="article-eyebrow">Trails</div>
-    <h1>Dispatches</h1>
-    <p class="article-lead">Releases, announcements, and observations from the broader knowledge-infrastructure landscape — what's shipping, what's shifting, what's worth watching.</p>
-  </header><div class="post-grid"><a class="post-card" href="/trails/dispatches/the-orchestration-layer/">
-    <div class="post-card-eyebrow">Dispatches</div>
-    <h3>The Orchestration Layer: How broberg.ai Builds Software With Fifteen Agents</h3>
-    <p>Most companies bolted AI onto systems that already existed. broberg.ai built AI-native from the foundation — and then applied the same principle to its own production process. This is what came out: cardmem, an orchestration engine where plans come before code, quality checks happen in a real browser, and the reasoning survives the session.</p>
-    <div class="post-card-meta">Dispatches · September 2, 2026 · 9 min read</div>
-  </a></div></article>
+      <div class="article-eyebrow">Dispatches</div>
+      <h1>The Orchestration Layer: How broberg.ai Builds Software With Fifteen Agents</h1>
+      <p class="article-lead">Most companies bolted AI onto systems that already existed. broberg.ai built AI-native from the foundation — and then applied the same principle to its own production process. This is what came out: cardmem, an orchestration engine where plans come before code, quality checks happen in a real browser, and the reasoning survives the session.</p>
+      <div class="article-meta">Dispatches · trail by broberg.ai · September 2, 2026</div>
+      
+    </header><div class="prose"><h2>The bolted-on era is ending</h2>
+<p>Most companies met AI the same way: something was glued onto the top of a system that already existed. A chat bubble in the corner of a website. A summarise button in a CRM. A copilot in an editor. It works, in the narrow sense that it does something. It also leaves the underlying system exactly as it was — which means the AI can only ever reach whatever the old system happened to expose.</p>
+<p><a href="https://broberg.ai">broberg.ai</a> took the other route, and has been on it long enough for it to stop being a bet. The company has been building software since 1995 and now builds <em>AI-native</em> — the phrase on its own front page is blunt about the distinction: <strong>&quot;Det er ikke en chatbot klistret oven på en gammel hjemmeside.&quot;</strong> It is not a chatbot stuck on top of an old website.</p>
+<p>That sounds like positioning. This article is about the part that is harder to claim and easier to check: what happens when a company applies that principle to <em>its own</em> production process, and then runs its entire operation on the result.</p>
+<h2>Which player we are</h2>
+<p>Four things, taken from the front page rather than from an elevator pitch.</p>
+<p><strong>Websites, webshops, platforms, and AI integration — on one engine.</strong> Not four product lines with four codebases. The same foundation underneath, which is why a site built for a florist and a platform built for a municipality share the same upgrade path.</p>
+<p><strong>EU-first, deliberately.</strong> All data hosted in the EU. Built without dependence on Big Tech infrastructure. This is not a compliance checkbox retrofitted after a customer asked; it is why the stack looks the way it does — <a href="https://mistral.ai">Mistral</a> for the EU tier, <a href="https://fly.io">Fly.io</a> in Stockholm, no US round-trip for personal data.</p>
+<p><strong>Human in the loop, by default.</strong> You approve content before it publishes — or switch on autopilot once you trust it. The order matters. A system that starts autonomous and adds approval later never gets the approval built properly; a system that starts with approval can safely remove it.</p>
+<p><strong>Customers who cannot afford to be experimented on.</strong> Lundbeck. Grundfos. COWI. Ole Lyngaard. More than forty Danish municipalities. One case covers 16,838 employees. These are not the accounts you win with a demo.</p>
+<h2>The problem that forced an engine</h2>
+<p>Here is the thing nobody tells you about building software with AI agents: the coding is not the bottleneck.</p>
+<p>An agent can write a feature in twenty minutes. What it cannot do on its own is remember <em>why</em> the feature exists, prove it works in front of a human, notice that it contradicts a decision made three weeks ago, or stop itself from shipping something nobody asked for. Run one agent and you can hold all of that in your head. Run fifteen, across a dozen repositories, and you are no longer a developer — you are an air traffic controller without a radar.</p>
+<p>That is the problem <a href="https://broberg.ai/flagskibe/cardmem"><strong>cardmem</strong></a> was built to solve. Its own tagline states the goal precisely:</p>
+<blockquote>
+<p><strong>Se din idé blive til et live produkt — sporbart hele vejen.</strong>
+<em>See your idea become a live product — traceable all the way.</em></p>
+</blockquote>
+<p>Traceable is the load-bearing word.</p>
+<h2>How the loop actually works</h2>
+<p>cardmem describes itself as the engine that drives every project in the universe, from first thought to finished, live product. Six steps, and each one exists because skipping it caused a specific kind of damage:</p>
+<p><strong>1. Idea.</strong> Captured from chat, from a phone, from anywhere. No format required. Ideas that need a form to be recorded are ideas that get lost.</p>
+<p><strong>2. Plan.</strong> cardmem writes a concrete plan with explicit success criteria <em>before</em> any code is written. This is the step most AI workflows omit, and omitting it is how you end up with a roadmap full of topic strings and no reasoning behind any of them. The plan is written while the context that motivated it is still alive — not &quot;next turn&quot;, because there is no next turn for context.</p>
+<p><strong>3. Task board.</strong> The plan is broken into prioritised tasks, visible to everyone. The board <em>is</em> the to-do list. Not a private list inside an agent&#39;s head, where the customer cannot see it and no quality gate can reach it.</p>
+<p><strong>4. The agent builds.</strong> In the correct repository, against the plan, and then it waits for approval rather than shipping.</p>
+<p><strong>5. Quality check — in a real browser.</strong> Not &quot;the tests passed&quot;. A real browser opens the real surface and verifies it looks and behaves the way it should. A failed check sends the work back. Every delivery carries a screenshot as proof.</p>
+<p><strong>6. Live — and round again.</strong> The change ships, and the loop starts over.</p>
+<p>Four principles hold it together: <strong>plan before code</strong>, <strong>real browser checks</strong>, <strong>gates before deployment</strong>, and <strong>screenshot proof on every delivery</strong>. None of them are novel individually. What is unusual is enforcing all four on machines that would otherwise be very fast at producing work nobody asked for.</p>
+<h2>Your entire team, in your pocket</h2>
+<p>cardmem&#39;s mobile surface is not a status dashboard. It is a command centre: direct control of agents from anywhere, <strong>15+ running simultaneously</strong>, live chat with each of them, and a notification when a build finishes.</p>
+<p>The customer-facing half matters just as much. Clients see the live board, approve designs <em>before</em> anything is built, and get proof of delivery per item. That replaces the two worst artefacts in software consulting — the status email and the status meeting — with something the customer can check without asking anyone.</p>
+<h2>What orchestration looks like on a bad day</h2>
+<p>Feature lists are easy to write and hard to believe. So here is a week from our own operation instead, and it is the most honest argument we have.</p>
+<p>Five agent sessions, five different repositories, working on unrelated things. Over two days, each of them independently ran into the same class of bug: <strong>a measurement that cannot tell two situations apart.</strong></p>
+<ul>
+<li>A scheduled probe read an authentication failure as &quot;nothing pending&quot; and reported healthy for three months while doing nothing at all.</li>
+<li>A cleanup tool&#39;s preview always answered &quot;0 items&quot; — so &quot;nothing to clean&quot; and &quot;I am not allowed to tell you&quot; looked identical.</li>
+<li>A paging parameter was accepted by the API and never actually used, so a caller looping through pages fetched page one forever. Nothing errored.</li>
+<li>A secret scanner reported &quot;no findings&quot; for text it had never examined.</li>
+<li>A version marker counted the files it <em>intended</em> to write rather than the ones that landed.</li>
+</ul>
+<p>Every one of these fails <strong>green</strong>. There is no error, no red status, no alert. The system reports success on a question it never answered.</p>
+<p>What made the week interesting is not that we found them. It is that the sessions found them <em>in each other&#39;s systems</em>, across repository boundaries, and fixed them at both ends of the pipe — one agent measuring the consumer side, another measuring the issuer side, neither taking the other&#39;s word for it. Two of the five were caught by a peer saying, in effect, <em>your check could not have detected this even if it were happening.</em></p>
+<p>That is what an orchestration layer buys. Not more code per hour. <strong>A structure in which the machines check each other, and the reasoning survives.</strong></p>
+<h2>The memory underneath</h2>
+<p>There is one more piece, and it is the reason this website exists.</p>
+<p>Agents forget. Every session starts empty. Without somewhere durable to put <em>why</em> a decision was made, the reasoning evaporates the moment a conversation is compacted — and the next session re-derives it, or worse, decides differently.</p>
+<p><a href="https://trailmem.com">Trail</a> is that layer: a knowledge base that <strong>compiles</strong> what it is given rather than searching it on demand. The distinction is architectural, and we have written about it at length in <a href="/trails/how-trail-works/compile-time-knowledge-vs-rag/">Compile-Time Knowledge: A Technical Argument Against RAG</a>.</p>
+<p>For the orchestration story, the relevant part is simple. When one of those five bugs was diagnosed, the lesson did not stay in a chat log. It became a durable note — <em>&quot;a measurement without three outcomes is not a measurement&quot;</em> — searchable by every future session in every repository. The next agent to build a probe finds it before making the same mistake.</p>
+<p>Plans in cardmem. Reasoning in Trail. Neither one is a chatbot bolted onto anything.</p>
+<h2>The through-line</h2>
+<p>broberg.ai&#39;s argument is that AI belongs in the foundation, not on the surface. cardmem is that argument turned on the company itself: the same principle applied to how the work gets made, not just to what gets shipped.</p>
+<p>The tell is that we did not build a demo of it. We build everything on it — this site, the platforms behind those municipal deployments, and cardmem itself.</p>
+<hr>
+<p><strong>Read more:</strong> <a href="https://broberg.ai">broberg.ai</a> · <a href="https://broberg.ai/flagskibe/cardmem">cardmem — the core engine</a> · <a href="https://trailmem.com">Trail</a></p>
+</div><div class="post-footer"><div class="post-tags"><a class="post-tag" href="/tags/orchestration/">#orchestration</a><a class="post-tag" href="/tags/ai-agents/">#ai-agents</a><a class="post-tag" href="/tags/cardmem/">#cardmem</a><a class="post-tag" href="/tags/broberg-ai/">#broberg-ai</a></div><a class="post-more" href="/trails/dispatches/">← MORE FROM DISPATCHES</a></div></article>
   <footer class="footer">
     <div class="footer-inner">
       <div class="footer-brand">
@@ -988,6 +1040,6 @@ body[data-menu-open="true"] { overflow: hidden; }
 })();
 </script>
 
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebPage","name":"Dispatches | Latest News & Updates","url":"https://www.trailmem.com/trails/dispatches/","description":"Stay informed with our dispatches covering breaking news, updates, and latest developments. Read timely reports and current events.","inLanguage":"en","isPartOf":{"@type":"WebSite","name":"trail-landing","url":"https://www.trailmem.com/"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebPage","name":"The Orchestration Layer: How broberg.ai Builds Software With Fifteen Agents","url":"https://www.trailmem.com/trails/dispatches/the-orchestration-layer/","description":"Most companies bolted AI onto systems that already existed. broberg.ai built AI-native from the foundation — and then applied the same principle to its own production process. This is what came out: cardmem, an orchestration engine where plans come before code, quality checks happen in a real browser, and the reasoning survives the session.","inLanguage":"en","isPartOf":{"@type":"WebSite","name":"trail-landing","url":"https://www.trailmem.com/"}}</script>
 </body>
 </html>

@@ -21,12 +21,27 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://www.trailmem.com/tags/ai-agents/</loc>
+    <lastmod>2026-09-02</lastmod>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://www.trailmem.com/tags/architecture/</loc>
     <lastmod>2026-09-02</lastmod>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://www.trailmem.com/tags/associative-structures/</loc>
+    <lastmod>2026-09-02</lastmod>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://www.trailmem.com/tags/broberg-ai/</loc>
+    <lastmod>2026-09-02</lastmod>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://www.trailmem.com/tags/cardmem/</loc>
     <lastmod>2026-09-02</lastmod>
     <priority>0.5</priority>
   </url>
@@ -151,6 +166,11 @@
     <priority>0.5</priority>
   </url>
   <url>
+    <loc>https://www.trailmem.com/tags/orchestration/</loc>
+    <lastmod>2026-09-02</lastmod>
+    <priority>0.5</priority>
+  </url>
+  <url>
     <loc>https://www.trailmem.com/tags/policy/</loc>
     <lastmod>2026-09-02</lastmod>
     <priority>0.5</priority>
@@ -207,6 +227,11 @@
   </url>
   <url>
     <loc>https://www.trailmem.com/trails/dispatches/</loc>
+    <lastmod>2026-09-02</lastmod>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://www.trailmem.com/trails/dispatches/the-orchestration-layer/</loc>
     <lastmod>2026-09-02</lastmod>
     <priority>0.5</priority>
   </url>

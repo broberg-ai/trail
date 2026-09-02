@@ -8,8 +8,11 @@
 - [Privacy Policy](https://www.trailmem.com/privacy/): What Trail and the Trail Web Clipper do with your data — what the extension reads, what stays on your device, what we store, and how to delete it.
 - [#accumulation — trail](https://www.trailmem.com/tags/accumulation/): Content tagged accumulation.
 - [#agent-memory — trail](https://www.trailmem.com/tags/agent-memory/): Content tagged agent-memory.
+- [#ai-agents — trail](https://www.trailmem.com/tags/ai-agents/): Content tagged ai-agents.
 - [#architecture — trail](https://www.trailmem.com/tags/architecture/): Content tagged architecture.
 - [#associative-structures — trail](https://www.trailmem.com/tags/associative-structures/): Content tagged associative-structures.
+- [#broberg-ai — trail](https://www.trailmem.com/tags/broberg-ai/): Content tagged broberg-ai.
+- [#cardmem — trail](https://www.trailmem.com/tags/cardmem/): Content tagged cardmem.
 - [#comparison — trail](https://www.trailmem.com/tags/comparison/): Content tagged comparison.
 - [#compile-time — trail](https://www.trailmem.com/tags/compile-time/): Content tagged compile-time.
 - [#convergence — trail](https://www.trailmem.com/tags/convergence/): Content tagged convergence.
@@ -34,6 +37,7 @@
 - [#neuroscience — trail](https://www.trailmem.com/tags/neuroscience/): Content tagged neuroscience.
 - [#nlp — trail](https://www.trailmem.com/tags/nlp/): Content tagged nlp.
 - [#notebooklm — trail](https://www.trailmem.com/tags/notebooklm/): Content tagged notebooklm.
+- [#orchestration — trail](https://www.trailmem.com/tags/orchestration/): Content tagged orchestration.
 - [#policy — trail](https://www.trailmem.com/tags/policy/): Content tagged policy.
 - [#product — trail](https://www.trailmem.com/tags/product/): Content tagged product.
 - [#queue — trail](https://www.trailmem.com/tags/queue/): Content tagged queue.
@@ -46,6 +50,7 @@
 - [#zettelkasten — trail](https://www.trailmem.com/tags/zettelkasten/): Content tagged zettelkasten.
 - [As We May Think: Vannevar Bush's 1945 Vision](https://www.trailmem.com/the-1945-concept/): Explore Vannevar Bush's influential 1945 essay 'As We May Think' and how his vision of information organization shaped modern technology and the internet.
 - [Dispatches | Latest News & Updates](https://www.trailmem.com/trails/dispatches/): Stay informed with our dispatches covering breaking news, updates, and latest developments. Read timely reports and current events.
+- [The Orchestration Layer: How broberg.ai Builds Software With Fifteen Agents](https://www.trailmem.com/trails/dispatches/the-orchestration-layer/): Most companies bolted AI onto systems that already existed. broberg.ai built AI-native from the foundation — and then applied the same principle to its own production process. This is what came out: cardmem, an orchestration engine where plans come before code, quality checks happen in a real browser, and the reasoning survives the session.
 - [Field Notes | Research & Documentation](https://www.trailmem.com/trails/field-notes/): Field notes for research, observations, and documentation. Capture and organize your field notes effectively with our platform.
 - [Compile-Time Knowledge vs RAG: Technical Architecture Guide](https://www.trailmem.com/trails/how-trail-works/compile-time-knowledge-vs-rag/): Technical analysis of why RAG systems fail for certain workloads. Explore compile-time knowledge architecture as an alternative to retrieval-augmented generation.
 - [Does a Trail Get Smarter as It Grows? Knowledge Base Growth](https://www.trailmem.com/trails/how-trail-works/does-a-trail-get-smarter-as-it-grows/): Learn how knowledge bases improve with growth: the S-curve pattern, when systems plateau, and design choices that keep trails smarter.
