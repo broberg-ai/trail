@@ -21,8 +21,14 @@ skrevet. Og et kort på cms' board ville aldrig blive samlet op af en
 trail-session i queue-drain.
 
 **Denne plan-doc findes fordi flytningen ikke tog plan-doc'en med** (`plan: null`
-på begge kort efter flytningen). Et F-nummer på boardet uden en plan bag er
-forbudt her, så den er skrevet i samme tur som fundet.
+på begge kort efter flytningen; cms måler det samme som `plans_copied: 0`). Et
+F-nummer på boardet uden en plan bag er forbudt her, så den er skrevet i samme
+tur som fundet.
+
+**Og numrene skiftede undervejs:** `move_card_to_project` tildeler
+modtager-projektets næste frie F-nummer, så cms' `F185.1`/`F185.2` blev vores
+`F223`/`F224`. Dokumenteret opførsel, ikke et uheld — men enhver henvisning til
+de gamle numre er nu død, og det er derfor oversættelsen står skrevet her.
 
 ## F223 — de 30 billedtekster
 
@@ -56,6 +62,33 @@ felter» ikke skelnes fra «værktøjet virker ikke» — og det er nøjagtig de
 skelnen der er gået galt fire gange på ét døgn i dette repo.
 
 Attributterne (`data-cms-field`) udsendes af **vores** `build.ts`.
+
+### De 700 huller er ikke 700 beslutninger
+
+cms krydstjekkede hvert huls tekst mod alt CMS-indhold på `site=trail`
+(#25017), og opdelingen ændrer opgavens form:
+
+| | | |
+|---|---|---|
+| **618** | teksten **står allerede i CMS'et** — mangler kun `data-cms-field` | **88,3 %** |
+| **82** | teksten findes **ikke** i CMS'et (75 unikke) | 11,7 % |
+
+*700 i alt, heraf 680 unikke — resten er samme tekst på flere sider.*
+
+**De 618 er én ændring i `build.ts`**, ikke 618 beslutninger: teksten er
+allerede redigerbar i admin, den kan bare ikke klikkes på ude på siden. **De 82
+er det egentlige indholdsarbejde.**
+
+> **Brug 618/82. Brug IKKE 344/33** fra cms' tidligere besked — de har selv
+> markeret det som *superseded*. Det tal scannede hele siden inkl. menu og fod
+> og talte unikke strenge frem for elementer, altså en anden population end
+> `check-editable`. To tal fra to udsnit er præcis den slags par nogen lægger
+> sammen.
+
+Krydstjekket afdækkede desuden en kategori ingen af os havde: **tekst bagt ind i
+selve SVG-figurerne** — «TRANSLUCENT SCREEN KEYBOARD LEVERS MICROFILM STORAGE»,
+«1945 MEMEX Bush · 1968 THE DEMO Engelbart». Det er synlig prosa **og** en del af
+en tegning. Den hører til som sin egen beslutning i cms-F185.3, ikke i bunken.
 
 ## Begge er blokeret af F216 — og det er ikke en formalitet
 
