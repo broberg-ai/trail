@@ -410,7 +410,25 @@ const spaIndexPath = join(SPA_DIR, 'index.html');
 const hasSpa = existsSync(spaIndexPath);
 if (hasSpa) {
   console.log(`[admin-server] SPA found at ${SPA_DIR} — serving static files`);
-  app.use('/assets/*', serveStatic({ root: SPA_DIR }));
+
+  // F221 — cache headers. Measured 2026-09-02 on the live app: index.html and
+  // the bundle were served with NO Cache-Control, NO ETag and NO Last-Modified,
+  // so every browser applied its own heuristic and there was no way to
+  // revalidate. The owner reported a shipped feature as "never delivered"; it
+  // was live and rendering (Lens confirmed the size line on app.trailmem.com),
+  // his browser was simply still on an older copy — and a stale SPA and a
+  // current one look exactly alike.
+  //
+  // Two opposite rules, and the pairing is the point:
+  //   /assets/*   filenames are content-hashed by Vite, so a given URL can
+  //               never change meaning → cache for a year, immutable.
+  //   index.html  is the ONE file whose URL is stable while its contents move
+  //               every deploy → must never be reused without revalidating.
+  // Getting only the first right is what produces a permanently stale app.
+  app.use('/assets/*', serveStatic({
+    root: SPA_DIR,
+    onFound: (_path, c) => c.header('Cache-Control', 'public, max-age=31536000, immutable'),
+  }));
   app.use('/favicon.svg', serveStatic({ root: SPA_DIR }));
   app.use('/uploads/*', serveStatic({ root: SPA_DIR }));
   app.use('/ambient/*', serveStatic({ root: SPA_DIR }));
@@ -451,6 +469,12 @@ if (hasSpa) {
       }
       return c.redirect('/login', 302);
     }
+    // No-store rather than no-cache: without an ETag or Last-Modified there is
+    // nothing for a revalidation to compare, so "revalidate" would hand the
+    // browser a 200 with the whole file anyway. The document is ~1 KB; the
+    // hashed bundle it points at is what carries the weight, and that one is
+    // cached for a year.
+    c.header('Cache-Control', 'no-store, must-revalidate');
     return c.html(indexHtml);
   });
 } else {
