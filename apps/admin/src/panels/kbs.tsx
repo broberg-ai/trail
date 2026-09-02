@@ -10,6 +10,35 @@ import { NewTrailModal } from '../components/new-trail-modal';
 import { EmptyState } from '../components/ui/empty-state';
 import { Icons } from '../components/ui/icons';
 
+
+/**
+ * F217 — how big is this Trail. The server sends BOTH what the database claims
+ * and what is present on disk, because on production today they disagree: 501 MB
+ * of image records point at files that are gone. Showing only the sum would put
+ * phantom megabytes in front of the owner as fact, and he would plan storage —
+ * or delete something — against them.
+ *
+ * So the number shown is what is REALLY there, and the gap gets its own line
+ * rather than being folded in or hidden.
+ */
+interface KbSizeInfo {
+  totalBytes: number;
+  totalBytesClaimed: number;
+  sourceBytes: number;
+  imageBytesPresent: number;
+  knowledgeBytes: number;
+  sourceCount: number;
+  imageCount: number;
+  imageMissingCount: number;
+}
+
+function fmtSize(bytes: number): string {
+  if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(1)} GB`;
+  if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
 export function KnowledgeBasesPanel() {
   useLocale();
   const { route } = useLocation();
@@ -136,6 +165,8 @@ export function KnowledgeBasesPanel() {
         {kbs.map((kb) => {
           const pending = (kb as KnowledgeBase & { pendingCandidateCount?: number })
             .pendingCandidateCount ?? 0;
+          const size = (kb as KnowledgeBase & { size?: KbSizeInfo }).size;
+          const missingBytes = size ? size.totalBytesClaimed - size.totalBytes : 0;
           return (
             <a
               key={kb.id}
@@ -181,6 +212,29 @@ export function KnowledgeBasesPanel() {
                     }}
                   >
                     {kb.description}
+                  </div>
+                ) : null}
+                {size ? (
+                  <div
+                    data-testid={`trail-size-${kb.slug}`}
+                    style={{
+                      fontSize: 12,
+                      color: 'var(--color-fg-muted)',
+                      marginTop: 6,
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                    title={`${fmtSize(size.sourceBytes)} kilder · ${fmtSize(size.imageBytesPresent)} billeder · ${fmtSize(size.knowledgeBytes)} viden`}
+                  >
+                    {fmtSize(size.totalBytes)}
+                    {missingBytes > 0 ? (
+                      <span
+                        data-testid={`trail-size-missing-${kb.slug}`}
+                        style={{ color: 'var(--color-warning, #b45309)', marginLeft: 8 }}
+                        title={`${size.imageMissingCount} billed-poster peger på filer der ikke findes`}
+                      >
+                        ⚠ {fmtSize(missingBytes)} mangler på disken
+                      </span>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

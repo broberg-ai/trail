@@ -101,3 +101,4 @@ export {
   ensureTypeFrontmatter,
   prepareCompiledMarkdown,
 } from './compile/claim-anchors.js';
+export { kbSizes, toMB, type KbSize, type FileProbe } from './kb-size.js';

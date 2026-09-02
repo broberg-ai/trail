@@ -3,7 +3,9 @@ import { documents, knowledgeBases, wikiBacklinks, type TrailDatabase } from '@t
 import { CreateKBSchema, UpdateKBSchema } from '@trail/shared';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth, getUser, getTenant, getTrail } from '../middleware/auth.js';
-import { uniqueSlug, createCandidate, resolveKbId, logActivity } from '@trail/core';
+import { uniqueSlug, createCandidate, resolveKbId, logActivity, kbSizes } from '@trail/core';
+import { statSync } from 'node:fs';
+import { join } from 'node:path';
 import { broadcaster } from '../services/broadcast.js';
 import { listKbTags } from '../services/tag-aggregate.js';
 import { buildSeedGlossary } from '../services/glossary-seed.js';
@@ -39,12 +41,48 @@ const LIST_SQL = `
    ORDER BY kb.updated_at DESC
 `;
 
+/**
+ * F217 — the same upload root uploads.ts writes to (line 361). Deriving it
+ * again here would be a second source for one value; it is read from the same
+ * env pair so a change moves both.
+ */
+function uploadsRoot(): string {
+  return process.env.TRAIL_UPLOADS_DIR ?? join(process.env.TRAIL_DATA_DIR ?? '.data', 'uploads');
+}
+
+/** Bytes on disk, or null when the file is not there. Never throws. */
+function probeUpload(storagePath: string): number | null {
+  try {
+    const st = statSync(join(uploadsRoot(), storagePath));
+    return st.isFile() ? st.size : null;
+  } catch {
+    return null;
+  }
+}
+
 kbRoutes.get('/knowledge-bases', async (c) => {
   const trail = getTrail(c);
   const tenant = getTenant(c);
 
-  const result = await trail.execute(LIST_SQL, [tenant.id]);
-  return c.json(result.rows);
+  const [result, sizes] = await Promise.all([
+    trail.execute(LIST_SQL, [tenant.id]),
+    // F217 — size per Trail. `size` is what is REALLY there; `sizeClaimed` is
+    // what the rows add up to. They differ when image records outlive their
+    // files, which is the state production is in today (501 MB of orphans
+    // measured 2026-09-02). Reporting only the sum would put phantom megabytes
+    // in front of the owner as fact.
+    kbSizes(trail, tenant.id, probeUpload).catch((err) => {
+      console.error('[kb-size] failed, listing without sizes:', err);
+      return [];
+    }),
+  ]);
+
+  const byId = new Map(sizes.map((s) => [s.knowledgeBaseId, s]));
+  const rows = (result.rows as Array<Record<string, unknown>>).map((r) => {
+    const s = byId.get(String(r.id));
+    return s ? { ...r, size: s } : r;
+  });
+  return c.json(rows);
 });
 
 kbRoutes.get('/knowledge-bases/:id', async (c) => {
