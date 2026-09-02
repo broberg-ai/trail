@@ -27,7 +27,7 @@ import {
   knowledgeBases,
   type TrailDatabase,
 } from '@trail/db';
-import { formatSeqId } from '@trail/shared';
+import { formatSeqId, buildFtsQuery } from '@trail/shared';
 import { createCandidate } from '../queue/candidates.js';
 import { slugify } from '../slug.js';
 import { prepareCompiledMarkdown } from '../compile/claim-anchors.js';
@@ -107,17 +107,6 @@ function globMatch(filename: string, pattern: string): boolean {
     '^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$',
   );
   return re.test(filename);
-}
-
-function sanitizeFtsQuery(raw: string): string {
-  // Mirror of MCP server's sanitizer. FTS5 special chars → spaces so
-  // the parser doesn't choke on user-supplied quotes, dashes, etc.
-  return raw
-    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
-    .split(/\s+/)
-    .filter((w) => w.length > 0)
-    .map((w) => (/\s/.test(w) ? `"${w}"` : w))
-    .join(' ');
 }
 
 // ── guide ───────────────────────────────────────────────────────────────
@@ -228,7 +217,7 @@ export async function search(
   if (mode === 'search') {
     const query = (args.query ?? '').trim();
     if (!query) return { ok: false, error: 'search-mode-requires-query' };
-    const ftsQuery = sanitizeFtsQuery(query);
+    const ftsQuery = buildFtsQuery(query);
     const docResults = ftsQuery
       ? await ctx.trail.searchDocuments(ftsQuery, kb.id, ctx.tenantId, 20)
       : [];

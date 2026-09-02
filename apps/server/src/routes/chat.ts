@@ -9,7 +9,7 @@ import {
 } from '@trail/db';
 import { and, asc, eq, inArray, like, sql } from 'drizzle-orm';
 import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
-import { ChatRequestSchema } from '@trail/shared';
+import { ChatRequestSchema, buildFtsQuery } from '@trail/shared';
 import { resolveKbId, stripClaimAnchors } from '@trail/core';
 import {
   HEURISTIC_PATH,
@@ -613,7 +613,7 @@ async function retrieveContext(
   const PER_KB_CHUNKS = 8;
   const PER_KB_DOCS = 4;
 
-  const ftsQuery = sanitizeFtsQuery(query);
+  const ftsQuery = buildFtsQuery(query);
   if (!ftsQuery) return { context: '', citations: [], images: [] };
 
   for (const kbId of kbIds) {
@@ -924,39 +924,4 @@ async function listFadedHeuristicIds(
     if (isFaded(confidence)) faded.add(r.id);
   }
   return faded;
-}
-
-// Common Danish + English function words. The query is an OR of every term, so
-// stopwords let irrelevant Neurons accumulate BM25 mass and drown the one that
-// actually answers a long natural-language question. Dropping them focuses the
-// query on content terms — the recall fix for questions like "Hvornår skiftede
-// Trail chat over til Mistral, og hvilken commit?" (was 15 OR-terms incl.
-// hvornår/over/til/og/svar/kort/med → now ~6 content terms).
-const FTS_STOPWORDS = new Set([
-  // Danish
-  'og', 'i', 'på', 'til', 'er', 'en', 'et', 'den', 'det', 'de', 'at', 'som', 'med', 'for', 'af', 'der',
-  'du', 'jeg', 'vi', 'han', 'hun', 'hvornår', 'hvad', 'hvem', 'hvilken', 'hvilke', 'hvor', 'hvorfor',
-  'hvordan', 'kan', 'skal', 'vil', 'har', 'var', 'blev', 'over', 'under', 'ved', 'om', 'men', 'eller',
-  'ikke', 'så', 'kort', 'svar', 'mig', 'os', 'din', 'dit', 'min', 'mit', 'denne', 'dette', 'disse',
-  // English
-  'the', 'a', 'an', 'to', 'of', 'is', 'are', 'was', 'were', 'and', 'or', 'in', 'on', 'with', 'what',
-  'when', 'which', 'who', 'how', 'why', 'can', 'should', 'will', 'do', 'does', 'please', 'short',
-  'answer', 'me', 'my', 'your', 'it', 'this', 'that',
-]);
-
-function sanitizeFtsQuery(raw: string): string {
-  // Split on whitespace AND punctuation: stripping punctuation *within* a term
-  // glued "TV-lyd" → "TVlyd", which never matches (FTS indexes it as two tokens
-  // "tv"+"lyd"), so hyphenated terms silently retrieved nothing. See search.ts.
-  const split = (s: string) => s.split(/[^\p{L}\p{N}]+/u).filter((t) => t.length > 0);
-  const terms = split(raw)
-    .filter((t) => t.length >= 2 && !FTS_STOPWORDS.has(t.toLowerCase()))
-    .map((t) => `"${t}"*`);
-  // Fall back to the full token set if stopword-stripping emptied the query
-  // (e.g. a question made entirely of function words) so we never widen to an
-  // empty MATCH (which would return zero context for an otherwise-answerable Q).
-  if (terms.length === 0) {
-    return split(raw).map((t) => `"${t}"*`).join(' OR ');
-  }
-  return terms.join(' OR ');
 }

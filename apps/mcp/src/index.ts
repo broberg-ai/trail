@@ -15,7 +15,7 @@ import {
 } from '@trail/db';
 import { eq, and, like, sql, desc } from 'drizzle-orm';
 import { createCandidate, slugify } from '@trail/core';
-import { formatSeqId } from '@trail/shared';
+import { formatSeqId, buildFtsQuery } from '@trail/shared';
 
 // MCP-initiated wiki mutations flow through the Curation Queue. The server's
 // auto-approval policy (see @trail/core shouldAutoApprove) fires for LLM-actor
@@ -214,7 +214,7 @@ server.tool(
       if (!query?.trim()) {
         return { content: [{ type: 'text' as const, text: 'Search query required for search mode.' }] };
       }
-      const ftsQuery = sanitizeFtsQuery(query);
+      const ftsQuery = buildFtsQuery(query);
       const docResults = ftsQuery
         ? await trail.searchDocuments(ftsQuery, kb.id, ctx.tenantId, 20)
         : [];
@@ -960,15 +960,6 @@ function globMatch(filename: string, pattern: string): boolean {
     '^' + pattern.replace(/\./g, '\\.').replace(/\*/g, '.*').replace(/\?/g, '.') + '$',
   );
   return regex.test(filename);
-}
-
-function sanitizeFtsQuery(raw: string): string {
-  const terms = raw
-    .split(/\s+/)
-    .map((t) => t.replace(/[^\p{L}\p{N}]/gu, ''))
-    .filter((t) => t.length > 0)
-    .map((t) => `"${t}"*`);
-  return terms.join(' OR ');
 }
 
 // ── start ──────────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { documents, knowledgeBases } from '@trail/db';
 import { and, eq } from 'drizzle-orm';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
-import { parseTags, canonicaliseTag, parseSeqId, kbPrefix, redactSecrets } from '@trail/shared';
+import { parseTags, canonicaliseTag, parseSeqId, kbPrefix, redactSecrets, buildFtsQuery } from '@trail/shared';
 import { resolveKbId } from '@trail/core';
 import {
   parseAudienceParam,
@@ -70,7 +70,7 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
     return c.json({ documents: [], chunks: [] });
   }
 
-  const ftsQuery = sanitizeFtsQuery(query);
+  const ftsQuery = buildFtsQuery(query);
   if (!ftsQuery) return c.json({ documents: [], chunks: [] });
 
   // F112.2 — also search shared user-notes (LIKE on user_note column).
@@ -233,22 +233,4 @@ async function lookupBySeqId(
     .get();
   if (!row || row.seq === null) return null;
   return { ...row, seq: row.seq };
-}
-
-// Turn user input into a safe FTS5 MATCH expression.
-// FTS5 MATCH treats quotes, dashes, and other punctuation as syntax, so a
-// raw user string can explode the parser. We tokenise on whitespace, strip
-// non-word chars, and OR the terms together as phrase-prefix searches.
-function sanitizeFtsQuery(raw: string): string {
-  // Split on whitespace AND punctuation. Stripping punctuation *within* a term
-  // glued "TV-lyd" → "TVlyd", which never matches: FTS indexes the document's
-  // "TV-lyd" as two tokens "tv"+"lyd", so the query token "tvlyd*" hits nothing
-  // and a hyphenated search silently returns zero. Splitting instead yields
-  // "TV"* OR "lyd"* → matches. (The raw `-` must never reach FTS5, where it is
-  // the NOT operator.)
-  const terms = raw
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter((t) => t.length > 0)
-    .map((t) => `"${t}"*`);
-  return terms.join(' OR ');
 }

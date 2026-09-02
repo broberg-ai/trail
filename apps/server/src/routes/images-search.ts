@@ -31,6 +31,7 @@ import {
   type Audience,
 } from '../services/audience.js';
 import type { AppBindings } from '../app.js';
+import { buildFtsQuery } from '@trail/shared';
 
 export const imagesSearchRoutes = new Hono<AppBindings>();
 imagesSearchRoutes.use('*', requireAuth);
@@ -69,7 +70,7 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
   // Empty query: return latest N images for this KB so admin browse
   // works without a search term. We sort by created_at DESC (newest
   // first) — same convention as the rest of the admin browse views.
-  const ftsQuery = query ? sanitizeFtsQuery(query) : '';
+  const ftsQuery = query ? buildFtsQuery(query) : '';
   const overFetch = limit * 3; // audience-filter eats some, hence over-fetch
 
   // F163.2 — flag-WHERE clause shared between FTS + browse paths.
@@ -338,17 +339,3 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images/sources', async (c) => {
 
   return c.json({ sources });
 });
-
-/**
- * FTS5 sanitiser identical to the one in /search and /retrieve. See
- * those for rationale; pulled into a shared module would be the right
- * cleanup but is out of scope here.
- */
-function sanitizeFtsQuery(raw: string): string {
-  const terms = raw
-    .split(/\s+/)
-    .map((t) => t.replace(/[^\p{L}\p{N}_-]/gu, ''))
-    .filter((t) => t.length > 0)
-    .map((t) => `"${t}"*`);
-  return terms.join(' OR ');
-}

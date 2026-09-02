@@ -25,7 +25,7 @@ import { Hono } from 'hono';
 import { documents, documentImages, knowledgeBases } from '@trail/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
-import { canonicaliseTag, parseTags, kbPrefix } from '@trail/shared';
+import { canonicaliseTag, parseTags, kbPrefix, buildFtsQuery } from '@trail/shared';
 import { resolveKbId, stripClaimAnchors } from '@trail/core';
 import {
   parseAudienceParam,
@@ -123,7 +123,7 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
 
   const tagFilter = parseTagFilter(body.tagFilter);
 
-  const ftsQuery = sanitizeFtsQuery(query);
+  const ftsQuery = buildFtsQuery(query);
   if (!ftsQuery) {
     // Empty / un-FTS-able query (e.g. all stopwords) — return zero hits
     // rather than 500. Site-LLM can decide whether to retry or fall back
@@ -370,19 +370,4 @@ function parseTagFilter(raw: unknown): string[] {
     .filter((t): t is string => typeof t === 'string')
     .map((t) => canonicaliseTag(t))
     .filter((t): t is string => !!t);
-}
-
-/**
- * Same FTS5-sanitiser as `/search` uses. Duplicated here rather than
- * imported because /search keeps its own as a private helper; pulling
- * it out into a shared module is a follow-up cleanup, not blocker for
- * F160 Phase 1.
- */
-function sanitizeFtsQuery(raw: string): string {
-  const terms = raw
-    .split(/\s+/)
-    .map((t) => t.replace(/[^\p{L}\p{N}_-]/gu, ''))
-    .filter((t) => t.length > 0)
-    .map((t) => `"${t}"*`);
-  return terms.join(' OR ');
 }

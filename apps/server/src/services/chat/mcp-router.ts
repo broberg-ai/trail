@@ -33,7 +33,7 @@ import {
 } from '@trail/db';
 import { and, eq, like, sql, desc } from 'drizzle-orm';
 import { z } from 'zod';
-import { formatSeqId } from '@trail/shared';
+import { formatSeqId, buildFtsQuery } from '@trail/shared';
 
 export interface ToolContext {
   trail: TrailDatabase;
@@ -90,16 +90,6 @@ async function resolveKB(
       .where(and(eq(knowledgeBases.id, needle), eq(knowledgeBases.tenantId, tenantId)))
       .get())
   );
-}
-
-function sanitizeFtsQuery(raw: string): string {
-  // Mirror MCP: drop FTS5 special chars, collapse whitespace.
-  return raw
-    .replace(/[^a-zA-Z0-9æøåÆØÅ\s\-_]/g, ' ')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .join(' ');
 }
 
 function notFoundResult(arg: string | undefined): ToolResult {
@@ -165,7 +155,7 @@ const searchTool: ToolDefinition = {
       if (!query?.trim()) {
         return { content: [{ type: 'text', text: 'Search query required for search mode.' }] };
       }
-      const ftsQuery = sanitizeFtsQuery(query);
+      const ftsQuery = buildFtsQuery(query);
       const docResults = ftsQuery
         ? await ctx.trail.searchDocuments(ftsQuery, kb.id, ctx.tenantId, 20)
         : [];
