@@ -1693,7 +1693,13 @@ function renderLogo(size: number, label: string): string {
 }
 const navLinks = (global.navLinks as Array<{ label: string; href: string }>) ?? [];
 const signInLabel = String(global.signInLabel ?? "Sign In");
-const signInHref = String(global.signInHref ?? "#");
+// The app lives at app.trailmem.com. Defaulting to "#" made the header's
+// "Sign In" a DEAD LINK on every page — it rendered, it was styled, it
+// highlighted on hover, and it went nowhere. A visitor who wants to log in is
+// the most valuable one on the site, and the failure was invisible to us
+// because the markup was present and correct. The CMS field still overrides
+// this; the default is now a working destination rather than a placeholder.
+const signInHref = String(global.signInHref || "https://app.trailmem.com");
 const navCtaLabel = String(global.navCtaLabel ?? "Initialize Node");
 const navCtaHref = String(global.navCtaHref ?? "#");
 const footerLinks = (global.footerLinks as Array<{ label: string; href: string }>) ?? [];
