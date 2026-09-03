@@ -401,6 +401,10 @@ export function updateKnowledgeBase(
     /** F201.8 — ambient auto-approval threshold. null clears (off);
      *  a number in [0,1] arms it. */
     autoApproveThreshold?: number | null;
+    /** F226 — smallest side, in pixels, an extracted image must have to be
+     *  stored. null clears the filter, which is what every Trail did before
+     *  this setting existed. */
+    minImagePx?: number | null;
   },
 ): Promise<KnowledgeBase> {
   return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}`, {

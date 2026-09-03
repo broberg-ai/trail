@@ -404,7 +404,8 @@
       "hour": "h",
       "day": "d",
       "week": "w"
-    }
+    },
+    "saving": "Saving…"
   },
   "diff": {
     "toggleShow": "Show changes",
@@ -945,6 +946,15 @@
         "publicLabel": "Public persona",
         "publicPlaceholder": "Du er Sanne Andersen, zoneterapeut i Aalborg. Booking via sanne-andersen.dk/book. Tone: varm, dansk, du-form.",
         "publicHint": "For chat widgets that render Trail's answer directly to end-users. Establish identity, voice, and what to suggest as a natural next step."
+      },
+      "minImage": {
+        "title": "Minimum image size",
+        "subtitle": "Images whose shortest side is below this are never stored. Bullets, rules and logo fragments lifted out of PDFs otherwise become Neuron images and cost a description each.",
+        "placeholder": "off",
+        "hint": "Empty means no filter (today’s behaviour). 64 px is the measured starting point: it removes about 44% of images and only 0.5% of the ones that earned a description.",
+        "saved": "Minimum image size saved",
+        "error": "Could not save minimum image size",
+        "invalid": "Enter a whole number of 0 or more"
       }
     },
     "account": {

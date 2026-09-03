@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { documents, uploadSessions, type TrailDatabase } from '@trail/db';
+import { documents, uploadSessions, knowledgeBases, type TrailDatabase } from '@trail/db';
 import { and, eq, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import { createReadStream, existsSync, statSync } from 'node:fs';
@@ -957,14 +957,29 @@ export async function processFileAsync(
   if (Array.isArray(result.images) && result.images.length > 0) {
     try {
       const visionModel = getActiveVisionModel();
-      await persistImagesFromExtraction(
+      // F226 — the Trail's own minimum image size. NULL for every KB that has
+      // not set one, so behaviour is unchanged until a curator chooses.
+      const kbRow = await trail.db
+        .select({ minImagePx: knowledgeBases.minImagePx })
+        .from(knowledgeBases)
+        .where(eq(knowledgeBases.id, kbId))
+        .get();
+      const res = await persistImagesFromExtraction(
         trail,
         docId,
         tenantId,
         kbId,
         result.images,
         visionModel,
+        kbRow?.minImagePx ?? null,
       );
+      if (res.filteredSmall > 0) {
+        // Said out loud rather than counted in silence: "we filtered 690 small
+        // images" and "extraction produced nothing" must never look alike.
+        console.log(
+          `[F226] ${docId}: filtered ${res.filteredSmall} image(s) below ${kbRow?.minImagePx}px, kept ${res.inserted}`,
+        );
+      }
     } catch (err) {
       // Don't fail the whole ingest if image-persist hiccups; the
       // bytes are still in storage and backfill will pick them up

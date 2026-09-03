@@ -404,7 +404,8 @@
       "hour": "t",
       "day": "d",
       "week": "u"
-    }
+    },
+    "saving": "Gemmer…"
   },
   "diff": {
     "toggleShow": "Vis ændringer",
@@ -945,6 +946,15 @@
         "publicLabel": "Public-persona",
         "publicPlaceholder": "Du er Sanne Andersen, zoneterapeut i Aalborg. Booking via sanne-andersen.dk/book. Tone: varm, dansk, du-form.",
         "publicHint": "Til chat-widgets der renderer Trail's svar direkte til slutbrugere. Etablér identitet, stemme, og hvad der naturligt kan foreslås som næste skridt."
+      },
+      "minImage": {
+        "title": "Mindste billedstørrelse",
+        "subtitle": "Billeder hvis korteste side er mindre end dette, gemmes slet ikke. Punkttegn, streger og logo-stumper fra PDF’er bliver ellers til Neuron-billeder og koster en beskrivelse hver.",
+        "placeholder": "fra",
+        "hint": "Tomt felt = intet filter (som hidtil). 64 px er målt som et godt udgangspunkt: det fjerner ca. 44 % af billederne og kun 0,5 % af dem der har fået en beskrivelse.",
+        "saved": "Mindste billedstørrelse gemt",
+        "error": "Kunne ikke gemme mindste billedstørrelse",
+        "invalid": "Angiv et helt tal på 0 eller derover"
       }
     },
     "account": {

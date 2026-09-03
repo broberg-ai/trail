@@ -58,6 +58,10 @@ export function SettingsTrailPanel() {
   const [description, setDescription] = useState('');
   const [language, setLanguage] = useState<string>('da');
   const [lintPolicy, setLintPolicy] = useState<'trusting' | 'strict'>('trusting');
+  // F226 — minimum image size for this Trail. '' means no filter, which is
+  // what every Trail did before the setting existed.
+  const [minImagePx, setMinImagePx] = useState<string>('');
+  const [minImageSaving, setMinImageSaving] = useState(false);
   // F160 Phase 2 — per-KB persona overrides for tool/public chat audiences.
   // Empty string in the UI maps to null on save (= "clear back to default").
   const [chatPersonaTool, setChatPersonaTool] = useState('');
@@ -105,6 +109,11 @@ export function SettingsTrailPanel() {
           setDescription(match.description ?? '');
           setLanguage(match.language ?? 'da');
           setLintPolicy(match.lintPolicy ?? 'trusting');
+          setMinImagePx(
+            (match as { minImagePx?: number | null }).minImagePx == null
+              ? ''
+              : String((match as { minImagePx?: number | null }).minImagePx),
+          );
           setChatPersonaTool(match.chatPersonaTool ?? '');
           setChatPersonaPublic(match.chatPersonaPublic ?? '');
           setLintScheduleDays(match.lintScheduleDays ?? null);
@@ -205,6 +214,28 @@ export function SettingsTrailPanel() {
       setToast({ kind: 'error', text: t('settings.trail.ambientMode.error') });
     } finally {
       setAutoApproveToggling(false);
+    }
+  }
+
+  // F226 — save the minimum image size. Empty clears it back to "no filter";
+  // that path has its own test because a field that can only ever be SET looks
+  // identical to one that saves correctly until someone tries to clear it.
+  async function handleSaveMinImagePx() {
+    if (!kb || minImageSaving) return;
+    const raw = minImagePx.trim();
+    const value = raw === '' ? null : Number(raw);
+    if (value !== null && (!Number.isFinite(value) || value < 0)) {
+      setToast({ kind: 'error', text: t('settings.trail.minImage.invalid') });
+      return;
+    }
+    setMinImageSaving(true);
+    try {
+      await updateKnowledgeBase(kb.id, { minImagePx: value });
+      setToast({ kind: 'success', text: t('settings.trail.minImage.saved') });
+    } catch {
+      setToast({ kind: 'error', text: t('settings.trail.minImage.error') });
+    } finally {
+      setMinImageSaving(false);
     }
   }
 
@@ -588,6 +619,43 @@ export function SettingsTrailPanel() {
               </button>
             ) : null}
           </div>
+        </section>
+
+        {/* F226 — per-Trail minimum image size. Measured on Sanne's Trail: a
+            third of all image rows are bullets and rules lifted out of PDFs,
+            costing 0,03% of the bytes but a vision description each. */}
+        <section class="pt-2 border-t border-[color:var(--color-border)]" data-testid="settings-min-image-section">
+          <div class="mb-3">
+            <h2 class="text-sm font-medium">{t('settings.trail.minImage.title')}</h2>
+            <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-xl">
+              {t('settings.trail.minImage.subtitle')}
+            </p>
+          </div>
+          <div class="flex items-center gap-3">
+            <input
+              type="number"
+              min="0"
+              step="1"
+              placeholder={t('settings.trail.minImage.placeholder')}
+              value={minImagePx}
+              data-testid="settings-min-image-input"
+              onInput={(e) => setMinImagePx((e.currentTarget as HTMLInputElement).value)}
+              class="w-28 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)] px-2 py-1.5 text-sm"
+            />
+            <span class="text-[11px] text-[color:var(--color-fg-subtle)]">px</span>
+            <button
+              type="button"
+              data-testid="settings-min-image-save"
+              disabled={minImageSaving}
+              onClick={handleSaveMinImagePx}
+              class="rounded-md border border-[color:var(--color-border)] px-3 py-1.5 text-sm transition-colors hover:border-[color:var(--color-border-strong)] active:translate-y-px disabled:opacity-50"
+            >
+              {minImageSaving ? t('common.saving') : t('common.save')}
+            </button>
+          </div>
+          <p class="mt-2 text-[11px] text-[color:var(--color-fg-subtle)] max-w-xl">
+            {t('settings.trail.minImage.hint')}
+          </p>
         </section>
 
         {/* F200.1 — per-Trail contradiction-lint toggle (mirrors the decay toggle above). */}

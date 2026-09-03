@@ -24,6 +24,7 @@ const LIST_SQL = `
          kb.chat_persona_tool AS chatPersonaTool,
          kb.chat_persona_public AS chatPersonaPublic,
          kb.auto_approve_threshold AS autoApproveThreshold,
+         kb.min_image_px AS minImagePx,
          kb.created_at AS createdAt, kb.updated_at AS updatedAt,
          (SELECT COUNT(*) FROM documents d
             WHERE d.knowledge_base_id = kb.id
@@ -318,6 +319,11 @@ kbRoutes.patch('/knowledge-bases/:id', async (c) => {
   }
   // F201.8 — per-KB ambient auto-approval threshold. null clears (OFF);
   // a number in [0,1] arms it.
+  if (body.minImagePx !== undefined) {
+    // F226 — null clears the filter. A KB with no value keeps every image,
+    // which is what every Trail did before the column existed.
+    updates.minImagePx = body.minImagePx === null ? null : Number(body.minImagePx);
+  }
   if (body.autoApproveThreshold !== undefined) {
     updates.autoApproveThreshold = body.autoApproveThreshold;
   }

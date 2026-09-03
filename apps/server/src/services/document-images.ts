@@ -30,6 +30,36 @@ export interface ExtractedImageRow {
   description?: string;
 }
 
+/**
+ * F226 — is this image big enough to be worth storing?
+ *
+ * Measured on Sanne's Trail (1.557 images): a THIRD of every image row is a
+ * bullet, a rule or a logo fragment lifted out of a PDF, and together they are
+ * 0,03% of the bytes. The cost of keeping them is not disk — it is a vision
+ * description per meaningless image and an image search full of dots.
+ *
+ * The threshold is on the SMALLEST SIDE, deliberately, not on area and not on
+ * file size:
+ *   · area would pass a 2000x10 divider rule, which is exactly the shape we
+ *     want gone;
+ *   · bytes measure the wrong property — a 1 MB file can be a 20x20 icon and a
+ *     2 KB file a meaningful 400x400 line drawing.
+ *
+ * `>=` and not `>`: an image exactly AT the threshold is kept.
+ */
+export function isImageLargeEnough(
+  width: number,
+  height: number,
+  minPx: number | null | undefined,
+): boolean {
+  if (minPx == null || minPx <= 0) return true; // no filter configured
+  // A missing dimension is NOT a small image — it is an unknown one, and
+  // discarding on absent data would silently drop images whose extractor
+  // simply did not report a size.
+  if (!width || !height) return true;
+  return Math.min(width, height) >= minPx;
+}
+
 export async function persistImagesFromExtraction(
   trail: TrailDatabase,
   docId: string,
@@ -37,9 +67,10 @@ export async function persistImagesFromExtraction(
   kbId: string,
   extracted: ExtractedImageRow[],
   visionModel: string | null,
-): Promise<{ inserted: number; skipped: number }> {
+  minImagePx: number | null = null,
+): Promise<{ inserted: number; skipped: number; filteredSmall: number }> {
   if (extracted.length === 0) {
-    return { inserted: 0, skipped: 0 };
+    return { inserted: 0, skipped: 0, filteredSmall: 0 };
   }
 
   // Re-running the same upload (manual reingest, recover-pending-sources
@@ -50,9 +81,19 @@ export async function persistImagesFromExtraction(
 
   let inserted = 0;
   let skipped = 0;
+  let filteredSmall = 0;
   const visionAt = new Date().toISOString();
 
   for (const img of extracted) {
+    // F226 — filter BEFORE we read the bytes: a decorative fragment should
+    // cost us neither a storage read nor a row nor a vision description.
+    // Counted separately from `skipped` on purpose — "we chose not to keep
+    // this" and "we could not read it" are different facts, and merging them
+    // is the failure this repo has met all week.
+    if (!isImageLargeEnough(img.width, img.height, minImagePx)) {
+      filteredSmall += 1;
+      continue;
+    }
     try {
       const bytes = await storage.get(img.storagePath);
       if (!bytes) {
@@ -89,5 +130,5 @@ export async function persistImagesFromExtraction(
     }
   }
 
-  return { inserted, skipped };
+  return { inserted, skipped, filteredSmall };
 }

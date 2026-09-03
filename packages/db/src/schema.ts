@@ -114,6 +114,11 @@ export const knowledgeBases = sqliteTable(
     // for `lastPassAt`, the scheduler survives engine restarts and
     // catches up after downtime.
     lintScheduleDays: integer('lint_schedule_days'),
+    /** F226 — smallest side, in pixels, an extracted image must have to be
+     *  stored. NULL means no filter, which is what every KB created before
+     *  this column did — an existing Trail must not change behaviour because
+     *  a column appeared. */
+    minImagePx: integer('min_image_px'),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
     updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
   },

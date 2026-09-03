@@ -85,6 +85,10 @@ export const UpdateKBSchema = z.object({
   // (OFF — captures stay pending); a number in [0,1] arms it. Omit to leave
   // unchanged.
   autoApproveThreshold: z.number().min(0).max(1).nullable().optional(),
+  // F226 — smallest side, in pixels, an extracted image must have to be stored.
+  // null clears the filter (every image kept), which is what every Trail did
+  // before this setting existed. Omit to leave unchanged.
+  minImagePx: z.number().int().min(0).max(4096).nullable().optional(),
 });
 
 // ── Sources & Wiki Pages ──────────────────────────────────────────────────────
