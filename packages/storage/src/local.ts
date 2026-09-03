@@ -82,9 +82,29 @@ export class LocalStorage implements Storage {
     }
   }
 
+  /**
+   * F230.1 — a key returned here must never contain a double slash.
+   *
+   * This used to join `${prefix}/${relPath}` unconditionally, so a caller
+   * passing a prefix that ALREADY ended in a slash got `.../images//file.png`.
+   * The F161 backfill did exactly that, and then derived the filename with
+   * `key.slice(prefix.length)` — leaving a leading slash on 212 of Sanne's
+   * image rows.
+   *
+   * NOTHING FAILED ALONG THE WAY, and that is why it survived: POSIX collapses
+   * a double slash, so the file was found, read, measured and stored without a
+   * single error. Only the HTTP layer is strict enough to notice — a URL with
+   * an empty path segment matches no route — and by then the cause is four
+   * layers away from the symptom.
+   *
+   * So the trailing slash is stripped HERE rather than at the call site: a
+   * caller cannot be wrong about a shape this function is allowed to have two
+   * answers for.
+   */
   async list(prefix: string): Promise<string[]> {
     const full = this.resolve(prefix);
     if (!existsSync(full)) return [];
+    const base = prefix.replace(/\/+$/, '');
     const results: string[] = [];
     const walk = (dir: string, rel: string): void => {
       for (const entry of readdirSync(dir)) {
@@ -93,7 +113,7 @@ export class LocalStorage implements Storage {
         if (statSync(entryPath).isDirectory()) {
           walk(entryPath, relPath);
         } else {
-          results.push(`${prefix}/${relPath}`);
+          results.push(base ? `${base}/${relPath}` : relPath);
         }
       }
     };

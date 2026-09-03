@@ -960,7 +960,10 @@ export async function processFileAsync(
       // F226 — the Trail's own minimum image size. NULL for every KB that has
       // not set one, so behaviour is unchanged until a curator chooses.
       const kbRow = await trail.db
-        .select({ minImagePx: knowledgeBases.minImagePx })
+        .select({
+          minImagePx: knowledgeBases.minImagePx,
+          minImageEntropy: knowledgeBases.minImageEntropy,
+        })
         .from(knowledgeBases)
         .where(eq(knowledgeBases.id, kbId))
         .get();
@@ -972,7 +975,16 @@ export async function processFileAsync(
         result.images,
         visionModel,
         kbRow?.minImagePx ?? null,
+        kbRow?.minImageEntropy ?? null,
       );
+      if (res.filteredBlank > 0) {
+        // F229.1 — said out loud for the same reason as F226 below: a Trail
+        // that quietly drops a fifth of its images looks identical to one that
+        // extracted fewer.
+        console.log(
+          `[F229.1] ${docId}: discarded ${res.filteredBlank} image(s) with entropy below ${kbRow?.minImageEntropy}, kept ${res.inserted}`,
+        );
+      }
       if (res.filteredSmall > 0) {
         // Said out loud rather than counted in silence: "we filtered 690 small
         // images" and "extraction produced nothing" must never look alike.

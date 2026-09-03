@@ -956,7 +956,16 @@
         "error": "Could not save minimum image size",
         "invalid": "Enter a whole number of 0 or more"
       },
-      "priceUnknown": "price unknown"
+      "priceUnknown": "price unknown",
+      "minEntropy": {
+        "title": "Minimum image variation",
+        "subtitle": "An image with no variation — a rectangle in one colour — is a picture of nothing. Measured locally and for free, without asking a model.",
+        "placeholder": "e.g. 0.5",
+        "hint": "0 or empty turns the gate off. 0.5 removes solid fills; a photograph or diagram is typically above 5. Measured across 1,557 images: one in five is a solid fill. Applies to new images only — use the cleanup for the ones already here.",
+        "saved": "Minimum image variation saved",
+        "error": "Could not save",
+        "invalid": "Enter a number between 0 and 8, or leave the field empty"
+      }
     },
     "account": {
       "title": "Account",

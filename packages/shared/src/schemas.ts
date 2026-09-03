@@ -89,6 +89,12 @@ export const UpdateKBSchema = z.object({
   // null clears the filter (every image kept), which is what every Trail did
   // before this setting existed. Omit to leave unchanged.
   minImagePx: z.number().int().min(0).max(4096).nullable().optional(),
+  // F229.1 — smallest image entropy that still gets stored. 0 (or null) keeps
+  // every image, which is what every Trail did before this setting existed.
+  // Capped at 8: Shannon entropy over 8-bit channels cannot exceed 8, so a
+  // higher number would be a threshold nothing can ever pass — a setting that
+  // silently discards the whole corpus.
+  minImageEntropy: z.number().min(0).max(8).nullable().optional(),
 });
 
 // ── Sources & Wiki Pages ──────────────────────────────────────────────────────

@@ -25,6 +25,7 @@ const LIST_SQL = `
          kb.chat_persona_public AS chatPersonaPublic,
          kb.auto_approve_threshold AS autoApproveThreshold,
          kb.min_image_px AS minImagePx,
+         kb.min_image_entropy AS minImageEntropy,
          kb.created_at AS createdAt, kb.updated_at AS updatedAt,
          (SELECT COUNT(*) FROM documents d
             WHERE d.knowledge_base_id = kb.id
@@ -323,6 +324,12 @@ kbRoutes.patch('/knowledge-bases/:id', async (c) => {
     // F226 — null clears the filter. A KB with no value keeps every image,
     // which is what every Trail did before the column existed.
     updates.minImagePx = body.minImagePx === null ? null : Number(body.minImagePx);
+  }
+  if (body.minImageEntropy !== undefined) {
+    // F229.1 — null clears the gate. Kept separate from minImagePx: a curator
+    // can want the size filter without the content one, and vice versa.
+    updates.minImageEntropy =
+      body.minImageEntropy === null ? null : Number(body.minImageEntropy);
   }
   if (body.autoApproveThreshold !== undefined) {
     updates.autoApproveThreshold = body.autoApproveThreshold;

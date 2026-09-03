@@ -119,6 +119,14 @@ export const knowledgeBases = sqliteTable(
      *  this column did — an existing Trail must not change behaviour because
      *  a column appeared. */
     minImagePx: integer('min_image_px'),
+    /** F229.1 — smallest Shannon entropy an extracted image must have to be
+     *  stored. A solid-colour rectangle measures near 0; a photograph or a
+     *  diagram is 5+. NULL means no filter — the behaviour every KB had
+     *  before this column existed.
+     *
+     *  REAL and not INTEGER on purpose: the useful range is 0..1, and an
+     *  integer column could only say "off" or "discard nearly everything". */
+    minImageEntropy: real('min_image_entropy'),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
     updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
   },

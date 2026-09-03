@@ -17,6 +17,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import sharp from 'sharp';
 import { documentImages, type TrailDatabase } from '@trail/db';
 import { eq } from 'drizzle-orm';
 import { storage } from '../lib/storage.js';
@@ -60,6 +61,72 @@ export function isImageLargeEnough(
   return Math.min(width, height) >= minPx;
 }
 
+/**
+ * F229.1 — does this image depict ANYTHING?
+ *
+ * The owner opened one of the images F226 had let through: 416x439, 714 KB —
+ * and a single pale-blue rectangle. Big enough to pass any pixel threshold we
+ * could invent, and a picture of nothing. Size is a proxy for content that does
+ * not hold; entropy measures the property itself.
+ *
+ * Shannon entropy over the image's channels: a solid fill measures near 0, a
+ * photograph or a diagram 5+. `sharp` computes it locally from bytes we have
+ * already read — no model, no tokens, nothing leaves the machine. Measured on
+ * Sanne's 1.557 images, 331 of them (one in five) fall below 0.5, and 21 of
+ * those survive the 72px threshold.
+ *
+ * THREE OUTCOMES, NEVER TWO. "keep", "discard" and "could not measure" are
+ * three different facts, and collapsing the third into either of the others is
+ * the failure this repo met all week: an unreadable image discarded as blank
+ * looks exactly like a blank one, and nobody can tell afterwards.
+ */
+export type EntropyVerdict =
+  | { kind: 'keep'; entropy: number }
+  | { kind: 'blank'; entropy: number }
+  | { kind: 'unmeasured'; why: string };
+
+export async function imageEntropyVerdict(
+  bytes: Uint8Array,
+  minEntropy: number | null | undefined,
+): Promise<EntropyVerdict> {
+  if (minEntropy == null || minEntropy <= 0) return { kind: 'unmeasured', why: 'filter off' };
+  try {
+    const { entropy } = await sharp(Buffer.from(bytes)).stats();
+    if (typeof entropy !== 'number' || Number.isNaN(entropy)) {
+      return { kind: 'unmeasured', why: 'sharp reported no entropy' };
+    }
+    // `<` and not `<=`: an image exactly AT the threshold is kept, matching
+    // isImageLargeEnough's `>=`. The two settings must not disagree about
+    // what "at the limit" means.
+    return entropy < minEntropy ? { kind: 'blank', entropy } : { kind: 'keep', entropy };
+  } catch (err) {
+    // An image we cannot READ is not an image without content. Keeping it is
+    // the only answer that cannot lose data on a decoder we did not anticipate.
+    return { kind: 'unmeasured', why: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * F229.1 — bytes for an image we decided not to keep must go too.
+ *
+ * F226 skipped the ROW but the extractor had already written the bytes, so a
+ * filtered image stayed on disk: not discarded, just hidden. Deleting is one
+ * fact ("we are not keeping this"), so both discard paths do it.
+ *
+ * A failed delete is logged and swallowed: we have already decided not to keep
+ * the row, and turning a storage hiccup into a failed ingest would trade a few
+ * orphan bytes for a lost document.
+ */
+async function discardBytes(storagePath: string, why: string): Promise<void> {
+  try {
+    await storage.delete(storagePath);
+  } catch (err) {
+    console.warn(
+      `[F229.1] could not delete ${why} image bytes at ${storagePath}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
 export async function persistImagesFromExtraction(
   trail: TrailDatabase,
   docId: string,
@@ -68,9 +135,15 @@ export async function persistImagesFromExtraction(
   extracted: ExtractedImageRow[],
   visionModel: string | null,
   minImagePx: number | null = null,
-): Promise<{ inserted: number; skipped: number; filteredSmall: number }> {
+  minImageEntropy: number | null = null,
+): Promise<{
+  inserted: number;
+  skipped: number;
+  filteredSmall: number;
+  filteredBlank: number;
+}> {
   if (extracted.length === 0) {
-    return { inserted: 0, skipped: 0, filteredSmall: 0 };
+    return { inserted: 0, skipped: 0, filteredSmall: 0, filteredBlank: 0 };
   }
 
   // Re-running the same upload (manual reingest, recover-pending-sources
@@ -82,6 +155,7 @@ export async function persistImagesFromExtraction(
   let inserted = 0;
   let skipped = 0;
   let filteredSmall = 0;
+  let filteredBlank = 0;
   const visionAt = new Date().toISOString();
 
   for (const img of extracted) {
@@ -92,6 +166,9 @@ export async function persistImagesFromExtraction(
     // is the failure this repo has met all week.
     if (!isImageLargeEnough(img.width, img.height, minImagePx)) {
       filteredSmall += 1;
+      // F229.1 — the bytes go too. F226 left them on disk, which meant an
+      // image we had decided not to keep was hidden rather than filtered.
+      await discardBytes(img.storagePath, 'small');
       continue;
     }
     try {
@@ -99,6 +176,16 @@ export async function persistImagesFromExtraction(
       if (!bytes) {
         skipped += 1;
         console.warn(`[F161] persist skip — no bytes at ${img.storagePath}`);
+        continue;
+      }
+      // F229.1 — entropy gate. Runs on bytes we have ALREADY read, so it costs
+      // no extra storage access, and it runs BEFORE the row is inserted, so the
+      // async vision job (which picks its candidates from the rows) can never
+      // spend a call on an image of nothing.
+      const verdict = await imageEntropyVerdict(bytes, minImageEntropy);
+      if (verdict.kind === 'blank') {
+        filteredBlank += 1;
+        await discardBytes(img.storagePath, 'blank');
         continue;
       }
       const contentHash = createHash('sha256').update(new Uint8Array(bytes)).digest('hex');
@@ -130,5 +217,5 @@ export async function persistImagesFromExtraction(
     }
   }
 
-  return { inserted, skipped, filteredSmall };
+  return { inserted, skipped, filteredSmall, filteredBlank };
 }

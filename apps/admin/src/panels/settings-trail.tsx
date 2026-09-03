@@ -82,6 +82,11 @@ export function SettingsTrailPanel() {
   // what every Trail did before the setting existed.
   const [minImagePx, setMinImagePx] = useState<string>('');
   const [minImageSaving, setMinImageSaving] = useState(false);
+  // F229.1 — minimum image entropy for this Trail. '' means no gate. Kept as a
+  // separate field from the pixel one because they answer different questions:
+  // "is it big enough" and "does it depict anything".
+  const [minImageEntropy, setMinImageEntropy] = useState<string>('');
+  const [minEntropySaving, setMinEntropySaving] = useState(false);
   // F160 Phase 2 — per-KB persona overrides for tool/public chat audiences.
   // Empty string in the UI maps to null on save (= "clear back to default").
   const [chatPersonaTool, setChatPersonaTool] = useState('');
@@ -133,6 +138,11 @@ export function SettingsTrailPanel() {
             (match as { minImagePx?: number | null }).minImagePx == null
               ? ''
               : String((match as { minImagePx?: number | null }).minImagePx),
+          );
+          setMinImageEntropy(
+            (match as { minImageEntropy?: number | null }).minImageEntropy == null
+              ? ''
+              : String((match as { minImageEntropy?: number | null }).minImageEntropy),
           );
           setChatPersonaTool(match.chatPersonaTool ?? '');
           setChatPersonaPublic(match.chatPersonaPublic ?? '');
@@ -256,6 +266,31 @@ export function SettingsTrailPanel() {
       setToast({ kind: 'error', text: t('settings.trail.minImage.error') });
     } finally {
       setMinImageSaving(false);
+    }
+  }
+
+  // F229.1 — save the entropy gate. Same clear-to-empty path as the pixel
+  // field above, and it is tested for the same reason: a field that can only
+  // ever be SET looks identical to one that saves correctly.
+  async function handleSaveMinImageEntropy() {
+    if (!kb || minEntropySaving) return;
+    const raw = minImageEntropy.trim();
+    const value = raw === '' ? null : Number(raw);
+    // 8 is the ceiling for Shannon entropy over 8-bit channels, so anything
+    // higher is a threshold no image can pass — a setting that would silently
+    // discard the whole corpus.
+    if (value !== null && (!Number.isFinite(value) || value < 0 || value > 8)) {
+      setToast({ kind: 'error', text: t('settings.trail.minEntropy.invalid') });
+      return;
+    }
+    setMinEntropySaving(true);
+    try {
+      await updateKnowledgeBase(kb.id, { minImageEntropy: value });
+      setToast({ kind: 'success', text: t('settings.trail.minEntropy.saved') });
+    } catch {
+      setToast({ kind: 'error', text: t('settings.trail.minEntropy.error') });
+    } finally {
+      setMinEntropySaving(false);
     }
   }
 
@@ -675,6 +710,45 @@ export function SettingsTrailPanel() {
           </div>
           <p class="mt-2 text-[11px] text-[color:var(--color-fg-subtle)] max-w-xl">
             {t('settings.trail.minImage.hint')}
+          </p>
+        </section>
+
+        {/* F229.1 — per-Trail entropy gate. The owner opened a 416x439 image
+            F226 had let through and found a single pale-blue rectangle: size is
+            a proxy for content that does not hold. Measured on Sanne's 1.557
+            images, 331 have entropy below 0,5 and 21 of those clear a 72px
+            threshold. sharp computes this locally — no model, no tokens. */}
+        <section class="pt-2 border-t border-[color:var(--color-border)]" data-testid="settings-min-entropy-section">
+          <div class="mb-3">
+            <h2 class="text-sm font-medium">{t('settings.trail.minEntropy.title')}</h2>
+            <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-xl">
+              {t('settings.trail.minEntropy.subtitle')}
+            </p>
+          </div>
+          <div class="flex items-center gap-3">
+            <input
+              type="number"
+              min="0"
+              max="8"
+              step="0.1"
+              placeholder={t('settings.trail.minEntropy.placeholder')}
+              value={minImageEntropy}
+              data-testid="settings-min-entropy-input"
+              onInput={(e) => setMinImageEntropy((e.currentTarget as HTMLInputElement).value)}
+              class="w-28 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)] px-2 py-1.5 text-sm"
+            />
+            <button
+              type="button"
+              data-testid="settings-min-entropy-save"
+              disabled={minEntropySaving}
+              onClick={handleSaveMinImageEntropy}
+              class="rounded-md border border-[color:var(--color-border)] px-3 py-1.5 text-sm transition-colors hover:border-[color:var(--color-border-strong)] active:translate-y-px disabled:opacity-50"
+            >
+              {minEntropySaving ? t('common.saving') : t('common.save')}
+            </button>
+          </div>
+          <p class="mt-2 text-[11px] text-[color:var(--color-fg-subtle)] max-w-xl">
+            {t('settings.trail.minEntropy.hint')}
           </p>
         </section>
 

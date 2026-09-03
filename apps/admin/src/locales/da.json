@@ -956,7 +956,16 @@
         "error": "Kunne ikke gemme mindste billedstørrelse",
         "invalid": "Angiv et helt tal på 0 eller derover"
       },
-      "priceUnknown": "pris ukendt"
+      "priceUnknown": "pris ukendt",
+      "minEntropy": {
+        "title": "Mindste billed-variation",
+        "subtitle": "Et billede uden variation — en flade i én farve — er et billede af ingenting. Det måles lokalt og gratis, uden at spørge en model.",
+        "placeholder": "fx 0,5",
+        "hint": "0 eller tomt slår porten fra. 0,5 fjerner ensfarvede flader; et fotografi eller et diagram ligger typisk over 5. Målt på 1.557 billeder: hvert femte er en ensfarvet flade. Gælder kun nye billeder — brug oprydningen til dem der allerede ligger her.",
+        "saved": "Mindste billed-variation gemt",
+        "error": "Kunne ikke gemme",
+        "invalid": "Angiv et tal mellem 0 og 8, eller lad feltet være tomt"
+      }
     },
     "account": {
       "title": "Konto",

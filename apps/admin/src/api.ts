@@ -405,6 +405,11 @@ export function updateKnowledgeBase(
      *  stored. null clears the filter, which is what every Trail did before
      *  this setting existed. */
     minImagePx?: number | null;
+    /** F229.1 — smallest Shannon entropy an extracted image must have to be
+     *  stored. A solid-colour fill measures near 0; a photograph or diagram is
+     *  5+. null clears the gate. Separate from minImagePx on purpose: "big
+     *  enough" and "depicts anything" are different questions. */
+    minImageEntropy?: number | null;
   },
 ): Promise<KnowledgeBase> {
   return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}`, {

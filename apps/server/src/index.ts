@@ -12,6 +12,7 @@ import { seedDevCreditsOnBoot } from './bootstrap/dev-credits.js';
 import { backfillContentHash } from './bootstrap/backfill-content-hash.js';
 import { backfillDocumentImages } from './bootstrap/backfill-document-images.js';
 import { rerunVisionOnNull } from './bootstrap/rerun-vision.js';
+import { fixImageSlash } from './bootstrap/fix-image-slash.js';
 import { sweepAutoFlag } from './bootstrap/sweep-auto-flag.js';
 import { recoverIngestJobs, startBackpressureScheduler } from './services/ingest.js';
 import { startContradictionLint } from './services/contradiction-lint.js';
@@ -95,6 +96,10 @@ async function bootTenant(db: TrailDatabase): Promise<void> {
   // when TRAIL_VISION_RERUN_NULL=1 is set. See rerun-vision.ts for
   // the env-flag contract + recommended rollout.
   await rerunVisionOnNull(db);
+  // F230.1 — repair image rows whose filename starts with a slash (the old
+  // LocalStorage.list double-slash). SHIPPED DARK: a data transform on a prod
+  // table only runs when TRAIL_FIX_IMAGE_SLASH=1 is set deliberately.
+  await fixImageSlash(db);
   // F163.2 Phase 5 — opt-in regex-sweep over legacy image descriptions.
   // Stamps auto_flag_signal on rows that predate the [QUALITY:]-marker
   // prompt where the description text matches the regex backstop. Gated
