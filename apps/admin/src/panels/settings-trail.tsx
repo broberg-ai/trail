@@ -33,6 +33,7 @@ import { matchKb } from '../lib/kb-cache';
 import { t, useLocale } from '../lib/i18n';
 import { CenteredLoader } from '../components/centered-loader';
 import { Dropdown, type DropdownOption } from '../components/dropdown';
+import { modelPricing, pricesGeneratedAt } from '@trail/shared';
 
 /**
  * Per-Trail settings at `/kb/:kbId/settings`. Home for all configuration
@@ -45,6 +46,25 @@ import { Dropdown, type DropdownOption } from '../components/dropdown';
  * home; the listing toggle stays because it's useful to flip without
  * drilling in.
  */
+
+/**
+ * F228 — the cost note under a model in the picker.
+ *
+ * THREE outcomes, and keeping them apart is the point:
+ *   free route   -> no note at all (a $0 line reads as a price, not as free)
+ *   known price  -> the SDK's current number
+ *   UNKNOWN      -> says so. Never a leftover literal, never $0.00.
+ *
+ * The old table showed a number for everything, which is why it could be four
+ * months stale on Mistral Large without anyone noticing.
+ */
+function priceHint(id: string): string | undefined {
+  const p = modelPricing(id);
+  if (!p) return t('settings.trail.priceUnknown');
+  if (p.inputPer1M === 0 && p.outputPer1M === 0) return undefined;
+  return `$${p.inputPer1M.toFixed(2)} in / $${p.outputPer1M.toFixed(2)} out per 1M`;
+}
+
 export function SettingsTrailPanel() {
   const route = useRoute();
   const kbId = route.params.kbId ?? '';
@@ -781,14 +801,14 @@ export function SettingsTrailPanel() {
                   : t('settings.trail.ingestModel.useDefault'),
               },
               ...INGEST_MODELS.map((m: IngestModel): DropdownOption => {
-                // $0 (local-CLI / Max Plan) models show no cost note at all.
-                const free = m.costPerMillion.input === 0 && m.costPerMillion.output === 0;
+                // F228 — the price comes from @broberg/ai-sdk, not from a table
+                // here. Three outcomes, deliberately distinct: free route shows
+                // nothing, a known price shows the number, and an UNKNOWN price
+                // says so rather than degrading into a confident figure.
                 return {
                   value: `${m.backend}:${m.id}`,
                   label: m.label,
-                  hint: free
-                    ? undefined
-                    : `$${m.costPerMillion.input.toFixed(2)} in / $${m.costPerMillion.output.toFixed(2)} out per 1M`,
+                  hint: priceHint(m.id),
                 };
               }),
             ];
@@ -866,13 +886,10 @@ export function SettingsTrailPanel() {
                   : t('settings.trail.chatModel.useDefault'),
               },
               ...CHAT_MODELS.map((m: ChatModel): DropdownOption => {
-                const free = m.costPerMillion.input === 0 && m.costPerMillion.output === 0;
                 return {
                   value: `${m.backend}:${m.id}`,
                   label: m.label,
-                  hint: free
-                    ? undefined
-                    : `$${m.costPerMillion.input.toFixed(2)} in / $${m.costPerMillion.output.toFixed(2)} out per 1M`,
+                  hint: priceHint(m.id),
                 };
               }),
             ];

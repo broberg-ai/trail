@@ -955,7 +955,8 @@
         "saved": "Minimum image size saved",
         "error": "Could not save minimum image size",
         "invalid": "Enter a whole number of 0 or more"
-      }
+      },
+      "priceUnknown": "price unknown"
     },
     "account": {
       "title": "Account",
@@ -1097,7 +1098,8 @@
     "userFlagTooltip": "A curator has flagged this image as low quality",
     "colDescription": "Description",
     "colPage": "Page",
-    "colDimensions": "Size"
+    "colDimensions": "Size",
+    "sortScope": "Sorted across the {count} loaded images — not the whole Trail."
   },
   "linkReport": {
     "title": "Link Check",

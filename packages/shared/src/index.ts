@@ -19,3 +19,4 @@ export * from './safe-return-path.js';
 export * from './owner-identities.js';
 export * from './fts-query.js';
 export * from './fts-synonyms.js';
+export * from './model-pricing.js';

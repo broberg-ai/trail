@@ -1,6 +1,7 @@
 {
-  "version": "dc23ffe4b4588807031c3a382d006f1009393cb81af156d4868fbdec0c713abb",
+  "version": "2f7fcfbdb3fe4a13cc7cb89e3f8786d16ceac7b84f194861bdff07de91ea7c22",
   "semver": "1.8.0",
-  "files": 56,
-  "applied_via": "F075.3"
+  "written": 2,
+  "manifest_files": 58,
+  "applied_via": "F075.18"
 }

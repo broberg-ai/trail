@@ -80,6 +80,13 @@ export async function reportLocalIngestRun(opts: {
     model: opts.model ?? 'claude-code',
     transport: 'subprocess',
     capability: 'chat',
+    // @broberg/ai-sdk 0.38 requires the region on every recorded run, so the
+    // cost panel can answer "where did this data go" and not only "what did it
+    // cost". This path is the local Claude CLI on Christian's Mac — the model
+    // is Anthropic's, hosted in the US, and the call being FREE does not make
+    // it EU-resident. Saying 'eu' here because no money moved would be the
+    // exact conflation the field exists to prevent.
+    region: 'us',
     inputTokens: 0,
     outputTokens: 0,
     cacheReadTokens: 0,

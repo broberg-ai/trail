@@ -955,7 +955,8 @@
         "saved": "Mindste billedstørrelse gemt",
         "error": "Kunne ikke gemme mindste billedstørrelse",
         "invalid": "Angiv et helt tal på 0 eller derover"
-      }
+      },
+      "priceUnknown": "pris ukendt"
     },
     "account": {
       "title": "Konto",
@@ -1097,7 +1098,8 @@
     "userFlagTooltip": "En curator har flagget dette billede som lav kvalitet",
     "colDescription": "Beskrivelse",
     "colPage": "Side",
-    "colDimensions": "Størrelse"
+    "colDimensions": "Størrelse",
+    "sortScope": "Sorteret på de {count} billeder der er hentet — ikke hele Trailen."
   },
   "linkReport": {
     "title": "Link-tjek",

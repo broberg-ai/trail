@@ -28,6 +28,7 @@ import { t, useLocale } from '../lib/i18n';
 import { CenteredLoader } from '../components/centered-loader';
 import { Modal, ModalButton } from '../components/modal';
 import { lockBodyScroll } from '../lib/scroll-lock';
+import { sortHits, type SortKey } from './images-sort.js';
 
 const LIMIT = 36;
 const SEARCH_DEBOUNCE_MS = 250;
@@ -476,6 +477,41 @@ function ImageTile({
   );
 }
 
+function SortHeader({
+  label,
+  col,
+  sort,
+  onSort,
+  width,
+}: {
+  label: string;
+  col: SortKey;
+  sort: { key: SortKey; dir: 'asc' | 'desc' } | null;
+  onSort: (k: SortKey) => void;
+  width?: string;
+}) {
+  const active = sort?.key === col;
+  const arrow = active ? (sort.dir === 'asc' ? '\u25B2' : '\u25BC') : '\u21C5';
+  return (
+    <th class={'px-3 py-2 font-normal ' + (width ?? '')}>
+      <button
+        type="button"
+        data-testid={'images-sort-' + col}
+        aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+        onClick={() => onSort(col)}
+        class={
+          'inline-flex items-center gap-1 uppercase tracking-wider transition-colors ' +
+          'hover:text-[color:var(--color-fg)] active:translate-y-px ' +
+          (active ? 'text-[color:var(--color-fg)]' : '')
+        }
+      >
+        {label}
+        <span class="text-[9px] leading-none opacity-70" aria-hidden="true">{arrow}</span>
+      </button>
+    </th>
+  );
+}
+
 function ImageList({
   hits,
   selected,
@@ -491,20 +527,40 @@ function ImageList({
   onRescan: (imageId: string) => void;
   rescanBusy: Set<string>;
 }) {
+  // F227 — sortable columns. Third click clears back to the order the server
+  // returned, so a sort can be undone without reloading the panel.
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(null);
+  const onSort = (key: SortKey) =>
+    setSort((cur) =>
+      cur?.key !== key ? { key, dir: 'asc' } : cur.dir === 'asc' ? { key, dir: 'desc' } : null,
+    );
+  const rows = sortHits(hits, sort);
+
   return (
     <div class="overflow-x-auto rounded-md border border-[color:var(--color-border)]">
+      {sort ? (
+        // Said out loud rather than left to be discovered: the panel loads a page
+        // at a time, so a sort orders what is HERE — not the whole Trail. A
+        // sorted partial list looks exactly like a sorted complete one.
+        <p
+          class="px-3 py-1.5 text-[11px] text-[color:var(--color-fg-subtle)] border-b border-[color:var(--color-border)]"
+          data-testid="images-sort-scope-note"
+        >
+          {t('images.sortScope', { count: String(rows.length) })}
+        </p>
+      ) : null}
       <table class="w-full text-sm border-collapse">
         <thead>
           <tr class="text-left text-[10px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] border-b border-[color:var(--color-border)] bg-[color:var(--color-bg-card)]/40">
             <th class="px-3 py-2 font-normal w-10"></th>
             <th class="px-3 py-2 font-normal w-[100px]"></th>
-            <th class="px-3 py-2 font-normal">{t('images.colDescription')}</th>
-            <th class="px-3 py-2 font-normal w-[100px]">{t('images.colPage')}</th>
-            <th class="px-3 py-2 font-normal w-[120px]">{t('images.colDimensions')}</th>
+            <SortHeader label={t('images.colDescription')} col="description" sort={sort} onSort={onSort} />
+            <SortHeader label={t('images.colPage')} col="page" sort={sort} onSort={onSort} width="w-[100px]" />
+            <SortHeader label={t('images.colDimensions')} col="size" sort={sort} onSort={onSort} width="w-[120px]" />
           </tr>
         </thead>
         <tbody>
-          {hits.map((hit) => {
+          {rows.map((hit) => {
             const isSelected = selected.has(hit.id);
             return (
               <tr
