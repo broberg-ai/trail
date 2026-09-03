@@ -86,24 +86,40 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
   if (ftsQuery) {
     const offset = decodeFtsCursor(cursorRaw);
     const docClause = docIdFilter ? 'AND di.document_id = ?' : '';
+    // F229.2 — search the DESCRIPTION index and the OCR index together.
+    //
+    // Two contentless FTS tables rather than one wider one: fts5 cannot ALTER,
+    // so widening the existing index would mean DROP + CREATE on a production
+    // deploy. The cost is this UNION.
+    //
+    // MIN(rk) so a row that matches in BOTH indexes ranks by its better hit
+    // instead of appearing twice — an image whose caption AND printed text
+    // both mention the term is a better result, not two results.
     const sql = `
       SELECT di.id, di.document_id, di.filename, di.page, di.width, di.height,
              di.size_bytes, di.vision_description, di.vision_model, di.created_at,
-             di.auto_flag_signal, di.auto_flag_reason,
-             d.path AS doc_path, d.tags AS doc_tags
-        FROM document_images_fts fts
-        JOIN document_images di ON di.rowid = fts.rowid
+             di.ocr_text, di.auto_flag_signal, di.auto_flag_reason,
+             d.path AS doc_path, d.tags AS doc_tags,
+             MIN(m.rk) AS rk
+        FROM (
+          SELECT rowid, rank AS rk FROM document_images_fts
+           WHERE vision_description MATCH ?
+          UNION ALL
+          SELECT rowid, rank AS rk FROM document_images_ocr_fts
+           WHERE ocr_text MATCH ?
+        ) m
+        JOIN document_images di ON di.rowid = m.rowid
         JOIN documents d ON d.id = di.document_id
-       WHERE fts.vision_description MATCH ?
-         AND di.tenant_id = ?
+       WHERE di.tenant_id = ?
          AND di.knowledge_base_id = ?
          ${docClause}
          ${flagClause}
          ${missingDescClause}
-       ORDER BY rank
+       GROUP BY di.id
+       ORDER BY rk
        LIMIT ? OFFSET ?
     `;
-    const args: Array<string | number> = [ftsQuery, tenant.id, kbId];
+    const args: Array<string | number> = [ftsQuery, ftsQuery, tenant.id, kbId];
     if (docIdFilter) args.push(docIdFilter);
     args.push(overFetch, offset);
     result = await trail.execute(sql, args);
@@ -116,7 +132,7 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
     const sql = `
       SELECT di.id, di.document_id, di.filename, di.page, di.width, di.height,
              di.size_bytes, di.vision_description, di.vision_model, di.created_at,
-             di.auto_flag_signal, di.auto_flag_reason,
+             di.ocr_text, di.auto_flag_signal, di.auto_flag_reason,
              d.path AS doc_path, d.tags AS doc_tags
         FROM document_images di
         JOIN documents d ON d.id = di.document_id
@@ -180,6 +196,10 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
     width: row.width as number,
     height: row.height as number,
     visionModel: (row.vision_model as string | null) ?? null,
+    // F229.2 — the text READ OUT of the image, separate from `alt` (which is
+    // the model's description of it). null means either "no readable text" or
+    // "OCR has not run"; the row's ocr_at is what tells those apart.
+    ocrText: (row.ocr_text as string | null) ?? null,
     createdAt: String(row.created_at),
     autoFlagSignal: Number(row.auto_flag_signal ?? 0) === 1,
     autoFlagReason: (row.auto_flag_reason as string | null) ?? null,

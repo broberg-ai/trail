@@ -144,3 +144,46 @@ Migration for den nye kolonne (additiv), derefter `pnpm ship:engine` og
 `pnpm ship:admin`. Porten er slukket indtil tærsklen sættes — ship dark.
 
 Oprydningen (F229.3) rører ikke noget af sig selv: den viser et tal og venter.
+
+## RETTELSE — 0,5 var forkert, og målingen fangede det
+
+Jeg anbefalede 0,5 og satte den på Sannes Trail. Så målte jeg hvad en side med
+**ren tekst** scorer: **0,29**. Under grænsen. Den ville være blevet smidt ud.
+
+Slået fra igen med det samme, og fordelingen målt ordentligt:
+
+```
+entropi-interval        antal   beskrevet
+0     – 0,0001            296          0     ← PRÆCIS ensfarvet
+0,0001 – 0,01               0          0     ← båndet er TOMT
+0,01  – 0,05                4          0
+0,05  – 0,1                 1          0
+0,1   – 0,3                10          0
+0,3   – 0,5                15          3     ← 0,5 ville koste 3 ægte billeder
+over 0,5                  984
+```
+
+**Den rigtige grænse er 0,01, ikke 0,5.** Den fanger 296 af de 326 — og det
+tomme bånd under den er hele argumentet: der er ingenting at ramme ved et uheld.
+Det mindst indholdsrige læsbare vi kunne konstruere (et 300×300 hvidt felt med
+ordet «ok») måler **0,0222**, altså over.
+
+## OG OCR OPFINDER TEKST PÅ ET TOMT BILLEDE
+
+Målt, ikke antaget. Mistral OCR fik et almindeligt 300×300-felt i **én farve**
+og svarede med en LaTeX-formel:
+
+```
+\[ \operatorname{E}\left[\left\|\mathbf{x}-\mathbf{y}\right\|^2\right] … \]
+```
+
+Opfundet fra ende til anden. Ingen fejl, intet signal om at det var opfundet.
+
+**Det er det dyreste denne kode kunne komme til at sende:** en opdigtet sætning
+skrevet ind i en kundes vidensbase som tekst der var *læst fra hendes egen
+kilde*. Sannes Trail har 296 ensfarvede billeder — uden en spærre ville
+funktionen have lagt 296 hallucinationer ind i hendes søgbare tekst.
+
+Derfor har `ocrImage()` et **fabrikations-gulv** der ikke er den samme knap som
+indstillingen ovenfor: indstillingen er en præference, gulvet er en
+korrekthedsspærre, og den gælder **også når kuratoren har slået porten fra**.

@@ -960,8 +960,8 @@
       "minEntropy": {
         "title": "Mindste billed-variation",
         "subtitle": "Et billede uden variation — en flade i én farve — er et billede af ingenting. Det måles lokalt og gratis, uden at spørge en model.",
-        "placeholder": "fx 0,5",
-        "hint": "0 eller tomt slår porten fra. 0,5 fjerner ensfarvede flader; et fotografi eller et diagram ligger typisk over 5. Målt på 1.557 billeder: hvert femte er en ensfarvet flade. Gælder kun nye billeder — brug oprydningen til dem der allerede ligger her.",
+        "placeholder": "Anbefalet: 0,01",
+        "hint": "0 eller tomt slår porten fra. **0,01 er det målte valg**: 296 af Sannes billeder er PRÆCIS ensfarvede, og båndet fra 0,0001 til 0,01 er helt tomt — så intet med indhold i kan falde under. En højere grænse rammer ægte billeder: 0,5 ville have smidt 3 beskrevne billeder ud. Gælder kun nye billeder.",
         "saved": "Mindste billed-variation gemt",
         "error": "Kunne ikke gemme",
         "invalid": "Angiv et tal mellem 0 og 8, eller lad feltet være tomt"

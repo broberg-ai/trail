@@ -960,8 +960,8 @@
       "minEntropy": {
         "title": "Minimum image variation",
         "subtitle": "An image with no variation — a rectangle in one colour — is a picture of nothing. Measured locally and for free, without asking a model.",
-        "placeholder": "e.g. 0.5",
-        "hint": "0 or empty turns the gate off. 0.5 removes solid fills; a photograph or diagram is typically above 5. Measured across 1,557 images: one in five is a solid fill. Applies to new images only — use the cleanup for the ones already here.",
+        "placeholder": "Recommended: 0.01",
+        "hint": "0 or empty turns the gate off. **0.01 is the measured choice**: 296 of Sanne’s images are EXACTLY solid, and the band from 0.0001 to 0.01 is empty — so nothing with content can fall below it. A higher threshold hits real images: 0.5 would have discarded 3 described ones. Applies to new images only.",
         "saved": "Minimum image variation saved",
         "error": "Could not save",
         "invalid": "Enter a number between 0 and 8, or leave the field empty"

@@ -31,7 +31,7 @@ import { documentImages, documents, knowledgeBases, type TrailDatabase } from '@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import pLimit from 'p-limit';
 import { storage } from '../../../lib/storage.js';
-import { applyDimensionFlag, createVisionBackendWithMetadata, getActiveVisionModel } from '../../vision.js';
+import { applyDimensionFlag, createVisionBackendWithMetadata, getActiveVisionModel, ocrImage } from '../../vision.js';
 import { ensureDerivative } from '../../vision-derivative.js';
 import type { JobContext, JobHandler } from '../types.js';
 
@@ -52,6 +52,11 @@ export interface VisionRerunResult {
   described: number;
   decorative: number;
   failed: number;
+  /** F229.2 — images where OCR returned readable text. */
+  ocrRead: number;
+  /** F229.2 — images where the OCR call errored. Their description, if any,
+   *  was still kept, so this is NOT a subset of `failed`. */
+  ocrFailed: number;
   model: string;
   /** Up to 6 random described rows for the visual-verification grid (Phase 5). */
   sampleImages: Array<{
@@ -150,13 +155,27 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
   if (total === 0) {
     await ctx.report({ current: 0, total: 0, etaMs: null, phase: 'no-candidates' });
     return {
-      result: { total: 0, described: 0, decorative: 0, failed: 0, model, sampleImages: [] },
+      result: {
+        total: 0,
+        described: 0,
+        decorative: 0,
+        failed: 0,
+        ocrRead: 0,
+        ocrFailed: 0,
+        model,
+        sampleImages: [],
+      },
     };
   }
 
   let described = 0;
   let decorative = 0;
   let failed = 0;
+  // F229.2 — counted apart from `described` and `failed` on purpose. "OCR read
+  // text", "OCR found no text" and "OCR errored" are three facts, and an image
+  // whose description succeeded while OCR errored is not a failed image.
+  let ocrRead = 0;
+  let ocrFailed = 0;
   const start = Date.now();
 
   const reportNow = async (phase: string) => {
@@ -170,7 +189,7 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
       total,
       etaMs,
       phase,
-      extra: { described, decorative, failed },
+      extra: { described, decorative, failed, ocrRead, ocrFailed },
     });
   };
 
@@ -211,6 +230,28 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
           language: row.kbLanguage,
         });
         const visionAt = new Date().toISOString();
+        // F229.2 — OCR on the SAME bytes, in the same pass. A description says
+        // what the image shows; OCR says what it reads, and only the second
+        // makes the text inside a figure searchable.
+        //
+        // Its failure is deliberately NOT the image's failure: OCR is an
+        // addition, and a provider hiccup must not undo a description we
+        // already have. `null` from here means "no readable text", which is a
+        // real answer — distinct from the column staying NULL because OCR
+        // never ran.
+        let ocr: Awaited<ReturnType<typeof ocrImage>> = null;
+        try {
+          ocr = await ocrImage(derivative.bytes, 'image/png', { tenant: ctx.tenantId });
+        } catch (err) {
+          ocrFailed += 1;
+          console.warn(
+            `[vision-rerun job=${ctx.jobId}] image=${row.id} OCR failed (description kept): ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        const ocrFields = ocr
+          ? { ocrText: ocr.text, ocrModel: ocr.model, ocrAt: visionAt }
+          : {};
+        if (ocr?.text) ocrRead += 1;
         if (!result.description) {
           // Decorative sentinel — mark as scanned + auto-flag (Vision
           // told us nothing's worth describing; that's exactly what
@@ -220,6 +261,11 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
             .set({
               visionAt,
               visionModel: model,
+              // F229.2 — a "decorative" verdict is about the PICTURE. A scanned
+              // page of text is exactly the case where vision has nothing to
+              // describe and OCR has everything, so the OCR text is written on
+              // this branch too rather than discarded with the description.
+              ...ocrFields,
               autoFlagSignal: 1,
               autoFlagReason: 'vision-decorative',
               updatedAt: visionAt,
@@ -242,6 +288,7 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
             visionDescription: result.description,
             visionModel: model,
             visionAt,
+            ...ocrFields,
             autoFlagSignal: finalFlag.signal ? 1 : 0,
             autoFlagReason: finalFlag.reason,
             updatedAt: visionAt,
@@ -293,6 +340,8 @@ export const visionRerunHandler: JobHandler<VisionRerunPayload, VisionRerunResul
       described,
       decorative,
       failed,
+      ocrRead,
+      ocrFailed,
       model,
       sampleImages,
     },

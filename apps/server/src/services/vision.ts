@@ -1,5 +1,6 @@
 import type { DescribeImage } from '@trail/pipelines';
 import { ai } from '../lib/ai.js';
+import sharp from 'sharp';
 
 // Read keys at call-time, not module-load-time, so a key added after
 // boot (or rotated) gets picked up without restart.
@@ -270,5 +271,96 @@ export function createVisionBackendWithMetadata(
     if (raw && raw.trim().toLowerCase() === 'decorative') raw = null;
     const { cleanText, autoFlag } = parseQualitySignal(raw);
     return { description: cleanText, autoFlag };
+  };
+}
+
+// ── F229.2 — OCR: the text READ OUT of an image ──────────────────────────
+
+/** Below this entropy an image cannot hold readable text, and OCR is known to
+ *  invent some. See ocrImage for the measurement behind the number. */
+const OCR_FABRICATION_FLOOR = 0.01;
+
+export interface OcrResultOut {
+  /** Extracted text, or null when the image holds no readable text. */
+  text: string | null;
+  model: string;
+  costCents: number;
+}
+
+/**
+ * F229.2 — read the text printed inside an image, via Mistral OCR (Paris).
+ *
+ * DESCRIPTION AND OCR ARE NOT THE SAME THING, and Trail has only ever had the
+ * first. A vision description says what the picture SHOWS ("a table of
+ * treatment prices"); OCR says what it READS ("Zoneterapi 60 min — 550 kr").
+ * Sanne's compendia carry teaching text inside the figures, and none of it was
+ * searchable.
+ *
+ * EU by construction: `ai.ocr()` routes to `mistral-ocr-latest` in Paris. We do
+ * not pass a `tier`, because a tier could resolve elsewhere; the SDK's OCR
+ * default is the EU model, and the response's own `usage.region` is what the
+ * caller should read if it needs to prove where the bytes went.
+ *
+ * An image with no text returns `text: null` — NOT an error and NOT an empty
+ * string. "There is nothing written here" is a real answer about the image;
+ * an empty string would later be indistinguishable from "we never ran OCR".
+ */
+export async function ocrImage(
+  bytes: Uint8Array | Buffer,
+  mimeType: string,
+  labels?: Record<string, string>,
+): Promise<OcrResultOut | null> {
+  // THE GUARD RUNS FIRST, BEFORE THE PROVIDER CHECK, and that ordering is
+  // deliberate. "This image is blank" is true whether or not a key is
+  // configured — and putting the provider check first made the most important
+  // test in this file impossible to run without a live API key, i.e. it would
+  // never run in CI. A correctness guard that only executes where it cannot be
+  // verified is not a guard.
+  // F229.2 — DO NOT OCR AN IMAGE WITH NOTHING IN IT. Measured, not assumed:
+  // handed a plain 300x300 rectangle in one colour, Mistral OCR returned a
+  // LaTeX formula —
+  //   \[ \operatorname{E}\left[\left\|\mathbf{x}-\mathbf{y}\right\|^2\right] … \]
+  // — invented whole, with no error and no signal that it was invented.
+  //
+  // That is the worst failure this repo can ship: a fabricated sentence written
+  // into a knowledge base as if it had been READ from the customer's own
+  // source. Sanne's Trail holds 296 such solid images; unguarded, this feature
+  // would have put 296 hallucinations into her searchable text.
+  //
+  // The floor is NOT the per-Trail setting. That one is a preference; this is a
+  // correctness guard, and it must hold even when the curator has turned the
+  // gate off. 0.01 with the measured gap behind it: 296 of Sanne's images sit
+  // at EXACTLY 0, the band from 0.0001 to 0.01 is EMPTY, and the least
+  // contentful thing we could construct — a 300x300 white square with the word
+  // "ok" on it — measures 0.0222. So nothing readable can fall below this.
+  try {
+    const { entropy } = await sharp(Buffer.from(bytes)).stats();
+    if (typeof entropy === 'number' && entropy < OCR_FABRICATION_FLOOR) {
+      return { text: null, model: 'skipped-blank', costCents: 0 };
+    }
+  } catch {
+    // Unreadable by sharp is NOT "blank" — fall through and let OCR try. The
+    // guard exists to stop fabrication on images we KNOW are empty, never to
+    // silently drop ones we merely failed to decode.
+  }
+  if (!hasVisionProvider()) return null;
+  const res = await ai.ocr({
+    document: new Uint8Array(bytes),
+    mimeType,
+    purpose: 'image-ocr',
+    ...(labels ? { labels } : {}),
+  });
+  const text = res.pages
+    .map((p) => p.markdown ?? '')
+    .join('\n')
+    .trim();
+  return {
+    text: text.length > 0 ? text : null,
+    model: res.usage.model || 'mistral-ocr-latest',
+    // The SDK has no price for mistral-ocr-latest today (getModelPrice returns
+    // undefined), so costUsd is 0 and we report 0 rather than inventing a
+    // number here. Reported to ai-sdk; the fix belongs in the shared price
+    // list, not in a second copy of it (F228).
+    costCents: res.usage.costUsd > 0 ? Math.ceil(res.usage.costUsd * 100) : 0,
   };
 }

@@ -347,6 +347,13 @@ export const documentImages = sqliteTable(
     visionModel: text('vision_model'),
     visionAt: text('vision_at'),
     visionCostCents: integer('vision_cost_cents'),
+    /** F229.2 — text READ OUT of the image by OCR, kept separate from the
+     *  vision description. A description says what the image shows; OCR says
+     *  what it reads. Only the second is something a curator can check against
+     *  the picture, so they must not share a column. */
+    ocrText: text('ocr_text'),
+    ocrModel: text('ocr_model'),
+    ocrAt: text('ocr_at'),
     // F163.2 — Vision-pipeline auto-flag. Set by either the structured
     // [QUALITY: low] marker in the Vision response or the regex
     // backstop on the description text. Curator-flag is separate

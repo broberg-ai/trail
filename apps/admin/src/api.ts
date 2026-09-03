@@ -1092,6 +1092,9 @@ export interface ImageHit {
   width: number;
   height: number;
   visionModel: string | null;
+  /** F229.2 — text read OUT of the image by OCR. Distinct from `alt`, which is
+   *  what a model said the image shows. */
+  ocrText: string | null;
   createdAt: string;
   /** F163.2 — Vision auto-flag signal (prompt-marker or regex backstop). */
   autoFlagSignal: boolean;
