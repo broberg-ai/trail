@@ -1,137 +1,185 @@
 /**
- * F236.2 — every package that HAS tests must be reachable by the gate.
+ * F236.2 — every tracked test file must be REACHED by the gate.
  *
- * The hole, in one sentence: **a package with no `test` script reports the same
- * thing as a package that passes — nothing.** Trail's gate is `turbo run test`,
- * which asks each package for its own script, so a package that never declares
- * one is silently skipped. Measured, and there were two:
+ * THE PROPERTY WAS SHARPENED ONCE, BY cardmem, AND IT MATTERED. The first
+ * version asked whether a package DECLARES a test script. That is not the thing
+ * we want: `"test": "bun test src/"` with a test file in `tests/` declares a
+ * script, passes that check, and never runs. Two different properties, and only
+ * the second is load-bearing.
  *
- *   apps/admin-server   1 test file, no script — the control plane (login,
- *                       sessions, tenants, invitations, API keys) ran nothing
- *   packages/core       1 test file, no script — 6 tests, 25 assertions,
- *                       written 2 Sept and never once executed by the gate
+ * Measured the moment the sharper one was asked: 28 tracked test files, 26 run.
+ * The two unreached were apps/widget's — a package EXCLUDED from the pnpm
+ * workspace, whose tests live in `tests/` rather than `src/`. The old guard was
+ * blind to both halves: it only counted under `src/`, and it did not know a
+ * package can be outside the workspace entirely, where no script can save it.
  *
- * Both were GREEN when finally run. That is the point: nothing was failing, so
- * nothing could reveal them. "Do your tests pass" would have been answered yes.
- *
- * TWO CORRECTIONS FROM cardmem, both of which this file originally got wrong:
- *
- * 1. THE RULE IS STRUCTURALLY INCAPABLE OF GROWING. `unreachable()` takes a
- *    list of packages that HAVE tests and returns a subset of it. There is no
- *    code path where "this package has no test script" can become a finding for
- *    a package with no tests — so the rule cannot drift into "everyone needs a
- *    test script", which would push people to add empty scripts that pass by
- *    running nothing. That was a promise in prose here before; a shape beats a
- *    promise.
- *
- * 2. THE PACKAGE LIST IS A PROPERTY, NOT A COPY OF THE CONFIG. It used to
- *    hardcode ['apps', 'packages'] — a hand-copy of pnpm-workspace.yaml's
- *    globs, i.e. correct for a reason living in another file. Measured: that
- *    file also lists `adapters/*`, which the copy omitted, and excludes three
- *    apps that the copy scanned. Nothing was wrong today, and that is exactly
- *    how this class survives. Now: every tracked package.json that is not the
- *    root. cardmem found the identical defect inside their own version of this
- *    guard.
- *
- * The pure function is tested against a FIXED fixture so a mutation reddens ONE
- * test with a precise diagnosis, rather than three because the live repo moved
- * under it.
+ * THREE STATES, NOT TWO. A script this file cannot interpret is reported as
+ * `unverifiable`, never as covered. "We checked and it is fine" and "we could
+ * not check" are different answers, and collapsing them is the failure this
+ * repo met all week.
  */
 import { expect, test } from 'bun:test';
-import { readdirSync, existsSync, statSync } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
+import { resolve, dirname } from 'node:path';
 
 const ROOT = resolve(import.meta.dir, '../../..');
 
-export interface PackageFacts {
-  name: string;
-  testFiles: number;
-  hasTestScript: boolean;
-}
-
-/**
- * The rule. Input is already restricted to packages, and the filter runs on
- * `testFiles > 0` FIRST — so a package with no tests can never appear in the
- * output, whatever anyone later adds below.
- */
-export function unreachable(pkgs: PackageFacts[]): string[] {
-  return pkgs
-    .filter((p) => p.testFiles > 0)
-    .filter((p) => !p.hasTestScript)
-    .map((p) => `${p.name} (${p.testFiles} test file(s), no test script)`);
-}
-
-function countTests(dir: string): number {
-  if (!existsSync(dir)) return 0;
-  let n = 0;
-  for (const entry of readdirSync(dir)) {
-    const p = join(dir, entry);
-    if (statSync(p).isDirectory()) n += countTests(p);
-    else if (/\.(test|spec)\.tsx?$/.test(entry)) n += 1;
-  }
-  return n;
-}
-
-/** Every tracked package.json that is not the root — the property, not the globs. */
-async function livePackages(): Promise<PackageFacts[]> {
-  const proc = Bun.spawn(['git', 'ls-files', '--', '*/package.json', '*/*/package.json'], {
-    cwd: ROOT,
-    stdout: 'pipe',
-  });
-  const listed = (await new Response(proc.stdout).text())
+async function git(args: string[]): Promise<string[]> {
+  const proc = Bun.spawn(['git', ...args], { cwd: ROOT, stdout: 'pipe' });
+  return (await new Response(proc.stdout).text())
     .split('\n')
     .map((s) => s.trim())
     .filter((s) => s && !s.includes('node_modules'));
-
-  const out: PackageFacts[] = [];
-  for (const rel of listed) {
-    const dir = dirname(rel);
-    const pkg = await Bun.file(join(ROOT, rel)).json();
-    out.push({
-      name: dir,
-      testFiles: countTests(join(ROOT, dir, 'src')),
-      hasTestScript: Boolean(pkg.scripts?.test),
-    });
-  }
-  return out;
 }
 
-// ── the rule, against a FIXED fixture ────────────────────────────────────────
+/**
+ * Directories pnpm actually includes, READ FROM THE CONFIG — never a hand-copy.
+ * The previous version of this guard hardcoded ['apps','packages'] and was
+ * therefore correct for a reason living in another file; that omission hid
+ * `adapters/*` and scanned three excluded apps.
+ *
+ * Parsed with a regex rather than by adding a YAML dependency: the file is a
+ * six-line list of quoted strings, and pulling in a parser to read it would
+ * cost more than it protects. If the file ever grows real YAML structure this
+ * must become a parser — the PRECONDITION below is what would notice.
+ */
+async function workspaceDirs(): Promise<{ include: string[]; exclude: string[] }> {
+  const raw = await Bun.file(resolve(ROOT, 'pnpm-workspace.yaml')).text();
+  const entries = [...raw.matchAll(/^\s*-\s*['"]?([^'"\n]+)['"]?\s*$/gm)].map((m) => m[1].trim());
+  return {
+    include: entries.filter((e) => !e.startsWith('!')),
+    exclude: entries.filter((e) => e.startsWith('!')).map((e) => e.slice(1)),
+  };
+}
 
-const FIXTURE: PackageFacts[] = [
-  { name: 'apps/with-tests-and-script', testFiles: 3, hasTestScript: true },
-  { name: 'apps/with-tests-no-script', testFiles: 1, hasTestScript: false },
-  { name: 'packages/no-tests-no-script', testFiles: 0, hasTestScript: false },
-  { name: 'packages/no-tests-but-script', testFiles: 0, hasTestScript: true },
-];
+function globMatches(pattern: string, dir: string): boolean {
+  // Only the shapes pnpm-workspace.yaml actually uses here: "a/*" and "a/b".
+  const re = new RegExp(`^${pattern.replace(/\*/g, '[^/]+')}$`);
+  return re.test(dir);
+}
 
-test('the rule names the package that has tests the gate cannot reach', () => {
-  expect(unreachable(FIXTURE)).toEqual([
-    'apps/with-tests-no-script (1 test file(s), no test script)',
-  ]);
+export type Coverage =
+  | { kind: 'covered'; by: string }
+  | { kind: 'unreached'; why: string }
+  | { kind: 'unverifiable'; why: string };
+
+/**
+ * Can the package's `test` script reach this file? Pure, so the rules can be
+ * tested against fixtures rather than against whatever the repo looks like
+ * today — a diagnosis that moves with the repo is a worse diagnosis.
+ */
+export function coverage(
+  file: string,
+  pkgDir: string,
+  script: string | undefined,
+  inWorkspace: boolean,
+): Coverage {
+  if (!inWorkspace) {
+    return { kind: 'unreached', why: `${pkgDir} is excluded from the pnpm workspace` };
+  }
+  if (!script) return { kind: 'unreached', why: `${pkgDir} declares no test script` };
+
+  const m = script.match(/^bun test\s*(.*)$/);
+  if (!m) return { kind: 'unverifiable', why: `cannot interpret script: ${script}` };
+
+  const paths = m[1].trim().split(/\s+/).filter(Boolean);
+  // Bare `bun test` walks the whole package.
+  if (paths.length === 0) return { kind: 'covered', by: `${pkgDir} (whole package)` };
+
+  const rel = file.slice(pkgDir.length + 1);
+  for (const p of paths) {
+    const norm = p.replace(/\/$/, '');
+    if (rel === norm || rel.startsWith(`${norm}/`)) return { kind: 'covered', by: `${pkgDir}: ${p}` };
+  }
+  return { kind: 'unreached', why: `${rel} is outside ${pkgDir}'s test paths (${paths.join(', ')})` };
+}
+
+// ── the rules, against FIXED fixtures ────────────────────────────────────────
+
+test('a file under the script’s path is covered', () => {
+  expect(coverage('apps/x/src/a.test.ts', 'apps/x', 'bun test src/', true).kind).toBe('covered');
 });
 
-test('STRUCTURAL — a package with NO tests can never be a finding', () => {
-  // Not a promise that we won't add it: `filter(testFiles > 0)` runs first, so
-  // there is no path where it could. Proven on a fixture where two such
-  // packages exist and one of them also lacks a script.
-  const noTestPkgs = FIXTURE.filter((p) => p.testFiles === 0);
-  expect(noTestPkgs.length).toBe(2);
-  for (const p of noTestPkgs) {
-    expect(unreachable([p])).toEqual([]);
-  }
+test('THE MEASURED CASE — a file OUTSIDE the script’s path is unreached', () => {
+  // "test": "bun test src/" with the file in tests/. Declares a script, passes
+  // the old guard, never runs.
+  const c = coverage('apps/x/tests/a.spec.ts', 'apps/x', 'bun test src/', true);
+  expect(c.kind).toBe('unreached');
+  expect((c as { why: string }).why).toContain('outside');
+});
+
+test('a package outside the workspace is unreached whatever its script says', () => {
+  const c = coverage('apps/w/tests/a.spec.ts', 'apps/w', 'bun test tests/', false);
+  expect(c.kind).toBe('unreached');
+  expect((c as { why: string }).why).toContain('excluded');
+});
+
+test('bare `bun test` covers the whole package', () => {
+  expect(coverage('packages/y/src/a.test.ts', 'packages/y', 'bun test', true).kind).toBe('covered');
+});
+
+test('THREE STATES — a script we cannot read is UNVERIFIABLE, never covered', () => {
+  // "we checked and it is fine" and "we could not check" must not look alike.
+  const c = coverage('apps/z/src/a.test.ts', 'apps/z', 'bash scripts/test.sh', true);
+  expect(c.kind).toBe('unverifiable');
 });
 
 // ── the live repo ────────────────────────────────────────────────────────────
 
-test('PRECONDITION — the enumeration actually found the workspace', async () => {
-  // Without this the assertion below passes by examining nothing, which is the
-  // exact shape it exists to catch.
-  const pkgs = await livePackages();
-  expect(pkgs.length).toBeGreaterThan(10);
-  expect(pkgs.filter((p) => p.testFiles > 0).length).toBeGreaterThan(4);
-});
+test('every tracked test file is reached by the gate', async () => {
+  const files = await git(['ls-files', '--', '*.test.ts', '*.test.tsx', '*.spec.ts', '*.spec.tsx']);
+  const pkgFiles = await git(['ls-files', '--', '*/package.json', '*/*/package.json']);
+  const { include, exclude } = await workspaceDirs();
 
-test('every package holding test files declares a test script the gate can run', async () => {
-  expect(unreachable(await livePackages())).toEqual([]);
+  // PRECONDITION — the enumeration found something. An empty list would pass
+  // by examining nothing, which is the shape this file exists to catch.
+  expect(files.length).toBeGreaterThan(20);
+  expect(pkgFiles.length).toBeGreaterThan(10);
+  // And the workspace config was actually READ — an empty include list would
+  // mark every package as outside the workspace and turn this into noise, or
+  // (worse) a parser change could silently return nothing.
+  expect(include.length).toBeGreaterThan(1);
+  expect(exclude.length).toBeGreaterThan(0);
+
+  const pkgs = new Map<string, string | undefined>();
+  for (const rel of pkgFiles) {
+    const dir = dirname(rel);
+    const json = await Bun.file(resolve(ROOT, rel)).json();
+    pkgs.set(dir, json.scripts?.test);
+  }
+  const inWorkspace = (dir: string) =>
+    include.some((p) => globMatches(p, dir)) && !exclude.some((p) => globMatches(p, dir));
+
+  const unreached: string[] = [];
+  const unverifiable: string[] = [];
+  for (const f of files) {
+    const dir = [...pkgs.keys()]
+      .filter((d) => f.startsWith(`${d}/`))
+      .sort((a, b) => b.length - a.length)[0];
+    if (!dir) { unreached.push(`${f} — belongs to no package`); continue; }
+    const c = coverage(f, dir, pkgs.get(dir), inWorkspace(dir));
+    if (c.kind === 'unreached') unreached.push(`${f} — ${c.why}`);
+    if (c.kind === 'unverifiable') unverifiable.push(`${f} — ${c.why}`);
+  }
+  // Reported separately on purpose: an unverifiable file is not a pass.
+  expect(unverifiable).toEqual([]);
+
+  // PINNED, NOT MUTED. Two tracked test files genuinely do not run, and the
+  // honest thing is neither to fail the whole gate forever nor to quietly
+  // exclude them — it is to state exactly which two, so the set cannot grow
+  // without going red and cannot shrink without telling us to delete this pin.
+  //
+  // apps/widget's specs import raw @playwright/test, which this repo forbids
+  // (F112: browser automation goes through Cardmem Lens). They were written
+  // 20-30 May; the rule landed 15 June — so they did not break a rule, the
+  // rule arrived and nobody swept them up. Nothing runs them: the package is
+  // excluded from the pnpm workspace and no CI job calls them. They are dead
+  // weight that LOOKS like coverage, which is worse than no coverage.
+  //
+  // Tracked as F237. Removing them, or converting them to Lens manuscripts,
+  // makes this assertion fail — which is the point.
+  const KNOWN_UNREACHED = [
+    'apps/widget/tests/admin-image-carousel.spec.ts — apps/widget is excluded from the pnpm workspace',
+    'apps/widget/tests/multi-tenant.spec.ts — apps/widget is excluded from the pnpm workspace',
+  ];
+  expect(unreached.sort()).toEqual(KNOWN_UNREACHED.sort());
 });
