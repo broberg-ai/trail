@@ -337,6 +337,13 @@
       "when": 1788520000000,
       "tag": "0047_image_triage",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "6",
+      "when": 1788530000000,
+      "tag": "0048_rebuild_ocr_fts",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,20 @@
+-- F238: genopbyg det OCR-indeks 0046 oprettede uden rebuild.
+--
+-- 0046 lavede document_images_ocr_fts som en contentless FTS5-tabel over
+-- document_images. Et sådant indeks er TOMT når det oprettes over rækker der
+-- allerede findes — og en DELETE fyrer så en trigger der forsøger at fjerne en
+-- post der aldrig blev indsat. SQLite svarer:
+--
+--     SQLITE_CORRUPT_VTAB: database disk image is malformed
+--
+-- Målt 4. september: ALLE TRE tenants kunne ikke slette et billede.
+-- sanne-andersen (1.557), broberg-ai (742) og fd-aalborg (53) — en kunde.
+-- Grunddatabasen var sund; PRAGMA integrity_check sagde 'ok', og FTS5's egen
+-- integrity-check sagde OK på begge indeks. Kun selve slettningen afslørede det.
+--
+-- 0025 slap for det fordi DEN oprettede sit indeks i samme migration som
+-- tabellen: der var ingen rækker at være ude af sync med.
+--
+-- En rebuild regenererer indekset fra document_images. Der går INGEN data tabt
+-- — indekset er fuldt udledt af tabellen. Idempotent: kan køres igen.
+INSERT INTO `document_images_ocr_fts`(`document_images_ocr_fts`) VALUES('rebuild');
