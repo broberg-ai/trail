@@ -44,7 +44,9 @@ async function git(args: string[]): Promise<string[]> {
  */
 async function workspaceDirs(): Promise<{ include: string[]; exclude: string[] }> {
   const raw = await Bun.file(resolve(ROOT, 'pnpm-workspace.yaml')).text();
-  const entries = [...raw.matchAll(/^\s*-\s*['"]?([^'"\n]+)['"]?\s*$/gm)].map((m) => m[1].trim());
+  const entries = [...raw.matchAll(/^\s*-\s*['"]?([^'"\n]+)['"]?\s*$/gm)]
+    .map((m) => m[1]?.trim())
+    .filter((e): e is string => Boolean(e));
   return {
     include: entries.filter((e) => !e.startsWith('!')),
     exclude: entries.filter((e) => e.startsWith('!')).map((e) => e.slice(1)),
@@ -81,7 +83,7 @@ export function coverage(
   const m = script.match(/^bun test\s*(.*)$/);
   if (!m) return { kind: 'unverifiable', why: `cannot interpret script: ${script}` };
 
-  const paths = m[1].trim().split(/\s+/).filter(Boolean);
+  const paths = (m[1] ?? '').trim().split(/\s+/).filter(Boolean);
   // Bare `bun test` walks the whole package.
   if (paths.length === 0) return { kind: 'covered', by: `${pkgDir} (whole package)` };
 
