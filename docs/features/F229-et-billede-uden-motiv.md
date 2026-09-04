@@ -187,3 +187,24 @@ funktionen have lagt 296 hallucinationer ind i hendes søgbare tekst.
 Derfor har `ocrImage()` et **fabrikations-gulv** der ikke er den samme knap som
 indstillingen ovenfor: indstillingen er en præference, gulvet er en
 korrekthedsspærre, og den gælder **også når kuratoren har slået porten fra**.
+
+## Reuse
+
+> **Kørt 4. september, efter at `/feature`-skillen igen kunne indlæses.** Dette
+> tjek har aldrig kørt i dette repo før: den udgave af skillen der faktisk blev
+> indlæst var fra 14. maj og indeholdt slet ikke Step 3.5. Se F234.
+
+| kapacitet | Discovery-søgning | resultat |
+|---|---|---|
+| billed-entropi / ensfarvet-detektion | `?q=image entropy` | **intet match** — bygget lokalt med `sharp`, som allerede er en afhængighed |
+| OCR | `?q=OCR` | **intet match** — går gennem `@broberg/ai-sdk`s `ai.ocr()`, altså flådens gateway, ikke en rå udbyder |
+| billed-vision | `?q=vision` | **intet match** — går gennem `@broberg/ai-sdk`s `ai.vision()` |
+
+**Positiv kontrol kørt:** `?q=mail` svarer `@broberg/mail` 200. Uden den ville
+tre tomme svar ikke kunne skelnes fra et dødt endpoint — og det er præcis den
+skelnen der er gået galt fire gange i dette repo på ét døgn.
+
+**Ingen rå udbyder-integration.** Hverken Mistral OCR eller vision kaldes
+direkte; begge går gennem `@broberg/ai-sdk`, så omkostning, fallback og
+region-rapportering virker som alle andre steder.
+

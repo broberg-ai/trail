@@ -1,12 +1,12 @@
 ---
 name: local-ingest
-description: Drain awaiting-local-compile sources for a Trail tenant and compile them into Neurons IN THIS interactive cc session ($0 Max-plan), writing to the cloud KB over the plain cloud REST API (no MCP). The Local Ingest Station (F191) parks sources; buddy can also dispatch a drain job (the upmetrics-remediation pattern).
+description: Drain awaiting-local-compile sources for a Trail tenant and compile them into Neurons IN THIS interactive cc session (free on the Max plan), writing to the cloud KB over the plain cloud REST API (no MCP). The Local Ingest Station (F191) parks sources; buddy can also dispatch a drain job (the upmetrics-remediation pattern).
 argument-hint: "<tenant-slug> <kb-slug-or-id> | status"
 ---
 
 # /local-ingest $ARGUMENTS
 
-The **$0 ingest engine** for F191. The cloud engine compiles via paid OpenRouter;
+The **free (Max-plan) ingest engine** for F191. The cloud engine compiles via paid OpenRouter;
 this skill compiles **for free** by doing the work itself — in an interactive
 Claude Code session on the Max subscription — and writing the Neurons straight
 into the cloud KB over the **cloud REST API**. No MCP: the session is already
@@ -15,15 +15,15 @@ the right path (and the trail MCP is local-stdio-only — it can't reach cloud).
 
 ## THE INVARIANT (read this first)
 
-$0 only holds because **YOU** (an interactive cc session on Max) do the compile:
+Staying free only holds because **YOU** (an interactive cc session on Max) do the compile:
 read the source, reason about it, decide the Neurons. The REST calls below are
 just data I/O — they are NOT LLM calls. So:
 
-- **YOU compile** — your own turn-reasoning. That is $0.
+- **YOU compile** — your own turn-reasoning. That is free.
 - **YOU do vision too** (F191.7) — you are multimodal. To describe an image,
   download its bytes and **Read the local file** (the Read tool renders images),
-  then describe it in your own turn. That is $0 — NOT a vision API call.
-- **NEVER** shell out to `claude -p` (Anthropic API-bills it → not $0).
+  then describe it in your own turn. That is free — NOT a vision API call.
+- **NEVER** shell out to `claude -p` (Anthropic API-bills it → not free).
 - **NEVER** call an Anthropic/OpenRouter API key, and **never** hit the cloud
   `/reingest` endpoint (that fires the paid cloud compile).
 
@@ -91,7 +91,7 @@ Print the count + filenames. Stop.
 
 2. **For each source `S` (id `$SID`):**
 
-   a0. **Local vision first (F191.7 — $0, you describe the images).** The pending
+   a0. **Local vision first (F191.7 — free, you describe the images).** The pending
       list includes `fileType`. Cloud vision is deliberately deferred to you here.
       - **Standalone image** (`fileType` ∈ `png|jpg|jpeg|webp|gif|svg`): the
         parked content is just a placeholder. Fetch the raw image, VIEW it, write
@@ -122,7 +122,7 @@ Print the count + filenames. Stop.
           "$TRAIL_CLOUD_API/api/v1/documents/$SID/images/<filename>/local-vision" \
           -d '{"description":"<your description of the image>"}'
         ```
-      All of this is YOUR turn-reasoning over a Read image — **$0, no vision API.**
+      All of this is YOUR turn-reasoning over a Read image — **free, no vision API.**
 
    a. **Fetch the exact compile prompt** (single-source with cloud ingest):
       ```bash
@@ -155,7 +155,7 @@ Print the count + filenames. Stop.
    c. The engine stamps a **free-run** to upmetrics on `/local-compiled` (F191.5,
       cost 0, connector mcp:claude-code) — nothing for you to do.
 
-3. **Report**: `✓ local-ingest <kb>: compiled N source(s) → M Neurons, $0 (Max-plan).`
+3. **Report**: `✓ local-ingest <kb>: compiled N source(s) → M Neurons, free (Max-plan).`
 
 ## How a drain gets started
 

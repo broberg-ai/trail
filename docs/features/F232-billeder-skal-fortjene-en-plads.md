@@ -131,3 +131,24 @@ OCR var gratis.
 ensfarvede og når aldrig trin 2 — cirka $0,62 sparet. Beløbet er lille; **det
 bærende argument er ikke pengene, men at OCR opfinder tekst på et tomt
 billede.**
+
+## Reuse
+
+> **Kørt 4. september, efter at `/feature`-skillen igen kunne indlæses.** Dette
+> tjek har aldrig kørt i dette repo før: den udgave af skillen der faktisk blev
+> indlæst var fra 14. maj og indeholdt slet ikke Step 3.5. Se F234.
+
+| kapacitet | Discovery-søgning | resultat |
+|---|---|---|
+| billed-entropi / ensfarvet-detektion | `?q=image entropy` | **intet match** — bygget lokalt med `sharp`, som allerede er en afhængighed |
+| OCR | `?q=OCR` | **intet match** — går gennem `@broberg/ai-sdk`s `ai.ocr()`, altså flådens gateway, ikke en rå udbyder |
+| billed-vision | `?q=vision` | **intet match** — går gennem `@broberg/ai-sdk`s `ai.vision()` |
+
+**Positiv kontrol kørt:** `?q=mail` svarer `@broberg/mail` 200. Uden den ville
+tre tomme svar ikke kunne skelnes fra et dødt endpoint — og det er præcis den
+skelnen der er gået galt fire gange i dette repo på ét døgn.
+
+**Ingen rå udbyder-integration.** Hverken Mistral OCR eller vision kaldes
+direkte; begge går gennem `@broberg/ai-sdk`, så omkostning, fallback og
+region-rapportering virker som alle andre steder.
+
