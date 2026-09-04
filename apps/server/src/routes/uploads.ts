@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { documents, uploadSessions, knowledgeBases, type TrailDatabase } from '@trail/db';
-import { and, eq, sql } from 'drizzle-orm';
+import { documents, documentChunks, uploadSessions, knowledgeBases, type TrailDatabase } from '@trail/db';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -148,6 +148,122 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
   // for $0 in-session compile by the /local-ingest skill instead of the cloud
   // OpenRouter compile. Defaults off → existing uploads behave unchanged.
   const localCompile = c.req.query('localCompile') === 'true';
+
+  // F243.1 — UPSERT ON SOURCE URL. A re-push of the SAME page must update the
+  // document, not create a twin.
+  //
+  // The consumer is broberg-ai-site's sync of its CMS pages into Aidan's
+  // knowledge base: every document carries `metadata.sourceUrl`, and a re-sync
+  // after an article edit used to double the KB — the assistant then cited the
+  // old version side by side with the new. Owner's GO 4 September 2026:
+  // «Ja tak til overskrivning-på-URL».
+  //
+  // The key is (tenant, KB, metadata.sourceUrl) over ACTIVE source documents.
+  // Uploads without a sourceUrl take the exact path they always did — including
+  // the F162 duplicate-hash 409 below. `?force=true` also skips this branch:
+  // force has always meant "upload anyway as a separate Source", and an upsert
+  // that ate the escape hatch would leave no way to intentionally fork a page.
+  if (sourceUrl && !force) {
+    const matches = await trail.db
+      .select({ id: documents.id, contentHash: documents.contentHash })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.tenantId, tenant.id),
+          eq(documents.knowledgeBaseId, kbId),
+          eq(documents.kind, 'source'),
+          eq(documents.archived, false),
+          sql`json_extract(${documents.metadata}, '$.sourceUrl') = ${sourceUrl}`,
+        ),
+      )
+      .orderBy(desc(documents.createdAt))
+      .all();
+
+    if (matches.length > 0) {
+      // Several matches are possible historically (?force=true twins). The
+      // NEWEST is updated, and the count rides in the response so an abnormal
+      // state is visible instead of silently chosen away.
+      const target = matches[0]!;
+
+      if (target.contentHash === contentHash) {
+        // Unchanged bytes: nothing is written — not even updatedAt, so a
+        // no-op re-sync of 103 pages leaves no trace of churn. The consumer's
+        // own proof is "0 new documents", and this branch is what makes a
+        // full re-sync idempotent.
+        const doc = await trail.db.select().from(documents).where(eq(documents.id, target.id)).get();
+        console.log(`[upload] upsert-unchanged doc=${target.id} sourceUrl=${sourceUrl} ${lap()}`);
+        return c.json({ ...doc, upsert: 'unchanged', upsertMatches: matches.length }, 200);
+      }
+
+      // Changed bytes: SAME document id (the consumer never has to book-keep
+      // ids), new bytes, chunks rebuilt, compile re-triggered.
+      console.log(`[upload] upsert-update doc=${target.id} sourceUrl=${sourceUrl} ${lap()}`);
+      await storage.put(sourcePath(tenant.id, kbId, target.id, ext), buffer, file.type);
+
+      const isTextUpdate = TEXT_EXTENSIONS.has(ext);
+      const hasExtractorU = isTextUpdate || pickPipeline(file.name) !== null;
+      const decoded = isTextUpdate ? new TextDecoder().decode(buffer) : null;
+      await trail.db
+        .update(documents)
+        .set({
+          filename: file.name,
+          fileType: ext,
+          fileSize: file.size,
+          contentHash,
+          metadata: JSON.stringify({ connector, sourceUrl }),
+          tags: uploadTags?.join(', ') ?? null,
+          awaitingLocalCompile: localCompile,
+          status: !hasExtractorU ? 'failed' : 'processing',
+          errorMessage: !hasExtractorU ? unsupportedFormatMessage(ext) : null,
+          ...(decoded !== null
+            ? { content: decoded, title: ext === 'md' ? extractTitle(decoded) ?? file.name : file.name }
+            : {}),
+          version: sql<number>`COALESCE(${documents.version}, 1) + 1`,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(documents.id, target.id))
+        .run();
+
+      // Replace the search chunks — the pattern documents.ts:482 already uses.
+      // The read-back rule applies to these: the F243 tests assert through the
+      // SEARCH endpoint that old-only words stop matching and new words match.
+      await trail.db.delete(documentChunks).where(eq(documentChunks.documentId, target.id)).run();
+      if (decoded !== null && decoded.trim()) {
+        const chunks = chunkText(decoded);
+        await storeChunks(trail, target.id, tenant.id, kbId, chunks);
+      }
+
+      if (!isTextUpdate && pickPipeline(file.name) !== null) {
+        processFileAsync(trail, target.id, tenant.id, kbId, user.id, file.name, buffer, localCompile).catch(async (err) => {
+          console.error(`[pipeline] upsert re-run failed for ${file.name}:`, err);
+          await trail.db
+            .update(documents)
+            .set({ status: 'failed', errorMessage: String(err).slice(0, 1000), updatedAt: new Date().toISOString() })
+            .where(eq(documents.id, target.id))
+            .run();
+        });
+      }
+
+      await logActivity(trail, {
+        tenantId: tenant.id,
+        knowledgeBaseId: kbId,
+        actorId: user.id,
+        actorKind: 'user',
+        kind: 'source.uploaded',
+        subjectType: 'document',
+        subjectId: target.id,
+        summary: `Updated ${file.name} (re-push of same source URL)`,
+        metadata: { fileType: ext, fileSize: file.size, connector: connector ?? 'upload', upsert: 'updated' },
+      });
+
+      if (isTextUpdate && !localCompile) {
+        triggerIngest({ trail, docId: target.id, kbId, tenantId: tenant.id, userId: user.id });
+      }
+
+      const doc = await trail.db.select().from(documents).where(eq(documents.id, target.id)).get();
+      return c.json({ ...doc, upsert: 'updated', upsertMatches: matches.length }, 200);
+    }
+  }
   if (!force) {
     const existing = await trail.db
       .select({
