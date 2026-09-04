@@ -126,3 +126,31 @@ cardmem havde anbefalet `git check-ignore` uden `--no-index` til tre repos —
 et tjek der **aldrig kan udløses på en sporet fil**, altså en vagt uden
 kaldere. Søgt efter i vores hooks og scripts: **ingen forekomster.** Vi har den
 ikke.
+
+---
+
+## Efterskrift: kortet kom for sent, og vagthunden fangede det
+
+**F236.2 blev committet TO gange før kortet fandtes.** Board-integriteten
+flaggede det på anden commit:
+
+> *«F236.2 is not a card — create it with acceptance criteria (or drop the
+> reference)»*
+
+Mekanismen er værd at navngive, fordi den ikke ligner en forglemmelse: jeg
+**tilføjede** F236.2's afsnit til denne plan-doc frem for at gå gennem
+`/feature`-skillen. Plan-doc-halvdelen af reglen var derfor opfyldt hele tiden —
+det var kort-halvdelen der manglede, og netop den halvdel er den skillen ville
+have tvunget frem.
+
+**Ironien er præcis nattens emne:** jeg opdagede at `/feature` havde kørt en
+tre måneder gammel udgave (F234), rettede det — og sprang så skillen over næste
+gang jeg lavede et F-nummer.
+
+**Klassen lukket, ikke tilfældet.** Alle 25 F-numre fra nattens commits er
+krydstjekket mod boardet OG mod disken:
+
+```
+plan-doc på disken   25 af 25
+kort på boardet      25 af 25   (efter F236.2 blev oprettet)
+```
