@@ -442,7 +442,13 @@ function ImageTile({
     >
       <div class="relative aspect-square bg-[color:var(--color-bg)] overflow-hidden">
         <img
-          src={hit.url}
+          // F241.3 — the THUMBNAIL, not the original. The server has computed
+          // `thumbnailUrl` for a long time and no `<img>` in this panel ever
+          // read it, so every tile downloaded the full-size image: measured on
+          // Sanne's Trail, one screenful of 36 pulled hundreds of megabytes and
+          // could not finish. `?? hit.url` keeps the old behaviour when the
+          // server sends no thumbnail.
+          src={hit.thumbnailUrl ?? hit.url}
           alt={hit.alt}
           loading="lazy"
           class="w-full h-full object-cover transition group-hover:scale-105"
@@ -607,7 +613,9 @@ function ImageList({
                 </td>
                 <td class="px-3 py-2">
                   <img
-                    src={hit.url}
+                    // F241.3 — thumbnail, same reason as the card grid. This
+                    // cell renders at 80x80; the original can be 29 MB.
+                    src={hit.thumbnailUrl ?? hit.url}
                     alt={hit.alt}
                     loading="lazy"
                     class="w-20 h-20 object-cover rounded border border-[color:var(--color-border)]"
@@ -991,6 +999,8 @@ function ImageDetail({
       </button>
 
       <img
+        // Deliberately the ORIGINAL: this is the full-size viewer, and the whole
+        // point of opening it is to see the real image.
         src={hit.url}
         alt={hit.alt}
         onClick={(e) => e.stopPropagation()}

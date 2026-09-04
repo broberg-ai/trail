@@ -1087,6 +1087,21 @@ export interface ImageHit {
   filename: string;
   /** Absolute proxy URL — same-origin auth via session cookie. */
   url: string;
+  /**
+   * F241.3 — a small WebP for LISTS and GRIDS. Prefer it over `url` anywhere
+   * the image is rendered at thumbnail size.
+   *
+   * The server has sent this field since F161.5 and THIS TYPE NEVER DECLARED
+   * IT, so it was invisible to every `<img>` in the gallery — all three read
+   * `url` and downloaded the original. Measured on Sanne's Trail: 36 rows
+   * pulled hundreds of megabytes and a screenful could not finish loading.
+   * A field the server sends and the type omits is not a small mistake; it is
+   * a feature that cannot be used and cannot be seen to be missing.
+   *
+   * Nullable: an engine may decline to offer one, and the call site falls back
+   * to `url`.
+   */
+  thumbnailUrl: string | null;
   alt: string;
   page: number | null;
   width: number;
