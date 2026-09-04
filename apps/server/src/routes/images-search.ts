@@ -22,7 +22,6 @@ import { Hono } from 'hono';
 import { documents, documentImages, knowledgeBases } from '@trail/db';
 import { and, eq } from 'drizzle-orm';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
-import { needsDerivative } from '../services/vision-derivative.js';
 import { resolveKbId } from '@trail/core';
 import {
   parseAudienceParam,
@@ -185,17 +184,17 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
     // broken icon. Relative URL keeps the same-origin contract
     // documented on the ImageHit type.
     url: `/api/v1/documents/${row.document_id}/images/${String(row.filename).replace(/^\//, '')}`,
-    // F161.5 — relative thumbnail URL (≤1568px WebP via the serve route's
-    // ?variant=thumb branch) only for images heavy enough to warrant a
-    // derivative; null otherwise so a consumer's `thumbnailUrl ?? url`
-    // falls back to the (already small) original.
-    thumbnailUrl: needsDerivative(
-      Number(row.width),
-      Number(row.height),
-      Number(row.size_bytes ?? 0),
-    )
-      ? `/api/v1/documents/${row.document_id}/images/${String(row.filename).replace(/^\//, '')}?variant=thumb`
-      : null,
+    // F241.1 — ALWAYS a thumbnail URL.
+    //
+    // This used to be gated on `needsDerivative`, which answers the VISION
+    // model's question (is it over 3 MB / 4 MP?), not the browser's. So an
+    // 800 kB image got `null` here, the client's documented
+    // `thumbnailUrl ?? url` fallback did exactly what it says, and the list
+    // loaded the full original. Measured: 0 of Sanne's 1385 images cleared
+    // that threshold, so EVERY row loaded full-size — 24.4 MB per screenful,
+    // which also starved the browser's connection pool and left the Sources
+    // request queued behind it for minutes.
+    thumbnailUrl: `/api/v1/documents/${row.document_id}/images/${String(row.filename).replace(/^\//, '')}?variant=thumb`,
     alt: (row.vision_description as string | null) ?? '',
     page: row.page as number | null,
     width: row.width as number,
