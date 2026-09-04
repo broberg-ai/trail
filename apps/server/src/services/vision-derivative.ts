@@ -162,3 +162,97 @@ export function shouldFallback(err: unknown): boolean {
 
   return false;
 }
+
+/**
+ * F241.1 — THE DISPLAY THUMBNAIL. A different question from the one
+ * `needsDerivative` answers, and that conflation was the bug.
+ *
+ * `ensureDerivative` exists because the vision model rejects images over
+ * 5 MB, so it only produces anything above 3 MB / 4 MP. The image LIST
+ * reused that decision to choose whether to advertise a thumbnail — but
+ * "small enough for a model" and "small enough for a grid of 36" are not
+ * the same threshold. Measured on Sanne's Trail, 4 September 2026:
+ *
+ *   1385 images, 0 with a derivative → every list row loaded the FULL image
+ *   one screenful (36 rows)          → 24.4 MB
+ *   largest single image             → 29.5 MB
+ *
+ * And it did not only make the image list slow. A browser holds ~6
+ * connections per host, so 36 multi-megabyte fetches occupied all of them
+ * and the Sources request queued BEHIND them — an endpoint that answers in
+ * 0.25 s took minutes in the tab. Two broken pages, one cause.
+ *
+ * So this is deliberately its OWN function rather than a lowered threshold
+ * on `needsDerivative`: that function's answer decides what the MODEL sees.
+ * Lowering it to get thumbnails would silently change vision input too —
+ * one edit, two effects, and nobody would notice the second.
+ *
+ * It also never writes `vision_derivative_path`. That column means "the
+ * bytes the model saw"; if display output were recorded there it would
+ * stop meaning that, and no error would ever reveal it.
+ */
+const THUMB_LONG_EDGE = 480;
+const THUMB_QUALITY = 75;
+
+/** `.../page-1-img-1.png` → `.../page-1-img-1.thumb480.webp` */
+export function displayThumbPathFor(originalPath: string): string {
+  const lastDot = originalPath.lastIndexOf('.');
+  const base = lastDot > 0 ? originalPath.slice(0, lastDot) : originalPath;
+  return `${base}.thumb${THUMB_LONG_EDGE}.webp`;
+}
+
+export interface DisplayThumb {
+  bytes: Uint8Array;
+  /** What to send as Content-Type — the thumbnail is not always what wins. */
+  contentType: string;
+  /** False when the original was already smaller and is served instead. */
+  isThumb: boolean;
+}
+
+/**
+ * Produce (or read the cached) display thumbnail for ANY image, regardless
+ * of size. Idempotent — storage is the source of truth, same as
+ * `ensureDerivative`. The original is never modified.
+ *
+ * A THUMBNAIL IS NOT ALWAYS SMALLER, and that is not a corner case here:
+ * 673 of Sanne's 1385 images are under 50 kB, and re-encoding a small PNG
+ * as WebP can come out BIGGER (measured in this function's own test: a
+ * 67 kB thumb from a 17 kB original). Shipping that would have made those
+ * rows worse while the headline number improved — a win in aggregate and a
+ * regression for half the list. So the smaller of the two wins, and the
+ * caller is told which one it got.
+ */
+export async function ensureDisplayThumb(originalPath: string): Promise<DisplayThumb> {
+  const original = await storage.get(originalPath);
+  if (!original) {
+    throw new Error(`display-thumb: original missing at ${originalPath}`);
+  }
+
+  const thumbPath = displayThumbPathFor(originalPath);
+  const cached = await storage.get(thumbPath);
+  if (cached) {
+    return cached.byteLength < original.byteLength
+      ? { bytes: cached, contentType: 'image/webp', isThumb: true }
+      : { bytes: original, contentType: 'application/octet-stream', isThumb: false };
+  }
+
+  const encoded = await sharp(original)
+    .rotate() // apply EXIF orientation
+    .resize({
+      width: THUMB_LONG_EDGE,
+      height: THUMB_LONG_EDGE,
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+    .webp({ quality: THUMB_QUALITY })
+    .toBuffer();
+
+  if (encoded.byteLength >= original.byteLength) {
+    // Do not cache a thumbnail that loses: it would spend disk on bytes we
+    // will never serve, and force the same comparison on every later read.
+    return { bytes: original, contentType: 'application/octet-stream', isThumb: false };
+  }
+
+  await storage.put(thumbPath, encoded, 'image/webp');
+  return { bytes: encoded, contentType: 'image/webp', isThumb: true };
+}

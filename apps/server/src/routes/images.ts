@@ -5,7 +5,19 @@ import { basename } from 'node:path';
 import { resolveKbId } from '@trail/core';
 import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
 import { storage, imagePath, sourcePath } from '../lib/storage.js';
-import { ensureDerivative, needsDerivative } from '../services/vision-derivative.js';
+import { ensureDisplayThumb } from '../services/vision-derivative.js';
+
+/** F241.1 — one place that maps a filename to a content type. It was written
+ *  inline at the serve site; the thumb branch needs the same answer, and two
+ *  copies of a mapping is how they drift. */
+function contentTypeFor(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  return ext === 'png' ? 'image/png'
+    : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+    : ext === 'webp' ? 'image/webp'
+    : ext === 'gif' ? 'image/gif'
+    : 'application/octet-stream';
+}
 import { defaultAudienceForAuth, isVisibleToAudience } from '../services/audience.js';
 import type { AppBindings } from '../app.js';
 
@@ -68,19 +80,21 @@ imageRoutes.get('/documents/:docId/images/:filename', async (c) => {
     return c.json({ error: 'Not found' }, 404);
   }
 
-  // F161.5 — `?variant=thumb`: serve a lightweight ≤1568px WebP for heavy
-  // images so a chat answer with N hits doesn't load N× full-res PNGs. The
-  // $0 local-vision path never produced a derivative, so generate it lazily
-  // here via the F165.1 helper (idempotent + storage-cached). Below the
-  // threshold (≤3 MB and ≤4 MP) there's no derivative → fall through to the
-  // original (already small).
+  // F241.1 — `?variant=thumb` serves a display thumbnail for EVERY image.
+  //
+  // It used to hand back the VISION derivative, and only when
+  // `needsDerivative` said yes — i.e. above 3 MB or 4 MP, which is the
+  // model's limit, not a screen's. Below that it fell through and served
+  // the full original, with a 200 and the right content-type, so nothing
+  // looked wrong anywhere. Measured on Sanne's Trail: 0 of 1385 images had
+  // a derivative, one screenful of the image list pulled 24.4 MB, and the
+  // Sources request queued behind those fetches for minutes.
+  //
+  // Now the size question is answered for the display, and the vision
+  // derivative is left alone to answer the model's.
   if (c.req.query('variant') === 'thumb') {
     const img = await trail.db
-      .select({
-        width: documentImages.width,
-        height: documentImages.height,
-        sizeBytes: documentImages.sizeBytes,
-      })
+      .select({ storagePath: documentImages.storagePath })
       .from(documentImages)
       .where(
         and(
@@ -90,23 +104,30 @@ imageRoutes.get('/documents/:docId/images/:filename', async (c) => {
         ),
       )
       .get();
-    if (img && needsDerivative(img.width, img.height, img.sizeBytes)) {
-      const deriv = await ensureDerivative(
-        imagePath(tenant.id, doc.knowledgeBaseId, docId, filename),
-        img.width,
-        img.height,
-        img.sizeBytes,
+    // F232.2 — prefer the path ON THE ROW; recomputing it is what produced
+    // F230's 212 unreachable images. Fall back only when there is no row.
+    const source =
+      img?.storagePath ?? imagePath(tenant.id, doc.knowledgeBaseId, docId, filename);
+    try {
+      const thumb = await ensureDisplayThumb(source);
+      return new Response(thumb.bytes, {
+        headers: {
+          // Not always webp: an image that is already smaller than its own
+          // thumbnail is served as-is, and saying "webp" then would be a lie
+          // the browser acts on.
+          'Content-Type': thumb.isThumb ? 'image/webp' : contentTypeFor(filename),
+          'Cache-Control': 'private, max-age=86400',
+        },
+      });
+    } catch (err) {
+      // A thumbnail that cannot be produced (unreadable bytes, a format
+      // sharp refuses) must not turn a working image into an error — fall
+      // through and serve the original below.
+      console.error(
+        `[images] thumb failed for ${source}:`,
+        err instanceof Error ? err.message : err,
       );
-      if (deriv.isDerivative) {
-        return new Response(deriv.bytes, {
-          headers: {
-            'Content-Type': 'image/webp',
-            'Cache-Control': 'private, max-age=86400',
-          },
-        });
-      }
     }
-    // else: fall through and serve the original below.
   }
 
   // F232.2 — READ THE PATH OFF THE ROW, do not recompute it.
@@ -137,17 +158,9 @@ imageRoutes.get('/documents/:docId/images/:filename', async (c) => {
   const data = await storage.get(resolved);
   if (!data) return c.json({ error: 'Image not found' }, 404);
 
-  const ext = filename.split('.').pop()?.toLowerCase();
-  const contentType =
-    ext === 'png' ? 'image/png' :
-    ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' :
-    ext === 'webp' ? 'image/webp' :
-    ext === 'gif' ? 'image/gif' :
-    'application/octet-stream';
-
   return new Response(data, {
     headers: {
-      'Content-Type': contentType,
+      'Content-Type': contentTypeFor(filename),
       'Cache-Control': 'private, max-age=3600',
     },
   });
