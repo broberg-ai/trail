@@ -75,7 +75,7 @@ test('DEN MÅLTE FEJL — rækker der fandtes FØR indekset kan stadig slettes',
   catch (e) { brokeAsExpected = String((e as Error).message).includes('malformed'); }
   expect(brokeAsExpected).toBe(true);
 
-  // Og reparationen — den ene linje 0046 manglede.
+  // Og reparationen — den ene linje, som nu bor i 0048.
   raw.run("INSERT INTO document_images_ocr_fts(document_images_ocr_fts) VALUES('rebuild')");
   raw.run("DELETE FROM document_images WHERE id='r0'");
   const left = raw.query('SELECT COUNT(*) n FROM document_images').get() as { n: number };
@@ -83,9 +83,20 @@ test('DEN MÅLTE FEJL — rækker der fandtes FØR indekset kan stadig slettes',
   raw.close();
 });
 
-test('migration 0046 BÆRER sin rebuild — teksten, ikke kun opførslen', async () => {
-  // Opførsels-testen ovenfor ville også bestå hvis nogen fjernede rebuild fra
-  // 0046 og lagde den et tredje sted. Denne pinner den hvor den hører hjemme.
-  const sql = await Bun.file(new URL('../drizzle/0046_image_ocr.sql', import.meta.url)).text();
-  expect(sql).toContain("VALUES('rebuild')");
+test('EN ALLEREDE KØRT MIGRATION MÅ ALDRIG REDIGERES', async () => {
+  // Det her kostede prod. Jeg tilføjede rebuild-linjen til 0046 EFTER den var
+  // kørt. Køreren genkender migrationer på indholdets hash, så en ændret fil
+  // er en NY migration: den kørte 0046 forfra, ramte
+  //
+  //     SQLITE_ERROR: duplicate column name: ocr_text
+  //
+  // i bootTenant, processen afsluttede med kode 1, og maskinen genstartede i
+  // ring. Motoren var nede — og med den Sannes chat på hendes eget site.
+  //
+  // Rettelsen hører til i en NY migration (0048), aldrig i den gamle fil.
+  // Denne test pinner at 0046 IKKE bærer den, og at 0048 gør.
+  const m46 = await Bun.file(new URL('../drizzle/0046_image_ocr.sql', import.meta.url)).text();
+  expect(m46).not.toContain("VALUES('rebuild')");
+  const m48 = await Bun.file(new URL('../drizzle/0048_rebuild_ocr_fts.sql', import.meta.url)).text();
+  expect(m48).toContain("VALUES('rebuild')");
 });

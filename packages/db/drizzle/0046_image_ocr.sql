@@ -33,17 +33,3 @@ CREATE TRIGGER `document_images_ocr_fts_update` AFTER UPDATE ON `document_images
   INSERT INTO `document_images_ocr_fts`(`rowid`, `ocr_text`)
   VALUES (new.rowid, new.ocr_text);
 END;
---> statement-breakpoint
--- F238 — REBUILD, og den linje er ikke valgfri.
---
--- Et contentless FTS5-indeks oprettet over EKSISTERENDE rækker er tomt, og en
--- senere DELETE fyrer en trigger der vil fjerne en post der aldrig blev
--- indsat: "SQLITE_CORRUPT_VTAB: database disk image is malformed".
---
--- Uden den her brød denne migration billedsletning for alle tre tenants,
--- inklusive en kunde. Det er også derfor 0048 findes: databaser der allerede
--- havde kørt 0046 skulle repareres bagefter.
---
--- På en frisk database er den et no-op. Det er præcis derfor fejlen var
--- usynlig i udvikling.
-INSERT INTO `document_images_ocr_fts`(`document_images_ocr_fts`) VALUES('rebuild');
