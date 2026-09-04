@@ -1060,8 +1060,8 @@
   },
   "images": {
     "title": "Billeder",
-    "summary": "Viser {n} billede",
-    "summaryPlural": "Viser {n} billeder",
+    "summary": "Viser {n} af {total} billede",
+    "summaryPlural": "Viser {n} af {total} billeder",
     "summaryEmpty": "Ingen billeder fundet.",
     "searchPlaceholder": "Søg i billed-beskrivelser…",
     "filterAllSources": "Alle kilder",
@@ -1108,7 +1108,9 @@
     "colDescription": "Beskrivelse",
     "colPage": "Side",
     "colDimensions": "Størrelse",
-    "sortScope": "Sorteret på de {count} billeder der er hentet — ikke hele Trailen."
+    "sortScope": "Sorteret på de {count} billeder der er hentet — ikke hele Trailen.",
+    "summaryLegacy": "Viser {n} billede",
+    "summaryLegacyPlural": "Viser {n} billeder"
   },
   "linkReport": {
     "title": "Link-tjek",

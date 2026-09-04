@@ -227,7 +227,36 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
     }
   }
 
-  return c.json({ hits, nextCursor });
+  // F241.2 — THE TOTAL, because "36+" is not a number.
+  //
+  // The header read "Showing 36+ images", and that string cannot tell "36 of
+  // 40" apart from "36 of 1385" — the owner spotted it on a Trail with 1385.
+  // A "+" says only "there is more", which is the one thing the reader could
+  // already guess. So the count is asked for explicitly.
+  //
+  // It counts the SAME predicate the browse query uses (tenant, KB,
+  // triage='kept', plus the active filters) so the total and the rows cannot
+  // disagree. It deliberately does NOT apply the audience filter, which is a
+  // per-row check done in JS above — so on an audience-filtered view the total
+  // is an upper bound. Said here rather than discovered: a number that is
+  // quietly wrong is worse than one that is honest about its edge.
+  const countSql = `
+    SELECT COUNT(*) AS n
+      FROM document_images di
+      JOIN documents d ON d.id = di.document_id
+     WHERE di.tenant_id = ?
+       AND di.knowledge_base_id = ?
+       AND di.triage = 'kept'
+       ${docIdFilter ? 'AND di.document_id = ?' : ''}
+       ${flagClause}
+       ${missingDescClause}
+  `;
+  const countArgs: Array<string | number> = [tenant.id, kbId];
+  if (docIdFilter) countArgs.push(docIdFilter);
+  const countRes = await trail.execute(countSql, countArgs);
+  const total = Number((countRes.rows[0] as Record<string, unknown> | undefined)?.n ?? 0);
+
+  return c.json({ hits, nextCursor, total });
 });
 
 function decodeBrowseCursor(raw: string | null): { createdAt: string; id: string } | null {

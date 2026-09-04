@@ -1120,6 +1120,11 @@ export function listImageSources(kbId: string): Promise<{ sources: ImageSource[]
 export interface ImageListResponse {
   hits: ImageHit[];
   nextCursor: string | null;
+  /** F241.2 — how many images match the current filters in total. The header
+   *  used to say "36+", which cannot tell 36-of-40 from 36-of-1385. Optional
+   *  so an older engine (which does not send it) degrades to the old text
+   *  rather than rendering "of undefined". */
+  total?: number;
 }
 
 // F163.1 — bulk endpoints

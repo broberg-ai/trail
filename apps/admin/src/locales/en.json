@@ -1060,8 +1060,8 @@
   },
   "images": {
     "title": "Images",
-    "summary": "Showing {n} image",
-    "summaryPlural": "Showing {n} images",
+    "summary": "Showing {n} of {total} image",
+    "summaryPlural": "Showing {n} of {total} images",
     "summaryEmpty": "No images found.",
     "searchPlaceholder": "Search image descriptions…",
     "filterAllSources": "All sources",
@@ -1108,7 +1108,9 @@
     "colDescription": "Description",
     "colPage": "Page",
     "colDimensions": "Size",
-    "sortScope": "Sorted across the {count} loaded images — not the whole Trail."
+    "sortScope": "Sorted across the {count} loaded images — not the whole Trail.",
+    "summaryLegacy": "Showing {n} image",
+    "summaryLegacyPlural": "Showing {n} images"
   },
   "linkReport": {
     "title": "Link Check",

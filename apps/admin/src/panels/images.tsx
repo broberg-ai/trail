@@ -56,6 +56,10 @@ export function ImagesPanel() {
   const [hits, setHits] = useState<ImageHit[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  // F241.2 — the real total from the server. null = this engine did not send
+  // one, and the header then falls back to the old "36+" rather than claiming
+  // a number it does not have.
+  const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -117,6 +121,7 @@ export function ImagesPanel() {
     setHits([]);
     setCursor(null);
     setHasMore(false);
+    setTotal(null);
     setError(null);
     setSelected(new Set());
     listImages(kbId, {
@@ -130,6 +135,7 @@ export function ImagesPanel() {
         setHits(r.hits);
         setCursor(r.nextCursor);
         setHasMore(r.nextCursor !== null);
+        setTotal(typeof r.total === 'number' ? r.total : null);
       })
       .catch((err: ApiError) => {
         if (!cancelled) setError(err.message);
@@ -156,6 +162,7 @@ export function ImagesPanel() {
       setHits((prev) => [...prev, ...r.hits]);
       setCursor(r.nextCursor);
       setHasMore(r.nextCursor !== null);
+      setTotal(typeof r.total === 'number' ? r.total : null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
     } finally {
@@ -259,9 +266,16 @@ export function ImagesPanel() {
         <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 32px; letter-spacing: -0.015em; line-height: 1.15; margin: 0 0 6px;">{t('images.title')}</h1>
         <p class="text-[color:var(--color-fg-muted)] text-sm">
           {hits.length > 0 ? (
-            t(hits.length === 1 ? 'images.summary' : 'images.summaryPlural', {
-              n: hits.length + (hasMore ? '+' : ''),
-            })
+            total === null
+              ? // Older engine: no total. Keep the old wording rather than
+                // rendering "of undefined".
+                t(hits.length === 1 ? 'images.summaryLegacy' : 'images.summaryLegacyPlural', {
+                  n: hits.length + (hasMore ? '+' : ''),
+                })
+              : t(total === 1 ? 'images.summary' : 'images.summaryPlural', {
+                  n: hits.length,
+                  total,
+                })
           ) : loading ? (
             <span class="loading-delayed inline-block">{t('common.loading')}</span>
           ) : (
