@@ -1,4 +1,5 @@
 import { createMailer } from '@broberg/mail';
+import { MAGIC_LINK_TTL_MIN } from './ttl.js';
 
 /**
  * F172 — magic-link email. Delivery via @broberg/mail (F005 fleet mailer):
@@ -60,7 +61,7 @@ ${intro}
 
 ${link}
 
-This link expires in 15 minutes. If you didn't request it, you can ignore
+This link expires in ${MAGIC_LINK_TTL_MIN} minutes. If you didn't request it, you can ignore
 this email — nothing happens until the link is used.
 
 — Trail
@@ -76,7 +77,7 @@ this email — nothing happens until the link is used.
 </p>
 <p style="font-size: 0.9rem; color: #555;">Or paste this link into your browser:<br>
 <code style="word-break: break-all;">${link}</code></p>
-<p style="font-size: 0.85rem; color: #777; margin-top: 2rem;">This link expires in 15 minutes. If you didn't request it, you can ignore this email — nothing happens until the link is used.</p>
+<p style="font-size: 0.85rem; color: #777; margin-top: 2rem;">This link expires in ${MAGIC_LINK_TTL_MIN} minutes. If you didn't request it, you can ignore this email — nothing happens until the link is used.</p>
 <p style="font-size: 0.85rem; color: #777;">— Trail</p>
 </body></html>`;
 

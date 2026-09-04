@@ -4,6 +4,7 @@ import { eq, and, gt, isNull, inArray } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import { db, schema } from './db.js';
 import { sendMagicLink } from './email.js';
+import { MAGIC_LINK_TTL_MIN } from './ttl.js';
 
 /**
  * F33 Phase 1B.2 — magic-link auth.
@@ -19,7 +20,7 @@ import { sendMagicLink } from './email.js';
 
 const COOKIE_NAME = 'trail-session';
 const SESSION_TTL_DAYS = 30;
-const MAGIC_LINK_TTL_MIN = 15;
+
 
 function nowIso(): string {
   return new Date().toISOString();
