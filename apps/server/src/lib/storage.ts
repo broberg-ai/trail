@@ -16,3 +16,20 @@ export function sourcePath(tenantId: string, kbId: string, docId: string, ext: s
 export function imagePath(tenantId: string, kbId: string, docId: string, filename: string): string {
   return `${tenantId}/${kbId}/${docId}/images/${filename}`;
 }
+
+/**
+ * F232.1 — where an image waits while nobody has judged it yet.
+ *
+ * A separate PREFIX, not a flag on the same folder: an image that is deleted
+ * during triage should never have touched the Trail's real image store, so
+ * "what is in the Trail" and "what was extracted" cannot drift. It also means a
+ * crashed triage run leaves its mess in one identifiable place.
+ */
+export function pendingImagePath(
+  tenantId: string,
+  kbId: string,
+  docId: string,
+  filename: string,
+): string {
+  return `${tenantId}/${kbId}/${docId}/images-pending/${filename}`;
+}

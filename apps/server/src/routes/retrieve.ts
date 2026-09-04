@@ -327,6 +327,8 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
         and(
           eq(documentImages.tenantId, tenant.id),
           inArray(documentImages.documentId, docIdsForImages),
+          // F232.1 — never hand out an image that is still waiting to be judged.
+          eq(documentImages.triage, 'kept'),
         ),
       )
       .all();

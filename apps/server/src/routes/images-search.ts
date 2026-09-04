@@ -112,6 +112,10 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
         JOIN documents d ON d.id = di.document_id
        WHERE di.tenant_id = ?
          AND di.knowledge_base_id = ?
+         -- F232.1 — an image waiting in the pending store is not in the Trail
+         -- yet. Excluded here rather than filtered in the caller, so a new
+         -- reader cannot forget it.
+         AND di.triage = 'kept'
          ${docClause}
          ${flagClause}
          ${missingDescClause}
@@ -138,6 +142,7 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
         JOIN documents d ON d.id = di.document_id
        WHERE di.tenant_id = ?
          AND di.knowledge_base_id = ?
+         AND di.triage = 'kept'   -- F232.1, same reason as the FTS branch above
          ${cursorClause}
          ${docClause}
          ${flagClause}
@@ -329,7 +334,7 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images/sources', async (c) => {
     SELECT d.id AS doc_id, d.filename, d.title, d.path, d.tags,
            COUNT(di.id) AS image_count
       FROM documents d
-      JOIN document_images di ON di.document_id = d.id
+      JOIN document_images di ON di.document_id = d.id AND di.triage = 'kept'
      WHERE d.tenant_id = ?
        AND d.knowledge_base_id = ?
        AND d.kind = 'source'

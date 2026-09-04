@@ -28,6 +28,7 @@ import { startUploadSessionGc } from './services/upload-session-gc.js';
 import { initJobRunner } from './services/jobs/runner.js';
 import { noopHandler } from './services/jobs/handlers/noop.js';
 import { visionRerunHandler } from './services/jobs/handlers/vision-rerun.js';
+import { imageTriageHandler } from './services/jobs/handlers/image-triage.js';
 import { init as upInit, setTag } from '@upmetrics/sdk';
 import { UPMETRICS_DSN, reportDeploy } from '@trail/shared';
 
@@ -203,6 +204,7 @@ for (const [slug, db] of tenantPool) {
     jobRunner.register('noop', noopHandler);
   }
   jobRunner.register('vision-rerun', visionRerunHandler);
+  jobRunner.register('image-triage', imageTriageHandler);
   await jobRunner.start();
   jobRunners.push(jobRunner);
 }

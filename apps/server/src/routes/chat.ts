@@ -826,6 +826,7 @@ async function retrieveContext(
            JOIN document_images di ON di.rowid = fts.rowid
           WHERE fts.vision_description MATCH ?
             AND di.tenant_id = ?
+            AND di.triage = 'kept'   -- F232.1 — pending images are not in the Trail
             AND di.knowledge_base_id IN (${placeholders})
           ORDER BY bm25(document_images_fts) ASC
           LIMIT ?`,

@@ -15,6 +15,7 @@ import { resolveKbId, logActivity } from '@trail/core';
 import { persistImagesFromExtraction } from '../services/document-images.js';
 import { getJobRunner } from '../services/jobs/runner.js';
 import type { VisionRerunPayload } from '../services/jobs/handlers/vision-rerun.js';
+import type { ImageTriagePayload } from '../services/jobs/handlers/image-triage.js';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 // Silent hangs in pdfjs-dist on malformed PDFs are the single worst failure
@@ -895,7 +896,12 @@ export async function processFileAsync(
       buffer,
       filename,
       storage,
-      imagePrefix: `${tenantId}/${kbId}/${docId}/images`,
+      // F232.1 — extraction writes into the PENDING store. Nothing is in the
+      // Trail until the triage job has decided it is worth keeping. The public
+      // URL below is unchanged on purpose: it names the document and the file,
+      // not where the bytes sit, so promotion is invisible to the markdown the
+      // extractor writes.
+      imagePrefix: `${tenantId}/${kbId}/${docId}/images-pending`,
       imageUrlPrefix: `/api/v1/documents/${docId}/images`,
       describeImage: undefined,
       // F190.6 — tag the image-source vision call with tenant/KB so its cost
@@ -975,16 +981,13 @@ export async function processFileAsync(
         result.images,
         visionModel,
         kbRow?.minImagePx ?? null,
-        kbRow?.minImageEntropy ?? null,
+        // F232.1 — the entropy gate has MOVED OUT of the ingest path. It is now
+        // step 1 of the triage job (F232.3), where it decides whether to spend
+        // a model call rather than whether to keep a row. Passing null keeps
+        // the function's contract intact without evaluating anything here.
+        null,
+        'pending',
       );
-      if (res.filteredBlank > 0) {
-        // F229.1 — said out loud for the same reason as F226 below: a Trail
-        // that quietly drops a fifth of its images looks identical to one that
-        // extracted fewer.
-        console.log(
-          `[F229.1] ${docId}: discarded ${res.filteredBlank} image(s) with entropy below ${kbRow?.minImageEntropy}, kept ${res.inserted}`,
-        );
-      }
       if (res.filteredSmall > 0) {
         // Said out loud rather than counted in silence: "we filtered 690 small
         // images" and "extraction produced nothing" must never look alike.
@@ -1048,15 +1051,20 @@ export async function processFileAsync(
   if (!awaitingLocalCompile && Array.isArray(result.images) && result.images.length > 0) {
     try {
       const runner = getJobRunner();
-      const jobId = await runner.submit<VisionRerunPayload>({
-        kind: 'vision-rerun',
+      // F232.3 — this is now TRIAGE, not merely description. The images are
+      // sitting in the pending store; the job decides which of them are worth
+      // anything, deletes the rest, and moves the survivors into the Trail.
+      // Vision + OCR happen inside it, so the old vision-rerun submit here
+      // would have described images that were about to be deleted.
+      const jobId = await runner.submit<ImageTriagePayload>({
+        kind: 'image-triage',
         tenantId,
         knowledgeBaseId: kbId,
         userId,
-        payload: { documentIds: [docId], filter: 'null-only' },
+        payload: { documentIds: [docId] },
       });
       console.log(
-        `[F165] queued vision-rerun job=${jobId} doc=${docId} images=${result.images.length}`,
+        `[F232.3] queued image-triage job=${jobId} doc=${docId} images=${result.images.length}`,
       );
     } catch (err) {
       // Non-fatal: doc is already 'ready', curator can trigger Vision

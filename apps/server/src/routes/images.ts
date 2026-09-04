@@ -13,6 +13,30 @@ export const imageRoutes = new Hono<AppBindings>();
 
 imageRoutes.use('*', requireAuth);
 
+/**
+ * F232.2 — a stored path is only usable if it stays inside this tenant.
+ *
+ * `storage_path` is a column, and a column is data. Trusting it verbatim would
+ * turn any write that reaches that column into a read of any file the process
+ * can see. So the row decides WHERE INSIDE THE TENANT the bytes are, never
+ * whether they are inside it.
+ *
+ * Returns the computed path when the stored one is absent, empty, escaping, or
+ * outside the tenant prefix — never an error, because a bad column value must
+ * degrade to the old behaviour rather than break a working image.
+ */
+export function safeStoragePath(
+  stored: string | null | undefined,
+  tenantId: string,
+  computed: string,
+): string {
+  if (!stored) return computed;
+  const p = stored.replace(/\/{2,}/g, '/').replace(/^\/+/, '');
+  if (p.includes('..')) return computed;
+  if (!p.startsWith(`${tenantId}/`)) return computed;
+  return p;
+}
+
 imageRoutes.get('/documents/:docId/images/:filename', async (c) => {
   const trail = getTrail(c);
   const tenant = getTenant(c);
@@ -85,7 +109,32 @@ imageRoutes.get('/documents/:docId/images/:filename', async (c) => {
     // else: fall through and serve the original below.
   }
 
-  const data = await storage.get(imagePath(tenant.id, doc.knowledgeBaseId, docId, filename));
+  // F232.2 — READ THE PATH OFF THE ROW, do not recompute it.
+  //
+  // This used to derive the path from tenant/kb/doc/filename and ignore
+  // `storage_path` entirely — two sources for one value, which is the exact
+  // shape that produced F230's 212 unreachable images. It also makes it
+  // impossible for the bytes to live anywhere but the computed place, so an
+  // image waiting in the pending store could never be served after promotion.
+  //
+  // The fallback is deliberate: a row with no storage_path (or none at all,
+  // e.g. a legacy file on disk with no row) still resolves the old way. A
+  // missing row must not turn a working image into a 404.
+  const stored = await trail.db
+    .select({ storagePath: documentImages.storagePath })
+    .from(documentImages)
+    .where(
+      and(
+        eq(documentImages.documentId, docId),
+        eq(documentImages.filename, filename),
+        eq(documentImages.tenantId, tenant.id),
+      ),
+    )
+    .get();
+  const computed = imagePath(tenant.id, doc.knowledgeBaseId, docId, filename);
+  const resolved = safeStoragePath(stored?.storagePath, tenant.id, computed);
+
+  const data = await storage.get(resolved);
   if (!data) return c.json({ error: 'Image not found' }, 404);
 
   const ext = filename.split('.').pop()?.toLowerCase();

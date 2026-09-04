@@ -29,6 +29,7 @@ const KNOWN_KINDS: ReadonlySet<JobKind> = new Set<JobKind>([
   'noop',
   'vision-rerun',
   'bulk-vision-rerun',
+  'image-triage',
 ]);
 
 jobRoutes.post('/jobs', async (c) => {

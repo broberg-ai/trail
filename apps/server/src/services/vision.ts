@@ -357,10 +357,16 @@ export async function ocrImage(
   return {
     text: text.length > 0 ? text : null,
     model: res.usage.model || 'mistral-ocr-latest',
-    // The SDK has no price for mistral-ocr-latest today (getModelPrice returns
-    // undefined), so costUsd is 0 and we report 0 rather than inventing a
-    // number here. Reported to ai-sdk; the fix belongs in the shared price
-    // list, not in a second copy of it (F228).
+    // MEASURED 4 Sept, correcting what this comment said an hour earlier:
+    // the SDK DOES price OCR. usage.costUsd came back 0.002 per page, i.e.
+    // $1 per 1.000 pages. The earlier note said it was 0 because
+    // getModelPrice('mistral-ocr-latest') returns undefined — true, and the
+    // wrong thing to conclude from: the adapter prices per PAGE, not per
+    // token, so the token price-list has no entry by design.
+    //
+    // The number matters, because OCR is the expensive half: $0.002 against
+    // $0.000108 for the vision description on the same image — 19x. Anyone
+    // reading the old comment would have believed OCR was free.
     costCents: res.usage.costUsd > 0 ? Math.ceil(res.usage.costUsd * 100) : 0,
   };
 }

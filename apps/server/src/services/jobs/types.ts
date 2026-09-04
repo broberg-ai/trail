@@ -23,7 +23,8 @@ export type JobStatus =
 export type JobKind =
   | 'noop' // Phase 1 verification stub
   | 'vision-rerun' // Phase 2
-  | 'bulk-vision-rerun'; // Phase 4
+  | 'bulk-vision-rerun' // Phase 4
+  | 'image-triage'; // F232.3 — judge pending images after compilation
 
 /**
  * Generic progress shape — every handler must conform so the SSE channel

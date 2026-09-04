@@ -330,6 +330,13 @@
       "when": 1788510000000,
       "tag": "0046_image_ocr",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1788520000000,
+      "tag": "0047_image_triage",
+      "breakpoints": true
     }
   ]
 }

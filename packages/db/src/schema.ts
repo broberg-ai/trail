@@ -351,6 +351,13 @@ export const documentImages = sqliteTable(
      *  vision description. A description says what the image shows; OCR says
      *  what it reads. Only the second is something a curator can check against
      *  the picture, so they must not share a column. */
+    /** F232.1 — 'pending' while the image waits in the temp store for the
+     *  triage job to decide whether it holds anything of value; 'kept' once it
+     *  has passed and its bytes live in the real image store.
+     *
+     *  Defaults to 'kept' because every row written before this column already
+     *  IS in the Trail. A 'pending' default would have emptied the gallery. */
+    triage: text('triage', { enum: ['pending', 'kept'] }).notNull().default('kept'),
     ocrText: text('ocr_text'),
     ocrModel: text('ocr_model'),
     ocrAt: text('ocr_at'),

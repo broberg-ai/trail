@@ -136,6 +136,9 @@ export async function persistImagesFromExtraction(
   visionModel: string | null,
   minImagePx: number | null = null,
   minImageEntropy: number | null = null,
+  /** F232.1 — 'pending' parks the rows for the triage job (F232.3) to judge;
+   *  'kept' writes them straight into the Trail. Ingest passes 'pending'. */
+  triage: 'pending' | 'kept' = 'kept',
 ): Promise<{
   inserted: number;
   skipped: number;
@@ -206,6 +209,7 @@ export async function persistImagesFromExtraction(
           visionDescription: img.description?.trim() ?? null,
           visionModel: img.description ? visionModel : null,
           visionAt: img.description ? visionAt : null,
+          triage,
         })
         .run();
       inserted += 1;
