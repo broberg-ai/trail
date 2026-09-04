@@ -89,6 +89,22 @@ export async function logActivity(
       metadata: input.metadata ? JSON.stringify(input.metadata) : null,
     }).run();
   } catch (err) {
-    console.error('[activity-log] write failed:', err instanceof Error ? err.message : err);
+    // F239 — LOG ÅRSAGEN, ikke kun forsøget.
+    //
+    // Den her linje sagde før kun `err.message`, og for en drizzle-fejl ER den
+    // besked hele SQL-sætningen plus parametrene. Altså: en fejlrapport der
+    // fortæller hvad vi PRØVEDE og aldrig hvorfor det gik galt.
+    //
+    // Målt 4. september: seks «write failed» i loggen, og ikke ét ord om
+    // årsagen. Diagnosen krævede fire SSH-runder til en produktionsdatabase
+    // hvor hver eneste manuelle gentagelse af den samme indsættelse LYKKEDES —
+    // fordi den rigtige besked lå i `err.cause`, som ingen printede.
+    //
+    // Tenanten står med, ellers kan en fejl ikke henføres til en kunde.
+    const cause = err instanceof Error && err.cause instanceof Error ? err.cause.message : null;
+    console.error(
+      `[activity-log] write failed for tenant=${input.tenantId} kind=${input.kind}:`,
+      cause ?? (err instanceof Error ? err.message : err),
+    );
   }
 }
