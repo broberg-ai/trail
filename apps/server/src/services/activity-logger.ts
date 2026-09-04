@@ -24,12 +24,63 @@
  */
 import { logActivity } from '@trail/core';
 import type { TrailDatabase } from '@trail/db';
+import { tenants } from '@trail/db';
 import { broadcaster, type BroadcastEvent } from './broadcast.js';
 import type { ActivityKind } from '@trail/core';
 
+/**
+ * F240.1 — THE SUBSCRIBER IS PER-TENANT; THE BROADCASTER IS NOT.
+ *
+ * `startActivityLogger(db)` is called once per tenant in the pool
+ * (index.ts iterates `tenantPool`), but every one of those subscribers
+ * is attached to the SAME process-global broadcaster. So one tenant's
+ * event was handed to all three subscribers, and each tried to insert
+ * it into ITS OWN database.
+ *
+ * Two of those three writes were wrong, every time. They failed — but
+ * only because `activity_log.tenant_id` has a foreign key into a
+ * `tenants` table that holds just this tenant's own row. Measured
+ * 4 September 2026: nine writes in one candidate flow, three landed,
+ * six raised `FOREIGN KEY constraint failed`. Exactly one in three,
+ * which is the number of tenants on the engine.
+ *
+ * Nothing leaked — zero foreign rows in all three production
+ * databases — but a foreign key is a BACKSTOP, not a decision. It had
+ * become the only thing keeping one customer's activity out of
+ * another's log, and it only holds while every tenant DB happens to
+ * contain exactly its own tenant row. Move a tenant between engines,
+ * or clone a database, and that stops being true silently.
+ *
+ * So the scope is decided HERE, where a decision can be made, instead
+ * of thrown four layers down. The foreign key stays exactly as it is.
+ */
 export function startActivityLogger(trail: TrailDatabase): () => void {
+  // Resolved on the first event and cached: the activity log is on the
+  // hot path (26,622 rows on broberg-ai alone), so re-reading `tenants`
+  // per event would be three queries to avoid two writes.
+  let ownTenantIds: Promise<Set<string>> | null = null;
+  const resolveOwnTenantIds = (): Promise<Set<string>> => {
+    ownTenantIds ??= trail.db
+      .select({ id: tenants.id })
+      .from(tenants)
+      .all()
+      .then((rows) => new Set(rows.map((r) => r.id)));
+    return ownTenantIds;
+  };
+
   return broadcaster.subscribe((event) => {
-    void logFromBroadcast(trail, event).catch((err) => {
+    void (async () => {
+      // Compared on TENANT ID from this database's own `tenants` table,
+      // never on the directory name: broberg-ai's id is `t-broberg-ai`,
+      // but fd-aalborg's is `b4ce4f7c-fa2f-44a0-92ca-509145c2f4ce`. A
+      // slug comparison would work for two tenants out of three, and a
+      // guard that works for most looks right.
+      if ('tenantId' in event && event.tenantId) {
+        const own = await resolveOwnTenantIds();
+        if (!own.has(event.tenantId)) return;
+      }
+      await logFromBroadcast(trail, event);
+    })().catch((err) => {
       console.error('[activity-logger] drop:', err instanceof Error ? err.message : err);
     });
   });
