@@ -1,121 +1,144 @@
-# F222 — machines must be replaceable
+# F222 — maskiner skal kunne skiftes: al tilstand væk fra dem der udruller
 
-**Card:** trail-F222 · epic · critical
+**Kort:** trail-F222 · epic · critical
+**Revision 2 — 4. september 2026.** Revideret på ejerens ordre og efter hans egen
+arkitektur-beslutning (samtalen 4/9, gengivet nedenfor). Revision 1 (2/9) pegede
+på Turso som destination; den står nederst som sammenligning og fallback.
 
-> Owner, 3 September 2026: *"jeg kan ikke basere en chat på data i trail hvis
-> den er nede i 90 -> 30 sekunder uden at man kan få et svar ved reboots eller
-> deploys, det holder ikke — maskiner og admin teknik skal afkobles fra
-> databaserne komplet."*
+> Ejeren, 3. september: *«jeg kan ikke basere en chat på data i trail hvis den
+> er nede i 90 → 30 sekunder … maskiner og admin teknik skal afkobles fra
+> databaserne komplet.»*
 
-## This overrules F220, and the owner was right
+## Hvad 4. september BEVISTE — epicens egen begrundelse, målt i drift
 
-F220 concluded: split the admin app, shard the engine, **do not move any
-database**. That optimised for migration safety and under-weighted the thing
-that actually decides it — **Trail is becoming a dependency other products
-call.** A dependency that returns nothing for 90 seconds during a deploy is not
-one you can build a chat on. *"Shorter outage"* is not an answer to *"must not
-be unavailable"*.
+Dagen leverede den måling revision 1 kun kunne forudsige:
 
-## The measurement that defines the job
+- **Alle tre kunder gik ned sammen, to gange på én dag** — én maskine, én
+  proces, én disk. En brudt migration tog Sannes kunde-chat med sig; en
+  billed-rettelse gjorde hele admin ubrugelig for alle.
+- I fejl-øjeblikket: **33 MB ledig hukommelse, belastning 4,36 på én delt
+  kerne, 0 swap.** Motoren kørte på den mindste maskine Fly sælger.
+- Maskinen er siden sat op til **2 kerner / 4 GB** (ejerens ordre). Det købte
+  luft — det flyttede ingen tilstand. Målsætningen er uændret.
 
-Engine volume, 3 September 2026:
+## Målbilledet — ejerens model (4/9)
+
+**Princippet: det der udruller ofte, ejer ingen tilstand. Det der ejer
+tilstand, udruller næsten aldrig.**
+
+| maskine | antal | udruller | tilstand |
+|---|---|---|---|
+| **app** (app.trailmem.com — login, admin, API-proxy) | **2** | ofte | **ingen** |
+| **engine** (ingest, chat, søgning) | 1 → flere | ofte | **ingen** |
+| **DB-maskine** (db.trailmem.com) | 1 | sjældent | **alle trail-databaser + login-databasen**, én database pr. Trail — filmodellen bevares |
+| **objektlager** (Tigris, Stockholm) | — | aldrig | alle upload-filer + backups |
+
+**Databasen skal UD af app-laget** (ejerens formulering) og ud af motor-laget:
+begge bliver rene programmer der kan genstartes, dubleres og smides væk.
+
+### Hvorfor denne model løser mere end revision 1
+
+1. **API'et kundesites bruger ligger på app-maskinen.** Sannes Eir, widget'en
+   og buddy kalder `app.trailmem.com/api/v1/…`, som validerer og sender videre
+   til motoren. I dag afbryder BÅDE en app-udrulning og en motor-udrulning
+   derfor kundernes API. To app-maskiner + to motorer bag rullende udrulning
+   fjerner vinduet — men **kun når tilstanden er væk fra dem**, for en disk
+   hører til én bestemt maskine.
+2. **Motorer bliver ens, og F170-routerlaget skrumper væk for HA-tilfældet.**
+   Hele grunden til at trafik i dag skal rammes på den rigtige motor er at
+   kundens database ligger på dens disk. Med databaserne på DB-maskinen kan
+   enhver motor betjene enhver kunde; Flys egen fordeling rækker. F170
+   genopstår først den dag ydelse (ikke oppetid) kræver sharding.
+3. **Revision 1's største risiko OPHØRER.** Frygten var Turso-replikaernes
+   sync-churn mod vores FTS5-indeks. I ejerens model er der ingen replika og
+   ingen tredjeparts sync-protokol — motoren spørger DB-maskinen direkte.
+   Søgeindekset forbliver præcis som det er.
+4. **Region-porten OPHØRER også.** Turso kunne ikke bekræftes i Stockholm
+   (målt 4/9: deres AWS-liste har kun Irland som EU-region; Fly-platformens
+   liste var ikke opdrivelig på skrift). Vores egen DB-maskine er en Fly-maskine
+   i `arn` — spørgsmålet findes ikke.
+
+### Teknisk form på DB-maskinen — og hvad der SKAL måles først
+
+En anden maskines SQLite-fil kan ikke bare åbnes over nettet. DB-maskinen
+kører derfor **libsql-serveren (sqld)** — den åbne server bag Turso — og
+motoren forbinder med den `@libsql/client` vi allerede bruger: forbindelsen
+skifter fra en filsti til en URL + token. Én database pr. Trail bevares 1:1.
+
+**Det er stadig en beslutning der først træffes når tallet findes** (F222.2):
+en chat kører ~12 søgninger pr. svar, og de går fra lokal disk-læsning til
+netværkskald. Samme region betyder få millisekunder pr. kald, men det er en
+FORUDSIGELSE — spiken måler den rigtige chat-sti og en rigtig ingest mod en
+kopi af en rigtig tenant-database, og skriver p50/p95 her i dokumentet.
+
+### Den ærlige pris, sagt nu
+
+- **DB-maskinen er stadig ÉT punkt.** Forskellen fra i dag: dens eneste job er
+  at være oppe, den udruller ikke sammen med software-rettelser, og «i stykker»
+  betyder «gendan fra snapshot + backup» — ikke «data er væk». Gendannelsen
+  skal ØVES som en del af F222.3, ikke antages: vi har allerede én gang (14/5)
+  overlevet på at et snapshot tilfældigvis var 5 timer gammelt.
+- **Backup-kæden bliver bærende:** volumen-snapshots + database-kopier til
+  objektlageret ad den backup-sti der allerede kører. Read-replikaer og
+  udskiftelig DB-maskine er fase 3, ikke dette epic.
+
+## Målingerne planen hviler på (4. september 2026)
 
 ```
-/data/broberg-ai        180 MB
-/data/sanne-andersen    2.3 GB    ← uploads/t-sanne-andersen = 2.2 GB / 2525 files
-/data/fd-aalborg        7.0 MB
+/data på motoren:   broberg-ai 179 MB · sanne-andersen 2,1 GB · fd-aalborg 7,5 MB
+Upload-filer:       KUN Sanne har nogen: 2.427 originaler + 1.396 miniaturer · 2,1 GB
+                    broberg-ai: 0 filer (742 billed-rækker peger på død tenant — F225)
+                    fd-aalborg: 0 filer (53 rækker uden filer)
+Login-databasen:    217 kB (+ 4 MB arbejdslog) på app-maskinens volumen
+Chat-mønster:       ~12 søgninger pr. svar; skrivetrafik er få hændelser i timen
 ```
 
-**The databases are the smaller half.** 2.2 of the 2.3 GB is *files*. Moving the
-DB and leaving the images on the volume decouples nothing — the machine is still
-not replaceable, and the work *looks* finished.
+Det ændrer historiernes vægt: **fil-flytningen er reelt en Sanne-flytning**, og
+login-databasen er det mindste flyt i hele planen — men stadig det farligste
+pr. byte.
 
-> **Both stores move, or neither counts.**
+## Rækkefølgen — revideret, princippet uændret: mindst risiko først, intet nøgent skifte
 
-## Why Turso — four measured reasons
+1. **F222.1 — filerne til objektlageret** (uændret først; tal opdateret).
+   Sannes 2.427 originaler hash-verificeres én for én. Miniaturerne (F241) er
+   AFLEDT data — de kopieres uden ceremoni eller genskabes, de er ikke
+   sandhedskilde. broberg-ai/fd-aalborg: intet at flytte; deres døde rækker
+   hører til F225, ikke her.
+2. **F222.2 — spiken, omskrevet:** DB-maskine i `arn` med sqld + en KOPI af en
+   rigtig tenant-database. Mål chat-stiens p50/p95 og en rigtig ingest.
+   Turso måles KUN hvis sqld skuffer — som sammenligning, ikke som plan A.
+3. **F222.3 — tenant-databaserne til DB-maskinen**, én ad gangen, mindst
+   først: fd-aalborg → broberg-ai → sanne-andersen. Uændrede beviser pr.
+   tenant (samme søgeresultater, samme svar på F219-regressionscasen) + **en
+   ØVET gendannelse fra backup før den første rigtige kunde flyttes.**
+4. **F222.4 — login-databasen ud af app-laget**, til samme DB-maskine.
+   217 kB, størst blastradius: et rigtigt login bevises mod den nye placering
+   FØR den gamle stopper, og `cb@webhouse.dk` verificeres som ejer i alle
+   tenants VED AT LOGGE IND, ikke ved at læse en række.
+5. **F222.6 (NY) — to app-maskiner og to motorer.** Muligt først nu, hvor
+   ingen af dem ejer tilstand. Rullende udrulning, mindst én oppe altid.
+6. **F222.5 — beviset:** udrul app OG motor mens rigtig chat-trafik kører, og
+   vis 0 fejlede kald — og gør målingen til en vagt der består ved hver
+   udrulning, ikke en engangsforestilling.
 
-**1. FTS5 survives.** All retrieval is SQLite FTS5 (`documents_fts` +
-`chunks_fts`, `tokenize='porter unicode61'`, with triggers). Postgres means
-rewriting search from zero — and F219 showed *today* how subtle that code is:
-five drifted implementations, a hyphen bug that returned nothing for months, and
-a ranking effect that hid the correct answer below the cut. Rewriting it during
-an infrastructure migration ships two bugs at once. Turso is libSQL, a SQLite
-fork; FTS5 is intact.
+**Intet nøgent skifte, noget sted:** hvert trin kører begge veje parallelt,
+beviser den nye på rigtig trafik, og fjerner først derefter den gamle.
 
-**2. The client is already ours.** `packages/db` uses `@libsql/client`, which
-Turso's own docs name as the Drizzle/ORM path. The connection becomes a URL plus
-a token — not a rewrite.
+## Reuse
 
-**3. One database per tenant is Turso's native model.** Our architecture already
-is one `trail.db` per tenant. Turso is built for that shape — many small
-databases, per-database tokens. It maps 1:1 instead of being forced.
+Discovery-tjek (revision 1, genbekræftet 4/9): `@broberg/*` har ingen
+objektlager- eller libsql-primitiv; `packages/storage` er vores egen seam med
+én implementering, og R2-backup-stien har allerede S3-multipart i produktion.
+sqld/libsql er open source; `@libsql/client` er allerede vores driver. Ingen
+nye fleet-pakker kræves. Infra-noterne på discovery (`/api/infra`) konsulteres
+for Tigris-opsætningen i F222.1.
 
-**4. The object-storage half is already built.** `packages/storage` is ONE
-interface with ONE implementation (`LocalStorage`), instantiated in exactly one
-place (`apps/server/src/lib/storage.ts:10`). And `R2BackupProvider` already does
-S3-compatible multipart upload via `@aws-sdk/lib-storage` — precisely the
-mechanism the seam's `appendChunk`/`finalize` need, proven in production on the
-backup path.
+## Appendiks — revision 1's Turso-spor (nu fallback)
 
-## The risks, stated now rather than discovered later
-
-### A. FTS5 churn vs embedded-replica sync — the one most likely to bite US
-
-Turso's own docs warn that *"large structural changes (btree splits) or dirty
-write-ahead logs can trigger unexpectedly high data transfers"*, with a **4 kB
-minimum sync unit per write**. An FTS5 index rebuilt on every ingest is exactly
-that kind of churn.
-
-This must be **measured on a real KB** before anything is committed to. It is the
-specific way this migration goes wrong for us rather than for a generic app.
-
-### B. Region / GDPR — **not verified**
-
-Sanne's KB holds health-adjacent client data, and the house rule is `arn`
-(Stockholm). Turso's locations page 404s and I could not confirm the region list.
-
-**This is a hard gate, not a detail.** If there is no EU region, Sanne's tenant
-does not move, and that changes the whole plan.
-
-### C. A new dependency on the hot path
-
-Today one machine can fail. Afterwards one *provider* can fail, and every machine
-goes with it. The mitigation is real — libSQL is open source and self-hostable
-(`sqld`) — but it has to be an exit we have **actually tried**, not one we assume.
-
-### D. Cold start
-
-An embedded replica must sync before it serves. For a 1.96 GB tenant that is not
-free. The design answer is a per-machine **ephemeral** replica — *not* a Fly
-volume, which would put us back on one machine — with the health check gating
-traffic until sync completes.
-
-## Two designs, and the spike decides between them
-
-| | remote-only | embedded replica |
-|---|---|---|
-| read latency | network per query | local file (µs) |
-| cold start | none | full sync before serving |
-| sync complexity | none | real, and FTS5 churn is the risk |
-| machines | any number, instantly | any number, after warm-up |
-
-A chat answer runs ~12 searches per question across N KBs. Whether that is
-acceptable over the network is **a number, not an opinion** — F222.2 measures it.
-
-## Ordering, and it is not arbitrary
-
-1. **Files first.** Biggest chunk of state, lowest risk (immutable blobs — copy,
-   verify by hash, switch), clean seam already. Moving the DB first would gain
-   nothing while 2.2 GB stays on the box.
-2. **The spike.** Decide remote-only vs embedded replica with a measurement.
-3. **Tenant databases.**
-4. **`control.db` last.** Smallest, highest blast radius — done only once the
-   pattern has been proven twice.
-5. **Prove it.** Deploy while traffic is in flight.
-
-## No naked cutover, anywhere
-
-Every step runs both stores, proves the new one on real traffic, and only then
-removes the old one. And `cb@webhouse.dk` must still be admin in every tenant
-afterwards — **verified by logging in, not by reading a row.** A migration is
-exactly where that gets broken.
+Fire grunde talte for Turso (FTS5 overlever; klienten er vores; én DB pr.
+tenant er deres model; objektlager-halvdelen allerede bygget) — de tre første
+gælder UÆNDRET for selv-hostet sqld. Tursos risici som målt/vurderet 2–4/9:
+sync-churn mod FTS5 (revision 1's risiko A — bortfalder uden replikaer),
+region (aws-eu-west-1/Irland er eneste bekræftede EU-region; `arn` ubekræftet),
+kold-start-sync på 2 GB-tenants, og en tredjepart på den varme sti. Turso
+genovervejes hvis spiken viser at selvhostet drift koster mere end den giver.
