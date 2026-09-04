@@ -23,6 +23,15 @@ export interface Storage {
   list(prefix: string): Promise<string[]>;
 
   /**
+   * F222.1 — path → byte-size for every file under a prefix, in ONE sweep.
+   * Exists because the KB-size panel probes ~1.400 files per render: per-file
+   * exists/stat calls are fine on a local disk and a request-storm against an
+   * object store. Local walks the tree; Tigris reads sizes off the LIST pages
+   * it already fetches.
+   */
+  statMany(prefix: string): Promise<Map<string, number>>;
+
+  /**
    * F180 — Append a chunk at the given byte offset to a staging file.
    * Creates the file (and any parent dirs) if missing. Idempotent on
    * overlapping ranges: re-writing the same offset overwrites the same
@@ -40,3 +49,4 @@ export interface Storage {
 }
 
 export { LocalStorage } from './local.js';
+export { TigrisStorage, type TigrisConfig } from './tigris.js';

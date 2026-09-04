@@ -4,8 +4,7 @@ import { CreateKBSchema, UpdateKBSchema } from '@trail/shared';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth, getUser, getTenant, getTrail } from '../middleware/auth.js';
 import { uniqueSlug, createCandidate, resolveKbId, logActivity, kbSizes } from '@trail/core';
-import { statSync } from 'node:fs';
-import { join } from 'node:path';
+import { storage } from '../lib/storage.js';
 import { broadcaster } from '../services/broadcast.js';
 import { listKbTags } from '../services/tag-aggregate.js';
 import { buildSeedGlossary } from '../services/glossary-seed.js';
@@ -44,22 +43,15 @@ const LIST_SQL = `
 `;
 
 /**
- * F217 — the same upload root uploads.ts writes to (line 361). Deriving it
- * again here would be a second source for one value; it is read from the same
- * env pair so a change moves both.
+ * F222.1 — the size probe now goes through the storage seam instead of a
+ * second hand-rolled uploads-root: one statMany() sweep over the tenant's
+ * prefix, then pure map lookups. On local disk that is the same walk the old
+ * statSync loop paid for; on Tigris it is a handful of LIST pages instead of
+ * ~1.400 per-file requests.
  */
-function uploadsRoot(): string {
-  return process.env.TRAIL_UPLOADS_DIR ?? join(process.env.TRAIL_DATA_DIR ?? '.data', 'uploads');
-}
-
-/** Bytes on disk, or null when the file is not there. Never throws. */
-function probeUpload(storagePath: string): number | null {
-  try {
-    const st = statSync(join(uploadsRoot(), storagePath));
-    return st.isFile() ? st.size : null;
-  } catch {
-    return null;
-  }
+async function buildUploadProbe(tenantId: string): Promise<(p: string) => number | null> {
+  const sizes = await storage.statMany(tenantId);
+  return (storagePath: string) => sizes.get(storagePath) ?? null;
 }
 
 kbRoutes.get('/knowledge-bases', async (c) => {
@@ -73,7 +65,9 @@ kbRoutes.get('/knowledge-bases', async (c) => {
     // files, which is the state production is in today (501 MB of orphans
     // measured 2026-09-02). Reporting only the sum would put phantom megabytes
     // in front of the owner as fact.
-    kbSizes(trail, tenant.id, probeUpload).catch((err) => {
+    buildUploadProbe(tenant.id)
+      .then((probe) => kbSizes(trail, tenant.id, probe))
+      .catch((err) => {
       console.error('[kb-size] failed, listing without sizes:', err);
       return [];
     }),

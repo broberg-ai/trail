@@ -102,18 +102,26 @@ export class LocalStorage implements Storage {
    * answers for.
    */
   async list(prefix: string): Promise<string[]> {
+    return [...(await this.statMany(prefix)).keys()];
+  }
+
+  /** F222.1 — same walk as list(), but keeps the byte-size the walk already
+   *  paid statSync for. list() derives from this so the two can never
+   *  disagree about which files exist (the F013.4 duplicate-counter lesson). */
+  async statMany(prefix: string): Promise<Map<string, number>> {
     const full = this.resolve(prefix);
-    if (!existsSync(full)) return [];
+    const results = new Map<string, number>();
+    if (!existsSync(full)) return results;
     const base = prefix.replace(/\/+$/, '');
-    const results: string[] = [];
     const walk = (dir: string, rel: string): void => {
       for (const entry of readdirSync(dir)) {
         const entryPath = join(dir, entry);
         const relPath = rel ? `${rel}/${entry}` : entry;
-        if (statSync(entryPath).isDirectory()) {
+        const st = statSync(entryPath);
+        if (st.isDirectory()) {
           walk(entryPath, relPath);
         } else {
-          results.push(base ? `${base}/${relPath}` : relPath);
+          results.set(base ? `${base}/${relPath}` : relPath, st.size);
         }
       }
     };

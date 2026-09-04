@@ -6,7 +6,7 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { requireAuth, getUser, getTenant, getTrail } from '../middleware/auth.js';
 import { processPdf, processDocx, processPptx, processXlsx, dispatch, pickPipeline } from '@trail/pipelines';
-import { storage, sourcePath } from '../lib/storage.js';
+import { storage, sourcePath, stagingFsPath } from '../lib/storage.js';
 import { chunkText, storeChunks } from '../services/chunker.js';
 import { triggerIngest } from '../services/ingest.js';
 import { describeImageAsSource, getActiveVisionModel } from '../services/vision.js';
@@ -470,13 +470,12 @@ function tempPathFor(uploadId: string): string {
 }
 
 function tempFsPath(uploadId: string): string {
-  // Resolve through storage's root for hash-on-disk verification + GC.
-  // We don't read this file via storage.get() because partial reads
-  // are O(file-size) over the whole buffer; createReadStream is fine.
-  // Mirrors LocalStorage.resolve() but kept here so we don't widen the
-  // public Storage interface for this one debug/verify case.
-  const root = process.env.TRAIL_UPLOADS_DIR ?? join(process.env.TRAIL_DATA_DIR ?? '.data', 'uploads');
-  return join(root, tempPathFor(uploadId));
+  // Resolve through the backend's staging location (F222.1: local uploads-root
+  // on LocalStorage, DATA_DIR/upload-staging on Tigris) for hash-on-disk
+  // verification + GC. We don't read this file via storage.get() because
+  // partial reads are O(file-size) over the whole buffer; createReadStream
+  // is fine.
+  return stagingFsPath(tempPathFor(uploadId));
 }
 
 function parseContentRange(header: string | undefined): { start: number; end: number; total: number } | null {
