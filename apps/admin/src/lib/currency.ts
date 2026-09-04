@@ -29,11 +29,21 @@ export function formatCostForLocale(
   locale: Locale,
   fxRate: FxRate | null,
 ): string {
-  // Locale === 'da' AND we have a DKK rate → render in DKK.
-  if (locale === 'da' && fxRate && fxRate.to === 'DKK') {
+  return formatCost(cents, locale === 'da' ? 'dkk' : 'usd', fxRate);
+}
+
+/** F245 — explicit currency choice, independent of locale. 'dkk' without a
+ *  usable rate falls back to USD — never a silently wrong number. */
+export type CostCurrency = 'usd' | 'dkk';
+
+export function formatCost(
+  cents: number,
+  currency: CostCurrency,
+  fxRate: FxRate | null,
+): string {
+  if (currency === 'dkk' && fxRate && fxRate.to === 'DKK') {
     return formatDkk(cents, fxRate);
   }
-  // Default: USD cents / dollars.
   return formatUsd(cents);
 }
 

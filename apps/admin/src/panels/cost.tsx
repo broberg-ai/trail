@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 import { useKb } from '../lib/kb-cache';
-import { t, useLocale } from '../lib/i18n';
+import { t, useLocale, getLocale } from '../lib/i18n';
 import { formatLocaleDate, formatShortLocaleDate } from '../lib/dates';
 import {
   getCostSummary,
@@ -19,7 +19,7 @@ import {
   getUpmetricsCost,
   type UpmetricsCostSummary,
 } from '../api';
-import { formatCostForLocale } from '../lib/currency';
+import { formatCost, type CostCurrency } from '../lib/currency';
 import { CenteredLoader } from '../components/centered-loader';
 
 /**
@@ -79,6 +79,21 @@ export function CostPanel() {
   const [loading, setLoading] = useState(true);
   const [fxRate, setFxRate] = useState<FxRate | null>(null);
 
+  // F245 — explicit USD/DKK choice, independent of locale. Remembered per
+  // browser; a blocked localStorage (private mode) just yields the locale
+  // default. Written on every toggle, read once at mount.
+  const [currency, setCurrency] = useState<CostCurrency>(() => {
+    try {
+      const saved = localStorage.getItem('trail-cost-currency');
+      if (saved === 'usd' || saved === 'dkk') return saved;
+    } catch { /* locale default below */ }
+    return getLocale() === 'da' ? 'dkk' : 'usd';
+  });
+  const pickCurrency = (c: CostCurrency) => {
+    setCurrency(c);
+    try { localStorage.setItem('trail-cost-currency', c); } catch { /* per-browser convenience only */ }
+  };
+
   // Source-list pagination + sort state
   const [sort, setSort] = useState<CostSourceSort>('cost');
   const [order, setOrder] = useState<CostSortOrder>('desc');
@@ -96,22 +111,29 @@ export function CostPanel() {
       .catch(() => setCredits(null));
   }, [kbId]);
 
-  // Fetch USD→DKK rate when locale is Danish. Silent on failure —
-  // the formatter falls back to USD cents if fxRate stays null.
+  // F245 — fetch USD→DKK rate when DKK is the chosen display currency.
+  // On failure the formatter falls back to USD and the DKK button says so —
+  // never a silently wrong number.
+  const [fxFailed, setFxFailed] = useState(false);
   useEffect(() => {
-    if (locale !== 'da') {
+    if (currency !== 'dkk') {
       setFxRate(null);
+      setFxFailed(false);
       return;
     }
     getFxRate('USD', 'DKK')
-      .then(setFxRate)
+      .then((r) => {
+        setFxRate(r);
+        setFxFailed(false);
+      })
       .catch((err) => {
         console.warn('[cost-panel] FX rate fetch failed, showing USD:', err);
         setFxRate(null);
+        setFxFailed(true);
       });
-  }, [locale]);
+  }, [currency]);
 
-  const fmt = (cents: number) => formatCostForLocale(cents, locale, fxRate);
+  const fmt = (cents: number) => formatCost(cents, currency, fxRate);
 
   // Summary fetch (totals + chart). Separate from source list because
   // they have different cache + invalidation characteristics.
@@ -211,6 +233,24 @@ export function CostPanel() {
           {t('nav.cost')}
         </h1>
         <div class="flex items-center gap-2">
+          {(['usd', 'dkk'] as const).map((c) => (
+            <button
+              key={c}
+              data-testid={`cost-currency-${c}`}
+              onClick={() => pickCurrency(c)}
+              aria-pressed={currency === c}
+              title={c === 'dkk' && fxFailed ? (locale === 'da' ? 'Kursen kunne ikke hentes — viser USD' : 'Rate unavailable — showing USD') : undefined}
+              class={
+                'px-2 py-1 text-xs font-mono rounded transition ' +
+                (currency === c
+                  ? 'bg-[color:var(--color-accent)] text-[color:var(--color-accent-fg)]'
+                  : 'text-[color:var(--color-fg-muted)] hover:text-[color:var(--color-fg)]')
+              }
+            >
+              {c === 'usd' ? 'USD' : fxFailed && currency === 'dkk' ? 'DKK ⚠' : 'DKK'}
+            </button>
+          ))}
+          <span class="mx-1 text-[color:var(--color-border)]">·</span>
           {WINDOWS.map((w) => (
             <button
               key={w.value}
