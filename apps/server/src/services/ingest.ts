@@ -323,6 +323,28 @@ async function claimAndRun(
       runningLocally.delete(kbId);
       return;
     }
+    // F243.2 — an archived (or deleted) document must never compile. The queue
+    // is durable and boot-recovery re-queues it, so archiving a document AFTER
+    // upload otherwise still burns a paid compile (measured 4/9: 6 archived
+    // sources compiled across a restart). Cancel the job instead of running it;
+    // the finally-block drains on to the next queued job.
+    const jobDoc = await trail.db
+      .select({ archived: documents.archived })
+      .from(documents)
+      .where(eq(documents.id, next.documentId))
+      .get();
+    if (!jobDoc || jobDoc.archived) {
+      await trail.db
+        .update(ingestJobs)
+        .set({
+          status: 'failed',
+          errorMessage: jobDoc ? 'document archived — compile cancelled' : 'document deleted — compile cancelled',
+          completedAt: new Date().toISOString(),
+        })
+        .where(and(eq(ingestJobs.id, next.id), eq(ingestJobs.status, 'queued')))
+        .run();
+      return;
+    }
     // F21 — backpressure check. If global concurrency cap or tenant
     // hourly rate is hit, leave job queued and bail. Periodic scheduler
     // re-ticks every 30s; current-job-completion also re-ticks via the
