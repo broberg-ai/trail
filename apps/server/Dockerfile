@@ -79,6 +79,10 @@ COPY packages/pipelines/src ./packages/pipelines/src
 COPY packages/shared/src ./packages/shared/src
 COPY packages/storage/src ./packages/storage/src
 
+# F222.1 — verify/migration scripts run ON the machine (creds + files live
+# there), invoked via `fly ssh console -C "bun /app/apps/server/scripts/..."`.
+COPY apps/server/scripts ./apps/server/scripts
+
 # F168 — Beam: install engine-side import helper. Invoked by the local
 # beam.ts CLI via `fly ssh console -C "/usr/local/bin/beam-import.sh ..."`.
 COPY apps/server/scripts/beam-import.sh /usr/local/bin/beam-import.sh
