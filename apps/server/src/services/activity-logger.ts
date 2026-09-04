@@ -58,13 +58,26 @@ export function startActivityLogger(trail: TrailDatabase): () => void {
   // Resolved on the first event and cached: the activity log is on the
   // hot path (26,622 rows on broberg-ai alone), so re-reading `tenants`
   // per event would be three queries to avoid two writes.
+  //
+  // THE CACHE HOLDS A PROMISE, SO A REJECTION MUST CLEAR IT. `??=` will
+  // not replace a settled-rejected promise (it is not null), so one
+  // transient failure — a locked database, a blip of I/O — would hand
+  // every later event that same rejection, and the activity log would
+  // be off for the rest of the process. Actions would keep happening;
+  // only the record of them would stop, behind a `drop:` line that
+  // reads like noise. The audit trail must not be able to go dark
+  // quietly, so the failure is made retryable instead of sticky.
   let ownTenantIds: Promise<Set<string>> | null = null;
   const resolveOwnTenantIds = (): Promise<Set<string>> => {
     ownTenantIds ??= trail.db
       .select({ id: tenants.id })
       .from(tenants)
       .all()
-      .then((rows) => new Set(rows.map((r) => r.id)));
+      .then((rows) => new Set(rows.map((r) => r.id)))
+      .catch((err: unknown) => {
+        ownTenantIds = null; // next event retries rather than inheriting this failure
+        throw err;
+      });
     return ownTenantIds;
   };
 
@@ -75,7 +88,15 @@ export function startActivityLogger(trail: TrailDatabase): () => void {
       // but fd-aalborg's is `b4ce4f7c-fa2f-44a0-92ca-509145c2f4ce`. A
       // slug comparison would work for two tenants out of three, and a
       // guard that works for most looks right.
-      if ('tenantId' in event && event.tenantId) {
+      //
+      // FAILS CLOSED. The test is only that the field is PRESENT — an
+      // empty or malformed id then falls out because it is not in the
+      // set, rather than skipping the guard entirely. A scope whose job
+      // is to distrust the sender must not be waved through by a value
+      // the sender controls. Control frames (`hello`/`ping`) carry no
+      // tenantId at all and are unaffected; logFromBroadcast already
+      // returns on them.
+      if ('tenantId' in event) {
         const own = await resolveOwnTenantIds();
         if (!own.has(event.tenantId)) return;
       }

@@ -133,3 +133,72 @@ test('the foreign key is STILL THERE — the guard did not replace it', async ()
   const cols = (fks as Array<{ from: string }>).map((f) => f.from).sort();
   expect(cols).toEqual(['actor_id', 'knowledge_base_id', 'tenant_id']);
 });
+
+// ── F240.1 review round 1 — the two findings the code+security gate raised ──
+
+test('an event whose tenantId is EMPTY is dropped, not attempted (the guard fails CLOSED)', async () => {
+  const attempted: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]): void => {
+    const line = args.map(String).join(' ');
+    if (line.includes('[activity-log] write failed')) attempted.push(line);
+    original(...(args as []));
+  };
+  const beforeA = await countRows(dbA);
+  const beforeB = await countRows(dbB);
+  try {
+    // MUTATION MARKER: restore `&& event.tenantId` to the guard and this goes red.
+    // An empty id belongs to no tenant, so BOTH subscribers must drop it — a guard
+    // that only runs when the value is truthy is waved through by the one value
+    // that is guaranteed to be wrong.
+    broadcaster.emit({
+      type: 'candidate_created', tenantId: '', kbId: A.kb,
+      candidateId: 'cand-empty', kind: 'external-feed', title: 'empty-tenant',
+      status: 'pending', autoApproved: false, createdBy: null, confidence: 0.5,
+    } as never);
+    await settle();
+  } finally {
+    console.error = original;
+  }
+
+  expect(attempted).toEqual([]);
+  expect(await countRows(dbA)).toBe(beforeA);
+  expect(await countRows(dbB)).toBe(beforeB);
+});
+
+test('a transient tenant-lookup failure does NOT switch the audit log off for good', async () => {
+  // The cache holds a PROMISE. If a rejection stays cached, every later event
+  // inherits it and nothing is ever logged again — the audit trail goes dark
+  // behind a line that reads like noise. So the property under test is that the
+  // SECOND event re-runs the lookup rather than reusing the failure.
+  //
+  // MUTATION MARKER: drop the `.catch(() => { ownTenantIds = null; ... })` and
+  // `lookups` stays at 1 — this test goes red while every other test stays green.
+  let lookups = 0;
+  const failing = {
+    db: {
+      select: () => ({
+        from: () => ({
+          all: async (): Promise<Array<{ id: string }>> => {
+            lookups += 1;
+            throw new Error('database is locked');
+          },
+        }),
+      }),
+      insert: () => ({ values: () => ({ run: async (): Promise<void> => undefined }) }),
+    },
+  } as never;
+
+  const stop = startActivityLogger(failing);
+  try {
+    emitForA('cand-retry-1');
+    await settle();
+    expect(lookups).toBe(1);
+
+    emitForA('cand-retry-2');
+    await settle();
+    expect(lookups).toBe(2); // retried — the rejection was not cached
+  } finally {
+    stop();
+  }
+});

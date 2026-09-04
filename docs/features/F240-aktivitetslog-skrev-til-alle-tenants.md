@@ -123,6 +123,34 @@ den negative kontrol ville prøven altså bestå på den bug den findes for at
 fange.** Det er dagens gennemgående fejlform, en tak ude: ét signal, to
 kendsgerninger.
 
+## Reuse
+
+Discovery-tjek kørt 4. september 2026 mod `discovery.broberg.ai/api/search`.
+
+| kapacitet | fund | beslutning |
+|---|---|---|
+| aktivitets-/revisionslog | **`@broberg/event-log` v0.1.0** (L1, shipped, ejet af cms) — «en GDPR-bevidst hændelses- og aktivitetslog, et append-only revisionsspor over hvem-gjorde-hvad» | **Byg ikke om nu.** Se nedenfor. |
+| hændelseskanal / pubsub | intet | Trails `broadcaster` er 30 linjer i eget repo. Ikke en fleet-kapacitet. |
+| kunde-isolation | `@broberg/apikey`, «Multi-tenant management» | Dækker adgang og medlemskaber, ikke afgrænsning af en intern hændelseskanal. Ikke relevant her. |
+
+**`@broberg/event-log` er et ægte overlap, og det skal siges højt frem for at
+blive glemt.** Trail har sin egen håndrullede `activity_log` (skema i
+`packages/db`, skrivning i `packages/core/src/activity.ts`), og pakken løser
+samme opgave for hele flåden — inklusive IP-hashning, anonymisering og
+opbevaringsregler vi ikke har.
+
+**Men den overtages ikke på dette kort, og grunden er ikke bekvemmelighed:**
+dette er en fejlrettelse på en kørende kunde-adskillelse med 27.019 eksisterende
+rækker fordelt på tre kundedatabaser. At skifte lagringslag midt i den rettelse
+ville være netop det «nøgne skifte» harness-kontrakten forbyder — man river ikke
+en fungerende vej ned før erstatningen er bevist live. Pakken lader desuden
+lagring og servering være forbrugerens, så en overtagelse er en migrering af
+skrive-siden, ikke en pakke-installation.
+
+**Filet som selvstændig beslutning**, ikke som noget der stiltiende blev fravalgt:
+skal Trails aktivitetslog skrives gennem `@broberg/event-log`? Det er et
+ja/nej for ejeren, med cms som ejer af pakken.
+
 ## Afhængigheder
 
 Ingen. Ændringen ligger i `apps/server/src/services/activity-logger.ts`.
