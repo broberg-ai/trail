@@ -47,17 +47,41 @@ const t0 = Date.now();
 const localFiles = [...(await local.statMany('')).keys()].filter((k) => !k.startsWith('_tmp/'));
 console.log(`[sha] ${localFiles.length} lokale filer at verificere …`);
 
+// STREAM-hash begge sider — aldrig hele filen i hukommelsen. Første udgave
+// holdt fulde buffere og OOM-dræbte PROD-maskinen (exit 137, 00:45 dansk tid,
+// motoren delte boksen). Verifikation må aldrig koste driften noget.
+const bucketUrlFor = (key: string) => tigris.signedUrl(key, 300);
+
+async function shaLocalStream(key: string): Promise<string | null> {
+  const full = join(UPLOADS_ROOT, key);
+  const f = Bun.file(full);
+  if (!(await f.exists())) return null;
+  const h = createHash('sha256');
+  for await (const chunk of f.stream()) h.update(chunk);
+  return h.digest('hex');
+}
+
+async function shaBucketStream(key: string): Promise<string | null> {
+  const res = await fetch(await bucketUrlFor(key));
+  if (res.status === 404) return null;
+  if (!res.ok || !res.body) throw new Error(`bucket GET ${key}: HTTP ${res.status}`);
+  const h = createHash('sha256');
+  for await (const chunk of res.body) h.update(chunk);
+  return h.digest('hex');
+}
+
 let ok = 0;
 const mismatches: string[] = [];
 for (const key of localFiles) {
-  const a = await local.get(key);
-  const b = await tigris.get(key);
+  const a = await shaLocalStream(key);
+  const b = await shaBucketStream(key);
   if (!a) { mismatches.push(`${key} — lokal fil kunne ikke læses`); continue; }
   if (!b) { mismatches.push(`${key} — MANGLER i bucket`); continue; }
-  if (sha(a) === sha(b)) ok++;
+  if (a === b) ok++;
   else mismatches.push(`${key} — sha256 AFVIGER`);
-  if ((ok + mismatches.length) % 500 === 0) {
-    console.log(`[sha] ${ok + mismatches.length}/${localFiles.length} · ${Math.round((Date.now() - t0) / 1000)}s`);
+  if ((ok + mismatches.length) % 250 === 0) {
+    console.log(`[sha] ${ok + mismatches.length}/${localFiles.length} · rss ${(process.memoryUsage.rss() / 1e6) | 0} MB · ${Math.round((Date.now() - t0) / 1000)}s`);
+    Bun.gc(true);
   }
 }
 
