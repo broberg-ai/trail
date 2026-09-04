@@ -734,6 +734,7 @@
     "create": "Create Trail",
     "pendingBadge": "{n} pending",
     "totalNeurons": "Neurons on this trail server: {n}",
+    "neuronCount": "{n} neurons",
     "newTrail": {
       "button": "New Trail",
       "title": "Create a new Trail",

@@ -167,6 +167,7 @@ export function KnowledgeBasesPanel() {
             .pendingCandidateCount ?? 0;
           const size = (kb as KnowledgeBase & { size?: KbSizeInfo }).size;
           const missingBytes = size ? size.totalBytesClaimed - size.totalBytes : 0;
+          const neuronCount = (kb as KnowledgeBase & { wikiPageCount?: number }).wikiPageCount;
           return (
             <a
               key={kb.id}
@@ -214,7 +215,7 @@ export function KnowledgeBasesPanel() {
                     {kb.description}
                   </div>
                 ) : null}
-                {size ? (
+                {size || typeof neuronCount === 'number' ? (
                   <div
                     data-testid={`trail-size-${kb.slug}`}
                     style={{
@@ -223,10 +224,18 @@ export function KnowledgeBasesPanel() {
                       marginTop: 6,
                       fontFamily: 'var(--font-mono)',
                     }}
-                    title={`${fmtSize(size.sourceBytes)} kilder · ${fmtSize(size.imageBytesPresent)} billeder · ${fmtSize(size.knowledgeBytes)} viden`}
+                    title={size ? `${fmtSize(size.sourceBytes)} kilder · ${fmtSize(size.imageBytesPresent)} billeder · ${fmtSize(size.knowledgeBytes)} viden` : undefined}
                   >
-                    {fmtSize(size.totalBytes)}
-                    {missingBytes > 0 ? (
+                    {typeof neuronCount === 'number' ? (
+                      <span data-testid={`trail-neurons-${kb.slug}`}>
+                        {t('kbs.neuronCount', {
+                          n: neuronCount.toLocaleString(locale === 'da' ? 'da-DK' : 'en-US'),
+                        })}
+                        {size ? ' · ' : ''}
+                      </span>
+                    ) : null}
+                    {size ? fmtSize(size.totalBytes) : null}
+                    {size && missingBytes > 0 ? (
                       <span
                         data-testid={`trail-size-missing-${kb.slug}`}
                         style={{ color: 'var(--color-warning, #b45309)', marginLeft: 8 }}

@@ -734,6 +734,7 @@
     "create": "Opret Trail",
     "pendingBadge": "{n} afventer",
     "totalNeurons": "Neuroner på denne trail-server: {n}",
+    "neuronCount": "{n} neuroner",
     "newTrail": {
       "button": "Ny Trail",
       "title": "Opret ny Trail",
