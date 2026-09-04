@@ -1,17 +1,16 @@
 # F222 — maskiner skal kunne skiftes: al tilstand væk fra dem der udruller
 
 **Kort:** trail-F222 · epic · critical
-**Revision 2 — 4. september 2026.** Revideret på ejerens ordre og efter hans egen
-arkitektur-beslutning (samtalen 4/9, gengivet nedenfor). Revision 1 (2/9) pegede
-på Turso som destination; den står nederst som sammenligning og fallback.
+**Revision 3 — 4. september 2026 (aften).** Tilføjer failover-modellen efter
+ejerens indvending mod «nede i minutter + et script et menneske skal køre».
+Revision 2 (samme dag) satte ejerens DB-maskine-model i stedet for revision 1's
+Turso-spor (2/9), som nu står nederst som fallback.
 
 > Ejeren, 3. september: *«jeg kan ikke basere en chat på data i trail hvis den
 > er nede i 90 → 30 sekunder … maskiner og admin teknik skal afkobles fra
 > databaserne komplet.»*
 
 ## Hvad 4. september BEVISTE — epicens egen begrundelse, målt i drift
-
-Dagen leverede den måling revision 1 kun kunne forudsige:
 
 - **Alle tre kunder gik ned sammen, to gange på én dag** — én maskine, én
   proces, én disk. En brudt migration tog Sannes kunde-chat med sig; en
@@ -21,7 +20,7 @@ Dagen leverede den måling revision 1 kun kunne forudsige:
 - Maskinen er siden sat op til **2 kerner / 4 GB** (ejerens ordre). Det købte
   luft — det flyttede ingen tilstand. Målsætningen er uændret.
 
-## Målbilledet — ejerens model (4/9)
+## Målbilledet — ejerens model (4/9), inkl. redundans
 
 **Princippet: det der udruller ofte, ejer ingen tilstand. Det der ejer
 tilstand, udruller næsten aldrig.**
@@ -30,57 +29,84 @@ tilstand, udruller næsten aldrig.**
 |---|---|---|---|
 | **app** (app.trailmem.com — login, admin, API-proxy) | **2** | ofte | **ingen** |
 | **engine** (ingest, chat, søgning) | 1 → flere | ofte | **ingen** |
-| **DB-maskine** (db.trailmem.com) | 1 | sjældent | **alle trail-databaser + login-databasen**, én database pr. Trail — filmodellen bevares |
+| **DB-primær** (db.trailmem.com) | 1 | sjældent | **alle trail-databaser + login-databasen**, én database pr. Trail — filmodellen bevares |
+| **DB-replika** (fase 3, F222.7) | 1 | sjældent | løbende kopi af primæren — gerne hos en ANDEN udbyder, så den også dækker en Fly-hændelse i Stockholm |
 | **objektlager** (Tigris, Stockholm) | — | aldrig | alle upload-filer + backups |
 
 **Databasen skal UD af app-laget** (ejerens formulering) og ud af motor-laget:
 begge bliver rene programmer der kan genstartes, dubleres og smides væk.
 
+### Failover-modellen — ejerens krav: ingen minutter nede, intet menneske klokken tre
+
+Ejerens indvending, 4/9: *«Jeg er stadig ikke vild med en plan hvor vi kan være
+nede i minutter og at det er et script der skal køres for at lave changeover —
+hvem kører det script?»* Modellen svarer i tre lag:
+
+1. **Læsning falder AUTOMATISK over — og læsning er det kritiske.** Motoren
+   kender begge DB-maskiner og skifter selv til replikaen for opslag når
+   primæren ikke svarer. Kundernes chat og søgning mærker INGENTING: ingen
+   minutter, intet script. Trail er læse-tung og skrive-let, så det der venter
+   under en primær-nedtur er en håndfuld skrivninger — synligt, aldrig tavst.
+2. **Forfremmelsen (replika → primær for SKRIVNINGER) køres af en vagt, ikke
+   et menneske.** Buddy/cron overvåger primæren og forfremmer automatisk —
+   men KUN når Fly selv bekræfter at maskinen er DØD, ikke blot tavs. Den
+   skelnen er bærende: forfremmes der mens primæren kun er *unåelig*, kan to
+   maskiner tro de er chef og skrive hver sin sandhed (split-brain). Ejeren
+   får BESKED, ikke et spørgsmål.
+3. **Vil vi hellere købe end bygge, er dét Turso.** Automatisk failover er
+   præcis varen de sælger. Spiken (F222.2) holder døren åben: viser
+   vagt-bygningen sig tungere end ventet, er svaret at betale.
+
+Slutbilledet: **kunderne oplever nul nedetid ved en død DB-maskine; nye
+skrivninger holder en kort, synlig pause; intet menneske skal gøre noget om
+natten.** Tabsvinduet (en skrivning der kun nåede primæren) måles og
+rapporteres — «lille» er en måling, ikke et tillidsord (F222.7's AC).
+
 ### Hvorfor denne model løser mere end revision 1
 
 1. **API'et kundesites bruger ligger på app-maskinen.** Sannes Eir, widget'en
-   og buddy kalder `app.trailmem.com/api/v1/…`, som validerer og sender videre
-   til motoren. I dag afbryder BÅDE en app-udrulning og en motor-udrulning
-   derfor kundernes API. To app-maskiner + to motorer bag rullende udrulning
-   fjerner vinduet — men **kun når tilstanden er væk fra dem**, for en disk
-   hører til én bestemt maskine.
+   og buddy kalder `app.trailmem.com/api/v1/…` → proxy → motor. I dag afbryder
+   BÅDE en app-udrulning og en motor-udrulning derfor kundernes API. To
+   app-maskiner + to motorer bag rullende udrulning fjerner vinduet — men kun
+   når tilstanden er væk fra dem, for en disk hører til én bestemt maskine.
 2. **Motorer bliver ens, og F170-routerlaget skrumper væk for HA-tilfældet.**
-   Hele grunden til at trafik i dag skal rammes på den rigtige motor er at
-   kundens database ligger på dens disk. Med databaserne på DB-maskinen kan
-   enhver motor betjene enhver kunde; Flys egen fordeling rækker. F170
-   genopstår først den dag ydelse (ikke oppetid) kræver sharding.
+   Trafik skal i dag rammes på den rigtige motor fordi kundens database ligger
+   på dens disk. Med databaserne på DB-maskinen kan enhver motor betjene
+   enhver kunde; Flys egen fordeling rækker. F170 genopstår først den dag
+   ydelse (ikke oppetid) kræver sharding.
 3. **Revision 1's største risiko OPHØRER.** Frygten var Turso-replikaernes
-   sync-churn mod vores FTS5-indeks. I ejerens model er der ingen replika og
-   ingen tredjeparts sync-protokol — motoren spørger DB-maskinen direkte.
-   Søgeindekset forbliver præcis som det er.
-4. **Region-porten OPHØRER også.** Turso kunne ikke bekræftes i Stockholm
-   (målt 4/9: deres AWS-liste har kun Irland som EU-region; Fly-platformens
-   liste var ikke opdrivelig på skrift). Vores egen DB-maskine er en Fly-maskine
-   i `arn` — spørgsmålet findes ikke.
+   sync-churn mod vores FTS5-indeks. Motoren spørger DB-maskinen direkte;
+   søgeindekset forbliver præcis som det er. (Vores EGEN replika synker også —
+   men med libsqls egen replikering, uden tredjeparts minimums-enheder, og
+   målt i F222.7 før den loves noget.)
+4. **Region-porten OPHØRER.** Turso kunne ikke bekræftes i Stockholm (målt
+   4/9: kun Irland på deres AWS-liste). Vores DB-maskiner er egne maskiner —
+   primæren i `arn`; replikaen bevidst gerne hos en anden udbyder.
 
-### Teknisk form på DB-maskinen — og hvad der SKAL måles først
+### Teknisk form — og hvad der SKAL måles først
 
-En anden maskines SQLite-fil kan ikke bare åbnes over nettet. DB-maskinen
-kører derfor **libsql-serveren (sqld)** — den åbne server bag Turso — og
-motoren forbinder med den `@libsql/client` vi allerede bruger: forbindelsen
-skifter fra en filsti til en URL + token. Én database pr. Trail bevares 1:1.
+DB-maskinen kører **libsql-serveren (sqld)** — den åbne server bag Turso — og
+motoren forbinder med den `@libsql/client` vi allerede bruger: filsti bliver
+til URL + token. Én database pr. Trail bevares 1:1. Replikaen (fase 3) bruger
+libsqls indbyggede replikering.
 
-**Det er stadig en beslutning der først træffes når tallet findes** (F222.2):
-en chat kører ~12 søgninger pr. svar, og de går fra lokal disk-læsning til
-netværkskald. Samme region betyder få millisekunder pr. kald, men det er en
-FORUDSIGELSE — spiken måler den rigtige chat-sti og en rigtig ingest mod en
-kopi af en rigtig tenant-database, og skriver p50/p95 her i dokumentet.
+**Intet loves før tallet findes** (F222.2): en chat kører ~12 søgninger pr.
+svar, og de går fra lokal disk til netværk. Samme region betyder få
+millisekunder pr. kald — det er en FORUDSIGELSE. Spiken måler den rigtige
+chat-sti og en rigtig ingest mod en kopi af en rigtig tenant-database, plus én
+ØVET gendannelse fra snapshot, og skriver tallene her i dokumentet.
 
-### Den ærlige pris, sagt nu
+### Redundans-stigen
 
-- **DB-maskinen er stadig ÉT punkt.** Forskellen fra i dag: dens eneste job er
-  at være oppe, den udruller ikke sammen med software-rettelser, og «i stykker»
-  betyder «gendan fra snapshot + backup» — ikke «data er væk». Gendannelsen
-  skal ØVES som en del af F222.3, ikke antages: vi har allerede én gang (14/5)
-  overlevet på at et snapshot tilfældigvis var 5 timer gammelt.
-- **Backup-kæden bliver bærende:** volumen-snapshots + database-kopier til
-  objektlageret ad den backup-sti der allerede kører. Read-replikaer og
-  udskiftelig DB-maskine er fase 3, ikke dette epic.
+| lag | dækker | tab ved brug | automatik |
+|---|---|---|---|
+| Snapshots (automatisk) | fejl på maskinen | op til timer | fuld |
+| Backup i objektlageret | fejl hos Fly / volumen væk | op til en dag | fuld |
+| **Replika (F222.7)** | primær DB-maskine dør | **læsning: nul · skrivning: kort synlig pause** | læse-failover fuld; skrive-forfremmelse via vagt, kun ved Fly-bekræftet død maskine |
+
+**Supabase som fallback er FRAVALGT** (4/9, begrundelse i F222.7-planen): det
+er en anden database-motor, søgningen er SQLites FTS5, og en kopi motoren ikke
+kan boote på er en backup, ikke en fallback — og backups findes allerede.
 
 ## Målingerne planen hviler på (4. september 2026)
 
@@ -93,52 +119,48 @@ Login-databasen:    217 kB (+ 4 MB arbejdslog) på app-maskinens volumen
 Chat-mønster:       ~12 søgninger pr. svar; skrivetrafik er få hændelser i timen
 ```
 
-Det ændrer historiernes vægt: **fil-flytningen er reelt en Sanne-flytning**, og
-login-databasen er det mindste flyt i hele planen — men stadig det farligste
-pr. byte.
+Fil-flytningen er reelt en Sanne-flytning, og login-databasen er det mindste
+flyt i planen — men stadig det farligste pr. byte.
 
-## Rækkefølgen — revideret, princippet uændret: mindst risiko først, intet nøgent skifte
+## Rækkefølgen — mindst risiko først, intet nøgent skifte
 
-1. **F222.1 — filerne til objektlageret** (uændret først; tal opdateret).
-   Sannes 2.427 originaler hash-verificeres én for én. Miniaturerne (F241) er
-   AFLEDT data — de kopieres uden ceremoni eller genskabes, de er ikke
-   sandhedskilde. broberg-ai/fd-aalborg: intet at flytte; deres døde rækker
-   hører til F225, ikke her.
-2. **F222.2 — spiken, omskrevet:** DB-maskine i `arn` med sqld + en KOPI af en
-   rigtig tenant-database. Mål chat-stiens p50/p95 og en rigtig ingest.
-   Turso måles KUN hvis sqld skuffer — som sammenligning, ikke som plan A.
-3. **F222.3 — tenant-databaserne til DB-maskinen**, én ad gangen, mindst
-   først: fd-aalborg → broberg-ai → sanne-andersen. Uændrede beviser pr.
-   tenant (samme søgeresultater, samme svar på F219-regressionscasen) + **en
-   ØVET gendannelse fra backup før den første rigtige kunde flyttes.**
-4. **F222.4 — login-databasen ud af app-laget**, til samme DB-maskine.
-   217 kB, størst blastradius: et rigtigt login bevises mod den nye placering
-   FØR den gamle stopper, og `cb@webhouse.dk` verificeres som ejer i alle
-   tenants VED AT LOGGE IND, ikke ved at læse en række.
-5. **F222.6 (NY) — to app-maskiner og to motorer.** Muligt først nu, hvor
-   ingen af dem ejer tilstand. Rullende udrulning, mindst én oppe altid.
-6. **F222.5 — beviset:** udrul app OG motor mens rigtig chat-trafik kører, og
-   vis 0 fejlede kald — og gør målingen til en vagt der består ved hver
-   udrulning, ikke en engangsforestilling.
-
-**Intet nøgent skifte, noget sted:** hvert trin kører begge veje parallelt,
-beviser den nye på rigtig trafik, og fjerner først derefter den gamle.
+1. **F222.1 — filerne til objektlageret.** Sannes 2.427 originaler
+   hash-verificeres én for én. Miniaturerne (F241) er AFLEDT data — kopieres
+   uden ceremoni eller genskabes. broberg-ai/fd-aalborg: intet at flytte
+   (deres døde rækker er F225).
+2. **F222.2 — spiken:** DB-maskine i `arn` med sqld + kopi af rigtig
+   tenant-database. Chat-stiens p50/p95, en rigtig ingest, én øvet
+   gendannelse. Turso måles kun hvis sqld skuffer.
+3. **F222.3 — tenant-databaserne**, én ad gangen: fd-aalborg → broberg-ai →
+   sanne-andersen. Pr. tenant: samme søgeresultater, samme svar på
+   F219-regressionscasen, og øvet gendannelse FØR første rigtige kunde.
+4. **F222.4 — login-databasen ud af app-laget.** 217 kB, størst blastradius:
+   rigtigt login bevises mod ny placering før den gamle stopper;
+   cb@webhouse.dk ejer i alle tenants, bevist VED LOGIN.
+5. **F222.6 — to app-maskiner og to motorer.** Muligt først nu. Rullende
+   udrulning, mindst én af hver altid oppe — bevist destruktivt (sluk én
+   hårdt, API'et svarer stadig).
+6. **F222.5 — beviset som stående vagt:** udrul app OG motor under rigtig
+   chat-trafik, 0 fejlede kald, målt ved hver udrulning fremover.
+7. **F222.7 — replikaen (fase 3):** læse-failover i motoren, vagt-styret
+   forfremmelse ved Fly-bekræftet død maskine, målt tabsvindue, gerne anden
+   udbyder. Ren tilføjelse — intet fra trin 1–6 laves om.
 
 ## Reuse
 
-Discovery-tjek (revision 1, genbekræftet 4/9): `@broberg/*` har ingen
-objektlager- eller libsql-primitiv; `packages/storage` er vores egen seam med
-én implementering, og R2-backup-stien har allerede S3-multipart i produktion.
-sqld/libsql er open source; `@libsql/client` er allerede vores driver. Ingen
-nye fleet-pakker kræves. Infra-noterne på discovery (`/api/infra`) konsulteres
-for Tigris-opsætningen i F222.1.
+Discovery-tjek (rev. 1, genbekræftet 4/9): ingen `@broberg/*`-primitiv for
+objektlager eller libsql; `packages/storage` er egen seam med én
+implementering; R2-backup-stien har S3-multipart i produktion; `@libsql/client`
+er allerede driveren. Infra-noterne på discovery (`/api/infra`) konsulteres for
+Tigris-opsætningen i F222.1.
 
-## Appendiks — revision 1's Turso-spor (nu fallback)
+## Appendiks — revision 1's Turso-spor (nu fallback / køb-i-stedet)
 
 Fire grunde talte for Turso (FTS5 overlever; klienten er vores; én DB pr.
-tenant er deres model; objektlager-halvdelen allerede bygget) — de tre første
-gælder UÆNDRET for selv-hostet sqld. Tursos risici som målt/vurderet 2–4/9:
-sync-churn mod FTS5 (revision 1's risiko A — bortfalder uden replikaer),
-region (aws-eu-west-1/Irland er eneste bekræftede EU-region; `arn` ubekræftet),
-kold-start-sync på 2 GB-tenants, og en tredjepart på den varme sti. Turso
-genovervejes hvis spiken viser at selvhostet drift koster mere end den giver.
+tenant er deres model; objektlager-halvdelen bygget) — de tre første gælder
+uændret for selvhostet sqld. Tursos risici som målt/vurderet 2–4/9: sync-churn
+mod FTS5 (bortfalder uden deres replikaer), region (kun Irland bekræftet EU;
+`arn` ubekræftet), kold-start-sync, tredjepart på den varme sti. **Turso er
+samtidig køb-muligheden for automatisk failover** — genovervejes hvis F222.2
+viser at selvhostet drift, eller F222.7 at vagt-bygningen, koster mere end den
+giver.
