@@ -25,11 +25,77 @@
  */
 import { readdirSync, statSync, existsSync, mkdirSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
-import { createLibsqlDatabase, type TrailDatabase } from '@trail/db';
+import { createClient } from '@libsql/client';
+import { createLibsqlDatabase, LibsqlTrailDatabase, type TrailDatabase } from '@trail/db';
 
 export type TenantPool = Map<string, TrailDatabase>;
 
 const DATA_DIR = process.env.TRAIL_DATA_DIR ?? '/data';
+
+/**
+ * F222.3 — remote tenant DBs on the dedicated DB machine (sqld).
+ *
+ * TRAIL_DB_REMOTE is an EXPLICIT per-tenant flag, never inferred:
+ * `{"fd-aalborg":"http://trail-db-001.internal:6001"}`. A slug listed
+ * here is served from sqld at that URL; its auth token comes from
+ * TRAIL_DB_TOKEN_<SLUG> (slug uppercased, `-` → `_`). The F222.1
+ * lesson applies verbatim: secrets can land on a machine before the
+ * data has moved, so presence of a token must never flip serving —
+ * only this map does.
+ */
+export function remoteTenantConfig(): Record<string, string> {
+  const raw = process.env.TRAIL_DB_REMOTE;
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch {
+    // A malformed map must be LOUD, not an empty fallback: an engine that
+    // silently opens the on-disk copy after the file was deleted would
+    // recreate empty DBs and serve a blank tenant.
+    throw new Error(`TRAIL_DB_REMOTE is not valid JSON: ${raw.slice(0, 80)}`);
+  }
+}
+
+function remoteTokenFor(slug: string): string | undefined {
+  return process.env[`TRAIL_DB_TOKEN_${slug.toUpperCase().replace(/-/g, '_')}`];
+}
+
+/**
+ * Open a tenant DB on the remote sqld — and REFUSE to serve unless the
+ * migration marker proves the copy is complete (card constraint: "the
+ * engine must refuse to start against a tenant whose migration is
+ * incomplete, rather than serving a partial database"). The marker row
+ * is written by the migration script ONLY after per-table row counts
+ * and FTS parity have been verified against the source.
+ */
+export async function openRemoteTenantDb(slug: string, url: string): Promise<TrailDatabase> {
+  const client = createClient({ url, authToken: remoteTokenFor(slug) });
+  const db = new LibsqlTrailDatabase({ path: url, tenantId: slug }, client);
+  await assertMigrationComplete(db, slug);
+  return db;
+}
+
+export async function assertMigrationComplete(db: TrailDatabase, slug: string): Promise<void> {
+  let row: { completed_at?: unknown } | undefined;
+  try {
+    const res = await db.execute(
+      `SELECT completed_at FROM trail_migration WHERE tenant_slug = ?`,
+      [slug],
+    );
+    row = res.rows[0] as { completed_at?: unknown } | undefined;
+  } catch {
+    // Missing table counts as missing marker — fail closed below.
+  }
+  if (!row?.completed_at) {
+    throw new Error(
+      `[F222.3] tenant "${slug}" is configured remote but the sqld database carries no ` +
+        `completed migration marker — refusing to serve a possibly-partial database. ` +
+        `Run the migration to completion (it writes trail_migration) or remove the slug ` +
+        `from TRAIL_DB_REMOTE to serve the on-disk copy again.`,
+    );
+  }
+}
 
 // Directory entries under /data that are NOT tenant DBs. Mirrors
 // build-key-index.ts — keep in sync.
@@ -103,9 +169,24 @@ export async function openTenantPool(args: OpenTenantPoolArgs): Promise<TenantPo
     return pool;
   }
 
+  // F222.3 — remote-configured tenants open against sqld, and their slug
+  // may have NO directory under /data at all (the file is deleted after a
+  // proven migration), so they are opened from the map, not from disk
+  // discovery. A remote open that fails (marker missing, sqld down) must
+  // fail the BOOT, not fall back to a stale/absent file.
+  const remote = remoteTenantConfig();
+  for (const [slug, url] of Object.entries(remote)) {
+    if (pool.has(slug)) continue; // primary handled by the caller
+    console.log(`[multi-tenant] opening REMOTE tenant DB: ${slug} → ${url}`);
+    const db = await openRemoteTenantDb(slug, url);
+    await args.bootSecondary(slug, db);
+    pool.set(slug, db);
+  }
+
   const slugs = discoverTenantSlugs();
   for (const slug of slugs) {
     if (pool.has(slug)) continue; // primary already opened
+    if (remote[slug]) continue; // remote wins over a lingering on-disk copy
     const path = join(DATA_DIR, slug, 'trail.db');
     if (!existsSync(path)) continue;
     console.log(`[multi-tenant] opening secondary tenant DB: ${slug}`);

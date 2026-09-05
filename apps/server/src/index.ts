@@ -1,6 +1,12 @@
 import { createLibsqlDatabase, DEFAULT_DB_PATH, type TrailDatabase } from '@trail/db';
 import { createApp } from './app.js';
-import { openTenantPool, inferPrimarySlug, provisionTenant } from './lib/tenant-pool.js';
+import {
+  openTenantPool,
+  inferPrimarySlug,
+  provisionTenant,
+  remoteTenantConfig,
+  openRemoteTenantDb,
+} from './lib/tenant-pool.js';
 import { ensureIngestUser } from './bootstrap/ingest-user.js';
 import { seedTenantIdentity } from './bootstrap/seed-tenant.js';
 import { recoverZombieIngests } from './bootstrap/zombie-ingest.js';
@@ -124,7 +130,13 @@ async function bootTenant(db: TrailDatabase): Promise<void> {
   await backfillLinkCheck(db);
 }
 
-const trail = await createLibsqlDatabase({ path: DEFAULT_DB_PATH });
+// F222.3 — the PRIMARY tenant can be remote too (sanne-andersen is the
+// primary and moves last). The explicit TRAIL_DB_REMOTE map decides —
+// never token-presence, never file-absence.
+const primaryRemoteUrl = remoteTenantConfig()[inferPrimarySlug(DEFAULT_DB_PATH)];
+const trail = primaryRemoteUrl
+  ? await openRemoteTenantDb(inferPrimarySlug(DEFAULT_DB_PATH), primaryRemoteUrl)
+  : await createLibsqlDatabase({ path: DEFAULT_DB_PATH });
 await bootTenant(trail);
 
 // F40.2a-C: build the tenant pool. With TRAIL_MULTI_TENANT off the pool

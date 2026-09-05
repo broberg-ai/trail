@@ -1,0 +1,23 @@
+# F222.3 — trail-db-001: the dedicated DB machine (sqld, one process per
+# tenant). NO [http_service]/[[services]] on purpose: the machine has no
+# public IP and is reached only over the Fly private network. Deploys are
+# RARE by design ("det der ejer tilstand, udruller næsten aldrig").
+app = "trail-db-001"
+primary_region = "arn"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # slug:port pairs — the EXPLICIT list of tenants this machine serves.
+  # Grown one tenant at a time as migrations complete (F222.3).
+  TRAIL_DB_TENANTS = "fd-aalborg:6001"
+
+[mounts]
+  source = "trail_db_data"
+  destination = "/var/lib/sqld"
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1

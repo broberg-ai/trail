@@ -42,8 +42,18 @@ const MODE = process.env.SPIKE_MODE ?? 'all';
 function openLocal(path: string, tenantId: string): TrailDatabase {
   return new LibsqlTrailDatabase({ path, tenantId }, createClient({ url: `file:${path}` }));
 }
+// Token læses helst fra fil (SPIKE_REMOTE_TOKEN_FILE) så den aldrig står i argv.
+const remoteToken =
+  process.env.SPIKE_REMOTE_TOKEN ??
+  (process.env.SPIKE_REMOTE_TOKEN_FILE
+    ? (await Bun.file(process.env.SPIKE_REMOTE_TOKEN_FILE).text()).trim()
+    : undefined);
+
 function openRemote(tenantId: string): TrailDatabase {
-  return new LibsqlTrailDatabase({ path: REMOTE_URL, tenantId }, createClient({ url: REMOTE_URL }));
+  return new LibsqlTrailDatabase(
+    { path: REMOTE_URL, tenantId },
+    createClient({ url: REMOTE_URL, authToken: remoteToken }),
+  );
 }
 
 // Tenant + KB'er læses fra datasættet selv — aldrig hardkodet.
@@ -76,11 +86,20 @@ const turnRows = await local.db
   .limit(40)
   .all();
 const QUERIES = [...new Set(turnRows.map((r) => r.content.trim()).filter((q) => q.length > 3 && q.length < 300))].slice(0, 12);
-if (QUERIES.length < 5) {
-  console.error(`✗ kun ${QUERIES.length} rigtige forespørgsler fundet — for få til en måling`);
-  process.exit(1);
+// F222.3: en tenant med tynd chathistorik (fd-aalborg) suppleres med faste
+// forespørgsler — F219-regressionscasen FØRST, så den altid er med i pariteten.
+const FALLBACK_QUERIES = [
+  'Hvad koster en behandling',
+  'åbningstider',
+  'hvem er I',
+  'priser',
+  'hvordan booker jeg en tid',
+];
+for (const q of FALLBACK_QUERIES) {
+  if (QUERIES.length >= 12) break;
+  if (!QUERIES.includes(q)) QUERIES.push(q);
 }
-console.log(`[spike] ${QUERIES.length} rigtige brugerforespørgsler fra chat_turns`);
+console.log(`[spike] ${QUERIES.length} forespørgsler (${turnRows.length ? 'chat_turns + fallback' : 'fallback'})`);
 
 // ── Den fulde retrieval-sekvens (spejler retrieveContext i chat.ts) ─────────
 async function listFadedHeuristicIds(trail: TrailDatabase, kbId: string): Promise<Set<string>> {
@@ -177,6 +196,40 @@ if (!failed && (MODE === 'all' || MODE === 'parity' || MODE === 'read')) {
     else { console.log(`✗ FTS-paritet AFVIGER på: "${q.slice(0, 60)}" lokal=${l.length} remote=${r.length}`); failed = true; }
   }
   console.log(`${ftsMatch === QUERIES.length ? '✓' : '✗'} FTS-paritet: ${ftsMatch}/${QUERIES.length} forespørgsler identiske lokal vs remote`);
+
+  // F219-regressionscasen (fd-aalborg): 'Hvad koster en behandling' skal
+  // returnere priser.md i top 4 — på REMOTE, efter flytningen.
+  if (process.env.SPIKE_F219 === '1' && !failed) {
+    const hits = await remote.searchDocuments(buildFtsQuery('Hvad koster en behandling'), KB_IDS[0], TENANT, 4);
+    const found = hits.some((h) => (h.filename ?? '').includes('priser'));
+    console.log(`${found ? '✓' : '✗'} F219-regression på remote: priser.md i top 4 for 'Hvad koster en behandling' (fik: ${hits.map((h) => h.filename).join(', ')})`);
+    if (!found) failed = true;
+  }
+
+  // F222.3 — skriv migrerings-markøren i REMOTE når (og kun når) pariteten
+  // er bevist. Motoren nægter at servere en fjern-tenant uden denne række.
+  if (process.env.SPIKE_WRITE_MARKER === '1') {
+    const markerSlug = process.env.SPIKE_MARKER_SLUG;
+    if (!markerSlug) { console.error('✗ SPIKE_WRITE_MARKER kræver SPIKE_MARKER_SLUG'); failed = true; }
+    else if (failed) { console.error('✗ marker IKKE skrevet — pariteten fejlede'); }
+    else {
+      const counts: Record<string, number> = {};
+      for (const t of ['documents', 'document_chunks', 'knowledge_bases']) {
+        counts[t] = Number((await remote.execute(`SELECT COUNT(*) AS n FROM ${t}`)).rows[0].n);
+      }
+      await remote.execute(
+        `CREATE TABLE IF NOT EXISTS trail_migration (tenant_slug TEXT PRIMARY KEY, completed_at TEXT, source_rowcounts TEXT, verified TEXT)`,
+      );
+      await remote.execute(
+        `INSERT INTO trail_migration (tenant_slug, completed_at, source_rowcounts, verified)
+         VALUES (?, ?, ?, 'rowcounts+fts-parity')
+         ON CONFLICT(tenant_slug) DO UPDATE SET completed_at=excluded.completed_at, source_rowcounts=excluded.source_rowcounts, verified=excluded.verified`,
+        [markerSlug, new Date().toISOString(), JSON.stringify(counts)],
+      );
+      const back = await remote.execute(`SELECT completed_at FROM trail_migration WHERE tenant_slug = ?`, [markerSlug]);
+      console.log(`✓ migreringsmarkør skrevet + læst tilbage: ${markerSlug} @ ${back.rows[0]?.completed_at}`);
+    }
+  }
 }
 
 // ── Fase 2: Chat-retrieval p50/p95 ──────────────────────────────────────────

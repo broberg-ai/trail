@@ -57,6 +57,31 @@ export function newSnapshotId(now: Date = new Date()): string {
 export async function runBackupPass(input: BackupPassInput): Promise<BackupPassResult> {
   const { dbPath, dataDir, stagingDir, localDir, provider, trigger } = input;
 
+  // F222.3 — a REMOTE tenant (trail.path is an sqld URL, not a file) cannot
+  // be VACUUM'ed from here: the copy would land on the DB machine's disk,
+  // unreachable to this process. Refuse loudly instead of producing a
+  // zero-byte "backup" that looks green. The DB machine's backup sidecar
+  // owns this rung of the ladder for remote tenants (apps/db/backup.sh →
+  // object storage, daily).
+  if (!dbPath.startsWith('/')) {
+    return {
+      snapshot: {
+        id: 'remote-tenant',
+        snappedAt: new Date().toISOString(),
+        trigger,
+        uncompressedBytes: 0,
+        compressedBytes: 0,
+        sha256: '',
+        localPath: null,
+        remoteUrl: null,
+        status: 'failed',
+        error: `remote tenant (${dbPath}) — backups run on the DB machine's sidecar, not the engine`,
+      },
+      ok: false,
+      error: 'remote_tenant_backup_runs_on_db_machine',
+    };
+  }
+
   const id = newSnapshotId();
   const snappedAtIso = new Date().toISOString();
   const filename = `${id}.db.gz`;
