@@ -1,5 +1,17 @@
 /**
- * F253.1 — kør dæknings-invarianten mod en RIGTIG base og reparér om nødvendigt.
+ * F253.1 — dæknings-invarianten mod en LOKAL DATABASEFIL.
+ *
+ * ⚠️  BRUG `GET /api/v1/history/coverage` I STEDET, medmindre du VED at den
+ * tenant du måler ligger på en fil. Efter F222.3 serveres broberg-ai,
+ * sanne-andersen og fd-aalborg fra sqld på trail-db-001 (se TRAIL_DB_REMOTE),
+ * mens den gamle fil bliver liggende på motorens disk — med vilje, indtil
+ * ejeren har verificeret flytningen.
+ *
+ * MÅLT 6/9 2026, og det er derfor advarslen står her: dette script blev kørt
+ * mod /data/broberg-ai/trail.db, fandt 2 revner, reparerede dem og læste 0
+ * tilbage. Hele rapporten var internt konsistent — og handlede om en kopi
+ * ingen bruger. Den samme fil fik mig til at melde 37 dubletter i en base
+ * hvor der er nul. EN FILSTI ER ET GÆT PÅ HVOR DATA ER; ruten er et opslag.
  *
  *   bun run apps/server/scripts/verify-event-log-coverage.ts <db-sti>
  *   bun run apps/server/scripts/verify-event-log-coverage.ts <db-sti> --repair

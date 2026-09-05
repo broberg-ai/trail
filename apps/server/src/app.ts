@@ -22,6 +22,7 @@ import { streamRoutes } from './routes/stream.js';
 import { queueRoutes } from './routes/queue.js';
 import { readerFeedbackRoutes } from './routes/reader-feedback.js';
 import { lintRoutes } from './routes/lint.js';
+import { historyRoutes } from './routes/history.js';
 import { glossaryRoutes } from './routes/glossary.js';
 import { graphRoutes } from './routes/graph.js';
 import { memoryHealthRoutes } from './routes/memory-health.js';
@@ -187,6 +188,7 @@ export function createApp(trail: TrailDatabase, tenantPool: TenantPool): Hono<Ap
   app.route('/api/v1', queueRoutes);
   app.route('/api/v1', readerFeedbackRoutes);
   app.route('/api/v1', lintRoutes);
+  app.route('/api/v1', historyRoutes);
   app.route('/api/v1', glossaryRoutes);
   app.route('/api/v1', graphRoutes);
   app.route('/api/v1', memoryHealthRoutes);
