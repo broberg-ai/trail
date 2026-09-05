@@ -82,9 +82,9 @@ export function Dropdown({
   const label = current?.label ?? placeholder ?? '—';
 
   return (
-    {/* F248.3 — max-w-full på WRAPPEREN: den dimensionerer sig efter knappen,
-        så en max-bredde på knappen alene måler mod wrapperen og gør intet.
-        Med denne kappes fx w-[28rem]-vælgerne til skærmbredden på en telefon. */}
+    // F248.3 — max-w-full på WRAPPEREN: den dimensionerer sig efter knappen,
+    // så en max-bredde på knappen alene måler mod wrapperen og gør intet.
+    // Med denne kappes fx w-[28rem]-vælgerne til skærmbredden på en telefon.
     <div class="relative inline-block max-w-full" ref={wrapRef}>
       <button
         data-testid={testid}
