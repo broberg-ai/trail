@@ -108,6 +108,45 @@ chat-sti og en rigtig ingest mod en kopi af en rigtig tenant-database, plus én
 er en anden database-motor, søgningen er SQLites FTS5, og en kopi motoren ikke
 kan boote på er en backup, ikke en fallback — og backups findes allerede.
 
+## F222.2 — spikens facit (5. september 2026): sqld BESTÅR, Turso-appendikset er lukket
+
+**Opstilling:** ny Fly-app `trail-db-001` (org broberg-ai, region arn, shared-cpu-1x/1GB,
+10 GB volumen, INGEN offentlig IP — kun Flys private IPv6-net) med sqld
+(`ghcr.io/tursodatabase/libsql-server`). Indlæst en `VACUUM INTO`-kopi af den RIGTIGE
+sanne-andersen trail.db (338 dokumenter / 569 chunks / 35 MB, sha256 `c6677033…e78ffc3e`
+identisk gennem alle hop). Alle målinger kørt FRA motormaskinen med den ÆGTE kode
+(`searchChunks`/`searchDocuments`/`loadNeuronConfidence`/`createCandidateQueueAPI.write`)
+og 12 RIGTIGE brugerforespørgsler fra Sannes chathistorik — script:
+`apps/server/scripts/verify-f222-2-sqld-spike.ts`, negativ kontrol først.
+
+```
+FULD chat-retrieval (hele retrieveContext-sekvensen, n=60 pr. konfiguration):
+  lokal fil    p50 15,7 ms · p95 25,9 ms · max 26,9 ms
+  sqld remote  p50 40,0 ms · p95 48,0 ms · max 56,2 ms   ← +24 ms pr. svar
+
+INGEST-skrivesti (rigtige wiki-writes m. FTS-indeksopdatering, 8 writes):
+  lokal fil    p50 15 ms · max 26 ms
+  sqld remote  p50 52 ms · max 84 ms — og de nye sider findes STRAKS i FTS
+
+PARITET: 12/12 forespørgsler giver IDENTISKE resultater lokal vs sqld.
+  Rækketal ens (338/569/1). FTS5-indekset overlever uændret.
+
+GENDANNELSE (ØVET, ikke antaget): maskine destrueret → ny volumen fra
+  snapshot → boot → søgbar med identiske svar: **68 sekunder** i alt.
+  Spike-skrivningerne var korrekt VÆK efter gendannelsen (ægte øjebliksbillede).
+```
+
+**Beslutningen tallene bærer:** +24 ms på en chat der venter sekunder på LLM'en er
+usynligt for kunden — sqld-modellen HOLDER, og Turso-appendikset nedenfor forbliver
+lukket (genåbnes kun hvis driften skuffer). Fundet undervejs, vigtigt for F222.3:
+sqld på Fly SKAL lytte på IPv6 (`SQLD_HTTP_LISTEN_ADDR=[::]:8080` — 0.0.0.0 er
+uopnåelig over Flys private net), datamappen er `/var/lib/sqld/iku.db/dbs/default/data`,
+og en eksisterende SQLite-fil lagt dér FØR første boot serveres direkte — det er
+migrationsvejen pr. tenant. Spiken kørte UDEN auth (kun privat net); F222.3 skal
+sætte sqld's egen auth på før rigtige tenants flyttes. Oprydning til F222.3: den
+løsrevne volumen `vol_rnzl2qgk` (erstattet af gendannelses-volumen) + en stray
+seed-fil på `/var/lib/sqld/dbs/default/data` (forkert sti, harmløs).
+
 ## Målingerne planen hviler på (4. september 2026)
 
 ```
