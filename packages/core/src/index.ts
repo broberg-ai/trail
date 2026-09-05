@@ -110,7 +110,7 @@ export { auditEventLogCoverage, repairEventLogCoverage } from './history/coverag
 export type { CoverageReport, CoverageGap } from './history/coverage.js';
 
 // F253.2 + F253.3 — hjerne-versioner og tilbagerulning.
-export { takeBrainVersion, listBrainVersions, getBrainVersion } from './history/versions.js';
+export { takeBrainVersion, listBrainVersions, getBrainVersion, ensureRecentBrainVersion } from './history/versions.js';
 export type { BrainVersion, BrainVersionReason } from './history/versions.js';
 export { diffBrainVersion, restoreBrainVersion } from './history/restore.js';
 export type { RestoreDiff, RestoreChange, RestoreResult } from './history/restore.js';

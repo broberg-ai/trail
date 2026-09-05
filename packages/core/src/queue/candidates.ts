@@ -9,6 +9,7 @@ import {
   schema,
   type TrailDatabase,
 } from '@trail/db';
+import { ensureRecentBrainVersion } from '../history/versions.js';
 import { logActivity } from '../activity.js';
 import type {
   CreateQueueCandidate,
@@ -677,6 +678,34 @@ export async function resolveCandidate(
       : payload.notes ?? `${action.id} by curator`,
     metadataJson: payload.notes ? JSON.stringify({ notes: payload.notes }) : null,
   };
+
+  // F253.2 — mærk hjernen FØR den ændrer sig.
+  //
+  // Her, og ikke i ingesten: hver eneste ændring af en Neuron går gennem
+  // kø-kandidaten, uanset om den kom fra en upload, en lint-kørsel, en
+  // chat-gemning eller en kurator. Et mærke lagt i ingest-vejen ville dække
+  // uploads og INTET andet — og det ville se komplet ud.
+  //
+  // Kun for de effekter der faktisk ændrer viden. En 'acknowledge' eller en
+  // 'mark-still-relevant' rører ingen tekst, og et mærke foran dem ville fylde
+  // listen med grænser der ikke afgrænser noget.
+  //
+  // Afdæmpet (15 min), så en synkronisering af 100 artikler giver ÉT mærke.
+  // Og aldrig fatalt: at et mærke ikke kunne tages må ikke forhindre en
+  // godkendelse — det ville gøre en sikkerhedsforanstaltning til et nedbrud.
+  const CHANGES_KNOWLEDGE = new Set(['approve', 'retire-neuron', 'supersede']);
+  if (CHANGES_KNOWLEDGE.has(action.effect) && candidate.knowledgeBaseId) {
+    try {
+      await ensureRecentBrainVersion(trail, {
+        tenantId,
+        knowledgeBaseId: candidate.knowledgeBaseId,
+        label: `Før ${ctx.auto ? 'automatisk' : 'kurateret'} skrivning ${ctx.now.slice(0, 16).replace('T', ' ')}`,
+        reason: 'auto:ingest',
+      });
+    } catch (err) {
+      console.error('[brain-version] kunne ikke tage et mærke:', err);
+    }
+  }
 
   switch (action.effect) {
     case 'approve':

@@ -153,3 +153,46 @@ export async function getBrainVersion(
   ).rows[0];
   return row ? rowToVersion(row) : null;
 }
+
+/**
+ * Tag et mærke KUN hvis der ikke allerede er et nyt et.
+ *
+ * HVORFOR AFDÆMPNING OG IKKE «ét mærke pr. kørsel»: der findes ingen
+ * kørsels-grænse i koden. Hver kilde kompileres uafhængigt (processFileAsync
+ * pr. fil), så «én ingest-omgang» er ikke et objekt nogen kan pege på — det er
+ * et mønster i tiden. At opfinde et kørsels-objekt for at kunne mærke det ville
+ * være en større ændring end selve funktionen, og den ville stadig ikke dække
+ * en bunke-godkendelse eller en lint-kørsel.
+ *
+ * Afdæmpningen giver det samme resultat uden det: den FØRSTE skrivning i en
+ * byge tager mærket, resten genbruger det. En synkronisering af 100 artikler
+ * giver ét mærke, ikke hundrede — og pauser bygen i mere end vinduet, får den
+ * næste sit eget mærke, hvilket er præcis dét man vil kunne pege på.
+ *
+ * Vinduet er bevidst groft (15 min). Et mærke for meget koster nogle hundrede
+ * bytes; et mærke for lidt koster en tilbagerulning man ikke kan tage.
+ */
+export async function ensureRecentBrainVersion(
+  db: TrailDatabase,
+  args: {
+    tenantId: string;
+    knowledgeBaseId: string;
+    label: string;
+    reason?: BrainVersionReason;
+    withinMinutes?: number;
+  },
+): Promise<{ version: BrainVersion; created: boolean }> {
+  const minutes = args.withinMinutes ?? 15;
+  const recent = (
+    await db.execute(
+      `SELECT * FROM brain_versions
+        WHERE tenant_id = ? AND knowledge_base_id = ? AND reason = ?
+          AND REPLACE(SUBSTR(taken_at, 1, 19), 'T', ' ') >= datetime('now', ?)
+        ORDER BY taken_at DESC, rowid DESC LIMIT 1`,
+      [args.tenantId, args.knowledgeBaseId, args.reason ?? 'auto:ingest', `-${minutes} minutes`],
+    )
+  ).rows[0];
+
+  if (recent) return { version: rowToVersion(recent), created: false };
+  return { version: await takeBrainVersion(db, args), created: true };
+}

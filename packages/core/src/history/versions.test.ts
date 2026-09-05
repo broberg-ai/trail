@@ -9,7 +9,7 @@ import { test, expect } from 'bun:test';
 import { createLibsqlDatabase } from '@trail/db';
 import { join } from 'node:path';
 import { rmSync, statSync } from 'node:fs';
-import { takeBrainVersion, listBrainVersions } from './versions.js';
+import { takeBrainVersion, listBrainVersions, ensureRecentBrainVersion } from './versions.js';
 import { diffBrainVersion, restoreBrainVersion } from './restore.js';
 import { auditEventLogCoverage } from './coverage.js';
 
@@ -233,4 +233,47 @@ test('søgeindekset meldes STALE hvis kalderen ikke bygger det om', async () => 
   });
   expect(med.chunksRebuilt).toBe(rørt.length);
   expect(med.searchIndexStale).toBe(false);
+});
+
+test('en byge af skrivninger giver ÉT mærke, ikke ét pr. skrivning', async () => {
+  const { trail } = await seed();
+  await write(trail, 'n1', 'tekst', 1);
+
+  // 20 skrivninger i træk, som en site-synkronisering af 20 artikler.
+  const created: boolean[] = [];
+  for (let i = 0; i < 20; i += 1) {
+    const r = await ensureRecentBrainVersion(trail, {
+      tenantId: T, knowledgeBaseId: KB, label: `skrivning ${i}`, reason: 'auto:ingest',
+    });
+    created.push(r.created);
+  }
+
+  expect(created.filter(Boolean).length).toBe(1);      // kun den FØRSTE tog et mærke
+  expect(created[0]).toBe(true);
+  expect((await listBrainVersions(trail, T, KB)).length).toBe(1);
+});
+
+test('afdæmpningen gælder PR. GRUND — en lint-kørsel skygges ikke af en ingest', async () => {
+  // Ellers ville en ingest-byge sluge det mærke en lint-kørsel skulle have haft,
+  // og der ville ikke være noget at rulle tilbage til fra før linten.
+  const { trail } = await seed();
+  await write(trail, 'n1', 'tekst', 1);
+
+  const a = await ensureRecentBrainVersion(trail, { tenantId: T, knowledgeBaseId: KB, label: 'ingest', reason: 'auto:ingest' });
+  const b = await ensureRecentBrainVersion(trail, { tenantId: T, knowledgeBaseId: KB, label: 'lint', reason: 'auto:lint' });
+
+  expect(a.created).toBe(true);
+  expect(b.created).toBe(true);
+  expect((await listBrainVersions(trail, T, KB)).length).toBe(2);
+});
+
+test('et manuelt mærke tages ALTID — afdæmpningen må ikke sluge en ejers eget', async () => {
+  const { trail } = await seed();
+  await write(trail, 'n1', 'tekst', 1);
+  await ensureRecentBrainVersion(trail, { tenantId: T, knowledgeBaseId: KB, label: 'auto', reason: 'auto:ingest' });
+  const m1 = await takeBrainVersion(trail, { tenantId: T, knowledgeBaseId: KB, label: 'før jeg roder' });
+  const m2 = await takeBrainVersion(trail, { tenantId: T, knowledgeBaseId: KB, label: 'og en til' });
+
+  expect(m1.id).not.toBe(m2.id);
+  expect((await listBrainVersions(trail, T, KB)).length).toBe(3);
 });
