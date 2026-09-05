@@ -177,3 +177,58 @@ test('reparationen opfinder ikke en fortid — hændelsen bærer den version der
   expect(Number(ev.nv)).toBe(2);             // hændelsen siger den version der ER — ikke en ny
   expect(Number(ev.pv)).toBe(1);
 });
+
+test('et dokument arkiveret UDEN hændelse fanges — fejlen produktionen fandt', async () => {
+  // FUNDET AF EN PRODUKTIONS-KONTROL, ikke af en test: en forskel taget LIGE
+  // efter et mærke skal være tom, og den sagde at 51 sider ville «gendannes».
+  // DELETE /documents/:id satte archived=1 uden at skrive en hændelse, så
+  // loggens sidste ord om dem var stadig «created» — og en tilbagerulning ville
+  // have genoplivet præcis de dubletter oprydningen fjernede.
+  const { trail } = await seed();
+  await neuronMedLog(trail, 'n1', 'tekst', 1);
+  await trail.execute(`UPDATE documents SET archived = 1 WHERE id = 'n1'`); // som ruten gjorde
+
+  const r = await auditEventLogCoverage(trail, T);
+  expect(r.neurons).toBe(0);             // den er ude af hjernen …
+  expect(r.gaps).toHaveLength(1);        // … men loggen ved det ikke
+  expect(r.gaps[0]!.archiveDrift).toBe(true);
+  expect(r.intact).toBe(false);
+});
+
+test('et arkiveret dokument MED en archived-hændelse er ikke et hul', async () => {
+  const { trail } = await seed();
+  await neuronMedLog(trail, 'n1', 'tekst', 1);
+  await trail.execute(`UPDATE documents SET archived = 1 WHERE id = 'n1'`);
+  await trail.execute(
+    `INSERT INTO wiki_events (id, tenant_id, document_id, event_type, actor_kind, new_version, content_snapshot)
+     VALUES ('evt-arch',?, 'n1','archived','user',1,'tekst')`, [T]);
+
+  expect((await auditEventLogCoverage(trail, T)).intact).toBe(true);
+});
+
+test('et arkiveret dokument UDEN nogen historik er ikke et hul', async () => {
+  // Det kan være arkiveret før loggen fandtes. At kræve en hændelse for noget
+  // der aldrig har haft en, ville gøre invarianten permanent rød på gammel data.
+  const { trail } = await seed();
+  await trail.execute(
+    `INSERT INTO documents (id, tenant_id, knowledge_base_id, user_id, kind, filename, path, file_type, file_size, content, version, archived)
+     VALUES ('n1',?,'kb-cov','u-cov','wiki','n1.md','/neurons/','md',3,'gammel',1,1)`, [T]);
+
+  expect((await auditEventLogCoverage(trail, T)).intact).toBe(true);
+});
+
+test('reparationen af arkiv-drift skriver en ARCHIVED-hændelse, ikke en edited', async () => {
+  const { trail } = await seed();
+  await neuronMedLog(trail, 'n1', 'tekst', 1);
+  await trail.execute(`UPDATE documents SET archived = 1 WHERE id = 'n1'`);
+
+  const før = await auditEventLogCoverage(trail, T);
+  expect(await repairEventLogCoverage(trail, T, før.gaps)).toBe(1);
+  expect((await auditEventLogCoverage(trail, T)).intact).toBe(true);
+
+  const ev: any = (await trail.execute(
+    `SELECT event_type AS t, summary FROM wiki_events WHERE document_id='n1'
+      ORDER BY created_at DESC, rowid DESC LIMIT 1`)).rows[0];
+  expect(ev.t).toBe('archived'); // en 'edited' her ville sige at siden STADIG lever
+  expect(String(ev.summary)).toContain('arkiveret');
+});

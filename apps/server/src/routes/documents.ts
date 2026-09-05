@@ -600,6 +600,60 @@ documentRoutes.patch('/documents/:docId', async (c) => {
   return c.json(doc);
 });
 
+
+/**
+ * F253.1 — en arkivering/gendannelse SKAL i hændelses-loggen.
+ *
+ * Uden den er loggens sidste ord om en arkiveret side stadig «created», og en
+ * tilbagerulning (F253.3) genopliver den. Målt i produktion 6/9: en forskel
+ * taget lige efter et mærke ville have gendannet 51 sider som netop var
+ * arkiveret — dubletterne fra F252.2.
+ *
+ * Fejler den, må den IKKE vælte arkiveringen: en manglende hændelse er en
+ * revne invarianten kan finde og reparere, mens en fejlet arkivering er en
+ * side brugeren tror er væk og som stadig står der.
+ */
+async function logArchiveEvent(
+  trail: ReturnType<typeof getTrail>,
+  tenantId: string,
+  docId: string,
+  eventType: 'archived' | 'restored',
+  actorId: string | null,
+): Promise<void> {
+  try {
+    const doc = await trail.db
+      .select({ content: documents.content, version: documents.version, kind: documents.kind })
+      .from(documents)
+      .where(eq(documents.id, docId))
+      .get();
+    if (!doc || doc.kind !== 'wiki') return; // kun Neuroner har en hændelses-log
+
+    const prev = await trail.db
+      .select({ id: wikiEvents.id })
+      .from(wikiEvents)
+      .where(eq(wikiEvents.documentId, docId))
+      .orderBy(desc(wikiEvents.createdAt))
+      .limit(1)
+      .get();
+
+    await trail.db.insert(wikiEvents).values({
+      id: `evt_${crypto.randomUUID().slice(0, 12)}`,
+      tenantId,
+      documentId: docId,
+      eventType,
+      actorId,
+      actorKind: actorId ? 'user' : 'system',
+      previousVersion: doc.version ?? 1,
+      newVersion: doc.version ?? 1,
+      summary: eventType === 'archived' ? 'Arkiveret' : 'Gendannet fra arkiv',
+      prevEventId: prev?.id ?? null,
+      contentSnapshot: doc.content ?? '',
+    }).run();
+  } catch (err) {
+    console.error('[wiki-event] kunne ikke logge', eventType, docId, err);
+  }
+}
+
 documentRoutes.delete('/documents/:docId', async (c) => {
   const trail = getTrail(c);
   const tenant = getTenant(c);
@@ -620,6 +674,8 @@ documentRoutes.delete('/documents/:docId', async (c) => {
       409,
     );
   }
+
+  await logArchiveEvent(trail, tenant.id, docId, 'archived', getUser(c)?.id ?? null);
 
   await trail.db
     .update(documents)
@@ -656,6 +712,8 @@ documentRoutes.post('/documents/:docId/restore', async (c) => {
     .set({ archived: false, status: 'ready', updatedAt: new Date().toISOString() })
     .where(eq(documents.id, docId))
     .run();
+
+  await logArchiveEvent(trail, tenant.id, docId, 'restored', getUser(c)?.id ?? null);
 
   return c.json({ id: docId, archived: false, status: 'ready' });
 });
@@ -1201,6 +1259,12 @@ documentRoutes.post('/documents/bulk-delete', async (c) => {
   const trail = getTrail(c);
   const tenant = getTenant(c);
   const body = BulkDeleteSchema.parse(await c.req.json());
+
+  // Bulk-arkivering logger hver side for sig. Én hændelse for hele bunken ville
+  // ikke kunne besvare «var DENNE side aktiv ved mærket?».
+  for (const id of body.ids) {
+    await logArchiveEvent(trail, tenant.id, id, 'archived', getUser(c)?.id ?? null);
+  }
 
   await trail.db
     .update(documents)

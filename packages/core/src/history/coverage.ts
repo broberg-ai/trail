@@ -61,6 +61,21 @@ export interface CoverageGap {
   contentDrift: boolean;
   /** version > antal hændelser — mindst én skrivning blev aldrig logget. */
   versionDrift: boolean;
+  /**
+   * Dokumentet ER arkiveret, men loggens seneste hændelse siger det ikke.
+   *
+   * FUNDET AF EN PRODUKTIONS-KONTROL 6/9, ikke af en test: en forskel taget
+   * LIGE efter et mærke skal være tom, og den sagde at 51 sider ville
+   * «gendannes». Årsagen var at DELETE /documents/:id satte archived=1 uden at
+   * skrive en hændelse — så loggens sidste ord om de sider var stadig
+   * «created», og en tilbagerulning ville have genoplivet præcis de dubletter
+   * oprydningen fjernede.
+   *
+   * De to første invarianter kunne ikke se det: de scanner kun archived=0, så
+   * et dokument forsvandt UD af deres univers i samme øjeblik fejlen opstod.
+   * En vagt hvis dækning skrumper når fejlen sker, er ingen vagt.
+   */
+  archiveDrift: boolean;
 }
 
 export interface CoverageReport {
@@ -92,7 +107,7 @@ export async function auditEventLogCoverage(
     args.push(knowledgeBaseId);
   }
 
-  const { rows } = await db.execute(
+  const active = (await db.execute(
     `SELECT
        d.id                      AS documentId,
        d.path                    AS path,
@@ -110,12 +125,49 @@ export async function auditEventLogCoverage(
        AND d.archived = 0
        ${kbFilter}`,
     args,
-  );
+  )).rows;
+
+  // ARKIVEREDE dokumenter, undersøgt for sig. De hører ikke til i tællingen af
+  // Neuroner (de er ikke i hjernen længere), men loggen skal kunne fortælle at
+  // de BLEV arkiveret — ellers kan ingen rulning vide om de fandtes ved mærket.
+  const archived = (await db.execute(
+    `SELECT
+       d.id       AS documentId,
+       d.path     AS path,
+       d.filename AS filename,
+       COALESCE(d.version, 1) AS version,
+       (SELECT COUNT(*) FROM wiki_events e WHERE e.document_id = d.id) AS eventCount,
+       (SELECT e.event_type FROM wiki_events e WHERE e.document_id = d.id
+         ORDER BY e.created_at DESC, e.rowid DESC LIMIT 1) AS lastType
+     FROM documents d
+     WHERE d.tenant_id = ?
+       AND d.kind = 'wiki'
+       AND d.archived = 1
+       ${kbFilter}`,
+    args,
+  )).rows;
 
   const gaps: CoverageGap[] = [];
   let withoutHistory = 0;
 
-  for (const raw of rows) {
+  for (const raw of archived) {
+    const r = raw as unknown as {
+      documentId: string; path: string | null; filename: string | null;
+      version: number; eventCount: number; lastType: string | null;
+    };
+    // Et arkiveret dokument uden NOGEN hændelse er ikke et hul: det kan være
+    // arkiveret før loggen fandtes. Men har det en historik der ikke ender på
+    // 'archived', mangler netop den hændelse.
+    if (Number(r.eventCount) > 0 && r.lastType !== 'archived') {
+      gaps.push({
+        documentId: r.documentId, path: r.path, filename: r.filename,
+        version: Number(r.version), eventCount: Number(r.eventCount),
+        contentDrift: false, versionDrift: false, archiveDrift: true,
+      });
+    }
+  }
+
+  for (const raw of active) {
     const r = raw as unknown as {
       documentId: string; path: string | null; filename: string | null;
       version: number; eventCount: number; contentDrift: number;
@@ -135,11 +187,12 @@ export async function auditEventLogCoverage(
         eventCount: Number(r.eventCount),
         contentDrift,
         versionDrift,
+        archiveDrift: false,
       });
     }
   }
 
-  return { neurons: rows.length, withoutHistory, gaps, intact: gaps.length === 0 };
+  return { neurons: active.length, withoutHistory, gaps, intact: gaps.length === 0 };
 }
 
 /**
@@ -181,15 +234,18 @@ export async function repairEventLogCoverage(
          (id, tenant_id, document_id, event_type, actor_id, actor_kind,
           previous_version, new_version, summary, metadata, prev_event_id,
           source_candidate_id, content_snapshot)
-       VALUES (?, ?, ?, 'edited', NULL, 'system', ?, ?, ?, ?, ?, NULL, ?)`,
+       VALUES (?, ?, ?, ?, NULL, 'system', ?, ?, ?, ?, ?, NULL, ?)`,
       [
         `evt_${crypto.randomUUID().slice(0, 12)}`,
         tenantId,
         gap.documentId,
+        gap.archiveDrift ? 'archived' : 'edited',
         gap.eventCount > 0 ? Number(doc.version) - 1 : null,
         Number(doc.version),
-        'Indhentning: indholdet blev skrevet udenom hændelses-loggen. Denne hændelse bærer det indhold der FAKTISK står nu, ikke en rekonstruktion af mellemtilstanden.',
-        JSON.stringify({ repair: 'F253.1', contentDrift: gap.contentDrift, versionDrift: gap.versionDrift }),
+        gap.archiveDrift
+          ? 'Indhentning: dokumentet blev arkiveret uden at loggen fik det at vide. Uden denne hændelse ville en tilbagerulning genoplive det.'
+          : 'Indhentning: indholdet blev skrevet udenom hændelses-loggen. Denne hændelse bærer det indhold der FAKTISK står nu, ikke en rekonstruktion af mellemtilstanden.',
+        JSON.stringify({ repair: 'F253.1', contentDrift: gap.contentDrift, versionDrift: gap.versionDrift, archiveDrift: gap.archiveDrift }),
         prev?.id ?? null,
         doc.content ?? '',
       ],
