@@ -713,11 +713,16 @@ function SourceRow({
           : 'border-[color:var(--color-border)] bg-[color:var(--color-bg-card)]/80 hover:border-[color:var(--color-border-strong)]')
       }
     >
-      {/* F248.7 — max-[700px]:flex-wrap + flex-1: handlings-knapperne er
-          shrink-0, så uden dette pressede de venstre halvdel ned til nul
-          bredde og titlen brækkede ét bogstav pr. linje (ejerens skud 5/9). */}
+      {/* F248.7 — handlings-knapperne er shrink-0, så uden dette pressede de
+          venstre halvdel ned til nul bredde og titlen brækkede ét BOGSTAV pr.
+          linje (ejerens skud 5/9).
+          basis-full er det bærende, ikke flex-wrap: `flex-1` betyder basis 0,
+          altså "må gerne krympe til nul" — så fandtes der altid plads på én
+          linje, wrap udløstes aldrig, og venstre halvdel endte på 27px (målt
+          af Lens efter mit første forsøg). basis-full på mobil kræver en hel
+          linje, og DERFOR ombryder knapperne ned under. */}
       <div class="px-4 py-3 flex items-baseline justify-between gap-4 max-[700px]:flex-wrap">
-        <div class="min-w-0 flex-1 flex items-baseline gap-3">
+        <div class="min-w-0 flex-1 max-[700px]:basis-full flex items-baseline gap-3">
           <input
             type="checkbox"
             class="mt-[3px] shrink-0 cursor-pointer accent-[color:var(--color-accent)]"
