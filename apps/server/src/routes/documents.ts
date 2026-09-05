@@ -61,6 +61,47 @@ export const documentRoutes = new Hono();
 
 documentRoutes.use('*', requireAuth);
 
+/**
+ * F248.6 — letvægts-aktivitetstæller til sidebarens pulserende prik ved Kilder.
+ *
+ * To COUNT-forespørgsler, ingen dokument-kroppe: sidebaren spørger ved hver
+ * SSE-hændelse, og en liste over alle kilder ville sende hele KB'ets
+ * metadata over ledningen for at udlede ét tal.
+ *
+ *   active   — noget ARBEJDER lige nu (uploading | pending | processing)
+ *   awaiting — parkeret til lokal kompilering (venter på et menneske/dispatch)
+ *
+ * Begge er scoped til BÅDE tenant og KB — en anden tenants kilder må aldrig
+ * kunne tælle med (det er den negative kontrol i testen).
+ */
+documentRoutes.get('/knowledge-bases/:kbId/source-activity', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
+  if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
+
+  const base = [
+    eq(documents.tenantId, tenant.id),
+    eq(documents.knowledgeBaseId, kbId),
+    eq(documents.kind, 'source'),
+    eq(documents.archived, false),
+  ];
+
+  const activeRow = await trail.db
+    .select({ n: sql<number>`count(*)` })
+    .from(documents)
+    .where(and(...base, inArray(documents.status, ['uploading', 'pending', 'processing'])))
+    .get();
+
+  const awaitingRow = await trail.db
+    .select({ n: sql<number>`count(*)` })
+    .from(documents)
+    .where(and(...base, eq(documents.awaitingLocalCompile, true)))
+    .get();
+
+  return c.json({ active: Number(activeRow?.n ?? 0), awaiting: Number(awaitingRow?.n ?? 0) });
+});
+
 documentRoutes.get('/knowledge-bases/:kbId/documents', async (c) => {
   const trail = getTrail(c);
   const tenant = getTenant(c);

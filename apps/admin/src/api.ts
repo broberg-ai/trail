@@ -2001,3 +2001,17 @@ export function updatePushPrefs(prefs: Partial<PushPrefs>): Promise<{ ok: boolea
 export function sendTestPush(): Promise<{ sent: number; dead: number }> {
   return api('/api/v1/push/test', { method: 'POST', body: '{}' });
 }
+
+// ── F248.6 — aktivitets-signal til sidebarens Kilder-prik ──────────
+export interface SourceActivity {
+  /** Kilder der arbejder lige nu (uploading | pending | processing). */
+  active: number;
+  /** Kilder parkeret til lokal kompilering. */
+  awaiting: number;
+}
+
+export function getSourceActivity(kbId: string): Promise<SourceActivity> {
+  return api<SourceActivity>(
+    `/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/source-activity`,
+  );
+}

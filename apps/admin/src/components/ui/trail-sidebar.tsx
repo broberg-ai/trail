@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import { Icons, type IconName } from './icons';
 import { useKb } from '../../lib/kb-cache';
-import { listQueue } from '../../api';
+import { listQueue, getSourceActivity } from '../../api';
+import { useKbEvents, onStreamOpen, onFocusRefresh, debounce } from '../../lib/event-stream';
 import { t } from '../../lib/i18n';
 
 /**
@@ -150,6 +151,35 @@ export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
       .catch(() => { if (!cancelled) setQueueCount(null); });
     return () => { cancelled = true; };
   }, [kbId, path]);
+
+  // F248.6 — «flashing activity»-prikken ved Kilder (ejerens ønske 5/9).
+  // Tallet kommer fra ét letvægts-endpoint (to COUNT'er) og holdes LIVE på
+  // de fire hændelser der faktisk ændrer det. Debounced: en bulk-upload fyrer
+  // mange hændelser på millisekunder, og kun den sidste tælling gælder.
+  const [sourceActivity, setSourceActivity] = useState(0);
+  const refreshActivity = useRef(() => {});
+  refreshActivity.current = () => {
+    getSourceActivity(kbId)
+      .then((a) => setSourceActivity(a.active))
+      .catch(() => { /* et fejlet opslag må ikke tænde en falsk prik */ });
+  };
+  const bumpActivity = useMemo(
+    () => debounce(() => refreshActivity.current(), 400),
+    [],
+  );
+  useEffect(() => { refreshActivity.current(); }, [kbId]);
+  useKbEvents(kbId, (e) => {
+    if (
+      e.type === 'ingest_started' ||
+      e.type === 'ingest_completed' ||
+      e.type === 'ingest_failed' ||
+      e.type === 'source_compiled'
+    ) {
+      bumpActivity();
+    }
+  });
+  useEffect(() => onStreamOpen(() => refreshActivity.current()), [kbId]);
+  useEffect(() => onFocusRefresh(() => refreshActivity.current()), [kbId]);
 
   const groups = buildGroups(kbId);
   const footer = footerItems(kbId);
@@ -321,6 +351,7 @@ export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
                 collapsed={collapsed}
                 onClick={() => go(it.path)}
                 count={it.id === 'queue' ? queueCount : null}
+                pulse={it.id === 'sources' && sourceActivity > 0}
               />
             ))}
           </div>
@@ -352,6 +383,7 @@ function Item({
   onClick,
   dim,
   count,
+  pulse,
 }: {
   item: SidebarItem;
   active: boolean;
@@ -360,6 +392,8 @@ function Item({
   dim?: boolean;
   /** Optional badge count (e.g. pending queue items). Null/0 → no badge. */
   count?: number | null;
+  /** F248.6 — noget arbejder lige nu på denne flade (pulserende prik). */
+  pulse?: boolean;
 }) {
   const IconComp = Icons[item.icon];
   const label = t(item.labelKey);
@@ -370,10 +404,19 @@ function Item({
       onClick={onClick}
       class={'sidebar-item' + (active ? ' is-active' : '') + (dim ? ' is-dim' : '')}
       title={collapsed && showCount ? `${label} (${count})` : collapsed ? label : undefined}
-      aria-label={showCount ? `${label} (${count})` : label}
+      aria-label={
+        pulse
+          ? `${label} — ${t('sidebar.activity')}`
+          : showCount
+            ? `${label} (${count})`
+            : label
+      }
     >
       {active ? <span class="sidebar-item__bar" /> : null}
       <IconComp size={14} class="sidebar-item__icon" />
+      {/* F248.6 — prikken sidder på IKONET, ikke ved etiketten, så den også
+          er synlig i den kollapsede ikon-skinne hvor der ingen tekst er. */}
+      {pulse ? <span class="sidebar-item__pulse" data-testid="sidebar-activity-sources" aria-hidden="true" /> : null}
       {!collapsed ? <span class="sidebar-item__label">{label}</span> : null}
       {!collapsed && showCount ? (
         <span class="sidebar-item__count is-attention">{count > 99 ? '99+' : count}</span>

@@ -744,3 +744,27 @@ html[data-theme="dark"] .menu-item.is-danger:hover { background: rgba(249,115,22
     gap: 8px !important;
   }
 }
+
+/* F248.6 — aktivitets-prik ved Kilder: pulserer mens noget arbejder.
+   Den sidder oven på IKONET (ikke ved etiketten), så den også ses i den
+   kollapsede ikon-skinne hvor der ingen tekst er. */
+.sidebar-item__pulse {
+  position: absolute;
+  left: 22px;
+  top: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-bg);
+  animation: sidebar-pulse 1.4s var(--ease) infinite;
+}
+@keyframes sidebar-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.72); }
+}
+/* Respekter reduced-motion: prikken BLIVER (signalet må ikke forsvinde),
+   den holder bare op med at blinke. */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-item__pulse { animation: none; }
+}
