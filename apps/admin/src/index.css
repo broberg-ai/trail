@@ -101,6 +101,37 @@ body {
   min-height: 100vh;
 }
 
+/* F248.8 — appen må ALDRIG kunne trækkes sidelæns.
+   Ejeren kunne panorere hele siden ud af skærmen på sin iPhone. Målt på prod
+   med lukket menu: html og body stod på `overflow-x: visible` og der fandtes
+   ikke ét `overscroll-behavior` i hele admin — mens panelerne har 19 vandrette
+   rulle-striber (fanerækker, tabeller, segmentkontroller). En swipe der rammer
+   enden af sådan en stribe KÆDER derfor videre op i dokumentet, og iOS svarer
+   med sin gummibånds-panorering. Skallen er `overflow: hidden`, så der er ikke
+   noget at se derude — kun tomhed, og en app der føles løs.
+
+   Tre spærrer, fordi der er tre forskellige veje ind i den samme fejl:
+     1. overflow-x: hidden — et barn der stikker ud kan ikke gøre dokumentet
+        bredere, uanset hvilket panel der finder på det.
+     2. overscroll-behavior-x: none på dokumentet — det sidelæns gummibånd
+        findes ikke længere.
+     3. overscroll-behavior-x: contain på ALT — en swipe der rammer enden af
+        en rulle-stribe bliver hos striben. Universel selector med vilje:
+        erklæringen er uden virkning på alt der ikke ruller, så den dækker
+        også den næste stribe nogen tilføjer, uden at 19 kaldesteder skal
+        huske den. (`html, body` er mere specifik og beholder derfor `none`.)
+
+   Kun x-aksen røres: lodret gummibånd er en normal, ønsket fornemmelse. */
+html,
+body {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
+* {
+  overscroll-behavior-x: contain;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
