@@ -21,8 +21,13 @@ import { listenForSkipWaiting } from '@broberg/pwa/sw';
 
 declare const self: ServiceWorkerGlobalScope;
 
-// F247.2-bevis: denne kommentar bumpes for at give en byte-forskellig sw.js
-// til det levende gammel→ny-opdaterings-bevis (Lens waitForBuild). rev 3.
+// F247.2 — SW_REV er ÆGTE kode, ikke en kommentar: minifieren stripper
+// kommentarer, så et kommentar-bump gav en byte-identisk sw.js og browseren
+// så aldrig en ny version (målt: flow b215c53d, toasten udeblev i 120s).
+// Bump den ved et bevis-run; logges så en DevTools-kigger kan se revisionen.
+const SW_REV = 'r4';
+console.log('[trail-sw]', SW_REV);
+
 const SHELL_CACHE = 'trail-shell-v1';
 const ASSET_CACHE = 'trail-assets-v1';
 const KNOWN_CACHES = new Set([SHELL_CACHE, ASSET_CACHE]);
