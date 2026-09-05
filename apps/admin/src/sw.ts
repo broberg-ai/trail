@@ -22,7 +22,7 @@ import { listenForSkipWaiting } from '@broberg/pwa/sw';
 declare const self: ServiceWorkerGlobalScope;
 
 // F247.2-bevis: denne kommentar bumpes for at give en byte-forskellig sw.js
-// til det levende gammel→ny-opdaterings-bevis (Lens waitForBuild). rev 2.
+// til det levende gammel→ny-opdaterings-bevis (Lens waitForBuild). rev 3.
 const SHELL_CACHE = 'trail-shell-v1';
 const ASSET_CACHE = 'trail-assets-v1';
 const KNOWN_CACHES = new Set([SHELL_CACHE, ASSET_CACHE]);
