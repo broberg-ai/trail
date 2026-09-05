@@ -173,7 +173,11 @@ export function App({ children }: { children: ComponentChildren }) {
   }, []);
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+    // F248.5 — 100dvh, ikke 100vh: i Safari er 100vh den STORE viewport
+    // (inkl. den browser-chrome der kan trække sig væk), så skallen blev
+    // højere end det synlige område og HELE dokumentet kunne rulle — topbjælken
+    // ud af skærmen. dvh er det der faktisk er synligt lige nu.
+    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <canvas ref={canvasRef} id="trail-graph" aria-hidden="true" />
 
       {me ? <TopNav me={me} onOpenPalette={() => setPaletteOpen(true)} /> : null}

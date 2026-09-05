@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- F248.5 — mørk app-ikon-udgave (ejerens valg 5/9). Baggrund = Trails
+       dark-token #17140F; ringen i lys forgrund, kernen i accent. -->
+  <rect width="512" height="512" fill="#17140F"/>
+  <circle cx="256" cy="256" r="176" fill="none" stroke="#F5F1EA" stroke-width="26"/>
+  <circle cx="256" cy="256" r="116" fill="none" stroke="#E8A87C" stroke-width="11" opacity="0.55"/>
+  <circle cx="256" cy="256" r="52" fill="#E8A87C"/>
+</svg>

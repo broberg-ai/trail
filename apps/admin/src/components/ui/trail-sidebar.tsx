@@ -38,6 +38,13 @@ function buildGroups(kbId: string): SidebarGroup[] {
       ],
     },
     {
+      labelKey: 'sidebar.groupInput',
+      items: [
+        { id: 'sources', path: `/kb/${kbId}/sources`, labelKey: 'sidebar.sources', icon: 'Upload' },
+        { id: 'images', path: `/kb/${kbId}/images`, labelKey: 'sidebar.images', icon: 'FileText' },
+      ],
+    },
+    {
       labelKey: 'sidebar.groupCanon',
       items: [
         { id: 'neurons', path: `/kb/${kbId}/neurons`, labelKey: 'sidebar.neurons', icon: 'FileText' },
@@ -54,13 +61,6 @@ function buildGroups(kbId: string): SidebarGroup[] {
         { id: 'jobs', path: `/jobs`, labelKey: 'sidebar.jobs', icon: 'Cpu' },
         { id: 'activity', path: `/activity`, labelKey: 'sidebar.activity', icon: 'Cpu' },
         { id: 'links', path: `/kb/${kbId}/link-check`, labelKey: 'sidebar.links', icon: 'ArrowUpRight' },
-      ],
-    },
-    {
-      labelKey: 'sidebar.groupInput',
-      items: [
-        { id: 'sources', path: `/kb/${kbId}/sources`, labelKey: 'sidebar.sources', icon: 'Upload' },
-        { id: 'images', path: `/kb/${kbId}/images`, labelKey: 'sidebar.images', icon: 'FileText' },
       ],
     },
   ];
@@ -121,6 +121,22 @@ export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
   useEffect(() => {
     try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* no storage */ }
   }, [collapsed]);
+  // F248.5 — mens overlayet er åbent må arbejdsfladen BAG det ikke kunne rulle
+  // (ejerens skud 5/9: topbjælken kunne rulles ud af skærmen med menuen oppe).
+  // Låsen sidder på både html og body, fordi iOS ruller documentElement.
+  useEffect(() => {
+    if (!overlayMode) return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtml = html.style.overflow;
+    const prevBody = body.style.overflow;
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    return () => {
+      html.style.overflow = prevHtml;
+      body.style.overflow = prevBody;
+    };
+  }, [overlayMode]);
 
   // F186-followup — pending-queue count badge on the Kø item. Refetched on
   // navigation so it stays honest after the curator resolves items. `count`

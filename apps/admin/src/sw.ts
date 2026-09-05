@@ -26,11 +26,14 @@ declare const self: ServiceWorkerGlobalScope;
 // kommentarer, så et kommentar-bump gav en byte-identisk sw.js og browseren
 // så aldrig en ny version (målt: flow b215c53d, toasten udeblev i 120s).
 // Bump den ved et bevis-run; logges så en DevTools-kigger kan se revisionen.
-const SW_REV = 'r6';
+const SW_REV = 'r7';
 console.log('[trail-sw]', SW_REV);
 
 const SHELL_CACHE = 'trail-shell-v1';
-const ASSET_CACHE = 'trail-assets-v1';
+// F248.5 — v2: ikonerne er cache-first, så et navne-bump er det der får en
+// allerede-installeret klient til at hente de nye (mørke) ikoner i stedet for
+// at servere de gamle fra cachen for evigt. activate rydder ukendte caches.
+const ASSET_CACHE = 'trail-assets-v2';
 const KNOWN_CACHES = new Set([SHELL_CACHE, ASSET_CACHE]);
 
 // @broberg/pwa: den nye worker aktiverer først når brugeren siger til
