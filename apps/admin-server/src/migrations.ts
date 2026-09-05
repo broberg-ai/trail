@@ -124,6 +124,40 @@ const STATEMENTS = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_oauth_identities_provider_subject ON oauth_identities(provider, provider_subject)`,
   `CREATE INDEX IF NOT EXISTS idx_oauth_identities_user ON oauth_identities(user_id)`,
+
+  // F249 — passkeys (WebAuthn). Ceremonien køres af @broberg/auth/passkey-ceremony;
+  // disse to tabeller ER det store den skriver igennem. Bevidst UDEN en
+  // tenant-kolonne: en bruger har medlemskaber i flere tenants, og en
+  // tenant-scopet nøgle ville give samme person på samme telefon en adgang der
+  // virker i ét arbejdsrum og ikke i det andet.
+  //
+  // user_id har med vilje INGEN formatkrav ud over FK'en. Der er to levende
+  // formater i drift (`u-<hex8>` fra invite, `usr_lens_<hex8>` for Lens-
+  // principalen), og en UUID-validering ville afvise præcis Lens-principalen og
+  // intet andet — altså kun gå i stykker på den ene bruger ingen tester med.
+  `CREATE TABLE IF NOT EXISTS passkey_credentials (
+    credential_id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL REFERENCES control_users(id) ON DELETE CASCADE,
+    public_key TEXT NOT NULL,
+    counter INTEGER NOT NULL DEFAULT 0,
+    transports TEXT,
+    label TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_used_at TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_passkey_credentials_user ON passkey_credentials(user_id)`,
+
+  // Challenges er KORTLIVEDE og ENGANGS. takeChallenge SKAL slette i samme
+  // operation som den læser — en store der kun læser gør en challenge
+  // genafspillelig, og pakkens egne tests ville stadig være grønne.
+  `CREATE TABLE IF NOT EXISTS passkey_challenges (
+    id TEXT PRIMARY KEY NOT NULL,
+    challenge TEXT NOT NULL,
+    ceremony TEXT NOT NULL,
+    user_id TEXT,
+    expires_at INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_passkey_challenges_expiry ON passkey_challenges(expires_at)`,
 ];
 
 export async function runMigrations(): Promise<void> {
