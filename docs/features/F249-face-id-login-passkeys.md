@@ -70,9 +70,61 @@ sessionsmodel, ingen synkronisering. **Men det er et brud på reuse-first** —
 evne skal UDVIDES ind i pakken, ikke omgås lokalt. Bygges ikke uden components'
 ord.
 
-**Åbent spørgsmål, og planen venter på det:** er (b) en dokumenteret vej, eller
-er «passkey uden Better Auth-session» en gap components vil have filet? Spurgt
-5/9, intercom #25904.
+### AFGJORT 5/9 — af components, målt i pluginnets dist
+
+Spørgsmålet er besvaret (intercom #25913), og svaret lukker **begge** de veje
+der stod åbne. Målt i `@better-auth/passkey@1.6.23`s egen `dist`, ikke læst i
+dokumentationen:
+
+1. **`verify-authentication` (index.mjs ~461-470) kalder UBETINGET**
+   `createSession(passkey.userId)` → `setSessionCookie(...)`. Ingen flag, ingen
+   option, ingen gren. **«Bring your own session» er ikke en tilstand pluginnet
+   har.**
+2. **`afterVerification` fyrer FØR den blok** — så man KAN minte sin egen række
+   dér, og requesten fortsætter og laver en **anden** session med en **anden**
+   cookie alligevel. To sessionssystemer på ét login. *Fra signaturen alene
+   ligner det præcis en opt-out.* Det er dagens gennemgående fejlform igen: et
+   hook på det rigtige tidspunkt er ikke den kontrol det ligner.
+3. **Registrering kræver en Better Auth-session i forvejen** og afviser når
+   `userData.id !== session.user.id`. Vores `trail-session` er usynlig for den.
+
+Derfor er **(b) ikke den udvej den lignede**: punkt 3 tvinger os til også at
+mappe SESSION-modellen, og så bliver Better Auth skriveren af vores
+sessionsrækker med eget token-felt og signeret cookie. Vores `sessions.id` **ER**
+cookien — den ville ændre sig — og Lens-minten, der INSERTER en række direkte,
+brækker. Samme blast radius som (a), samlet på den ene tabel vi mindst har råd
+til at flytte.
+
+Og **(c) er rigtig i substans, forkert som lokal build**: pluginnet hardkoder
+`requireUserVerification: false` i BEGGE ceremonier, så enhver kopi der følger
+referencen får et passkey-login der **aldrig tjekker at en biometri skete** — og
+det ser perfekt ud. Det er den fælde ethvert repo med egne sessioner ville ramme
+hver for sig.
+
+### Vejen der bygges i stedet: en ceremoni-kun-indgang i pakken
+
+components bygger den (deres kort **components-F008.13**): `begin`/`finish` for
+begge ceremonier, injiceret store, **returnerer det verificerede bruger-id og
+INTET om sessioner.** Vi minter `trail-session` som i dag; Lens-minten røres
+ikke. UV-garden følger med.
+
+**Trail er consumer #1** og ejer deres AC#6: at det virker mod `control.db`
+rapporterer vi, ikke dem — de kan ikke se vores tabel.
+
+### Vores fakta, sendt til dem (#25915), alle målt i kilden
+
+| | |
+|---|---|
+| `userId` | vilkårlig TEXT, **to formater i drift**: `u-<hex>` (invite.ts:152), `usr_lens_<hex>` (lens-session.ts:49). En UUID-validering ville afvise præcis Lens-principalen og intet andet — altså kun gå i stykker på den ene bruger ingen tester med. |
+| Bruger-oprettelse | store'et må **aldrig**. `organization_id` er NOT NULL med FK, og «hvilken org» er en forretningsbeslutning (invite/onboarding), ikke noget en auth-ceremoni kan udlede. OAuth opretter i øvrigt heller aldrig en bruger (oauth.ts:297 afviser `email_not_registered`) — invite er den eneste vej ind. |
+| Session-skrivesteder | **tre**, alle skal forblive urørte: auth.ts:107, oauth.ts:317, lens-session.ts:79 |
+| `control_users` | mangler `emailVerified` og `updatedAt` — felter der forudsætter Better Auths brugerform skal være valgfri |
+| Multi-tenant | en passkey hører til **BRUGEREN**, ikke til tenanten. En bruger har ÉN org men kan have memberships i flere tenants; en tenant-scopet nøgle ville give en nøgle der virker i ét arbejdsrum og ikke i det andet — for samme person på samme telefon. cb er medlem af to tenants, så det ville ramme ejeren først. |
+
+Grønt felt: der findes **ingen** passkey-/credential-/webauthn-tabel i
+`control.db` i dag (0 træf i `apps/admin-server/src`). Der er intet at migrere.
+
+**F249.1 er blokeret indtil indgangen er udgivet.**
 
 ## Scope
 
