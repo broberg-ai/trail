@@ -124,6 +124,41 @@ rapporterer vi, ikke dem — de kan ikke se vores tabel.
 Grønt felt: der findes **ingen** passkey-/credential-/webauthn-tabel i
 `control.db` i dag (0 træf i `apps/admin-server/src`). Der er intet at migrere.
 
+### Interfacet er LÅST 5/9 (#25916) — og strammere end vi bad om
+
+components' plan-doc: `docs/features/F008.13-ceremony-and-session-welded.md`
+(733ed3c). Deres kort er **Ready, ikke i gang**; de siger til når indgangen står.
+
+**Tre af vores fem målinger blev til AC hos dem frem for prosa — deres
+begrundelse: «så de kan fejle, ikke bare stå der.»**
+
+| Deres AC | Bærer |
+|---|---|
+| **AC#7** | Store-interfacet har INGEN metode der opretter/opdaterer/læser en bruger — bevist ved TYPE: vores implementering skal kunne compile med kun credential-CRUD + opslag på credentialId. |
+| **AC#8** | `userId` er en ugennemsigtig streng uden formatvalidering, asserteret med BEGGE vores formater i SAMME test (`u-<hex8>` og `usr_lens_<hex8>`). |
+| **AC#9** | Ingen tenant-scoping i hverken record eller API. cb i to tenants er den nedskrevne begrundelse. |
+
+**De strammede vores punkt 4 frem for at følge det.** Vores konklusion var «gør
+`emailVerified`/`updatedAt` valgfri». Deres er stærkere: **de findes ikke.** Når
+store'et aldrig ser en bruger, opstår spørgsmålet ikke. `userName` sendes af
+kalderen ved `registration.begin`, aldrig læst fra en tabel de ikke ejer.
+
+Den sætning der flyttede designet var vores punkt 2 — *«hvis interfacet har et
+`findOrCreateUser`, er det den ene metode vi skal kunne nægte at implementere»* —
+og deres svar er den generelle form af den: **et interface med en metode en
+consumer SKAL afvise er ikke fleksibelt, det er i stykker.** Derfor er
+bruger-metoden fraværende, ikke valgfri.
+
+De tog også punkt 1's tredje linje med, som vi ikke selv fremhævede: at OAuth
+ALDRIG opretter en bruger (`oauth.ts:297`, `email_not_registered`), så **invite er
+den eneste vej ind hos os** — skrevet ned præcis dér hvor nogen ellers ville
+antage at en ceremoni kan lave en konto.
+
+Vores UV-CLEAR-kontrol (CDP's virtuelle authenticator, `isUserVerified:false`) er
+noteret som den negative kontrol deres AC#4 kræver. **At den var skrevet på
+consumer-siden før de shippede en linje er den rigtige rækkefølge** — behold den
+ordret når F249.1 tages op.
+
 **F249.1 er blokeret indtil indgangen er udgivet.**
 
 ## Scope
