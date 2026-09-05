@@ -7,9 +7,23 @@ import {
   type ApiKeyScope,
   revokeApiKey,
   unlinkProvider,
+  getPushConfig,
+  subscribePush,
+  unsubscribePush,
+  updatePushPrefs,
+  sendTestPush,
+  type PushPrefs,
+  type PushConfigResponse,
   type AuthMe,
   type ApiKey,
 } from '../api';
+import {
+  pushSupported,
+  isIOSStandalone,
+  subscribeToPush,
+  getSubscription,
+  unsubscribeFromPush,
+} from '@broberg/webpush/client';
 import { useLocale, getLocale, t, setLocale, type Locale } from '../lib/i18n';
 import { getTheme, toggleTheme, onThemeChange, type Theme } from '../theme';
 import { ambientEnabled } from '../lib/ambient-store';
@@ -377,30 +391,156 @@ function PreferencesSection() {
   );
 }
 
+/**
+ * F247.3 — rigtige push-notifikationer (før: localStorage-stub mærket
+ * "coming soon"). Master-knappen abonnerer DENNE enhed via @broberg/webpush;
+ * type-knapperne gemmes server-side pr. bruger og læses TILBAGE fra svaret
+ * (gem-felt-reglen — UI'et viser hvad databasen holder, ikke hvad vi sendte).
+ * iOS: push virker kun i den installerede app (hjemmeskærm) — guiden vises
+ * når man står i Safari uden at have installeret.
+ */
 function NotificationsSection() {
   const isDa = getLocale() === 'da';
-  const [digest, setDigest] = useStored<'off' | 'daily' | 'weekly'>('trail.notify.digest', 'weekly');
-  const [approvals, setApprovals] = useStored('trail.notify.approvals', true);
-  const [lint, setLint] = useStored('trail.notify.lint', false);
+  const [config, setConfig] = useState<PushConfigResponse | null>(null);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [subscribed, setSubscribed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [testState, setTestState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+
+  const supported = pushSupported();
+  const { ios, standalone } = isIOSStandalone();
+  const needsInstall = ios && !standalone;
+
+  const load = async () => {
+    try {
+      const cfg = await getPushConfig();
+      setConfig(cfg);
+      // Er DENNE enheds abonnement blandt de gemte endpoints?
+      const sub = supported ? await getSubscription() : null;
+      setSubscribed(!!sub && cfg.endpoints.includes(sub.endpoint));
+    } catch (err) {
+      setLoadErr(err instanceof Error ? err.message : String(err));
+    }
+  };
+  useEffect(() => { void load(); }, []);
+
+  const toggleMaster = async () => {
+    if (!config?.publicKey || busy) return;
+    setBusy(true);
+    try {
+      if (subscribed) {
+        const endpoint = await unsubscribeFromPush();
+        if (endpoint) await unsubscribePush(endpoint);
+      } else {
+        if (Notification.permission !== 'granted') {
+          const perm = await Notification.requestPermission();
+          if (perm !== 'granted') { setBusy(false); return; }
+        }
+        const sub = await subscribeToPush(config.publicKey);
+        await subscribePush(sub);
+      }
+      await load(); // læs tilbage — knappen viser serverens tilstand
+    } catch (err) {
+      setLoadErr(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setPref = async (key: keyof PushPrefs, value: boolean) => {
+    if (!config) return;
+    // Optimistisk visning, men den BLIVENDE tilstand er serverens svar.
+    setConfig({ ...config, prefs: { ...config.prefs, [key]: value } });
+    try {
+      const res = await updatePushPrefs({ [key]: value });
+      setConfig((c) => (c ? { ...c, prefs: res.prefs } : c));
+    } catch {
+      void load(); // gem fejlede → vis virkeligheden igen
+    }
+  };
+
+  const sendTest = async () => {
+    setTestState('sending');
+    try {
+      const r = await sendTestPush();
+      setTestState(r.sent > 0 ? 'sent' : 'error');
+    } catch {
+      setTestState('error');
+    }
+    setTimeout(() => setTestState('idle'), 3000);
+  };
+
+  const typeRows: Array<{ key: keyof PushPrefs; label: string; hint: string }> = [
+    { key: 'queue', label: isDa ? 'Kø-kandidater' : 'Queue candidates', hint: isDa ? 'Når en ny kandidat afventer din kuratering' : 'When a new candidate awaits your curation' },
+    { key: 'ingest', label: isDa ? 'Kilder' : 'Sources', hint: isDa ? 'Når en kilde er færdig-kompileret eller fejler' : 'When a source finishes compiling or fails' },
+    { key: 'lint', label: isDa ? 'Lint-fund' : 'Lint findings', hint: isDa ? 'Når et lint-gennemløb finder noget nyt' : 'When a lint pass finds something new' },
+    { key: 'system', label: isDa ? 'Drift' : 'System', hint: isDa ? 'Backup-fejl og andre driftsproblemer' : 'Backup failures and other operational issues' },
+  ];
+
   return (
     <Section
       id="notifications"
       title={t('accountPrefs.sections.notifications')}
-      subtitle={isDa ? 'Hvornår Trail rækker ud. (Coming soon — backend ikke wired endnu.)' : 'When Trail reaches out. (Coming soon — backend not wired yet.)'}
+      subtitle={isDa ? 'Push-notifikationer til denne enhed. Typerne gælder alle dine enheder.' : 'Push notifications for this device. The types apply to all your devices.'}
     >
-      <Field label={isDa ? 'Daglig opsummering' : 'Digest'}>
-        <div class="segmented">
-          <button aria-pressed={digest === 'off'} onClick={() => setDigest('off')}>{isDa ? 'Fra' : 'Off'}</button>
-          <button aria-pressed={digest === 'daily'} onClick={() => setDigest('daily')}>{isDa ? 'Dagligt' : 'Daily'}</button>
-          <button aria-pressed={digest === 'weekly'} onClick={() => setDigest('weekly')}>{isDa ? 'Ugentligt' : 'Weekly'}</button>
+      <>
+      {loadErr ? (
+        <div style={{ fontSize: 12, color: 'var(--color-danger)', padding: '8px 0' }}>{loadErr}</div>
+      ) : null}
+
+      {!supported ? (
+        <div data-testid="push-unsupported" style={{ fontSize: 12.5, color: 'var(--color-fg-muted)', padding: '12px 0', lineHeight: 1.5 }}>
+          {isDa ? 'Denne browser understøtter ikke push-notifikationer.' : 'This browser does not support push notifications.'}
         </div>
-      </Field>
-      <Field label={isDa ? 'Kø-godkendelser' : 'Queue approvals'}>
-        <Toggle on={approvals} onChange={setApprovals} />
-      </Field>
-      <Field label={isDa ? 'Lint-fund' : 'Lint findings'}>
-        <Toggle on={lint} onChange={setLint} />
-      </Field>
+      ) : needsInstall ? (
+        <div data-testid="push-ios-guide" style={{ fontSize: 12.5, color: 'var(--color-fg-muted)', padding: '12px 0', lineHeight: 1.6 }}>
+          {isDa
+            ? 'På iPhone virker notifikationer kun i den installerede app: tryk Del-knappen i Safari → «Føj til hjemmeskærm», og åbn Trail derfra.'
+            : 'On iPhone, notifications only work in the installed app: tap Share in Safari → “Add to Home Screen”, then open Trail from there.'}
+        </div>
+      ) : config && config.publicKey === null ? (
+        <div data-testid="push-not-configured" style={{ fontSize: 12.5, color: 'var(--color-fg-subtle)', padding: '12px 0' }}>
+          {isDa ? 'Push er ikke sat op på serveren endnu.' : 'Push is not configured on the server yet.'}
+        </div>
+      ) : (
+        <>
+          <Field label={isDa ? 'Notifikationer på denne enhed' : 'Notifications on this device'} hint={isDa ? 'Tænd for at abonnere denne enhed' : 'Turn on to subscribe this device'}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span data-testid="push-master-toggle" style={{ display: 'inline-flex', opacity: busy ? 0.5 : 1 }}>
+                <Toggle on={subscribed} onChange={() => void toggleMaster()} />
+              </span>
+              {subscribed ? (
+                <button
+                  type="button"
+                  class="btn btn-ghost"
+                  data-testid="push-test-button"
+                  disabled={testState === 'sending'}
+                  style={{ fontSize: 11.5, padding: '4px 10px', border: '1px solid var(--color-border-strong)' }}
+                  onClick={() => void sendTest()}
+                >
+                  {testState === 'sending'
+                    ? (isDa ? 'Sender…' : 'Sending…')
+                    : testState === 'sent'
+                      ? (isDa ? 'Sendt ✓' : 'Sent ✓')
+                      : testState === 'error'
+                        ? (isDa ? 'Fejlede' : 'Failed')
+                        : (isDa ? 'Send test' : 'Send test')}
+                </button>
+              ) : null}
+            </div>
+          </Field>
+          {config
+            ? typeRows.map((row) => (
+                <Field key={row.key} label={row.label} hint={row.hint}>
+                  <span data-testid={`push-toggle-${row.key}`} style={{ display: 'inline-flex' }}>
+                    <Toggle on={config.prefs[row.key]} onChange={(v) => void setPref(row.key, v)} />
+                  </span>
+                </Field>
+              ))
+            : null}
+        </>
+      )}
+      </>
     </Section>
   );
 }

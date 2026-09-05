@@ -1043,3 +1043,32 @@ export const uploadSessions = sqliteTable(
     index('idx_upload_sessions_expires').on(table.expiresAt),
   ],
 );
+
+/**
+ * F247.3 — Web-push. Én række pr. enheds-abonnement (endpoint er globalt
+ * unikt hos push-tjenesten) og én prefs-række pr. bruger i tenant-DB'en.
+ * Prefs er pr. BRUGER, ikke pr. enhed: slår man lint fra, gælder det alle
+ * ens enheder. `dead`-endpoints prunes af senderen (404/410) — aldrig
+ * `failed` (en forkert VAPID-nøgle ville ellers slette alle abonnenter).
+ */
+export const pushSubscriptions = sqliteTable(
+  'push_subscriptions',
+  {
+    endpoint: text('endpoint').primaryKey(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    tenantId: text('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    userAgent: text('user_agent'),
+    createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => [index('idx_push_subscriptions_user').on(table.tenantId, table.userId)],
+);
+
+export const pushPrefs = sqliteTable('push_prefs', {
+  userId: text('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  /** JSON: { queue: boolean, ingest: boolean, lint: boolean, system: boolean } */
+  prefs: text('prefs').notNull(),
+  updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
+});

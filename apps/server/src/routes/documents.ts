@@ -25,6 +25,7 @@ import { triggerIngest, buildCompilePrompt } from '../services/ingest.js';
 import { reportLocalIngestRun } from '../lib/ai.js';
 import { storage, sourcePath } from '../lib/storage.js';
 import { broadcaster } from '../services/broadcast.js';
+import { notifyPush } from '../services/push.js';
 import { backfillReferencesForKb } from '../services/reference-extractor.js';
 import { recordAccess } from '../services/access-tracker.js';
 import { recordReinforcement } from '../services/reinforcement.js';
@@ -874,6 +875,17 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
     docId: doc.id,
     awaitingLocalCompile: false,
     failed: !!body.failed,
+  });
+
+  // F247.3 — push: lokal-kompileret kilde færdig/fejlet.
+  void notifyPush(trail, tenant.id, 'ingest', {
+    title: body.failed ? 'Trail — kilde fejlede' : 'Trail — kilde klar',
+    body: body.failed
+      ? 'En kilde kunne ikke kompileres (local-ingest gav ingen Neuroner)'
+      : 'En kilde er kompileret og søgbar',
+    navigate: `/kb/${doc.knowledgeBaseId}/sources`,
+    icon: '/icon-192.png',
+    tag: 'trail-ingest',
   });
 
   return c.json({ id: doc.id, awaitingLocalCompile: false, failed: !!body.failed }, 200);

@@ -1959,3 +1959,45 @@ export function approveAmbientDevice(body: {
     body: JSON.stringify(body),
   });
 }
+
+// ── F247.3 — web-push (engine) ─────────────────────────────────────
+export interface PushPrefs {
+  queue: boolean;
+  ingest: boolean;
+  lint: boolean;
+  system: boolean;
+}
+
+export interface PushConfigResponse {
+  /** null = motoren har ingen VAPID-nøgler (push slukket). */
+  publicKey: string | null;
+  prefs: PushPrefs;
+  /** Endpoints for MINE allerede-abonnerede enheder. */
+  endpoints: string[];
+}
+
+export function getPushConfig(): Promise<PushConfigResponse> {
+  return api<PushConfigResponse>('/api/v1/push/config');
+}
+
+export function subscribePush(subscription: unknown): Promise<{ ok: boolean; endpoint: string }> {
+  return api('/api/v1/push/subscribe', {
+    method: 'POST',
+    body: JSON.stringify({ subscription }),
+  });
+}
+
+export function unsubscribePush(endpoint: string): Promise<{ ok: boolean; removed: boolean }> {
+  return api('/api/v1/push/unsubscribe', {
+    method: 'POST',
+    body: JSON.stringify({ endpoint }),
+  });
+}
+
+export function updatePushPrefs(prefs: Partial<PushPrefs>): Promise<{ ok: boolean; prefs: PushPrefs }> {
+  return api('/api/v1/push/prefs', { method: 'PUT', body: JSON.stringify(prefs) });
+}
+
+export function sendTestPush(): Promise<{ sent: number; dead: number }> {
+  return api('/api/v1/push/test', { method: 'POST', body: '{}' });
+}

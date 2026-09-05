@@ -30,6 +30,9 @@ import { apiKeyRoutes } from './routes/api-keys.js';
 import { backupRoutes } from './routes/backups.js';
 import { costRoutes } from './routes/cost.js';
 import { fxRoutes } from './routes/fx.js';
+import { pushRoutes } from './routes/push.js';
+import { notifyPush } from './services/push.js';
+import { setCandidatePushNotifier } from '@trail/core';
 import { chatSettingsRoutes } from './routes/chat-settings.js';
 import { ingestSettingsRoutes } from './routes/ingest-settings.js';
 import { userNoteRoutes } from './routes/documents-user-note.js';
@@ -212,6 +215,20 @@ export function createApp(trail: TrailDatabase, tenantPool: TenantPool): Hono<Ap
   app.route('/api/v1', maintenanceRoutes);
   // F200.1 — per-KB lint settings (contradiction-lint toggle).
   app.route('/api/v1', lintSettingsRoutes);
+  // F247.3 — web-push: config/subscribe/unsubscribe/prefs/test.
+  app.route('/api/v1', pushRoutes);
+
+  // F247.3 — kø-hook: en kandidat der lander PENDING pinger abonnenterne.
+  // Registreres her (én gang pr. proces) fordi kun core ser alle veje ind.
+  setCandidatePushNotifier(({ trail: t, tenantId, candidate }) => {
+    void notifyPush(t, tenantId, 'queue', {
+      title: 'Trail — ny kandidat i køen',
+      body: candidate.title || 'En ny kandidat afventer kuratering',
+      navigate: `/kb/${candidate.knowledgeBaseId}/queue`,
+      icon: '/icon-192.png',
+      tag: 'trail-queue',
+    });
+  });
 
   // Upmetrics — capture unhandled route errors (no-op unless UPMETRICS_DSN was
   // set at boot in index.ts), then preserve Hono's default 500 response.

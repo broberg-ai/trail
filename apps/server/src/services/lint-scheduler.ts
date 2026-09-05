@@ -37,6 +37,7 @@
  *     drawn from most-recently-updated Neurons. Remainder is uniform random
  *     over the rest of the KB so long-tail Neurons still get revisited.)
  */
+import { notifyPush, distinctSubscriptionTenants } from './push.js';
 import { activityLog, documents, knowledgeBases, type TrailDatabase } from '@trail/db';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import pLimit from 'p-limit';
@@ -320,6 +321,17 @@ async function runLintPassForKb(
   }
 
   const elapsedMs = Date.now() - kbStart;
+  // F247.3 — push kun når der faktisk ER nye fund (0 fund er støj).
+  if (findings > 0) {
+    void notifyPush(trail, kb.tenantId, 'lint', {
+      title: 'Trail — nye lint-fund',
+      body: `${findings} nye fund i "${kb.name}"`,
+      navigate: `/kb/${kb.id}/queue`,
+      icon: '/icon-192.png',
+      tag: 'trail-lint',
+    });
+  }
+
   await logActivity(trail, {
     tenantId: kb.tenantId,
     knowledgeBaseId: kb.id,
@@ -396,6 +408,20 @@ async function runBackupStep(trail: TrailDatabase): Promise<void> {
       );
     } else {
       console.error(`[lint-scheduler] backup failed: ${result.error ?? 'unknown'}`);
+      // F247.3 — system-push ved ÆGTE backup-fejl. Den forventede afvisning
+      // på fjern-tenants (backup ejes af DB-maskinens sidecar efter F222.3)
+      // er ikke en fejl og må ikke pinge nogen hvert kvarter.
+      if (result.error !== 'remote_tenant_backup_runs_on_db_machine') {
+        for (const t of await distinctSubscriptionTenants(trail)) {
+          void notifyPush(trail, t, 'system', {
+            title: 'Trail — backup fejlede',
+            body: (result.error ?? 'ukendt fejl').slice(0, 160),
+            navigate: '/settings',
+            icon: '/icon-192.png',
+            tag: 'trail-system',
+          });
+        }
+      }
     }
   } catch (err) {
     console.error('[lint-scheduler] backup pass threw:', err instanceof Error ? err.message : err);

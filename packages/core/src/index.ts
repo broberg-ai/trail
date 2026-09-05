@@ -15,11 +15,13 @@ export {
   VersionConflictError,
   DuplicateExternalFeedError,
   DEFAULT_ACTIONS,
+  setCandidatePushNotifier,
 } from './queue/candidates.js';
 export type {
   Actor,
   ResolutionResult,
   CandidateOp,
+  CandidatePushNotifier,
 } from './queue/candidates.js';
 export { shouldAutoApprove } from './queue/policy.js';
 

@@ -9,6 +9,7 @@ import {
 } from '@trail/core';
 import { backpressureFromEnv, type BackpressureConfig, type BackpressureDecision } from '@trail/shared';
 import { broadcaster } from './broadcast.js';
+import { notifyPush } from './push.js';
 import { ensureMcpConfig, writeIngestMcpConfig, cleanupIngestMcpConfig } from '../lib/mcp-config.js';
 import { unsealSecret } from '../lib/tenant-secrets.js';
 import { listKbTags } from './tag-aggregate.js';
@@ -805,6 +806,15 @@ async function runJob(
       filename: doc.filename,
     });
 
+    // F247.3 — push: kilden er inde.
+    void notifyPush(trail, job.tenantId, 'ingest', {
+      title: 'Trail — kilde klar',
+      body: `"${doc.filename}" er kompileret og søgbar`,
+      navigate: `/kb/${job.kbId}/sources`,
+      icon: '/icon-192.png',
+      tag: 'trail-ingest',
+    });
+
     console.log(`[ingest] Completed "${doc.filename}"`);
   } catch (err) {
     const rawMsg = err instanceof Error ? err.message : String(err);
@@ -836,6 +846,15 @@ async function runJob(
       docId: job.docId,
       filename: doc.filename,
       error: errorMsg,
+    });
+
+    // F247.3 — push: kilden fejlede (det man IKKE opdager før næste besøg).
+    void notifyPush(trail, job.tenantId, 'ingest', {
+      title: 'Trail — kilde fejlede',
+      body: `"${doc.filename}": ${errorMsg}`.slice(0, 160),
+      navigate: `/kb/${job.kbId}/sources`,
+      icon: '/icon-192.png',
+      tag: 'trail-ingest',
     });
   } finally {
     // Per-job mcp-config file lives on disk until we clean it up. Drop it

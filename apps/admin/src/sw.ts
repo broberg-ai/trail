@@ -18,6 +18,7 @@
  *     og en cachet 200 fra i går er en løgn i dag.
  */
 import { listenForSkipWaiting } from '@broberg/pwa/sw';
+import { createPushHandler, handleNotificationClick } from '@broberg/webpush/sw';
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -25,7 +26,7 @@ declare const self: ServiceWorkerGlobalScope;
 // kommentarer, så et kommentar-bump gav en byte-identisk sw.js og browseren
 // så aldrig en ny version (målt: flow b215c53d, toasten udeblev i 120s).
 // Bump den ved et bevis-run; logges så en DevTools-kigger kan se revisionen.
-const SW_REV = 'r4';
+const SW_REV = 'r5';
 console.log('[trail-sw]', SW_REV);
 
 const SHELL_CACHE = 'trail-shell-v1';
@@ -35,6 +36,19 @@ const KNOWN_CACHES = new Set([SHELL_CACHE, ASSET_CACHE]);
 // @broberg/pwa: den nye worker aktiverer først når brugeren siger til
 // («Ny version»-toasten) — ingen reload-loop, ingen tavs udskiftning.
 listenForSkipWaiting(self);
+
+// F247.3 — web-push via @broberg/webpush. defaultIcon SKAL være en rigtig
+// fil: en ikon-URL der svarer HTML gør notifikationen usynlig på iOS, tavst.
+self.addEventListener(
+  'push',
+  createPushHandler({
+    defaultTitle: 'Trail',
+    defaultNavigate: '/',
+    defaultIcon: '/icon-192.png',
+    defaultBadgeIcon: '/icon-192.png',
+  }),
+);
+self.addEventListener('notificationclick', (event) => handleNotificationClick(event));
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(

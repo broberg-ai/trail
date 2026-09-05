@@ -341,6 +341,25 @@ function safeParseTranslations(raw: string): QueueCandidate['translations'] {
 
 // ── Public API ─────────────────────────────────────────────────────
 
+/**
+ * F247.3 — push-notifier hook. Core må ikke kende web-push, men KUN core ser
+ * alle kandidat-veje (routes, compile-pipeline, lint) — så serveren
+ * registrerer en callback her ved boot. Kaldes udelukkende for kandidater
+ * der lander PENDING (auto-approve/reject skal ikke pinge nogen), og
+ * fejl i callbacken må aldrig vælte selve oprettelsen.
+ */
+export type CandidatePushNotifier = (args: {
+  trail: TrailDatabase;
+  tenantId: string;
+  candidate: QueueCandidate;
+}) => void;
+
+let candidatePushNotifier: CandidatePushNotifier | null = null;
+
+export function setCandidatePushNotifier(fn: CandidatePushNotifier | null): void {
+  candidatePushNotifier = fn;
+}
+
 /** Enqueue a candidate. Runs the auto-approval policy inline; stays pending otherwise. */
 export async function createCandidate(
   trail: TrailDatabase,
@@ -471,6 +490,14 @@ export async function createCandidate(
       { auto: true },
     );
     return { candidate, approval };
+  }
+
+  if (candidatePushNotifier) {
+    try {
+      candidatePushNotifier({ trail, tenantId, candidate });
+    } catch {
+      /* en notifikationsfejl må aldrig vælte kandidat-oprettelsen */
+    }
   }
 
   return { candidate };
