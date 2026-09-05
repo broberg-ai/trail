@@ -75,6 +75,28 @@ body {
   color: inherit;
   font: inherit;
 }
+
+/* F248.9 — appen må ALDRIG kunne trækkes sidelæns. Samme tre spærrer som
+   apps/admin/src/index.css (F248.8), hvor de blev målt frem: uden dem står
+   dokumentet på `overflow-x: visible` med `overscroll-behavior: auto`, og en
+   swipe der rammer enden af en vandret rulle-stribe kæder videre op i siden —
+   hvorefter iOS panorerer hele fladen ud af skærmen med sit gummibånd.
+     1. overflow-x: hidden — intet barn kan gøre dokumentet bredere.
+     2. overscroll-behavior-x: none — det sidelæns gummibånd findes ikke.
+     3. contain på ALT — en swipe bliver hos den stribe den startede i.
+   Universel selector med vilje: uden virkning på alt der ikke ruller, så den
+   dækker også den næste stribe nogen tilføjer. Kun x-aksen — lodret gummibånd
+   er en ønsket fornemmelse. */
+html,
+body {
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+}
+
+* {
+  overscroll-behavior-x: contain;
+}
+
 ::selection { background: rgba(232,168,124,0.3); color: var(--fg); }
 
 .mono { font-family: var(--font-mono); font-feature-settings: normal; }

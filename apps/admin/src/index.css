@@ -601,7 +601,19 @@ html[data-theme="dark"] .menu-item.is-danger:hover { background: rgba(249,115,22
 .sheet { animation: sheetIn 240ms var(--ease); }
 
 /* Scrollbar */
-.scroll-y { overflow-y: auto; }
+/* F248.9 — overscroll-behavior-y: none, ikke bare overflow-y: auto.
+   Målt på prod: menuens nav havde scrollHeight === clientHeight (661) — der var
+   INTET at rulle til — og alligevel kunne ejeren trække den op og ned, fordi
+   `auto` lader iOS give sit gummibånd på en scroller UDEN overflow. Hans egne
+   ord er diagnosen: «der er ikke noget på den anden led.»
+   `none` frem for `contain`: contain stopper kun kædningen UD og beholder det
+   lokale gummibånd — og det lokale gummibånd er præcis det der meldes.
+   Klassen bærer fire flader (sidebar-menu, tenant-vælger, sheet, kommando-
+   palette). Alle fire er lister i et panel, hvor et gummibånd ikke er en
+   fornemmelse men en usikkerhed: panelet ser ud til at kunne noget det ikke kan.
+   Arbejdsfladens EGEN rulle-container (app.tsx) er bevidst ikke med — dér er
+   gummibåndet den normale fornemmelse af at have nået bunden af en lang liste. */
+.scroll-y { overflow-y: auto; overscroll-behavior-y: none; }
 .scroll-y::-webkit-scrollbar { width: 8px; }
 .scroll-y::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: 4px; }
 .scroll-y::-webkit-scrollbar-track { background: transparent; }
