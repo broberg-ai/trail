@@ -84,6 +84,10 @@ app.get('/api/health', async (c) => {
       service: 'trail-admin',
       db: dbStatus,
       version: VERSION,
+      // F247.2 — flåde-kontrakten for Lens' waitForBuild: et `build`-felt der
+      // skifter pr. deploy, så et E2E-bevis kan vente på PRÆCIS den udgave
+      // det skal måle (aldrig grønt på den build man lige har erstattet).
+      build: process.env.GIT_SHA ?? 'unknown',
     },
     dbStatus === 'ok' ? 200 : 503,
   );
