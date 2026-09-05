@@ -36,6 +36,7 @@ export function TopNav({ me, onOpenPalette }: TopNavProps) {
       }}
     >
       <div
+        class="topnav-row"
         style={{
           display: 'flex',
           alignItems: 'center',

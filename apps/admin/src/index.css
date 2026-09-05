@@ -644,3 +644,11 @@ html[data-theme="dark"] .menu-item.is-danger:hover { background: rgba(249,115,22
     max-width: 110px !important;
   }
 }
+@media (max-width: 560px) {
+  /* Rækken selv: mindre luft, så pillerne har margen frem for 7px overløb
+     (målt efter første fix: 400px indhold på 393px viewport). */
+  .topnav-row {
+    gap: 8px !important;
+    padding: 10px 10px !important;
+  }
+}
