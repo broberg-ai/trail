@@ -308,7 +308,9 @@ export function PlayPanel() {
           <h2 class="text-lg font-semibold">{section.title}</h2>
           <p class="text-sm text-[color:var(--color-fg-muted)] max-w-2xl">{section.blurb}</p>
         </div>
-        <div class="pt-4">{section.render()}</div>
+        {/* F248.3 — showcases render at fixed sizes (op til 500px); på en
+            telefon ruller de i egen beholder i stedet for at skubbe siden. */}
+        <div class="pt-4 max-w-full" style={{ overflowX: 'auto' }}>{section.render()}</div>
       </section>
     </div>
   );

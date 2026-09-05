@@ -136,7 +136,7 @@ export function ManageTenantsPanel() {
         >
           {t('manageTenants.crumb')}
         </div>
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
           <div>
             <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontWeight: 400, fontSize: 32, letterSpacing: '-0.015em' }}>
               {t('manageTenants.heading')}
@@ -449,13 +449,17 @@ function TenantsList({
         borderRadius: 'var(--radius-lg)',
         // Clip rounded corners normally, but let an open row-menu escape
         // the box instead of being clipped behind the list below it.
-        overflow: openMenu ? 'visible' : 'hidden',
+        // F248.3 — 'auto' i stedet for 'hidden': kolonnerne er ~560px
+        // tilsammen, så på en telefon ruller listen i egen ramme.
+        overflow: openMenu ? 'visible' : undefined,
+        overflowX: openMenu ? 'visible' : 'auto',
       }}
     >
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: '1fr 90px 110px 120px 40px',
+          minWidth: 560,
           padding: '10px 18px',
           background: 'var(--color-bg-sunk)',
           borderBottom: '1px solid var(--color-border)',
@@ -509,6 +513,7 @@ function TenantRow({
       style={{
         display: 'grid',
         gridTemplateColumns: '1fr 90px 110px 120px 40px',
+        minWidth: 560,
         padding: '14px 18px',
         gap: 16,
         alignItems: 'center',
@@ -777,13 +782,14 @@ function InvitationsTab({
             background: 'var(--color-bg-card)',
             border: '1px solid var(--color-border)',
             borderRadius: 'var(--radius-lg)',
-            overflow: 'hidden',
+            overflowX: 'auto',
           }}
         >
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: '1fr 90px 130px 110px 90px',
+              minWidth: 600,
               padding: '10px 18px',
               background: 'var(--color-bg-sunk)',
               borderBottom: '1px solid var(--color-border)',
@@ -807,6 +813,7 @@ function InvitationsTab({
               style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 90px 130px 110px 90px',
+                minWidth: 600,
                 padding: '13px 18px',
                 gap: 16,
                 alignItems: 'center',

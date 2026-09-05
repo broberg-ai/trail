@@ -116,7 +116,9 @@ export function JobsPanel() {
         </section>
       ) : null}
 
-      <nav class="flex gap-1 mb-3 border-b border-[color:var(--color-border)]">
+      {/* F248.3 — fanelinjen ruller vandret på smalle skærme i stedet for
+          at skubbe hele siden bredere end viewporten. */}
+      <nav class="flex gap-1 mb-3 border-b border-[color:var(--color-border)] overflow-x-auto">
         {STATUS_FILTERS.map((tab) => {
           const count =
             tab.value === 'all'
@@ -151,7 +153,7 @@ export function JobsPanel() {
       </nav>
 
       {stats && stats.kinds.length > 1 ? (
-        <div class="mb-4 flex items-center gap-2 text-xs font-mono text-[color:var(--color-fg-muted)]">
+        <div class="mb-4 flex items-center gap-2 flex-wrap text-xs font-mono text-[color:var(--color-fg-muted)]">
           <span>{t('jobsPanel.kindFilter')}:</span>
           <button
             type="button"

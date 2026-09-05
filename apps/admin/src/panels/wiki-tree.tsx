@@ -193,7 +193,9 @@ export function WikiTreePanel() {
 
   return (
     <div class="page-shell" data-testid="neurons-root">
-      <header class="mb-6 flex items-end justify-between gap-4">
+      {/* F248.3 — flex-wrap: sortér/lint/ny-knapperne lægger sig under
+          overskriften på en telefon i stedet for at gøre siden 513px bred. */}
+      <header class="mb-6 flex items-end justify-between gap-4 flex-wrap">
         <div>
           <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 32px; letter-spacing: -0.015em; line-height: 1.15; margin: 0 0 6px;">{t('wikiTree.title')}</h1>
           <p class="mono" style="font-size: 12px; color: var(--color-fg-muted);">
@@ -204,7 +206,7 @@ export function WikiTreePanel() {
             )}
           </p>
         </div>
-        <div class="shrink-0 flex items-center gap-2">
+        <div class="shrink-0 flex items-center gap-2 flex-wrap max-w-full">
           <div class="relative">
             <button
               onClick={() => setSortMenuOpen((v) => !v)}

@@ -228,11 +228,13 @@ export function CostPanel() {
   return (
     <div class="page-shell space-y-6" data-testid="cost-root">
       {/* Header with window switcher + shadow-pill + CSV export */}
-      <div class="flex items-center justify-between">
+      {/* F248.3 — flex-wrap: på en telefon lægger valuta/vindue/CSV-rækken sig
+          under overskriften i stedet for at gøre siden 682px bred. */}
+      <div class="flex items-center justify-between flex-wrap gap-2">
         <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 32px; letter-spacing: -0.015em; line-height: 1.15; margin: 0;">
           {t('nav.cost')}
         </h1>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
           {(['usd', 'dkk'] as const).map((c) => (
             <button
               key={c}
@@ -532,7 +534,7 @@ function CreditsCard({ credits }: { credits: CreditsResponse }) {
   const recent = credits.recent.slice(0, 5);
   return (
     <div class="p-4 rounded-lg border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)]/40">
-      <div class="flex items-end justify-between gap-4">
+      <div class="flex items-end justify-between gap-4 flex-wrap">
         <div class="flex-1 min-w-0">
           <div class="text-xs font-mono uppercase tracking-wider text-[color:var(--color-fg-muted)] mb-1">
             {t('cost.credits.balance')}

@@ -123,7 +123,7 @@ export function WorkPanel() {
           <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 32px; letter-spacing: -0.015em; line-height: 1.15; margin: 0 0 6px;">{t('work.title')}</h1>
           <p class="text-[color:var(--color-fg-muted)] text-sm">{t('work.subtitle')}</p>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 flex-wrap max-w-full">
           <KindFilter value={kindFilter} onChange={setKindFilter} />
           <button
             type="button"

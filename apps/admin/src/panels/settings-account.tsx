@@ -530,13 +530,16 @@ function DeveloperSection() {
             background: 'var(--color-bg-card)',
             border: '1px solid var(--color-border)',
             borderRadius: 'var(--radius-lg)',
-            overflow: 'hidden',
+            // F248.3 — kolonnerne er ~640px tilsammen; på en telefon ruller
+            // listen i sin egen ramme i stedet for at skubbe hele siden.
+            overflowX: 'auto',
           }}
         >
           <div
             style={{
               display: 'grid',
               gridTemplateColumns: '1fr 120px 150px 110px 110px 90px',
+              minWidth: 660,
               padding: '10px 16px',
               background: 'var(--color-bg-sunk)',
               borderBottom: '1px solid var(--color-border)',
@@ -561,6 +564,7 @@ function DeveloperSection() {
               style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr 120px 150px 110px 110px 90px',
+                minWidth: 660,
                 padding: '12px 16px',
                 gap: 12,
                 alignItems: 'center',
@@ -790,6 +794,7 @@ function DangerSection({ isDa }: { isDa: boolean }) {
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 24,
+          flexWrap: 'wrap',
         }}
       >
         <div>
@@ -834,6 +839,9 @@ function Section({ id, title, subtitle, children }: { id: string; title: string;
 function Field({ label, hint, children }: { label: string; hint?: string; children: JSX.Element | JSX.Element[] }) {
   return (
     <div
+      // F248.3 — .settings-field: på ≤700px stables etiket og indhold
+      // (én kolonne, se index.css) så 180px-etiketten ikke skubber siden.
+      class="settings-field"
       style={{
         display: 'grid',
         gridTemplateColumns: '180px 1fr',
@@ -847,7 +855,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
         <div style={{ fontSize: 13, fontWeight: 500 }}>{label}</div>
         {hint ? <div style={{ fontSize: 11.5, color: 'var(--color-fg-subtle)', marginTop: 4, lineHeight: 1.5 }}>{hint}</div> : null}
       </div>
-      <div>{children}</div>
+      <div style={{ minWidth: 0 }}>{children}</div>
     </div>
   );
 }

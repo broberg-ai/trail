@@ -424,7 +424,7 @@ export function SourcesPanel() {
       {/* Filter strip — same grammar as Queue's status tabs. Active is
           default; Archived shows soft-deleted sources with a Restore
           button on each row so an accidental archive is one-click reversible. */}
-      <nav class="flex gap-1 mb-5 border-b border-[color:var(--color-border)]">
+      <nav class="flex gap-1 mb-5 border-b border-[color:var(--color-border)] overflow-x-auto">
         {FILTER_TABS.map((tab) => {
           const count = tabCounts?.[tab.value];
           return (

@@ -891,8 +891,8 @@ export function SettingsTrailPanel() {
                 value={selectedModelKey}
                 onChange={setSelectedModelKey}
                 options={modelOptions}
-                buttonClass="w-[28rem]"
-                menuClass="w-[28rem]"
+                buttonClass="w-[28rem] max-w-full"
+                menuClass="w-[28rem] max-w-full"
               />
             );
           })()}
@@ -972,8 +972,8 @@ export function SettingsTrailPanel() {
                 value={selectedChatModelKey}
                 onChange={setSelectedChatModelKey}
                 options={modelOptions}
-                buttonClass="w-[28rem]"
-                menuClass="w-[28rem]"
+                buttonClass="w-[28rem] max-w-full"
+                menuClass="w-[28rem] max-w-full"
               />
             );
           })()}

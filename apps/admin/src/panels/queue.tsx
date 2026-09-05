@@ -885,7 +885,7 @@ export function QueuePanel() {
         </div>
       </div>
 
-      <nav class="flex gap-1 mb-5 border-b border-[color:var(--color-border)]">
+      <nav class="flex gap-1 mb-5 border-b border-[color:var(--color-border)] overflow-x-auto">
         {STATUS_TABS.map((tab) => (
           <button
             key={tab.value}
@@ -917,7 +917,7 @@ export function QueuePanel() {
       ) : null}
 
       {data && data.items.length > 0 ? (
-        <div class="flex items-center justify-between gap-3 mb-3 text-[11px] font-mono">
+        <div class="flex items-center justify-between gap-3 mb-3 text-[11px] font-mono flex-wrap">
           <div class="flex items-center gap-3">
             <label class="inline-flex items-center gap-2 cursor-pointer select-none">
               <input
@@ -1253,7 +1253,9 @@ function CandidateRow({
           </div>
         </div>
       ) : null}
-      <div class="p-4 flex items-start gap-4">
+      {/* F248.3 — max-[700px]:flex-wrap: på en telefon lægger 280px-
+          handlingskolonnen sig under kortets indhold i stedet for ved siden af. */}
+      <div class="p-4 flex items-start gap-4 max-[700px]:flex-wrap">
         {showCheckbox ? (
           <label class="pt-1 cursor-pointer select-none" onClick={(e) => e.stopPropagation()}>
             <input
@@ -1266,7 +1268,7 @@ function CandidateRow({
           </label>
         ) : null}
         <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2 mb-1">
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
             {meta?.connector ? (
               <ConnectorBadge variant="tag" connector={meta.connector} />
             ) : null}
@@ -1330,7 +1332,7 @@ function CandidateRow({
           </div>
         </div>
         {c.status === 'pending' ? (
-          <div class="flex flex-col gap-2 shrink-0 w-[280px]">
+          <div class="flex flex-col gap-2 shrink-0 w-[280px] max-[700px]:w-full">
             {meta?.recommendation ? (
               <RecommendationBadge
                 recommendation={meta.recommendation}
