@@ -156,11 +156,16 @@ export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
   // Tallet kommer fra ét letvægts-endpoint (to COUNT'er) og holdes LIVE på
   // de fire hændelser der faktisk ændrer det. Debounced: en bulk-upload fyrer
   // mange hændelser på millisekunder, og kun den sidste tælling gælder.
+  // Prikken tæller BEGGE slags uafsluttet arbejde: det der kører lige nu
+  // (active) OG det der er droppet og parkeret til kompilering (awaiting).
+  // Kun `active` ville betyde at man dropper en fil på telefonen og ikke ser
+  // noget som helst, før en dispatch tilfældigvis fyrer — og dét er præcis
+  // det øjeblik man kigger efter en kvittering.
   const [sourceActivity, setSourceActivity] = useState(0);
   const refreshActivity = useRef(() => {});
   refreshActivity.current = () => {
     getSourceActivity(kbId)
-      .then((a) => setSourceActivity(a.active))
+      .then((a) => setSourceActivity(a.active + a.awaiting))
       .catch(() => { /* et fejlet opslag må ikke tænde en falsk prik */ });
   };
   const bumpActivity = useMemo(
