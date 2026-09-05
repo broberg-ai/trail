@@ -457,7 +457,7 @@ export function CostPanel() {
             {t('cost.noSourcesInWindow')}
           </div>
         ) : (
-          {/* F248.3 — kilde-tabellen ruller i egen ramme på en telefon. */}
+          // F248.3 — kilde-tabellen ruller i egen ramme på en telefon.
           <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead class="text-xs text-[color:var(--color-fg-muted)] uppercase tracking-wide text-left">
