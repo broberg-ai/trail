@@ -433,6 +433,18 @@ if (hasSpa) {
   app.use('/uploads/*', serveStatic({ root: SPA_DIR }));
   app.use('/ambient/*', serveStatic({ root: SPA_DIR }));
   app.use('/thinking/*', serveStatic({ root: SPA_DIR }));
+  // F247.1 — PWA-filerne skal være OFFENTLIGE: browseren/OS'et henter
+  // manifest + ikoner uden session (installations-flowet og iOS'
+  // apple-touch-fetch), og en 302 til /login gør appen uinstallérbar.
+  // Manifestet får sin rigtige mime-type; ingen af filerne rummer data.
+  app.use('/manifest.webmanifest', serveStatic({
+    root: SPA_DIR,
+    onFound: (_path, c) => c.header('Content-Type', 'application/manifest+json'),
+  }));
+  app.use('/icon-192.png', serveStatic({ root: SPA_DIR }));
+  app.use('/icon-512.png', serveStatic({ root: SPA_DIR }));
+  app.use('/icon-maskable-512.png', serveStatic({ root: SPA_DIR }));
+  app.use('/apple-touch-icon.png', serveStatic({ root: SPA_DIR }));
 
   // SPA fallback — any non-API path returns index.html so client-side
   // routing (preact-iso) can take over. UNAUTHENTICATED users get
