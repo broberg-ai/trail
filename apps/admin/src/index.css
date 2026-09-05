@@ -135,12 +135,16 @@ body {
      edge so long lines don't run on forever. */
   max-width: 72rem;
   margin: 0;
-  padding: 2rem 1.5rem 4rem;
+  /* F248.3 — vandret padding som variabel: /settings' klæbrige fane-bjælke
+     bleeder med præcis denne værdi. Hardkodede -32px var 8px forkert på
+     mobil, hvor paddingen er 24px. Én kilde, aldrig to tal. */
+  --page-pad-x: 1.5rem;
+  padding: 2rem var(--page-pad-x) 4rem;
   position: relative;
   z-index: 1;
 }
 @media (min-width: 768px) {
-  .page-shell { padding: 2.5rem 2rem 5rem; }
+  .page-shell { --page-pad-x: 2rem; padding: 2.5rem var(--page-pad-x) 5rem; }
 }
 
 /* ── Prose renderer for rendered markdown (Neurons + candidate view) */

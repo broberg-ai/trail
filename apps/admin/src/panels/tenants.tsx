@@ -231,7 +231,9 @@ export function ManageTenantsPanel() {
         style={{
           position: 'relative',
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
+          // F248.3 — 2×2 på en telefon: fire 1fr-kolonner kan ikke blive
+          // smallere end deres tal og skubbede siden 27px for bred.
+          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
           gap: 0,
           marginBottom: 32,
           border: '1px solid var(--color-border)',
@@ -254,6 +256,7 @@ export function ManageTenantsPanel() {
           gap: 0,
           marginBottom: 12,
           borderBottom: '1px solid var(--color-border)',
+          overflowX: 'auto',
         }}
       >
         <Tab active={tab === 'all'} onClick={() => setTab('all')}>

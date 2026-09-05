@@ -82,7 +82,10 @@ export function Dropdown({
   const label = current?.label ?? placeholder ?? '—';
 
   return (
-    <div class="relative inline-block" ref={wrapRef}>
+    {/* F248.3 — max-w-full på WRAPPEREN: den dimensionerer sig efter knappen,
+        så en max-bredde på knappen alene måler mod wrapperen og gør intet.
+        Med denne kappes fx w-[28rem]-vælgerne til skærmbredden på en telefon. */}
+    <div class="relative inline-block max-w-full" ref={wrapRef}>
       <button
         data-testid={testid}
         type="button"
@@ -90,7 +93,7 @@ export function Dropdown({
         disabled={disabled}
         class={
           'relative flex items-center gap-2 pl-3 pr-8 py-1.5 text-sm rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)]/40 hover:border-[color:var(--color-border-strong)] focus:border-[color:var(--color-accent)] focus:outline-none transition disabled:opacity-50 disabled:cursor-not-allowed text-left ' +
-          (buttonClass ?? 'w-[20rem]')
+          (buttonClass ?? 'w-[20rem]') + ' max-w-full'
         }
         aria-haspopup="listbox"
         aria-expanded={open}

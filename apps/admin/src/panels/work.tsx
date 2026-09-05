@@ -189,7 +189,7 @@ function KindFilter({
 }) {
   return (
     <div
-      class="inline-flex items-center rounded-md border border-[color:var(--color-border)] overflow-hidden text-[11px] font-mono uppercase tracking-wider"
+      class="inline-flex items-center rounded-md border border-[color:var(--color-border)] overflow-x-auto max-w-full text-[11px] font-mono uppercase tracking-wider"
       role="group"
       aria-label={t('work.filter.kind')}
     >

@@ -81,10 +81,12 @@ export function SettingsAccountPanel() {
           top: 0,
           zIndex: 5,
           background: 'var(--color-bg)',
-          marginLeft: -32,
-          paddingLeft: 32,
-          marginRight: -32,
-          paddingRight: 32,
+          // F248.3 — bleed med sidens FAKTISKE padding (--page-pad-x), ikke
+          // et hardkodet tal: 32 var 8px forkert på mobil (24px padding).
+          marginLeft: 'calc(-1 * var(--page-pad-x))',
+          paddingLeft: 'var(--page-pad-x)',
+          marginRight: 'calc(-1 * var(--page-pad-x))',
+          paddingRight: 'var(--page-pad-x)',
           borderBottom: '1px solid var(--color-border)',
         }}
       >
