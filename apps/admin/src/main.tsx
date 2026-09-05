@@ -12,6 +12,7 @@ import { ChatPanel } from './panels/chat';
 import { GlossaryPanel } from './panels/glossary';
 import { GraphPanel } from './panels/graph';
 import { MemoryHealthPanel } from './panels/memory-health';
+import { BrainVersionsPanel } from './panels/brain-versions';
 import { WorkPanel } from './panels/work';
 import { PlayPanel } from './panels/play';
 import { SettingsTrailPanel } from './panels/settings-trail';
@@ -70,6 +71,7 @@ function Main() {
           <Route path="/kb/:kbId/neurons/:slug" component={WikiReaderPanel} />
           <Route path="/kb/:kbId/graph" component={GraphPanel} />
           <Route path="/kb/:kbId/memory-health" component={MemoryHealthPanel} />
+          <Route path="/kb/:kbId/brain-versions" component={BrainVersionsPanel} />
           <Route path="/kb/:kbId/work" component={WorkPanel} />
           <Route path="/kb/:kbId/sources" component={SourcesPanel} />
           <Route path="/kb/:kbId/images" component={ImagesPanel} />

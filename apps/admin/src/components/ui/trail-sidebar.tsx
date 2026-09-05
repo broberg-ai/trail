@@ -52,6 +52,7 @@ function buildGroups(kbId: string): SidebarGroup[] {
         { id: 'glossary', path: `/glossary`, labelKey: 'sidebar.glossary', icon: 'FileText' },
         { id: 'graph', path: `/kb/${kbId}/graph`, labelKey: 'sidebar.graph', icon: 'Network' },
         { id: 'memory-health', path: `/kb/${kbId}/memory-health`, labelKey: 'sidebar.memoryHealth', icon: 'Activity' },
+        { id: 'brain-versions', path: `/kb/${kbId}/brain-versions`, labelKey: 'sidebar.brainVersions', icon: 'Activity' },
       ],
     },
     {

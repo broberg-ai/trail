@@ -2015,3 +2015,67 @@ export function getSourceActivity(kbId: string): Promise<SourceActivity> {
     `/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/source-activity`,
   );
 }
+
+// ── F253.4 — hjerne-versioner ────────────────────────────────────────────────
+
+export interface BrainVersion {
+  id: string;
+  knowledgeBaseId: string;
+  label: string;
+  reason: string;
+  takenAt: string;
+  highWaterEventId: string | null;
+  coverageIntact: boolean;
+  coverageGaps: number;
+  neuronCount: number;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface RestoreChange {
+  documentId: string;
+  path: string | null;
+  filename: string | null;
+  action: 'revert' | 'archive' | 'unarchive';
+  currentVersion: number;
+  restoredLength?: number;
+}
+
+export interface RestoreDiff {
+  version: BrainVersion;
+  changes: RestoreChange[];
+  revert: number;
+  archive: number;
+  unarchive: number;
+  unchanged: number;
+}
+
+export interface RestoreResult {
+  versionId: string;
+  applied: number;
+  revert: number;
+  archive: number;
+  unarchive: number;
+  safetyVersionId: string;
+  chunksRebuilt: number;
+  searchIndexStale: boolean;
+}
+
+export function listBrainVersions(kbId: string): Promise<{ versions: BrainVersion[] }> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/brain-versions`);
+}
+
+export function takeBrainVersion(kbId: string, label: string): Promise<BrainVersion> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/brain-versions`, {
+    method: 'POST',
+    body: JSON.stringify({ label }),
+  });
+}
+
+export function getBrainVersionDiff(id: string): Promise<RestoreDiff> {
+  return api(`/api/v1/brain-versions/${encodeURIComponent(id)}/diff`);
+}
+
+export function restoreBrainVersion(id: string): Promise<RestoreResult> {
+  return api(`/api/v1/brain-versions/${encodeURIComponent(id)}/restore`, { method: 'POST' });
+}

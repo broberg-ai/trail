@@ -39,7 +39,8 @@
     "settings": "Indstillinger",
     "back": "Trails",
     "collapse": "Skjul sidebar",
-    "expand": "Vis sidebar"
+    "expand": "Vis sidebar",
+    "brainVersions": "Versioner"
   },
   "empty": {
     "noTrailsTitle": "Ingen trails endnu",

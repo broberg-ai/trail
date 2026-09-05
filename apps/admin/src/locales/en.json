@@ -39,7 +39,8 @@
     "settings": "Settings",
     "back": "Trails",
     "collapse": "Collapse sidebar",
-    "expand": "Expand sidebar"
+    "expand": "Expand sidebar",
+    "brainVersions": "Versions"
   },
   "empty": {
     "noTrailsTitle": "No trails yet",
