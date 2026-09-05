@@ -172,6 +172,7 @@ export function TenantSwitcher({ tenants, isMobile = false, onManageTenants }: T
     <div ref={ref} style={{ position: 'relative' }}>
       <button
         type="button"
+        data-testid="topnav-tenant-switcher"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -207,6 +208,7 @@ export function TenantSwitcher({ tenants, isMobile = false, onManageTenants }: T
           <Icons.Building size={11} stroke={2} />
         </span>
         <span
+          class="topnav-tenant-label"
           style={{
             whiteSpace: 'nowrap',
             overflow: 'hidden',

@@ -53,7 +53,7 @@ export function TopNav({ me, onOpenPalette }: TopNavProps) {
           >
             trail
           </span>
-          <span style={{ color: 'var(--color-fg-subtle)', fontSize: 14, marginLeft: 2 }}>admin</span>
+          <span class="topnav-hide-mobile" style={{ color: 'var(--color-fg-subtle)', fontSize: 14, marginLeft: 2 }}>admin</span>
         </a>
 
         {/* Tenant switcher */}
@@ -71,6 +71,7 @@ export function TopNav({ me, onOpenPalette }: TopNavProps) {
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--color-fg-muted)', minWidth: 0 }}>
             <Icons.Chevron size={11} style={{ transform: 'rotate(-90deg)', flex: '0 0 auto' }} />
             <span
+              class="topnav-crumb"
               style={{
                 fontFamily: 'var(--font-serif)',
                 fontSize: 14,
@@ -91,6 +92,7 @@ export function TopNav({ me, onOpenPalette }: TopNavProps) {
         {/* ⌘K palette affordance (right-aligned per Christian's call) */}
         <button
           type="button"
+          data-testid="topnav-palette"
           onClick={onOpenPalette}
           aria-label="Open command palette"
           style={{
@@ -116,7 +118,7 @@ export function TopNav({ me, onOpenPalette }: TopNavProps) {
           }}
         >
           <Icons.Search size={13} />
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>⌘K</span>
+          <span class="topnav-hide-mobile" style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>⌘K</span>
         </button>
 
         {/* User menu */}

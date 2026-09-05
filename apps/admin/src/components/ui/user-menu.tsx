@@ -77,6 +77,7 @@ export function UserMenu({ user, tenant, isMobile = false }: UserMenuProps) {
     <div ref={ref} style={{ position: 'relative' }}>
       <button
         type="button"
+        data-testid="topnav-user-menu"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -96,7 +97,7 @@ export function UserMenu({ user, tenant, isMobile = false }: UserMenuProps) {
           {initials}
         </span>
         {!isMobile ? (
-          <span style={{ fontSize: 13, fontWeight: 500 }}>
+          <span class="topnav-hide-mobile" style={{ fontSize: 13, fontWeight: 500 }}>
             {(user.name?.split(' ')[0]) || user.email.split('@')[0]}
           </span>
         ) : null}

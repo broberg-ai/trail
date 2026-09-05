@@ -627,3 +627,20 @@ html[data-theme="dark"] .menu-item.is-danger:hover { background: rgba(249,115,22
   color: var(--color-fg-subtle);
   font-size: 12.5px;
 }
+
+/* F246 — topbjælken skal kunne være på en telefon. Målt 5/9 (Lens, 393px):
+   logo + tenant-pille + ⌘K + brugerpille = 510px, intet måtte krympe, og
+   hele siden blev trukket sidelæns ("the wiggle" — global beslutning:
+   sidelæns rulning på mobil er forbudt). Under 560px gemmes ordmærkets
+   tekst, ⌘K-tasteteksten og brugerens navn; tenant-navnet ellipsis-klippes. */
+@media (max-width: 560px) {
+  .topnav-hide-mobile {
+    display: none !important;
+  }
+  .topnav-tenant-label {
+    max-width: 96px !important;
+  }
+  .topnav-crumb {
+    max-width: 110px !important;
+  }
+}
