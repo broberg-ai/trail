@@ -1,5 +1,6 @@
 import { render } from 'preact';
-import { LocationProvider, Router, Route } from 'preact-iso';
+import { useEffect } from 'preact/hooks';
+import { LocationProvider, Router, Route, useLocation } from 'preact-iso';
 import { App } from './app';
 import { QueuePanel } from './panels/queue';
 import { KnowledgeBasesPanel } from './panels/kbs';
@@ -45,12 +46,25 @@ initTheme();
 // calls marked.parse. Idempotent.
 ensureAnchorMarkedExtensions();
 
+/** F248.1 — /kb/:kbId uden underside → Chat (sidebarens første punkt). */
+function KbIndexRedirect({ kbId }: { kbId?: string }) {
+  const { route } = useLocation();
+  useEffect(() => {
+    if (kbId) route(`/kb/${kbId}/chat`, true);
+  }, [kbId, route]);
+  return null;
+}
+
 function Main() {
   return (
     <LocationProvider>
       <App>
         <Router>
           <Route path="/" component={KnowledgeBasesPanel} />
+          {/* F248.1 — en BAR trail-adresse (/kb/<slug>) er gyldig og lander på
+              Chat. Uden denne rute faldt den i NotFound: ejeren loggede ind på
+              telefonen og fik 404 midt i en fungerende trail (5/9). */}
+          <Route path="/kb/:kbId" component={KbIndexRedirect} />
           <Route path="/kb/:kbId/queue" component={QueuePanel} />
           <Route path="/kb/:kbId/neurons" component={WikiTreePanel} />
           <Route path="/kb/:kbId/neurons/:slug" component={WikiReaderPanel} />

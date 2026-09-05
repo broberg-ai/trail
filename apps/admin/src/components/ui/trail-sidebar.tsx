@@ -86,7 +86,15 @@ export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
   const { path, route } = useLocation();
   const kb = useKb(kbId);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
-    try { return localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { return false; }
+    // F248.2 — på en telefon starter sidebaren som ikon-skinne (60px): den
+    // fulde 240px-kolonne åd over halvdelen af en 393px-skærm (ejerens
+    // telefonskud 5/9). Et gemt valg vinder stadig — men kun på store
+    // skærme; på mobil er skinnen udgangspunktet uanset hvad desktop gemte.
+    try {
+      const narrow = typeof matchMedia !== 'undefined' && matchMedia('(max-width: 700px)').matches;
+      if (narrow) return true;
+      return localStorage.getItem(COLLAPSE_KEY) === '1';
+    } catch { return false; }
   });
 
   useEffect(() => {
