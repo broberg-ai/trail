@@ -713,8 +713,11 @@ function SourceRow({
           : 'border-[color:var(--color-border)] bg-[color:var(--color-bg-card)]/80 hover:border-[color:var(--color-border-strong)]')
       }
     >
-      <div class="px-4 py-3 flex items-baseline justify-between gap-4">
-        <div class="min-w-0 flex items-baseline gap-3">
+      {/* F248.7 — max-[700px]:flex-wrap + flex-1: handlings-knapperne er
+          shrink-0, så uden dette pressede de venstre halvdel ned til nul
+          bredde og titlen brækkede ét bogstav pr. linje (ejerens skud 5/9). */}
+      <div class="px-4 py-3 flex items-baseline justify-between gap-4 max-[700px]:flex-wrap">
+        <div class="min-w-0 flex-1 flex items-baseline gap-3">
           <input
             type="checkbox"
             class="mt-[3px] shrink-0 cursor-pointer accent-[color:var(--color-accent)]"
@@ -723,7 +726,7 @@ function SourceRow({
             aria-label={t('common.selectRow', { name: doc.filename })}
           />
           <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2 mb-0.5">
+          <div class="flex items-center gap-2 mb-0.5 flex-wrap">
             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-[color:var(--color-bg)] border border-[color:var(--color-border)] text-[color:var(--color-fg-muted)]">
               {doc.fileType || 'doc'}
             </span>

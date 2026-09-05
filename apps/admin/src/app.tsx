@@ -177,7 +177,12 @@ export function App({ children }: { children: ComponentChildren }) {
     // (inkl. den browser-chrome der kan trække sig væk), så skallen blev
     // højere end det synlige område og HELE dokumentet kunne rulle — topbjælken
     // ud af skærmen. dvh er det der faktisk er synligt lige nu.
-    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    // F248.7 — 100svh, ikke 100dvh: dvh MÅLES OM løbende når Safaris
+    // adresselinje folder sig ind/ud, så hele skallen skiftede højde under
+    // brug — den lodrette "wiggle" ejeren så. svh er den STABILE lille
+    // viewport: den ændrer sig aldrig, og den er pr. definition ≤ det
+    // synlige, så topbjælken stadig ikke kan rulles væk (F248.5's fix består).
+    <div style={{ height: '100svh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <canvas ref={canvasRef} id="trail-graph" aria-hidden="true" />
 
       {me ? <TopNav me={me} onOpenPalette={() => setPaletteOpen(true)} /> : null}

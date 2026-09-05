@@ -26,7 +26,7 @@ declare const self: ServiceWorkerGlobalScope;
 // kommentarer, så et kommentar-bump gav en byte-identisk sw.js og browseren
 // så aldrig en ny version (målt: flow b215c53d, toasten udeblev i 120s).
 // Bump den ved et bevis-run; logges så en DevTools-kigger kan se revisionen.
-const SW_REV = 'r8';
+const SW_REV = 'r9';
 console.log('[trail-sw]', SW_REV);
 
 const SHELL_CACHE = 'trail-shell-v1';
