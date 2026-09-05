@@ -782,8 +782,82 @@ async function approveCreate(
     : op.path ?? payload.path ?? '/neurons/queries/';
   const path = pathIn.endsWith('/') ? pathIn : `${pathIn}/`;
 
-  const docId = `doc_${crypto.randomUUID().slice(0, 12)}`;
   const docKind = op.docKind ?? 'wiki';
+
+  // F252 — EN KILDE-FIL HAR ÉN SIDE. Findes path+filename allerede, opdateres
+  // den frem for at der indsættes endnu en række.
+  //
+  // Uden det her formerer siderne sig: broberg-ai-sitets synkronisering
+  // gen-uploader en artikel (uploads.ts:357 sætter status='processing' og
+  // localCompile), kilden lander i køen igen, og hver kompilering skrev en
+  // frisk side ved siden af den forrige. Målt 5/9 2026 i broberg-ai:
+  // 39 kilde-filer som 90 sider — aidan-historien 5×, tre andre 4×.
+  //
+  // Og dubletterne er IKKE ens: de er skrevet af forskellige kørsler, af en
+  // model, på forskellige tidspunkter. En søgning kunne derfor give tre
+  // forskellige svar på samme spørgsmål uden at nogen kunne se hvilket der var
+  // nyest. Det er ikke rod i en liste — det er uenighed inde i vidensbasen.
+  //
+  // Opslaget sker på FILNAVN, aldrig på titel: den danske og den engelske
+  // udgave af samme artikel har samme emne og skal netop have hver sin side.
+  const existing = await tx
+    .select({ id: documents.id, version: documents.version })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.tenantId, candidate.tenantId),
+        eq(documents.knowledgeBaseId, candidate.knowledgeBaseId),
+        eq(documents.archived, false),
+        eq(documents.path, path),
+        eq(documents.filename, filename),
+      ),
+    )
+    .get();
+
+  if (existing) {
+    const nextVersion = (existing.version ?? 1) + 1;
+    await tx
+      .update(documents)
+      .set({
+        title: candidate.title,
+        content,
+        fileSize: content.length,
+        status: 'ready',
+        version: nextVersion,
+        ...(op.tags ? { tags: op.tags } : {}),
+        ...(op.ingestJobId ? { ingestJobId: op.ingestJobId } : {}),
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(documents.id, existing.id))
+      .run();
+
+    // 'edited', ikke 'created' — historikken skal kunne vise at siden blev
+    // skrevet om, ellers ser en omskrivning ud som om intet skete.
+    const updEventId = await emitEvent(tx, {
+      tenantId: candidate.tenantId,
+      documentId: existing.id,
+      eventType: 'edited',
+      previousVersion: existing.version ?? 1,
+      newVersion: nextVersion,
+      prevEventId: null,
+      contentSnapshot: content,
+      candidateId: candidate.id,
+      actor,
+      ctx,
+    });
+    await finaliseApproved(tx, candidate.id, actor, existing.id, action.id, ctx);
+    return {
+      candidateId: candidate.id,
+      actionId: action.id,
+      effect: action.effect,
+      documentId: existing.id,
+      wikiEventId: updEventId,
+      autoApproved: ctx.auto,
+      status: 'approved',
+    };
+  }
+
+  const docId = `doc_${crypto.randomUUID().slice(0, 12)}`;
   await tx
     .insert(documents)
     .values({
