@@ -7,6 +7,14 @@
     <meta name="theme-color" content="#FAF9F5" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#17140F" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- F247.1 — PWA: installérbar fra hjemmeskærmen. Manifestet + PNG-ikonerne
+         ligger i public/ (én kilde); apple-touch + standalone-meta er iOS' vej,
+         som ikke læser manifestet for ikonet. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Trail" />
     <script>
       // Blocking inline script — runs BEFORE anything paints so the first
       // frame uses the curator's persisted theme instead of the light
