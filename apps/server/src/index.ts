@@ -121,13 +121,24 @@ async function bootTenant(db: TrailDatabase): Promise<void> {
   // scheduler for each KB with work outstanding. Survives restarts without
   // dropping half a 65-file upload batch on the floor.
   await recoverIngestJobs(db);
+}
+
+// F222.3 — the three link/reference sweeps are OUT of the serving path.
+// Measured 5/9 07:39–07:47 (dansk tid 09:39): with a remote tenant DB the
+// reference/backlink/link-check backfills walk every wiki doc over the
+// network (broberg-ai: 7,217 docs), and with them inside bootTenant the
+// engine answered 502 to ALL customers for 8 minutes while it swept.
+// They are idempotent maintenance, not serving prerequisites — so they
+// run AFTER Bun.serve, per tenant, and a failure is logged, never fatal.
+async function bootTenantDeferred(slug: string, db: TrailDatabase): Promise<void> {
+  const t0 = Date.now();
   await backfillReferences(db);
   await backfillBacklinks(db);
-  // F148 — populate broken_links table so the admin link-report panel
-  // surfaces any unresolvable [[wiki-link]]s immediately on first deploy.
-  // Idempotent; runs after backfillBacklinks so the fresh backlinks table
-  // reflects the fold-enabled resolution.
+  // F148 — populate broken_links so the admin link-report panel surfaces
+  // unresolvable [[wiki-link]]s. Runs after backfillBacklinks so the fresh
+  // backlinks table reflects the fold-enabled resolution.
   await backfillLinkCheck(db);
+  console.log(`[boot-deferred] ${slug}: link/reference sweeps done in ${Math.round((Date.now() - t0) / 1000)}s`);
 }
 
 // F222.3 — the PRIMARY tenant can be remote too (sanne-andersen is the
@@ -312,6 +323,18 @@ const server = Bun.serve({
 
 console.log(`trail server running on http://localhost:${server.port}`);
 console.log(`  database: ${trail.path}`);
+
+// F222.3 — deferred maintenance sweeps run now that customers are served.
+// Sequential per tenant (one sweep at a time keeps the DB machine calm).
+void (async () => {
+  for (const [slug, db] of tenantPool) {
+    try {
+      await bootTenantDeferred(slug, db);
+    } catch (err) {
+      console.error(`[boot-deferred] ${slug} failed:`, err instanceof Error ? err.message : err);
+    }
+  }
+})();
 
 // F196 — self-report this deploy to upmetrics (one success POST on boot,
 // fail-soft + no-op unless UPMETRICS_API_KEY + UPMETRICS_SITE are set).
