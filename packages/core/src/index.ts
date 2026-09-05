@@ -104,3 +104,7 @@ export {
   prepareCompiledMarkdown,
 } from './compile/claim-anchors.js';
 export { kbSizes, toMB, type KbSize, type FileProbe } from './kb-size.js';
+
+// F253.1 — hændelses-loggens dækning (forudsætningen for tilbagerulning).
+export { auditEventLogCoverage, repairEventLogCoverage } from './history/coverage.js';
+export type { CoverageReport, CoverageGap } from './history/coverage.js';
