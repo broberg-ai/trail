@@ -148,7 +148,7 @@ export function KnowledgeBasesPanel() {
     const count = (kb as KnowledgeBase & { wikiPageCount?: number }).wikiPageCount;
     return n + (typeof count === 'number' ? count : 0);
   }, 0);
-  const locale = getLocale();
+  const locale = useLocale();
   const formattedTotal = totalNeurons.toLocaleString(locale === 'da' ? 'da-DK' : 'en-US');
 
   return (

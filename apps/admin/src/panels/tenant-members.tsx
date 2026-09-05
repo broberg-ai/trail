@@ -10,7 +10,7 @@ import {
 import { Dropdown } from '../components/dropdown';
 import { Icons } from '../components/ui/icons';
 import { PanelHeader } from '../components/ui/panel-header';
-import { getLocale } from '../lib/i18n';
+import { useLocale } from '../lib/i18n';
 
 /**
  * F210.3 — Members of a tenant.
@@ -33,7 +33,7 @@ const ROLE_LABELS: Record<string, { da: string; en: string; hintDa: string; hint
 };
 
 export function TenantMembersPanel({ tenantId }: { tenantId: string }) {
-  const isDa = getLocale() === 'da';
+  const isDa = useLocale() === 'da';
   const [data, setData] = useState<TenantMembers | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);

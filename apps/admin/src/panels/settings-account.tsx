@@ -61,7 +61,7 @@ export function SettingsAccountPanel() {
     );
   }
 
-  const isDa = getLocale() === 'da';
+  const isDa = useLocale() === 'da';
 
   return (
     <div class="page-shell" data-testid="account-settings-root" style={{ position: 'relative', maxWidth: 760, marginLeft: 0 }}>
@@ -147,7 +147,7 @@ function initialsOf(name: string | null, email: string): string {
 }
 
 function ProfileSection({ me }: { me: AuthMe }) {
-  const isDa = getLocale() === 'da';
+  const isDa = useLocale() === 'da';
   const [displayName, setDisplayName] = useState(me.user.name ?? '');
   const initials = initialsOf(me.user.name, me.user.email);
   return (
@@ -367,7 +367,7 @@ function PreferencesSection() {
     <Section
       id="preferences"
       title={t('accountPrefs.sections.preferences')}
-      subtitle={getLocale() === 'da' ? 'Tema og sprog. Synkroniseret med kontroller i bruger-menuen.' : 'Theme and language. Synced with the user-menu controls.'}
+      subtitle={locale === 'da' ? 'Tema og sprog. Synkroniseret med kontroller i bruger-menuen.' : 'Theme and language. Synced with the user-menu controls.'}
     >
       <Field label={t('userMenu.theme')}>
         <div class="segmented">
@@ -381,7 +381,7 @@ function PreferencesSection() {
           <button aria-pressed={locale === 'da'} onClick={() => setLocale('da' as Locale)}>DA</button>
         </div>
       </Field>
-      <Field label={t('userMenu.ambient')} hint={getLocale() === 'da' ? 'Afspil ambient-loops mens du arbejder. Kun mens fanen er aktiv.' : 'Play ambient loops while you work. Only while the tab is active.'}>
+      <Field label={t('userMenu.ambient')} hint={locale === 'da' ? 'Afspil ambient-loops mens du arbejder. Kun mens fanen er aktiv.' : 'Play ambient loops while you work. Only while the tab is active.'}>
         <div class="segmented">
           <button aria-pressed={!ambientEnabled.value} onClick={() => { ambientEnabled.value = false; }}>{t('userMenu.ambientOff')}</button>
           <button aria-pressed={ambientEnabled.value} onClick={() => { ambientEnabled.value = true; }}>{t('userMenu.ambientOn')}</button>
@@ -400,7 +400,7 @@ function PreferencesSection() {
  * når man står i Safari uden at have installeret.
  */
 function NotificationsSection() {
-  const isDa = getLocale() === 'da';
+  const isDa = useLocale() === 'da';
   const [config, setConfig] = useState<PushConfigResponse | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [subscribed, setSubscribed] = useState(false);
@@ -761,6 +761,9 @@ function DeveloperSection() {
   );
 }
 
+// F250 — getLocale() er KORREKT her: formatDate er en ren funktion uden for en
+// komponent, så en hook ville være ulovlig. Den kaldes fra en render der selv
+// abonnerer via useLocale(), og læser derfor den aktuelle værdi hver gang.
 function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';

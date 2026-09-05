@@ -63,7 +63,7 @@ export function ManageTenantsPanel() {
     );
   }
 
-  const isDa = getLocale() === 'da';
+  const isDa = useLocale() === 'da';
   const tenants = me.tenants;
 
   function showToast(msg: string) {
