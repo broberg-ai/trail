@@ -1185,7 +1185,7 @@
   },
   "pwa": {
     "updateTitle": "Ny version klar",
-    "updateBody": "Trail er blevet opdateret. Genindlæs for at få den nyeste udgave.",
+    "updateBody": "Opdatér for at hente den seneste version.",
     "updateNow": "Opdatér",
     "updateLater": "Senere"
   }

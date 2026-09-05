@@ -1,14 +1,14 @@
 import { useState } from 'preact/hooks';
 import { useEffect } from 'preact/hooks';
-import { usePwaUpdate, PwaUpdateBanner } from '@broberg/pwa/preact';
+import { usePwaUpdate } from '@broberg/pwa/preact';
 import { t } from '../lib/i18n';
 
 /**
- * F247.2 — «Ny version»-toasten, drevet af @broberg/pwa (flådens primitiv,
- * konsument #4 — aldrig kopi #5). Registrerer /sw.js og lytter efter en
- * ventende worker; brugeren vælger selv hvornår der opdateres. Banner-
- * skelettet kommer med testids (pwa-update-confirm/dismiss/close) og
- * role=status — vi lægger kun husets tokens på via klassen.
+ * F247.2/F247.4 — «Ny version klar»-banneret. Livscyklussen (registrér /sw.js,
+ * opdag ventende worker, SKIP_WAITING + reload) kommer fra @broberg/pwa —
+ * flådens primitiv. Men SELVE BANNERET er flådens kanoniske markup+CSS
+ * (pwa-banner-wrap-familien), 1:1 som cardmem/xrt81/sanne/moovyy — ejerens
+ * ordre 5/9: «100% det samme … ikke en ny avart». Kun farve-tokens er Trails.
  *
  * Kill-switch (ship-dark): svarer /api/health med { sw: "off" } afregistreres
  * service-workeren ved næste load — vejen ud hvis en SW-udgave nogensinde
@@ -37,18 +37,47 @@ export function PwaUpdate() {
     })();
   }, [disabled]);
 
+  if (!updateReady || dismissed) return null;
+
   return (
-    <PwaUpdateBanner
-      updateReady={updateReady && !dismissed}
-      onUpdate={applyUpdate}
-      onDismiss={() => setDismissed(true)}
-      className="pwa-update-banner"
-      labels={{
-        title: t('pwa.updateTitle'),
-        body: t('pwa.updateBody'),
-        update: t('pwa.updateNow'),
-        dismiss: t('pwa.updateLater'),
-      }}
-    />
+    <div class="pwa-banner-wrap" role="status" aria-live="polite" data-testid="pwa-update-banner">
+      <div class="pwa-banner">
+        <span class="pwa-banner-ic" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 19V5" />
+            <path d="m5 12 7-7 7 7" />
+          </svg>
+        </span>
+        <div class="pwa-banner-txt">
+          <p class="pwa-banner-ttl">{t('pwa.updateTitle')}</p>
+          <p class="pwa-banner-sub">{t('pwa.updateBody')}</p>
+        </div>
+        <div class="pwa-banner-actions">
+          <button
+            type="button"
+            class="pwa-banner-later"
+            data-testid="pwa-update-dismiss"
+            onClick={() => setDismissed(true)}
+          >
+            {t('pwa.updateLater')}
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary pwa-banner-go"
+            data-testid="pwa-update-confirm"
+            onClick={() => applyUpdate()}
+          >
+            {t('pwa.updateNow')}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

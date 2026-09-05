@@ -82,6 +82,14 @@ export interface TrailSidebarProps {
   urlHasKbId?: boolean;
 }
 
+const NARROW_QUERY = '(max-width: 700px)';
+
+function isNarrowNow(): boolean {
+  try {
+    return typeof matchMedia !== 'undefined' && matchMedia(NARROW_QUERY).matches;
+  } catch { return false; }
+}
+
 export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
   const { path, route } = useLocation();
   const kb = useKb(kbId);
@@ -91,11 +99,24 @@ export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
     // telefonskud 5/9). Et gemt valg vinder stadig — men kun på store
     // skærme; på mobil er skinnen udgangspunktet uanset hvad desktop gemte.
     try {
-      const narrow = typeof matchMedia !== 'undefined' && matchMedia('(max-width: 700px)').matches;
-      if (narrow) return true;
+      if (isNarrowNow()) return true;
       return localStorage.getItem(COLLAPSE_KEY) === '1';
     } catch { return false; }
   });
+
+  // F248.4 — på en telefon åbner menuen som OVERLAY hen over arbejdsfladen
+  // (ejerens skud 5/9: den udfoldede kolonne skubbede alt indhold mod højre).
+  // `narrow` følger viewporten reaktivt, så en rotation/resize skifter mode.
+  const [narrow, setNarrow] = useState<boolean>(isNarrowNow);
+  useEffect(() => {
+    try {
+      const mq = matchMedia(NARROW_QUERY);
+      const onChange = () => setNarrow(mq.matches);
+      mq.addEventListener('change', onChange);
+      return () => mq.removeEventListener('change', onChange);
+    } catch { return undefined; }
+  }, []);
+  const overlayMode = narrow && !collapsed;
 
   useEffect(() => {
     try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch { /* no storage */ }
@@ -128,7 +149,33 @@ export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
     return false;
   };
 
+  // F248.4 — navigation fra overlayet lukker det: man valgte et sted at
+  // være, og arbejdsfladen er derinde bag menuen.
+  const go = (p: string) => {
+    route(p);
+    if (narrow) setCollapsed(true);
+  };
+
   return (
+    <>
+    {overlayMode ? (
+      <>
+        {/* Bagtæppe: klik lukker. Menuen ligger OVER indholdet — intet skubbes. */}
+        <div
+          data-testid="sidebar-backdrop"
+          onClick={() => setCollapsed(true)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 55,
+            background: 'rgba(0, 0, 0, 0.35)',
+          }}
+        />
+        {/* Pladsholder med skinnens bredde, så indholdet bag overlayet står
+            præcis hvor det stod — aside'en forlader flowet som fixed. */}
+        <div style={{ flex: '0 0 60px' }} />
+      </>
+    ) : null}
     <aside
       style={{
         width,
@@ -139,6 +186,17 @@ export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
         flexDirection: 'column',
         overflow: 'hidden',
         transition: 'width var(--dur) var(--ease), flex-basis var(--dur) var(--ease)',
+        ...(overlayMode
+          ? {
+              position: 'fixed',
+              top: 0,
+              bottom: 0,
+              left: 0,
+              height: '100dvh',
+              zIndex: 60,
+              boxShadow: 'var(--shadow-xl)',
+            }
+          : {}),
       }}
     >
       {/* Header — trail identity + back-to-Home + collapse toggle */}
@@ -147,7 +205,7 @@ export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
           <>
             <button
               type="button"
-              onClick={() => route('/')}
+              onClick={() => go('/')}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -202,6 +260,7 @@ export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
               <button
                 type="button"
                 class="icon-btn"
+                data-testid="sidebar-collapse"
                 onClick={() => setCollapsed(true)}
                 title={t('sidebar.collapse')}
                 aria-label={t('sidebar.collapse')}
@@ -215,6 +274,7 @@ export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
           <button
             type="button"
             class="icon-btn"
+            data-testid="sidebar-expand"
             onClick={() => setCollapsed(false)}
             title={t('sidebar.expand')}
             aria-label={t('sidebar.expand')}
@@ -243,7 +303,7 @@ export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
                 item={it}
                 active={isActive(it.path)}
                 collapsed={collapsed}
-                onClick={() => route(it.path)}
+                onClick={() => go(it.path)}
                 count={it.id === 'queue' ? queueCount : null}
               />
             ))}
@@ -259,12 +319,13 @@ export function TrailSidebar({ kbId, urlHasKbId = true }: TrailSidebarProps) {
             item={it}
             active={isActive(it.path)}
             collapsed={collapsed}
-            onClick={() => route(it.path)}
+            onClick={() => go(it.path)}
             dim
           />
         ))}
       </div>
     </aside>
+    </>
   );
 }
 

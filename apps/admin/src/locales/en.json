@@ -1184,8 +1184,8 @@
     }
   },
   "pwa": {
-    "updateTitle": "New version ready",
-    "updateBody": "Trail has been updated. Reload to get the latest version.",
+    "updateTitle": "Update available",
+    "updateBody": "Reload to get the latest version.",
     "updateNow": "Update",
     "updateLater": "Later"
   }
