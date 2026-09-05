@@ -351,6 +351,13 @@
       "when": 1788540000000,
       "tag": "0049_push_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1788550000000,
+      "tag": "0050_brain_versions",
+      "breakpoints": true
     }
   ]
 }

@@ -20,8 +20,13 @@
  * kald — så spørgsmålet «hvilken database målte du?» ikke kan stilles igen.
  */
 import { Hono } from 'hono';
-import { auditEventLogCoverage, repairEventLogCoverage } from '@trail/core';
-import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
+import {
+  auditEventLogCoverage, repairEventLogCoverage,
+  takeBrainVersion, listBrainVersions, getBrainVersion,
+  diffBrainVersion, restoreBrainVersion, resolveKbId,
+} from '@trail/core';
+import { chunkText, storeChunks } from '../services/chunker.js';
+import { requireAuth, getTenant, getTrail, getUser } from '../middleware/auth.js';
 
 export const historyRoutes = new Hono();
 
@@ -66,4 +71,85 @@ historyRoutes.post('/history/coverage/repair', async (c) => {
     gapsAfter: after.gaps.length,
     intact: after.intact,
   });
+});
+
+/**
+ * F253.2 — mærkerne.
+ *
+ * `knowledgeBaseId` er PÅKRÆVET her, i modsætning til dæknings-ruten: et mærke
+ * hører til én videnbase, og et mærke uden KB ville være en grænse for
+ * ingenting.
+ */
+historyRoutes.get('/knowledge-bases/:kbId/brain-versions', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
+  if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
+  return c.json({ versions: await listBrainVersions(trail, tenant.id, kbId) });
+});
+
+historyRoutes.post('/knowledge-bases/:kbId/brain-versions', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const user = getUser(c);
+  const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
+  if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
+
+  const body: { label?: string; reason?: string } = await c.req
+    .json<{ label?: string; reason?: string }>()
+    .catch(() => ({}));
+  const label = (body.label ?? '').trim();
+  if (!label) return c.json({ error: 'label er påkrævet — et mærke uden navn er et mærke ingen finder igen' }, 400);
+
+  const version = await takeBrainVersion(trail, {
+    tenantId: tenant.id,
+    knowledgeBaseId: kbId,
+    label,
+    reason: (body.reason as 'manual') ?? 'manual',
+    createdBy: user?.id ?? null,
+  });
+  return c.json(version, 201);
+});
+
+/** F253.3 — hvad ville en tilbagerulning gøre? Rører intet. */
+historyRoutes.get('/brain-versions/:id/diff', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  try {
+    const d = await diffBrainVersion(trail, tenant.id, c.req.param('id'));
+    return c.json(d);
+  } catch (err) {
+    return c.json({ error: String((err as Error).message) }, 404);
+  }
+});
+
+/**
+ * F253.3 — udfør den.
+ *
+ * Søgeindekset bygges om for hver rørt side. Kernen kan ikke selv gøre det
+ * (chunker'en bor her i serveren), så den tager det som et tilbagekald — og
+ * svaret bærer `searchIndexStale`, så en kalder der glemte det ikke kan tro
+ * indekset er friskt.
+ */
+historyRoutes.post('/brain-versions/:id/restore', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const user = getUser(c);
+  try {
+    const version = await getBrainVersion(trail, tenant.id, c.req.param('id'));
+    if (!version) return c.json({ error: 'Ukendt hjerne-version' }, 404);
+
+    const result = await restoreBrainVersion(trail, tenant.id, c.req.param('id'), {
+      actorId: user?.id ?? null,
+      rebuildChunks: async (documentId, content) => {
+        const chunks = content.trim() ? chunkText(content) : [];
+        await storeChunks(trail, documentId, tenant.id, version.knowledgeBaseId, chunks);
+      },
+    });
+    return c.json(result);
+  } catch (err) {
+    // En afvisning her er en FORVENTET tilstand (ufuldstændig log), ikke et
+    // nedbrud — den skal kunne læses af et menneske, ikke logges som 500.
+    return c.json({ error: String((err as Error).message) }, 409);
+  }
 });
