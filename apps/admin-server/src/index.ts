@@ -445,6 +445,14 @@ if (hasSpa) {
   app.use('/icon-512.png', serveStatic({ root: SPA_DIR }));
   app.use('/icon-maskable-512.png', serveStatic({ root: SPA_DIR }));
   app.use('/apple-touch-icon.png', serveStatic({ root: SPA_DIR }));
+  // F247.2 — sw.js følger index.html-reglen, ikke assets-reglen: stabil URL
+  // med indhold der flytter sig hvert deploy. no-cache er det der lader
+  // @broberg/pwa's update-poll SE den nye worker; en cachet sw.js ville
+  // fastfryse appen på en gammel version uden noget synligt signal.
+  app.use('/sw.js', serveStatic({
+    root: SPA_DIR,
+    onFound: (_path, c) => c.header('Cache-Control', 'no-cache'),
+  }));
 
   // SPA fallback — any non-API path returns index.html so client-side
   // routing (preact-iso) can take over. UNAUTHENTICATED users get

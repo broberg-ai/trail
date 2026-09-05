@@ -6,6 +6,7 @@ import { mountConstellation } from './lib/constellation';
 import { TopNav } from './components/ui/top-nav';
 import { TrailSidebar } from './components/ui/trail-sidebar';
 import { CommandPalette } from './components/ui/command-palette';
+import { PwaUpdate } from './components/pwa-update';
 import { AmbientProvider } from './components/ambient-provider';
 import { ThinkingSubscriber } from './components/thinking-subscriber';
 import { JobProgressModalRoot } from './components/job-progress-modal';
@@ -192,6 +193,7 @@ export function App({ children }: { children: ComponentChildren }) {
       <AmbientProvider />
       {me ? <ThinkingSubscriber /> : null}
       {me ? <JobProgressModalRoot /> : null}
+      <PwaUpdate />
     </div>
   );
 }

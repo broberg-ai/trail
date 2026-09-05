@@ -652,3 +652,41 @@ html[data-theme="dark"] .menu-item.is-danger:hover { background: rgba(249,115,22
     padding: 10px 10px !important;
   }
 }
+
+/* F247.2 — «Ny version»-toasten (@broberg/pwa-skelettet, husets tokens på). */
+.pwa-update-banner {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(92vw, 420px);
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+  color: var(--color-fg);
+  box-shadow: var(--shadow-md);
+  font-size: 13px;
+}
+.pwa-update-banner button {
+  cursor: pointer;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-fg);
+  padding: 6px 10px;
+  font-size: 12.5px;
+  transition: background var(--dur) var(--ease);
+}
+.pwa-update-banner button:hover { background: var(--color-hover); }
+.pwa-update-banner button:active { transform: translateY(1px); }
+.pwa-update-banner [data-testid="pwa-update-confirm"] {
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+  border-color: var(--color-accent);
+  font-weight: 600;
+}

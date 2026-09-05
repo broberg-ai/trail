@@ -20,6 +20,9 @@ importers:
 
   apps/admin:
     dependencies:
+      '@broberg/pwa':
+        specifier: ^0.3.0
+        version: 0.3.0(preact@10.29.1)(react@19.2.5)
       '@preact/signals':
         specifier: ^2.9.0
         version: 2.9.0(preact@10.29.1)
@@ -754,6 +757,17 @@ packages:
 
   '@broberg/mail@0.1.0':
     resolution: {integrity: sha512-H8Trh+EN3tqCFdZrfRQsWQJFjVeg8S7se1hJbIEjxiez6zlN9PMdjsD9QuOiUNsShyWdw9MGzihqMdQfx5IIZg==}
+
+  '@broberg/pwa@0.3.0':
+    resolution: {integrity: sha512-3sHE2+1auv7idEoisEq2S0YE0+Qhase/UlNP3sAZbQ0XdPtiGifKKXEqej6LFJd/anv8ytc3Fnci8wRKMZBxIw==}
+    peerDependencies:
+      preact: '>=10.0.0'
+      react: '>=18.0.0'
+    peerDependenciesMeta:
+      preact:
+        optional: true
+      react:
+        optional: true
 
   '@broberg/secret-scan@0.5.1':
     resolution: {integrity: sha512-REFa4lqFgdx5pn/37IPQUX0DLNq+K49xsqiy0ApbpWhCOZhZnO0FejioBxFNkyTduexpPAsLpoJZjpXIFvP09Q==}
@@ -4080,6 +4094,11 @@ snapshots:
       hono: 4.12.12
 
   '@broberg/mail@0.1.0': {}
+
+  '@broberg/pwa@0.3.0(preact@10.29.1)(react@19.2.5)':
+    optionalDependencies:
+      preact: 10.29.1
+      react: 19.2.5
 
   '@broberg/secret-scan@0.5.1': {}
 

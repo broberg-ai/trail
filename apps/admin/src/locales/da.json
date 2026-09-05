@@ -1182,5 +1182,11 @@
       "success": "{device} er forbundet. Appen henter selv sin adgang inden for få sekunder.",
       "successHint": "Enheden fik en begrænset nøgle: den kan gemme capture-kandidater og søge/chatte — intet andet. Tilbagekald den når som helst under Indstillinger → API-nøgler."
     }
+  },
+  "pwa": {
+    "updateTitle": "Ny version klar",
+    "updateBody": "Trail er blevet opdateret. Genindlæs for at få den nyeste udgave.",
+    "updateNow": "Opdatér",
+    "updateLater": "Senere"
   }
 }

@@ -1182,5 +1182,11 @@
       "success": "{device} is connected. The app picks up its access automatically within a few seconds.",
       "successHint": "The device got a scoped key: it can save capture candidates and search/chat — nothing else. Revoke it anytime under Settings → API keys."
     }
+  },
+  "pwa": {
+    "updateTitle": "New version ready",
+    "updateBody": "Trail has been updated. Reload to get the latest version.",
+    "updateNow": "Update",
+    "updateLater": "Later"
   }
 }
