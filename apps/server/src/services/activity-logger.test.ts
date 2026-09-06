@@ -189,15 +189,33 @@ test('a transient tenant-lookup failure does NOT switch the audit log off for go
     },
   } as never;
 
+  // ASSERT ON THE INCREASE, NOT ON AN ABSOLUTE COUNT.
+  //
+  // `lookups` counts events this logger observes on the SHARED broadcaster, so
+  // any other test file emitting a candidate event in the same bun process is
+  // also counted. Measured 2026-09-06: this test failed intermittently under
+  // turbo (`Expected: 2, Received: 4`) and passed every time the suite ran
+  // alone — a flake that made the gate untrustworthy twice in one session, and
+  // twice let a commit through on red because "1 fail" could not be told apart
+  // from a real regression at a glance.
+  //
+  // The claim under test is "the second event RE-RAN the lookup", not "exactly
+  // two events existed in the universe". The increase is the property; the
+  // absolute number was never part of it.
+  //
+  // MUTATION MARKER (unchanged): drop the `.catch(...)` that clears the cached
+  // rejection and the second event reuses the failed promise — `after` equals
+  // `first` and this goes red, while every other test stays green.
   const stop = startActivityLogger(failing);
   try {
     emitForA('cand-retry-1');
     await settle();
-    expect(lookups).toBe(1);
+    const first = lookups;
+    expect(first).toBeGreaterThan(0); // the lookup ran at all
 
     emitForA('cand-retry-2');
     await settle();
-    expect(lookups).toBe(2); // retried — the rejection was not cached
+    expect(lookups).toBeGreaterThan(first); // retried — the rejection was not cached
   } finally {
     stop();
   }
