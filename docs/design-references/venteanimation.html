@@ -1,0 +1,114 @@
+<!doctype html><html lang="da"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vente-tilstand — tre forslag</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#FAF9F5; --card:#FFFFFF; --sunk:#F4F2EB;
+  --fg:#1A1715; --muted:rgba(26,23,21,.70); --subtle:rgba(26,23,21,.40); --faint:rgba(26,23,21,.20);
+  --line:rgba(26,23,21,.10); --accent:#E8A87C; --accent-soft:rgba(232,168,124,.16);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 Inter,system-ui,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:40px 28px 90px}
+h1{font-family:Fraunces,Georgia,serif;font-weight:400;font-size:38px;margin:0 0 6px}
+.lede{color:var(--muted);max-width:70ch;margin:0 0 8px}
+.note{color:var(--subtle);font-size:13.5px;max-width:74ch;margin:0 0 34px}
+.grid{display:grid;gap:22px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.hd{padding:16px 20px 13px;border-bottom:1px solid var(--line)}
+.n{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;color:var(--subtle);text-transform:uppercase}
+.t{font-family:Fraunces,Georgia,serif;font-size:20px;margin:3px 0 5px}
+.d{color:var(--muted);font-size:13.5px;line-height:1.5}
+.stage{background:var(--sunk);padding:26px 20px;min-height:210px;display:flex;align-items:center;justify-content:center}
+.ft{padding:13px 20px;border-top:1px solid var(--line);display:flex;gap:16px;font-size:12.5px;color:var(--subtle)}
+.ft b{color:var(--fg);font-weight:500}
+
+/* ── 1: SKELET ───────────────────────────── */
+.sk{width:100%;max-width:330px}
+.skrow{display:flex;gap:11px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--line)}
+.skrow:last-child{border-bottom:0}
+.skdot{width:7px;height:7px;border-radius:50%;background:var(--faint);margin-top:6px;flex:none}
+.skcol{flex:1;min-width:0}
+.skbar{height:9px;border-radius:5px;background:linear-gradient(90deg,var(--line) 25%,rgba(26,23,21,.045) 37%,var(--line) 63%);background-size:400% 100%;animation:shim 1.5s ease-in-out infinite}
+.skbar+.skbar{margin-top:7px}
+@keyframes shim{0%{background-position:100% 0}100%{background-position:0 0}}
+
+/* ── 2: PULSEN ───────────────────────────── */
+.pulse{display:flex;flex-direction:column;align-items:center;gap:15px}
+.track{width:190px;height:2px;background:var(--line);border-radius:2px;position:relative;overflow:hidden}
+.track::after{content:'';position:absolute;inset:0;width:38%;border-radius:2px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:sweep 1.25s cubic-bezier(.4,0,.2,1) infinite}
+@keyframes sweep{0%{transform:translateX(-110%)}100%{transform:translateX(370%)}}
+.plabel{font-size:13px;color:var(--muted)}
+.pcount{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--subtle)}
+
+/* ── 3: DEN VOKSENDE LISTE ───────────────── */
+.grow{width:100%;max-width:330px}
+.growrow{display:flex;gap:10px;align-items:center;padding:9px 11px;border-radius:8px;font-size:13.5px;
+  opacity:0;transform:translateY(5px);animation:pop .45s ease forwards}
+.growrow:nth-child(1){animation-delay:.05s}.growrow:nth-child(2){animation-delay:.35s}
+.growrow:nth-child(3){animation-delay:.65s}.growrow:nth-child(4){animation-delay:.95s}
+.growrow.ghost{background:var(--accent-soft);color:var(--subtle)}
+@keyframes pop{to{opacity:1;transform:none}}
+.gdot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none}
+.gdot.q{background:var(--faint)}
+.gbar{height:8px;border-radius:4px;background:var(--line);flex:1}
+.gbar.w1{max-width:62%}.gbar.w2{max-width:80%}.gbar.w3{max-width:47%}
+
+.foot{margin-top:44px;padding-top:24px;border-top:1px solid var(--line);color:var(--muted);font-size:14px;max-width:76ch}
+.foot b{color:var(--fg)}
+</style></head><body>
+<div class="wrap">
+<h1>Tre forslag til vente-tilstanden</h1>
+<p class="lede">Den nuværende animation fylder omkring en tredjedel af skærmen for at sige «vent». Alle tre herunder er markant mindre, bruger Trails egne farver, og — vigtigst — <em>lyver ikke om hvor lang tid der er tilbage</em>.</p>
+<p class="note">Fælles regel i alle tre: intet vises de første 300 ms. Er svaret hurtigt, ser man aldrig en animation — kun et blink der aldrig kom. Det er den billigste forbedring af oplevet hastighed der findes.</p>
+
+<div class="grid">
+
+  <div class="card">
+    <div class="hd"><div class="n">Forslag 1</div><div class="t">Skelettet</div>
+    <div class="d">Formen af det der kommer, tegnet med det samme. Øjet finder sin plads før indholdet lander, så siden ikke hopper når det gør.</div></div>
+    <div class="stage"><div class="sk">
+      <div class="skrow"><div class="skdot"></div><div class="skcol"><div class="skbar" style="width:74%"></div><div class="skbar" style="width:44%"></div></div></div>
+      <div class="skrow"><div class="skdot"></div><div class="skcol"><div class="skbar" style="width:88%"></div><div class="skbar" style="width:36%"></div></div></div>
+      <div class="skrow"><div class="skdot"></div><div class="skcol"><div class="skbar" style="width:59%"></div><div class="skbar" style="width:50%"></div></div></div>
+    </div></div>
+    <div class="ft"><span><b>Bedst</b> til lister</span><span>ingen tekst</span><span>føles hurtigst</span></div>
+  </div>
+
+  <div class="card">
+    <div class="hd"><div class="n">Forslag 2</div><div class="t">Pulsen</div>
+    <div class="d">Én tynd linje. Diskret nok til at sidde permanent under en overskrift uden at stjæle opmærksomhed — og tæller sekunder når det trækker ud.</div></div>
+    <div class="stage"><div class="pulse">
+      <div class="track"></div>
+      <div class="plabel">Henter brudte links</div>
+      <div class="pcount" id="c">4 sekunder</div>
+    </div></div>
+    <div class="ft"><span><b>Bedst</b> til enkelt-tal</span><span>mindst plads</span><span>ærlig om tid</span></div>
+  </div>
+
+  <div class="card">
+    <div class="hd"><div class="n">Forslag 3</div><div class="t">Den voksende liste</div>
+    <div class="d">Rækkerne kommer efterhånden som de hentes, i stedet for at alt venter på det sidste. Man kan læse mens resten er på vej.</div></div>
+    <div class="stage"><div class="grow">
+      <div class="growrow"><div class="gdot"></div><div class="gbar w1"></div></div>
+      <div class="growrow"><div class="gdot"></div><div class="gbar w2"></div></div>
+      <div class="growrow"><div class="gdot"></div><div class="gbar w3"></div></div>
+      <div class="growrow ghost"><div class="gdot q"></div><span>henter flere…</span></div>
+    </div></div>
+    <div class="ft"><span><b>Bedst</b> til lange lister</span><span>kræver sidevis API</span><span>ingen tom skærm</span></div>
+  </div>
+
+</div>
+
+<p class="foot"><b>Min anbefaling: 1 til lister, 2 til alt andet.</b> Forslag 3 er den bedste oplevelse og den dyreste — den kræver at API'et kan levere i portioner, og det kan link-check-ruten ikke i dag.<br><br>
+Og den vigtigste bemærkning står uden for mockup'en: <b>den rigtige rettelse er at der ikke skal være noget at vente på.</b> En pænere animation gør 18 sekunder til 18 pænere sekunder.</p>
+</div>
+<script>
+  let s=4; const el=document.getElementById('c');
+  setInterval(()=>{s++; el.textContent=s+' sekunder';},1000);
+</script>
+</body></html>
