@@ -67,3 +67,31 @@ test('hybrid er betinget, ikke altid — en slukket videnbase koster ikke et kal
   const vindue = kode.slice(Math.max(0, i - 120), i + 200);
   expect(vindue).toMatch(/if\s*\(await hybridEnabled\(/);
 });
+
+/**
+ * F262.3 — BEGGE RUTER SKAL BRUGE DEN SAMME RANGERING.
+ *
+ * Opførslen er prøvet i `packages/core/src/retrieval/rangering.test.ts`. Det
+ * her er den anden halvdel: at ruterne faktisk KALDER den, frem for at have
+ * hver sin kopi. En kopi er ikke forkert den dag den skrives — den er forkert
+ * den dag den ene bliver rettet.
+ */
+const søgeruten = readFileSync(join(import.meta.dir, 'search.ts'), 'utf-8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+
+test('chatten KALDER den fælles rangering', () => {
+  expect(udenKommentarer()).toContain('rangerKandidater(');
+});
+
+test('søgeruten KALDER den fælles rangering', () => {
+  expect(søgeruten).toContain('rangerKandidater(');
+});
+
+test('ingen af ruterne har sin EGEN fletning ved siden af', () => {
+  // Kaldte en rute både rangerKandidater OG reciprocalRankFusion, ville den
+  // have to rangeringer der kan blive uenige — og prøven ovenfor ville
+  // stadig være grøn.
+  expect(udenKommentarer()).not.toContain('reciprocalRankFusion(');
+  expect(søgeruten).not.toContain('reciprocalRankFusion(');
+});

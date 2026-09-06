@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { vectorSearch, hybridEnabled } from '../services/hybrid-search.js';
+import { rangerKandidater } from '@trail/core';
 import {
   documents,
   documentImages,
@@ -629,6 +630,11 @@ async function retrieveContext(
 
     const chunkHits = await trail.searchChunks(ftsQuery, kbId, tenantId, PER_KB_CHUNKS);
     const docHits = await trail.searchDocuments(ftsQuery, kbId, tenantId, PER_KB_DOCS);
+    // Ordmatchningens EGEN rangering, taget FØR docHits får flere kandidater
+    // skubbet ind nedenfor. Fletningen spørger «hvor højt rangerede hver
+    // halvdel dette?», og det spørgsmål er meningsløst hvis listen imens er
+    // blevet til en pose med alt i.
+    const ordRang = docHits.map((h) => ({ id: h.id }));
 
     // F182.6 — decay-aware retrieval. Load confidence + pin + supersede state
     // for every candidate Neuron, then hide superseded ones and low-confidence
@@ -759,15 +765,30 @@ async function retrieveContext(
       }
     }
 
-    const rankedDocs = docHits
-      .filter((h) => h.kind === 'wiki' && !fadedHeuristicIds.has(h.id) && isChatVisible(confMap.get(h.id)))
-      .sort((a, b) => {
-        // Præcise titel-træf først. Derefter uændret: tillid faldende.
-        const A = præciseIds.has(a.id) ? 0 : 1;
-        const B = præciseIds.has(b.id) ? 0 : 1;
-        if (A !== B) return A - B;
-        return confidenceOf(confMap, b.id) - confidenceOf(confMap, a.id);
-      });
+    // F262.3 — FLET DE TO HALVDELE, I STEDET FOR AT LÆGGE DEN ENE OVENPÅ.
+    //
+    // Den gamle sortering var «præcist navn først, derefter tillid faldende».
+    // Den smed vektor-halvdelens egen rangering på gulvet: en Neuron som
+    // betydnings-søgningen fandt som nr. 1 kunne ende sidst, fordi den
+    // tilfældigvis havde lavere tillid end en Neuron ordmatchningen fandt.
+    // Målt 6/9 på produktion, første kørsel efter hybrid blev tændt:
+    // `cv-christian-broberg-danish.md` — vektor-halvdelens nr. 1 på 0,7896 —
+    // lå SIDST i citaterne.
+    //
+    // SAMME FUNKTION SOM SØGERUTEN, ikke en kopi. To kopier lader Aidan og
+    // søgefeltet svare forskelligt på det samme spørgsmål, og så kan ingen af
+    // dem bruges til at kontrollere den anden.
+    const rankedDocs = rangerKandidater(
+      docHits.filter((h) => h.kind === 'wiki' && !fadedHeuristicIds.has(h.id) && isChatVisible(confMap.get(h.id))),
+      {
+        præcise: præciseIds,
+        ord: ordRang,
+        vektor: vektorIds.map((id) => ({ id })),
+        // Reserve, kun for kandidater ingen af halvdelene rangerede (et
+        // præcist titel-træf uden ordmatch): tillid faldende, som før.
+        reserve: (a, b) => confidenceOf(confMap, b.id) - confidenceOf(confMap, a.id),
+      },
+    );
 
     // Fetch CONTENT for the ranked Neurons whose CHUNKS didn't make the cut, so
     // the cited Neuron's actual text reaches the model — not just a citation

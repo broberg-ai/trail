@@ -3,7 +3,7 @@ import { documents, knowledgeBases } from '@trail/db';
 import { and, eq } from 'drizzle-orm';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
 import { parseTags, canonicaliseTag, parseSeqId, kbPrefix, redactSecrets, buildFtsQuery } from '@trail/shared';
-import { resolveKbId, reciprocalRankFusion } from '@trail/core';
+import { resolveKbId, rangerKandidater } from '@trail/core';
 import { vectorSearch, hybridEnabled } from '../services/hybrid-search.js';
 import { exactTitleMatches } from '@trail/core';
 import {
@@ -176,12 +176,23 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
 
       // Flet på PLADS, ikke på score: bm25 er negativ og ubegrænset, cosinus
       // ligger i [-1,1]. De to tal kan ikke sammenlignes.
-      const fused = reciprocalRankFusion({
+      //
+      // F262.3 — DET PRÆCISE NAVN OVERLEVER FLETNINGEN. Den gamle sortering
+      // her overskrev den F261 lavede tyve linjer længere oppe, så «Cardmem»
+      // mistede sin garanti for at Neuronen der HEDDER Cardmem lå nr. 1, i
+      // samme øjeblik hybrid blev tændt. Det kunne ikke ses før: hybridEnabled()
+      // svarede altid nej (F262.2), så anden halvdel af sorteringen kørte
+      // aldrig, og en død kodegren kan ikke være i konflikt med noget.
+      //
+      // Rangeringen ligger FØR afkortningen nedenfor — ellers kunne et præcist
+      // træf blive skåret væk inden det blev flyttet frem.
+      const rangeret = rangerKandidater(documents as Array<{ id: string }>, {
+        præcise: new Set(præcise.map((p) => p.id)),
         ord: documents.map((d: { id: string }) => ({ id: d.id })),
         vektor: vec.hits.map((h: { documentId: string }) => ({ id: h.documentId })),
       });
-      const orden = new Map(fused.map((f, i) => [f.id, i]));
-      documents.sort((a, b) => (orden.get(a.id) ?? 1e9) - (orden.get(b.id) ?? 1e9));
+      documents.length = 0;
+      documents.push(...(rangeret as never[]));
       documents.length = Math.min(documents.length, limit);
     }
   }
