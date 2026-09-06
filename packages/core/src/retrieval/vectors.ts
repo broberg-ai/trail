@@ -95,6 +95,17 @@ export async function storeEmbedding(
 /**
  * Hvor stor en del af videnbasen har en BRUGBAR vektor?
  *
+ * NÆVNEREN UDELUKKER ARKIVEREDE SIDER, og det er en RETTELSE målt 6/9: første
+ * udgave talte ALLE tekststykker, mens indekseringen med rette springer
+ * arkiverede sider over. Så meldte en FULDT indekseret videnbase 52,8 % —
+ * «halvdelen af din hjerne er ikke søgbar», om en base hvor alt søgbart var
+ * taget. Tælleren og nævneren målte to forskellige populationer.
+ *
+ * Det er nattens fejlform vendt om: ikke en falsk grøn, men en falsk RØD. Den
+ * er mildere, fordi den får nogen til at lede efter et problem der ikke
+ * findes — men den koster stadig, og den ville have stået som «kendt
+ * mærkværdighed» for evigt hvis ikke tallet var blevet læst samme dag.
+ *
  * «Brugbar» er ikke det samme som «findes»: en vektor hvis content_hash ikke
  * længere matcher chunkens tekst er forældet, og en fra en anden model kan
  * ikke sammenlignes med de øvrige. Begge tælles som IKKE dækket, fordi det er
@@ -109,7 +120,8 @@ export async function coverage(
   const r = (await db.execute(
     `SELECT
        (SELECT COUNT(*) FROM document_chunks c
-         WHERE c.tenant_id = ? AND c.knowledge_base_id = ?)                    AS chunks,
+          JOIN documents d ON d.id = c.document_id
+         WHERE c.tenant_id = ? AND c.knowledge_base_id = ? AND d.archived = 0) AS chunks,
        (SELECT COUNT(*) FROM document_chunks c JOIN chunk_embeddings e ON e.chunk_id = c.id
          WHERE c.tenant_id = ? AND c.knowledge_base_id = ? AND e.model = ?)    AS with_any,
        (SELECT COUNT(*) FROM document_chunks c JOIN chunk_embeddings e ON e.chunk_id = c.id
