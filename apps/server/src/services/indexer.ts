@@ -33,8 +33,47 @@ import { contentHash, storeEmbedding, coverage, EMBEDDING_MODEL } from '@trail/c
 import type { TrailDatabase } from '@trail/db';
 import { embed } from './embedder.js';
 
-/** Mistral tager mange tekster pr. kald; 64 holder anmodningen under grænsen. */
-const BATCH = 64;
+/**
+ * PORTIONER MÅLES I TOKENS, IKKE I ANTAL — og det er en rettelse målt 6/9.
+ *
+ * Første udgave sendte 64 tekststykker pr. kald. Det virkede på broberg.ai og
+ * fejlede på Sanne med:
+ *
+ *     mistral embeddings 400: "Too many tokens overall, split into more batches."
+ *
+ * 128 af 569 stykker blev sprunget over. Årsagen er indlysende bagefter: et
+ * ANTAL siger intet om hvor lange teksterne er. Sannes Neuroner er længere
+ * (~750 tokens i snit mod broberg.ai's ~560), så de samme 64 stykker blev til
+ * næsten dobbelt så stor en anmodning.
+ *
+ * En grænse man ikke kan se fra kaldestedet skal måles i den enhed grænsen
+ * ER — ellers virker koden indtil nogen skriver længere tekster, og fejler så
+ * et sted ingen forbinder med årsagen.
+ *
+ * Budgettet er sat konservativt: 16.000 tokens pr. anmodning, anslået på
+ * 3,5 tegn/token for dansk-tung tekst. Ét stykke der ALENE overskrider
+ * budgettet sendes stadig for sig — bedre et kald der måske fejler med en
+ * læsbar grund end et stykke der aldrig bliver forsøgt.
+ */
+export const TOKEN_BUDGET = Number(process.env.TRAIL_EMBED_TOKEN_BUDGET ?? 16_000);
+export const CHARS_PER_TOKEN = 3.5;
+const MAX_PER_BATCH = 64; // loft oveni, så en base med meget korte stykker ikke sender tusinder
+
+/** Del i portioner der hver især holder sig under token-budgettet. */
+export function portioner<T extends { content: string }>(rows: T[]): T[][] {
+  const ud: T[][] = [];
+  let cur: T[] = [];
+  let tokens = 0;
+  for (const r of rows) {
+    const t = r.content.length / CHARS_PER_TOKEN;
+    if (cur.length > 0 && (tokens + t > TOKEN_BUDGET || cur.length >= MAX_PER_BATCH)) {
+      ud.push(cur); cur = []; tokens = 0;
+    }
+    cur.push(r); tokens += t;
+  }
+  if (cur.length > 0) ud.push(cur);
+  return ud;
+}
 
 export interface IndexResult {
   chunks: number;
@@ -88,8 +127,7 @@ async function embedBatch(
   rows: Array<{ id: string; content: string; documentId: string; knowledgeBaseId: string }>,
 ): Promise<{ embedded: number; costCents: number; inputTokens: number }> {
   let embedded = 0, costCents = 0, inputTokens = 0;
-  for (let i = 0; i < rows.length; i += BATCH) {
-    const slice = rows.slice(i, i + BATCH);
+  for (const slice of portioner(rows)) {
     const res = await embed(slice.map((r) => r.content));
     for (let j = 0; j < slice.length; j += 1) {
       const r = slice[j]!;
@@ -141,8 +179,9 @@ export async function sweepKb(
 
   let embedded = 0, costCents = 0, inputTokens = 0, skipped = 0;
   const errors: string[] = [];
-  for (let i = 0; i < rows.length; i += BATCH) {
-    const slice = rows.slice(i, i + BATCH);
+  const alle = portioner(rows);
+  let gjort = 0;
+  for (const slice of alle) {
     try {
       const r = await embedBatch(db, tenantId, slice);
       embedded += r.embedded; costCents += r.costCents; inputTokens += r.inputTokens;
@@ -156,7 +195,8 @@ export async function sweepKb(
       if (!errors.includes(besked)) errors.push(besked);
       skipped += slice.length;
     }
-    opts.onProgress?.(Math.min(i + BATCH, rows.length), rows.length, costCents);
+    gjort += slice.length;
+    opts.onProgress?.(gjort, rows.length, costCents);
   }
 
   const cov = await coverage(db, tenantId, knowledgeBaseId);
