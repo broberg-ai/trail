@@ -36,12 +36,16 @@ export async function embed(input: string[]): Promise<EmbedResult> {
     return { vectors: [], model: EMBEDDING_MODEL, provider: EMBEDDING_PROVIDER, costCents: 0, inputTokens: 0 };
   }
 
+  // INGEN `as never`. Første udgave havde et cast her, og det kostede en
+  // deploy: feltet hedder `text`, ikke `input`, og castet fjernede præcis den
+  // kontrol der ville have sagt det. Zod afviste anmodningen i produktion i
+  // stedet — samme fejl, opdaget et døgn senere og et lag længere nede.
   const res = await ai.embedding({
-    input,
+    text: input,
     tier: 'embedding',
     override: { provider: EMBEDDING_PROVIDER, model: EMBEDDING_MODEL, transport: 'http' },
     labels: { feature: 'F254-embedding' },
-  } as never);
+  });
 
   const usage = res.usage as unknown as Record<string, unknown>;
   const provider = String(usage?.provider ?? '');

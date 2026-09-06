@@ -42,6 +42,14 @@ export interface IndexResult {
   skipped: number;
   costCents: number;
   inputTokens: number;
+  /**
+   * HVORFOR noget blev sprunget over. Uden dette felt siger svaret
+   * «skipped: 10, cost: 0» og INTET om årsagen — og så skal man læse
+   * motorens logfiler for at finde ud af om modellen var nede, om nøglen
+   * manglede, eller om anmodningen var forkert. Målt på egen krop 6/9: en
+   * fejlet bagfyldning så nøjagtig ud som en tom videnbase.
+   */
+  errors?: string[];
 }
 
 /** Tekststykker der mangler en brugbar vektor (ingen, forældet, eller anden model). */
@@ -115,8 +123,9 @@ export async function indexDocument(
     const r = await embedBatch(db, tenantId, rows);
     return { chunks: rows.length, skipped: 0, ...r };
   } catch (err) {
-    console.error('[F254] kunne ikke indeksere', documentId, err);
-    return { chunks: rows.length, embedded: 0, skipped: rows.length, costCents: 0, inputTokens: 0 };
+    const besked = err instanceof Error ? err.message : String(err);
+    console.error('[F254] kunne ikke indeksere', documentId, besked);
+    return { chunks: rows.length, embedded: 0, skipped: rows.length, costCents: 0, inputTokens: 0, errors: [besked] };
   }
 }
 
@@ -131,6 +140,7 @@ export async function sweepKb(
   if (opts.max) rows = rows.slice(0, opts.max);
 
   let embedded = 0, costCents = 0, inputTokens = 0, skipped = 0;
+  const errors: string[] = [];
   for (let i = 0; i < rows.length; i += BATCH) {
     const slice = rows.slice(i, i + BATCH);
     try {
@@ -139,12 +149,20 @@ export async function sweepKb(
     } catch (err) {
       // Én fejlet portion stopper ikke resten: en bagfyldning af 6.796 Neuroner
       // må ikke skulle starte forfra fordi kald nummer 40 fik en timeout.
-      console.error('[F254] portion fejlede, fortsætter', err);
+      // Men årsagen SKAL med i svaret — en tælling uden grund tvinger den
+      // næste til at læse logfiler for at forstå sit eget resultat.
+      const besked = err instanceof Error ? err.message : String(err);
+      console.error('[F254] portion fejlede, fortsætter:', besked);
+      if (!errors.includes(besked)) errors.push(besked);
       skipped += slice.length;
     }
     opts.onProgress?.(Math.min(i + BATCH, rows.length), rows.length, costCents);
   }
 
   const cov = await coverage(db, tenantId, knowledgeBaseId);
-  return { chunks: rows.length, embedded, skipped, costCents, inputTokens, coverageAfter: cov.ratio };
+  return {
+    chunks: rows.length, embedded, skipped, costCents, inputTokens,
+    ...(errors.length > 0 ? { errors } : {}),
+    coverageAfter: cov.ratio,
+  };
 }
