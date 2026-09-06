@@ -80,17 +80,47 @@ export async function vectorSearch(
 /**
  * Er hybrid tændt for denne videnbase?
  *
- * Fejler opslaget, svares FALSE. En søgning skal aldrig fejle fordi et flag
- * ikke kunne læses — den skal falde tilbage til den vej der har virket hele
- * tiden.
+ * MÅLT 6. september 2026 — DENNE FUNKTION SVAREDE ALTID NEJ.
+ *
+ * Den gamle udgave skrev `SELECT hybrid_search_enabled AS on`. `on` er et
+ * RESERVERET ORD i SQLite, så sætningen kunne slet ikke parses:
+ *
+ *   SQL_PARSE_ERROR: near ON, "None": syntax error at (1, 35)
+ *
+ * En catch svarede `false`, og dermed:
+ *
+ *   kolonnen i databasen     1   (slået til)
+ *   kontakten i brugerfladen     slået til
+ *   hvad funktionen svarede  false
+ *
+ * Vektorsøgningen har ALDRIG kørt i produktion — ikke på nogen videnbase, ikke
+ * ét sekund. Hverken i søgeruten (F254.2) eller i chatten (F262). F260 rettede
+ * alle 1.205 vektorer fra nuller til rigtige tal, og porten ind til dem var
+ * lukket hele tiden.
+ *
+ * HVORFOR INGEN OPDAGEDE DET: `false` er et helt gyldigt svar. Det betyder
+ * normalt «kunden har ikke slået det til». Der er intet at se — ikke i en log,
+ * ikke i brugerfladen, ikke fra kaldestedet — der skiller SLÅET FRA fra KAN
+ * IKKE LÆSES. Den gamle kommentar her forsvarede endda tavsheden som en dyd.
+ * Et tilbagefald der aldrig siger noget er ikke et tilbagefald; det er en
+ * permanent nedetid der ligner en indstilling.
+ *
+ * Derfor er catch'en nu SMAL: kun «kolonnen findes ikke» (en ældre database,
+ * inden migrationen) er forventelig og tavs. Alt andet logges som fejl.
  */
 export async function hybridEnabled(db: TrailDatabase, kbId: string): Promise<boolean> {
   try {
     const r = (await db.execute(
-      `SELECT hybrid_search_enabled AS on FROM knowledge_bases WHERE id = ?`, [kbId],
-    )).rows[0] as { on?: number } | undefined;
-    return Number(r?.on ?? 0) === 1;
-  } catch {
+      `SELECT hybrid_search_enabled FROM knowledge_bases WHERE id = ?`, [kbId],
+    )).rows[0] as { hybrid_search_enabled?: unknown } | undefined;
+    return Number(r?.hybrid_search_enabled ?? 0) === 1;
+  } catch (err) {
+    // Den ENE forventelige fejl: databasen er ældre end migrationen der
+    // tilføjede kolonnen. Den er tavs, fordi den er en rigtig «ikke tilgængelig
+    // endnu». Alt andet er en fejl vi skal kunne se.
+    if (!/no such column/i.test(String(err))) {
+      console.error('[F262.2] kunne ikke læse hybrid_search_enabled — søgningen kører UDEN vektor-halvdelen', err);
+    }
     return false;
   }
 }
