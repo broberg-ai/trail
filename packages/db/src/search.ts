@@ -56,6 +56,12 @@ const CHUNKS_SQL = `
          dc.header_breadcrumb                               AS headerBreadcrumb,
          pd.kind                                            AS kind,
          pd.created_at                                      AS docCreatedAt,
+         -- F261.3 — moderdokumentets identitet følger med, så et stump-træf
+         -- kan KREDITERES. Uden dem kunne chatten bruge en Neurons indhold og
+         -- ikke fortælle hvilken det var.
+         pd.path                                            AS docPath,
+         pd.filename                                        AS docFilename,
+         pd.title                                           AS docTitle,
          highlight(chunks_fts, 0, '<mark>', '</mark>')      AS highlight,
          rank                                               AS rank
     FROM chunks_fts
@@ -109,6 +115,9 @@ export async function searchChunks(
     rank: row.rank as number,
     kind: row.kind as 'source' | 'wiki',
     docCreatedAt: (row.docCreatedAt as string | null) ?? '',
+    docPath: (row.docPath as string | null) ?? '',
+    docFilename: (row.docFilename as string | null) ?? '',
+    docTitle: (row.docTitle as string | null) ?? '',
   }));
 }
 

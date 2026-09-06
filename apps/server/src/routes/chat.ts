@@ -687,6 +687,23 @@ async function retrieveContext(
       totalChars += text.length;
       if (!seen.has(hit.documentId)) {
         seen.add(hit.documentId);
+        // F261.3 — KREDITÉR DEN NEURON DER FAKTISK LEVEREDE INDHOLDET.
+        //
+        // Denne løkke havde ingen citations.push. En Neuron fundet gennem sine
+        // TEKSTSTUMPER gav altså sit indhold til svaret og blev aldrig nævnt —
+        // og fordi den nu står i `seen`, springer dokument-løkken nedenfor den
+        // over. Citaterne viste derfor konsekvent de dokumenter der bidrog
+        // MINDST: dem der kun matchede på dokument-niveau.
+        //
+        // Målt 6/9 på ejerens eget spørgsmål: svaret kom ordret fra hans egen
+        // Neuron, mens kilderne pegede på flagskibe-broberg-ai.md og
+        // hosting-broberg-ai-md.md. Det er ikke kosmetik — citaterne er den
+        // eneste måde man kan kontrollere OM chatten svarer fra hjernen.
+        citations.push({
+          documentId: hit.documentId,
+          path: hit.docPath,
+          filename: hit.docFilename,
+        });
         // F141 — record the chat-context hit. One row per unique Neuron
         // that contributed to a chat answer; counted as actor_kind='user'
         // because it's a user question that pulled this Neuron in. Lets

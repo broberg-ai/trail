@@ -103,6 +103,19 @@ export interface ChunkSearchHit {
   kind: 'source' | 'wiki';
   /** Parent document created_at — so chat can date each Neuron in its context. */
   docCreatedAt: string;
+  /**
+   * F261.3 — moderdokumentets identitet.
+   *
+   * MÅLT 6/9: en Neuron der blev fundet gennem sine TEKSTSTUMPER leverede sit
+   * indhold til chat-svaret og fik ALDRIG en kildehenvisning — stump-løkken
+   * havde ingen `citations.push`, og fordi den lagde dokumentet i `seen`,
+   * sprang dokument-løkken den over bagefter. Citaterne viste derfor
+   * konsekvent de dokumenter der bidrog MINDST. Uden disse felter kunne
+   * stump-løkken ikke kreditere nogen.
+   */
+  docPath: string;
+  docFilename: string;
+  docTitle: string;
 }
 
 export interface DatabaseConfig {
