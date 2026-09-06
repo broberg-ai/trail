@@ -11,10 +11,11 @@
     "test": "bun test src/"
   },
   "dependencies": {
-    "@broberg/webpush": "^0.5.0",
     "@broberg/pwa": "0.3.0",
+    "@broberg/webpush": "^0.5.0",
     "@preact/signals": "^2.9.0",
     "@trail/shared": "workspace:*",
+    "@trail/ui": "workspace:*",
     "@upmetrics/sdk": "^0.1.5",
     "graphology": "^0.26.0",
     "graphology-layout-forceatlas2": "^0.10.1",

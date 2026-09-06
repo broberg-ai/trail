@@ -32,6 +32,9 @@ importers:
       '@trail/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@trail/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@upmetrics/sdk':
         specifier: ^0.1.5
         version: 0.1.5
@@ -126,6 +129,9 @@ importers:
       '@trail/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@trail/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       preact:
         specifier: ^10.23.0
         version: 10.29.1

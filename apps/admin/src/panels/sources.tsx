@@ -9,6 +9,7 @@ import {
   retryDocument,
   reingestDocument,
   getDocumentContent,
+  uploadSource,
   submitJob,
   api,
   ApiError,
@@ -16,6 +17,7 @@ import {
 import { showJob } from '../lib/jobs-store';
 import { formatPathDisplay } from '../lib/display-path';
 import { UploadDropzone } from '../components/upload-dropzone';
+import { PasteSource } from '@trail/ui';
 import { ProcessingIndicator } from '../components/processing-indicator';
 import { Modal, ModalButton } from '../components/modal';
 import { useKbEvents, onStreamOpen, onFocusRefresh, debounce } from '../lib/event-stream';
@@ -419,6 +421,12 @@ export function SourcesPanel() {
 
       <section class="mb-8">
         <UploadDropzone kbId={kbId} onUploaded={onUploaded} />
+        {/* F149.7 — samme vej ind som en droppet fil, bare med teksten i
+            stedet for filen. onUploaded genindlæser listen, så kilden er
+            synlig med det samme frem for ved næste manuelle opdatering. */}
+        <PasteSource
+          upload={async (file) => { onUploaded(await uploadSource(kbId, file)); }}
+        />
       </section>
 
       {/* Filter strip — same grammar as Queue's status tabs. Active is

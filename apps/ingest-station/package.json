@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@trail/shared": "workspace:*",
+    "@trail/ui": "workspace:*",
     "preact": "^10.23.0"
   },
   "devDependencies": {

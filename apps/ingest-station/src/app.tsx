@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import type { KnowledgeBase, Document } from '@trail/shared';
+import { PasteSource } from '@trail/ui';
 import {
   ApiError,
   getKey,
@@ -274,6 +275,16 @@ function Station({ onSignOut }: { onSignOut: () => void }) {
             onChange={(e) => { const f = (e.target as HTMLInputElement).files; if (f) void doUpload(f); }}
           />
         </div>
+
+        {/* F149.7 — «Indsæt tekst», samme komponent som admin bruger, så de to
+            flader ikke kan drive fra hinanden. force=false: en indsat note er
+            aldrig en dublet (filnavnet bærer et tidsstempel), så dedup-dialogen
+            er ikke relevant her. */}
+        <PasteSource
+          upload={(file) => uploadSource(kbId, file, false)}
+          onSaved={() => void refresh(kbId)}
+          testidPrefix="ingest-paste"
+        />
 
         {/* Awaiting-session banner (F191.4) */}
         {awaiting.length > 0 && (
