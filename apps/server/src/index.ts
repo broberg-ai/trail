@@ -26,6 +26,7 @@ import { backfillReferences, startReferenceExtractor } from './services/referenc
 import { backfillBacklinks, startBacklinkExtractor } from './services/backlink-extractor.js';
 import { backfillLinkCheck, startLinkChecker } from './services/link-checker.js';
 import { startLintScheduler } from './services/lint-scheduler.js';
+import { startIndexScheduler } from './services/index-scheduler.js';
 import { startConfidenceDecay } from './services/confidence-decay.js';
 import { startQueueBackfill } from './services/queue-backfill.js';
 import { startActionRecommender, backfillRecommendations } from './services/action-recommender.js';
@@ -193,6 +194,10 @@ for (const [slug, db] of tenantPool) {
 
   // F32.2 — scheduled dreaming pass (orphans+stale + contradictions).
   serviceStops.push(startLintScheduler(db));
+
+  // F254.1 — hold vektorerne i takt med teksten. Kun for videnbaser med
+  // hybrid slået til, så et slukket flag også betyder ingen regning.
+  serviceStops.push(startIndexScheduler(db));
 
   // F182.3 — nightly confidence-decay pass (pure math, no LLM).
   serviceStops.push(startConfidenceDecay(db));
