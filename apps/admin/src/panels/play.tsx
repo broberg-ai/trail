@@ -301,6 +301,10 @@ export function PlayPanel() {
         {SECTIONS.map((s) => (
           <button
             key={s.id}
+            // F257.4 — Lens skal kunne KLIKKE fanen for at nå sektionen bagved.
+            // Uden en stabil markør måtte kørslen ramme knappen på sin TEKST, og
+            // så knækker verifikationen den dag etiketten omskrives.
+            data-testid={`play-tab-${s.id}`}
             onClick={() => setActive(s.id)}
             class={
               'px-3 py-2 text-sm font-medium transition border-b-2 -mb-px ' +
