@@ -21,6 +21,7 @@ import type {
 } from '@trail/shared';
 import { redactSecrets } from '@trail/shared';
 import { slugify } from '../slug.js';
+import { neuronTitel } from './neuron-name.js';
 import { shouldAutoApprove, shouldAutoReject } from './policy.js';
 
 /**
@@ -803,8 +804,12 @@ async function approveCreate(
     );
   }
   const content = contentScan.redacted;
+  // F256 — en STI må aldrig blive til et filnavn. Sendte kompileringen den
+  // fulde sti som titel, gjorde slugify hele stien til ét navn, og hvert
+  // [[link]] til Neuronen pegede derefter på ingenting. Se neuron-name.ts.
+  const visningsTitel = neuronTitel(candidate.title, content);
   const rawName =
-    payload.filename ?? op.filename ?? slugify(candidate.title) ?? 'untitled';
+    payload.filename ?? op.filename ?? slugify(visningsTitel) ?? 'untitled';
   const filename = rawName.endsWith('.md') ? rawName : `${rawName}.md`;
   const pathIn = payload.filename
     ? payload.path ?? '/neurons/queries/'
@@ -848,7 +853,7 @@ async function approveCreate(
     await tx
       .update(documents)
       .set({
-        title: candidate.title,
+        title: visningsTitel,
         content,
         fileSize: content.length,
         status: 'ready',
@@ -896,7 +901,7 @@ async function approveCreate(
       userId: actor.kind === 'user' ? actor.id : candidate.createdBy ?? actor.id,
       kind: docKind,
       filename,
-      title: candidate.title,
+      title: visningsTitel,
       path,
       fileType: 'md',
       fileSize: content.length,

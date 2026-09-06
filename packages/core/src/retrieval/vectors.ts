@@ -139,7 +139,8 @@ export async function coverage(
     `SELECT
        (SELECT COUNT(*) FROM document_chunks c
           JOIN documents d ON d.id = c.document_id
-         WHERE c.tenant_id = ? AND c.knowledge_base_id = ? AND d.archived = 0) AS chunks,
+         WHERE c.tenant_id = ? AND c.knowledge_base_id = ? AND d.archived = 0
+           AND d.kind = 'wiki') AS chunks,
        (SELECT COUNT(*) FROM document_chunks c JOIN chunk_embeddings e ON e.chunk_id = c.id
          WHERE c.tenant_id = ? AND c.knowledge_base_id = ? AND e.model = ?)    AS with_any,
        (SELECT COUNT(*) FROM document_chunks c JOIN chunk_embeddings e ON e.chunk_id = c.id
@@ -199,7 +200,11 @@ export async function loadVectors(
        FROM chunk_embeddings e
        JOIN documents d ON d.id = e.document_id
       WHERE e.tenant_id = ? AND e.knowledge_base_id = ? AND e.model = ?
-        AND d.archived = 0`,
+        AND d.archived = 0
+        -- F254.7 — læsesiden skal være rigtig MED DET SAMME. Oprydningen af
+        -- gamle kilde-vektorer tager en fejning; uden dette filter ville
+        -- råmateriale blive ved med at dukke op i søgningen imens.
+        AND d.kind = 'wiki'`,
     [tenantId, knowledgeBaseId, model],
   )).rows as Array<{ chunkId: string; documentId: string; vector: Uint8Array }>;
   return rows.map((r) => ({

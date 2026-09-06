@@ -112,7 +112,7 @@ async function stale(
        FROM document_chunks c
        LEFT JOIN chunk_embeddings e ON e.chunk_id = c.id AND e.model = ?
        JOIN documents d ON d.id = c.document_id
-      WHERE c.tenant_id = ? AND d.archived = 0 ${filter}`,
+      WHERE c.tenant_id = ? AND d.archived = 0 AND d.kind = 'wiki' ${filter}`,
     args as string[],
   )).rows as Array<{ id: string; content: string; documentId: string; knowledgeBaseId: string; h: string | null }>;
 
@@ -176,6 +176,7 @@ export async function sweepKb(
   opts: { max?: number; onProgress?: (done: number, total: number, cents: number) => void } = {},
 ): Promise<IndexResult & {
   coverageAfter: number;
+  kildeVektorerFjernet: number;
   backfilledDocuments: number;
   backfilledChunks: number;
   byKind: Record<string, { chunks: number; embedded: number }>;
@@ -216,9 +217,26 @@ export async function sweepKb(
     opts.onProgress?.(gjort, rows.length, costCents);
   }
 
+  // F254.7 — ejeren 6/9: «det er ikke kildematerialet der skal indekseres og
+  // embeddes, det er Neurons». Kilder er KUN råmateriale til at skabe Neuroner.
+  //
+  // Oprydningen ligger i FEJEREN og ikke i et engangs-script: et script rydder
+  // ÉN gang og efterlader mekanismen der genskabte problemet. En fejer der
+  // spørger basen kan ikke narres af en fremtidig kodesti der glemmer reglen.
+  const ryddet = await db.execute(
+    `DELETE FROM chunk_embeddings
+      WHERE tenant_id = ? AND knowledge_base_id = ?
+        AND chunk_id IN (
+          SELECT c.id FROM document_chunks c
+            JOIN documents d ON d.id = c.document_id
+           WHERE c.knowledge_base_id = ? AND d.kind <> 'wiki')`,
+    [tenantId, knowledgeBaseId, knowledgeBaseId],
+  );
+
   const cov = await coverage(db, tenantId, knowledgeBaseId);
   return {
     chunks: rows.length, embedded, skipped, costCents, inputTokens,
+    kildeVektorerFjernet: Number(ryddet.rowsAffected ?? 0),
     ...(errors.length > 0 ? { errors } : {}),
     backfilledDocuments: bagfyldt.documents,
     backfilledChunks: bagfyldt.chunks,
