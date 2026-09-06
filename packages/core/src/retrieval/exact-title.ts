@@ -40,6 +40,24 @@ export interface ExactTitleHit {
  * én ville skjule den anden. En dublet skal kunne SES, ikke skjules af et
  * valg vi traf på brugerens vegne.
  */
+/**
+ * F262.4 — VED SAMME NAVN VINDER ENTITETEN.
+ *
+ * To Neuroner kan lovligt hedde præcis det samme:
+ *
+ *   /neurons/entities/christian-broberg.md   9.357 tegn   type: entity
+ *   /neurons/sources/christian-broberg.md    5.431 tegn   type: source
+ *
+ * Det er den designede tolags-form, ikke en fejl — en kilde-Neuron pr. indlæst
+ * kilde plus entiteten der samler dem. Ejeren, 6/9, ordret: «jeg har aldrig
+ * sagt at kilde neurons ikke må i hjernen». Og kompileringen gjorde sit
+ * arbejde: entiteten blev opdateret fem sekunder efter kilde-Neuronen og har
+ * absorberet alt det nye. Målt, ikke antaget.
+ *
+ * Der er derfor intet at slette. Der manglede kun en regel for hvem af de to
+ * der er svaret på navnet — og det er entiteten: den samler ALLE kilder om
+ * personen, mens kilde-Neuronen kun dækker én indlæsning.
+ */
 export async function exactTitleMatches(
   db: TrailDatabase,
   tenantId: string,
@@ -59,7 +77,8 @@ export async function exactTitleMatches(
         AND kind = 'wiki'
         AND archived = 0
         AND LOWER(TRIM(title)) = LOWER(?)
-      ORDER BY updated_at DESC
+      ORDER BY CASE WHEN path LIKE '/neurons/entities/%' THEN 0 ELSE 1 END,
+               updated_at DESC
       LIMIT ?`,
     [tenantId, knowledgeBaseId, q, limit],
   )).rows as Array<{ id: string; title: string; filename: string; path: string }>;

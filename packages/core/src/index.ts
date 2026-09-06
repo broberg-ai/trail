@@ -123,7 +123,7 @@ export {
 } from './retrieval/vectors.js';
 export type { EmbeddingRow } from './retrieval/vectors.js';
 export { reciprocalRankFusion, RRF_K } from './retrieval/fusion.js';
-export { rangerKandidater, type RangerArgs } from './retrieval/rangering.js';
+export { rangerKandidater, ordnCitater, type RangerArgs } from './retrieval/rangering.js';
 export type { Ranked, FusedHit } from './retrieval/fusion.js';
 export * from './queue/neuron-name.js';
 export * from './retrieval/exact-title.js';

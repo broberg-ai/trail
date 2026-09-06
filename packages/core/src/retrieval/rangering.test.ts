@@ -96,3 +96,36 @@ test('input muteres ikke', () => {
   rangerKandidater(ind, { præcise: new Set(['z']), ord: d('x', 'y', 'z'), vektor: [] });
   expect(ids(ind)).toEqual(['x', 'y', 'z']);
 });
+
+// ── F262.4 — citaternes rækkefølge ──────────────────────────────────────────
+
+import { ordnCitater } from './rangering.js';
+
+const c = (...ids: string[]) => ids.map((documentId) => ({ documentId }));
+const cids = (r: { documentId: string }[]) => r.map((x) => x.documentId);
+
+test('citater lægges i rangeringens rækkefølge, ikke fundrækkefølgen', () => {
+  // Præcis den målte situation: stump-træffene fandtes først, det rigtige
+  // dokument stod som nr. 4.
+  const fundet = c('airina', 'aidan', 'log', 'cv-christian');
+  const rang = new Map([['cv-christian', 0], ['log', 1], ['airina', 2], ['aidan', 3]]);
+  expect(cids(ordnCitater(fundet, rang))).toEqual(['cv-christian', 'log', 'airina', 'aidan']);
+});
+
+test('et citat UDEN plads i rangeringen lander bagest', () => {
+  const rang = new Map([['b', 0]]);
+  expect(cids(ordnCitater(c('urangeret', 'b'), rang))).toEqual(['b', 'urangeret']);
+});
+
+test('flere urangerede beholder deres indbyrdes orden', () => {
+  // Stabil sortering. Uden den ville et billedes adopterede forælder kunne
+  // hoppe rundt mellem to ellers identiske svar.
+  const rang = new Map([['b', 0]]);
+  expect(cids(ordnCitater(c('x', 'y', 'b', 'z'), rang))).toEqual(['b', 'x', 'y', 'z']);
+});
+
+test('input muteres ikke', () => {
+  const ind = c('p', 'q');
+  ordnCitater(ind, new Map([['q', 0]]));
+  expect(cids(ind)).toEqual(['p', 'q']);
+});

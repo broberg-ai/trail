@@ -95,3 +95,11 @@ test('ingen af ruterne har sin EGEN fletning ved siden af', () => {
   expect(udenKommentarer()).not.toContain('reciprocalRankFusion(');
   expect(søgeruten).not.toContain('reciprocalRankFusion(');
 });
+
+test('chatten ordner sine citater — den fælles funktion, ikke en egen sort', () => {
+  // Opførslen er prøvet i rangering.test.ts. Det her er kun ledningen: at
+  // chatten ikke går uden om og sorterer citaterne på sin egen måde.
+  const kode = udenKommentarer();
+  expect(kode).toContain('ordnCitater(');
+  expect(kode).not.toContain('citations.sort(');
+});

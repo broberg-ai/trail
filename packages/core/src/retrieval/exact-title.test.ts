@@ -16,12 +16,12 @@ const dir = mkdtempSync(join(tmpdir(), 'f261-'));
 let db: TrailDatabase;
 const T = 't-1', KB = 'kb-1';
 
-async function nyt(id: string, titel: string, o: { kind?: string; archived?: number; kb?: string; tid?: string } = {}) {
+async function nyt(id: string, titel: string, o: { kind?: string; archived?: number; kb?: string; tid?: string; sti?: string } = {}) {
   await db.execute(
     `INSERT INTO documents (id, tenant_id, knowledge_base_id, user_id, filename, file_type, path,
                             title, content, kind, archived, created_at, updated_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [id, T, o.kb ?? KB, 'u-1', `${id}.md`, 'md', '/neurons/entities/', titel, 'krop',
+    [id, T, o.kb ?? KB, 'u-1', `${id}.md`, 'md', o.sti ?? '/neurons/entities/', titel, 'krop',
      o.kind ?? 'wiki', o.archived ?? 0, '2026-01-01', o.tid ?? '2026-01-01'],
   );
 }
@@ -89,4 +89,37 @@ test('FLERE med samme titel returneres ALLE, nyeste først', async () => {
 test('tomt eller absurd langt opslag er ikke et navn', async () => {
   expect(await exactTitleMatches(db, T, KB, '   ')).toEqual([]);
   expect(await exactTitleMatches(db, T, KB, 'x'.repeat(201))).toEqual([]);
+});
+
+
+/**
+ * F262.4 — VED PRÆCIS SAMME TITEL VINDER ENTITETEN.
+ *
+ * Målt i drift: `/neurons/entities/christian-broberg.md` (9.357 tegn) og
+ * `/neurons/sources/christian-broberg.md` (5.431 tegn) hedder begge præcis
+ * «Christian Broberg». Det er den designede tolags-form, ikke en fejl — så
+ * ingen af dem må forsvinde. Der manglede kun en regel for hvem der er svaret
+ * på navnet, og det er entiteten: den samler ALLE kilder om personen.
+ */
+test('entiteten ligger før kilde-Neuronen når begge hedder det samme', async () => {
+  // Kilde-Neuronen får NYEST tidsstempel med vilje. Uden sti-præferencen ville
+  // «updated_at DESC» lægge den øverst — så prøven kan ikke bestå ved et
+  // tilfælde af indsætnings-rækkefølgen.
+  await nyt('e-ent', 'Flåden der bygger', { sti: '/neurons/entities/', tid: '2026-09-01' });
+  await nyt('e-src', 'Flåden der bygger', { sti: '/neurons/sources/', tid: '2026-09-06' });
+
+  const r = await exactTitleMatches(db, T, KB, 'Flåden der bygger');
+  expect(r.map((x) => x.id)).toEqual(['e-ent', 'e-src']);
+  // BEGGE er stadig med. Præferencen er en RANGERING, ikke en udelukkelse —
+  // kilde-Neuronen er en lovlig del af hjernen og må ikke forsvinde.
+  expect(r).toHaveLength(2);
+});
+
+test('NEGATIV KONTROL: to kilde-Neuroner indbyrdes sorteres stadig på tid', async () => {
+  // Uden den kunne «entitet først» være implementeret som «alfabetisk på sti»
+  // og se rigtig ud på prøven ovenfor.
+  await nyt('s-gammel', 'Kompilér-arkitektur', { sti: '/neurons/sources/', tid: '2026-08-01' });
+  await nyt('s-ny', 'Kompilér-arkitektur', { sti: '/neurons/sources/', tid: '2026-09-05' });
+  const r = await exactTitleMatches(db, T, KB, 'Kompilér-arkitektur');
+  expect(r.map((x) => x.id)).toEqual(['s-ny', 's-gammel']);
 });

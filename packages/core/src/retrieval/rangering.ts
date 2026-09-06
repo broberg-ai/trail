@@ -68,3 +68,28 @@ export function rangerKandidater<T extends { id: string }>(
     return args.reserve ? args.reserve(a, b) : 0;
   });
 }
+
+/**
+ * F262.4 — læg citaterne i rangeringens rækkefølge.
+ *
+ * Chatten skriver et citat i den rækkefølge løkkerne kører: først hvert
+ * tekststump-træf, så hvert dokument-træf. Det er FUNDRÆKKEFØLGEN, ikke
+ * relevans. Målt 6/9 på produktion stod betydnings-søgningens nr. 1 som
+ * kilde nr. 8, under seks Neuroner der bare delte et ord med spørgsmålet.
+ *
+ * Citaterne er den eneste måde ejeren kan kontrollere OM chatten svarer fra
+ * hjernen — en kildeliste der leder med det forkerte, ser ud som om den ikke
+ * fandt det rigtige, også når svaret er korrekt.
+ *
+ * Et dokument UDEN plads i rangeringen (fx en forælder adopteret for et
+ * billedes skyld) lander bagest med sin indbyrdes orden i behold. Sorteringen
+ * er stabil, så det er en tilføjelse til rækkefølgen, ikke en omrokade.
+ */
+export function ordnCitater<T extends { documentId: string }>(
+  citater: readonly T[],
+  rang: ReadonlyMap<string, number>,
+): T[] {
+  return [...citater].sort((a, b) =>
+    (rang.get(a.documentId) ?? Number.MAX_SAFE_INTEGER) -
+    (rang.get(b.documentId) ?? Number.MAX_SAFE_INTEGER));
+}

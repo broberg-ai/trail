@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { vectorSearch, hybridEnabled } from '../services/hybrid-search.js';
-import { rangerKandidater } from '@trail/core';
+import { rangerKandidater, ordnCitater } from '@trail/core';
 import {
   documents,
   documentImages,
@@ -610,6 +610,18 @@ async function retrieveContext(
 ): Promise<{ context: string; citations: Citation[]; images: ChatImage[] }> {
   const chunks: string[] = [];
   const citations: Citation[] = [];
+  // F262.4 — CITATERNES RÆKKEFØLGE ER RANGERINGEN, IKKE FUNDRÆKKEFØLGEN.
+  //
+  // Citaterne blev skrevet i den rækkefølge løkkerne kører: først hvert
+  // tekststump-træf, så hvert dokument-træf. Målt 6/9 på produktion betyder
+  // det at «Hvem er grundlæggeren» leder med airina.md og aidan.md, mens
+  // cv-christian-broberg-danish.md — betydnings-søgningens nr. 1 — står som
+  // nr. 8. Svaret var rigtigt; kildelisten så ud som om den ikke fandt ham.
+  //
+  // Det er ikke kosmetik: citaterne er den ENESTE måde ejeren kan kontrollere
+  // om chatten svarer fra hjernen. Samme fejlform som F261.3 et lag længere
+  // ude — dengang manglede citatet, nu står det bare det forkerte sted.
+  const citatRang = new Map<string, number>();
   const seen = new Set<string>();
   let totalChars = 0;
   const MAX_CHARS = 30_000;
@@ -789,6 +801,24 @@ async function retrieveContext(
         reserve: (a, b) => confidenceOf(confMap, b.id) - confidenceOf(confMap, a.id),
       },
     );
+
+    // Rangeringen der også skal styre CITATERNE. Kandidaterne er hvert
+    // dokument der overhovedet kan blive citeret i denne videnbase — både dem
+    // ordmatchningen fandt på dokument-niveau, og dem den kun fandt gennem en
+    // enkelt tekststump. Ordmatchningens to slags evidens lægges i ÉN liste med
+    // dokument-træffene først: at hele Neuronen matcher er et stærkere signal
+    // end at én passage gør. Fletningen tæller første forekomst, så et dokument
+    // der optræder begge steder scorer én gang.
+    const stumpForlældre = chunkHits.filter((h) => h.kind === 'wiki').map((h) => ({ id: h.documentId }));
+    const alleKandidater = [...new Set([...docHits.map((h) => h.id), ...stumpForlældre.map((h) => h.id)])].map((id) => ({ id }));
+    for (const k of rangerKandidater(alleKandidater, {
+      præcise: præciseIds,
+      ord: [...ordRang, ...stumpForlældre],
+      vektor: vektorIds.map((id) => ({ id })),
+      reserve: (a, b) => confidenceOf(confMap, b.id) - confidenceOf(confMap, a.id),
+    })) {
+      if (!citatRang.has(k.id)) citatRang.set(k.id, citatRang.size);
+    }
 
     // Fetch CONTENT for the ranked Neurons whose CHUNKS didn't make the cut, so
     // the cited Neuron's actual text reaches the model — not just a citation
@@ -999,7 +1029,10 @@ async function retrieveContext(
     context += `\n\n---\n\n### Available images in this Trail (you MAY reference them)\n${block}`;
   }
 
-  return { context, citations, images };
+  // Citaterne står nu i rangeringens rækkefølge. Dokumenter uden en plads
+  // (adopterede forældre til et billede, fx) beholder deres indbyrdes orden og
+  // lander bagest — stabil sortering, så det er en tilføjelse, ikke en omrokade.
+  return { context, citations: ordnCitater(citations, citatRang), images };
 }
 
 /**
