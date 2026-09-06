@@ -110,6 +110,23 @@ function skemaVersion(): string {
     .slice(0, 16);
 }
 
+/** De otte objekter skemaet består af: to tabeller og seks triggere. */
+const FTS_OBJEKTER = [
+  'documents_fts',
+  'chunks_fts',
+  'documents_ai',
+  'documents_au',
+  'documents_ad',
+  'chunks_ai',
+  'chunks_au',
+  'chunks_ad',
+];
+
+/** Sammenlign SQL uden at hænge på mellemrum og linjeskift. */
+function normalisér(sql: string): string {
+  return sql.replace(/\s+/g, ' ').replace(/;\s*$/, '').trim();
+}
+
 /** Findes BEGGE FTS-tabeller? En version-række alene beviser ingenting. */
 async function tabellerFindes(client: LibSqlClient): Promise<boolean> {
   const r = await client.execute(
@@ -117,6 +134,48 @@ async function tabellerFindes(client: LibSqlClient): Promise<boolean> {
       WHERE type = 'table' AND name IN ('documents_fts', 'chunks_fts')`,
   );
   return Number((r.rows[0] as unknown as { n: number | bigint }).n) === 2;
+}
+
+/**
+ * F259.3 — BÆRER BASEN ALLEREDE PRÆCIS DETTE SKEMA?
+ *
+ * Findes alle otte objekter, og er deres GEMTE SQL identisk med vores DDL, så
+ * er indekset bygget af netop dette skema og holdt i takt af netop disse
+ * triggere. Så er en genopbygning arbejde uden virkning, og vi kan nøjes med
+ * at stemple versionen.
+ *
+ * Det er ikke en optimering — det er den eneste vej ud af en fælde vi selv
+ * gravede: broberg-ais engangs-genopbygning tager 278s og rammer sqld's
+ * timeout, så versionen blev aldrig skrevet, så næste opstart genopbyggede
+ * igen. Et fix der kun virker EFTER en genopbygning der aldrig kan lykkes,
+ * virker aldrig.
+ *
+ * Vi sammenligner med basens EGEN gemte SQL, ikke kun med vores egen tekst:
+ * spørgsmålet er hvad databasen faktisk bærer, ikke hvad vi tror vi sendte.
+ */
+async function skemaErAlleredeKorrekt(client: LibSqlClient): Promise<boolean> {
+  const r = await client.execute({
+    sql: `SELECT name, sql FROM sqlite_master WHERE name IN (${FTS_OBJEKTER.map(() => '?').join(',')})`,
+    args: FTS_OBJEKTER,
+  });
+  const fundet = new Map<string, string>();
+  for (const row of r.rows as unknown as Array<{ name: string; sql: string | null }>) {
+    if (row.sql) fundet.set(row.name, normalisér(row.sql));
+  }
+  if (fundet.size !== FTS_OBJEKTER.length) return false;
+
+  const vores = new Map<string, string>();
+  for (const blok of [CREATE_DOCUMENTS_FTS, CREATE_CHUNKS_FTS, DOCUMENTS_TRIGGERS, CHUNKS_TRIGGERS]) {
+    for (const sætning of blok.split(/;\s*(?=CREATE|$)/)) {
+      const m = /CREATE (?:VIRTUAL TABLE|TRIGGER)\s+(\w+)/i.exec(sætning);
+      if (m) vores.set(m[1]!, normalisér(sætning));
+    }
+  }
+
+  for (const navn of FTS_OBJEKTER) {
+    if (fundet.get(navn) !== vores.get(navn)) return false;
+  }
+  return true;
 }
 
 export async function initFTS(client: LibSqlClient): Promise<void> {
@@ -137,6 +196,13 @@ export async function initFTS(client: LibSqlClient): Promise<void> {
     // BEGGE betingelser. En version-række uden tabeller ville ellers springe
     // opbygningen over og efterlade en base hvor enhver søgning fejler.
     if (nu?.version === ønsket && (await tabellerFindes(client))) return;
+
+    // Intet stempel, men basen bærer allerede præcis dette skema — overtag
+    // det i stedet for at bygge det forfra.
+    if (await skemaErAlleredeKorrekt(client)) {
+      await stemplVersion(client, ønsket);
+      return;
+    }
   }
 
   await client.executeMultiple(DROP_ALL);
@@ -146,9 +212,13 @@ export async function initFTS(client: LibSqlClient): Promise<void> {
   await client.executeMultiple(CHUNKS_TRIGGERS);
   await client.execute(`INSERT INTO documents_fts(documents_fts) VALUES('rebuild');`);
   await client.execute(`INSERT INTO chunks_fts(chunks_fts) VALUES('rebuild');`);
+  await stemplVersion(client, ønsket);
+}
+
+async function stemplVersion(client: LibSqlClient, version: string): Promise<void> {
   await client.execute({
     sql: `INSERT INTO fts_schema (id, version) VALUES (1, ?)
             ON CONFLICT(id) DO UPDATE SET version = excluded.version`,
-    args: [ønsket],
+    args: [version],
   });
 }

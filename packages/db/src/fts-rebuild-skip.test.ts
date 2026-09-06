@@ -82,15 +82,41 @@ test('POSITIV KONTROL: en tvungen genopbygning fejer spøgelset væk', async () 
   ryd();
 });
 
-test('ændret skema genopbygger', async () => {
+test('ÆGTE skema-afvigelse genopbygger — en manglende trigger', async () => {
+  // Skemaet i basen afviger nu FAKTISK fra vores DDL. Det er den tilstand der
+  // skal udløse en genopbygning — ikke et tal i en versions-kolonne.
   const db = await nyBase();
   await lægSpøgelse(db);
-  // Simulér at DDL'en har ændret sig: versionen i basen er en anden.
-  await db.execute(`UPDATE fts_schema SET version = 'en-helt-anden-version' WHERE id = 1`);
+  await db.execute(`DROP TRIGGER documents_au`);
+  await db.execute(`UPDATE fts_schema SET version = 'gammel' WHERE id = 1`);
 
   await db.initFTS();
 
   expect(await spøgelsetFindes(db)).toBe(false);
+  const r = await db.execute(
+    `SELECT COUNT(*) AS n FROM sqlite_master WHERE name = 'documents_au'`,
+  );
+  expect(Number((r.rows[0] as unknown as { n: number | bigint }).n)).toBe(1); // genskabt
+  await db.close();
+  ryd();
+});
+
+test('OVERTAGELSE: et korrekt skema uden versions-stempel genopbygges IKKE', async () => {
+  // Fælden vi selv gravede i produktion: broberg-ais engangs-genopbygning tog
+  // 278s og ramte sqld's timeout, så versionen aldrig blev skrevet, så næste
+  // opstart genopbyggede igen. Et fix der først virker EFTER en genopbygning
+  // der aldrig kan lykkes, virker aldrig. Bærer basen allerede præcis dette
+  // skema, stemples versionen og indekset står urørt.
+  const db = await nyBase();
+  await lægSpøgelse(db);
+  await db.execute(`DELETE FROM fts_schema`); // som en base der aldrig har set F259.2
+
+  await db.initFTS();
+
+  expect(await spøgelsetFindes(db)).toBe(true); // ikke genopbygget
+  const r = await db.execute(`SELECT version FROM fts_schema WHERE id = 1`);
+  const v = (r.rows[0] as unknown as { version: string } | undefined)?.version;
+  expect((v ?? '').length).toBe(16); // og stemplet, så næste opstart springer over
   await db.close();
   ryd();
 });
@@ -127,9 +153,8 @@ test('versionen skrives ned, så næste opstart kan springe over', async () => {
 test('søgningen virker stadig efter et spring', async () => {
   // Springet må ikke være grønt på bekostning af det indekset findes til.
   const db = await nyBase();
-  await db.execute(`UPDATE fts_schema SET version = 'tving-genopbygning' WHERE id = 1`);
   await db.initFTS();
-  await db.initFTS(); // nu springer den over
+  await db.initFTS(); // springer over
   const r = await db.execute(
     `SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'documents_fts'`,
   );
