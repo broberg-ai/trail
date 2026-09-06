@@ -68,3 +68,56 @@ export function isVisibleToAudience(
   }
   return true;
 }
+
+/**
+ * F255 — DET EFFEKTIVE PUBLIKUM. Kalderen må INDSNÆVRE, aldrig UDVIDE.
+ *
+ * MÅLT I PRODUKTION 6/9 2026, samme bearer-nøgle, samme søgning, samme minut:
+ *
+ *   mål: /neurons/heuristics/trail.md — skjult for 'tool' pr. design
+ *     standard (ingen parameter)  → heuristik-dokument i svaret:  nej
+ *     ?audience=tool              → heuristik-dokument i svaret:  nej
+ *     ?audience=curator           → heuristik-dokument i svaret:  JA
+ *
+ * De to første linjer er kontrollen: filteret VIRKER. Den tredje er fejlen:
+ * kalderen kunne slukke det.
+ *
+ * ÅRSAGEN VAR ÉN OPERATOR. Kaldestederne skrev
+ *
+ *     parseAudienceParam(raw) ?? defaultAudienceForAuth(authType)
+ *
+ * og `defaultAudienceForAuth` er det ENESTE sted der ved hvem kalderen er. Med
+ * `??` kører den kun når kalderen intet har sagt — altså blev autentificeringen
+ * sprunget over præcis når nogen bad om mere end de måtte. Det læser som «brug
+ * standarden hvis intet er angivet» og betyder «kalderens ønske vinder».
+ *
+ * Samme fejlform som resten af døgnet, nu i en spærre: EN MANGLENDE VÆRDI
+ * DEGRADERER TAVST TIL DET MEST GENERØSE UDFALD. Ingen fejl, ingen log, intet
+ * der ser forkert ud — svaret er bare større.
+ *
+ * Parameteren beholdes, for indsnævring er en ægte funktion: en kurator i admin
+ * vil kunne se HVAD EN EKSTERN KALDER SER uden at logge ud og hente en nøgle.
+ *
+ *                 ønsket: tool      ønsket: curator
+ *   session       tool (lovlig)     curator
+ *   bearer        tool              tool   ← afvist eskalering
+ *
+ * INGEN 4xx VED ESKALERING. Anmodningen betjenes med den snævre visning. En
+ * fejlkode ville lække at der ER noget mere at se.
+ */
+
+/** Hvor meget hvert publikum må se. Højere tal = bredere adgang. */
+const BREDDE: Record<Audience, number> = { public: 0, tool: 0, curator: 1 };
+
+export function effectiveAudience(
+  authType: 'bearer' | 'session' | undefined,
+  requested: string | undefined | null,
+): Audience {
+  const loft = defaultAudienceForAuth(authType);
+  const ønsket = parseAudienceParam(requested);
+  if (!ønsket) return loft;
+  // Er ønsket bredere end loftet, vinder loftet. Ellers kalderens ønske —
+  // `public` og `tool` filtrerer ens i dag, men er forskellige på
+  // chat-prompt-niveau, så et ønske MELLEM dem må ikke omskrives.
+  return BREDDE[ønsket] > BREDDE[loft] ? loft : ønsket;
+}

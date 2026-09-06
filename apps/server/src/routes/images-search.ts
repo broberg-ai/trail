@@ -24,8 +24,7 @@ import { and, eq } from 'drizzle-orm';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
 import { resolveKbId } from '@trail/core';
 import {
-  parseAudienceParam,
-  defaultAudienceForAuth,
+  effectiveAudience,
   isVisibleToAudience,
   type Audience,
 } from '../services/audience.js';
@@ -45,9 +44,8 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images', async (c) => {
 
   const query = (c.req.query('q') ?? '').trim();
   const limit = Math.min(Number(c.req.query('limit') ?? 20), HARD_LIMIT_CAP);
-  const audience: Audience =
-    parseAudienceParam(c.req.query('audience')) ??
-    defaultAudienceForAuth(c.get('authType'));
+  // F255 — kalderen må INDSNÆVRE, aldrig UDVIDE. Se effectiveAudience.
+  const audience: Audience = effectiveAudience(c.get('authType'), c.req.query('audience'));
   // F163 — optional per-source filter for the image-gallery panel.
   const docIdFilter = c.req.query('docId') ?? null;
   // F163.2 — flag-status filter. 'any' = auto OR curator-flagged,
@@ -375,9 +373,8 @@ imagesSearchRoutes.get('/knowledge-bases/:kbId/images/sources', async (c) => {
 
   // Audience-filter parent doc — heuristic / internal Neuron images are
   // hidden from non-curator audiences. (Curator default for the gallery.)
-  const audience: Audience =
-    parseAudienceParam(c.req.query('audience')) ??
-    defaultAudienceForAuth(c.get('authType'));
+  // F255 — kalderen må INDSNÆVRE, aldrig UDVIDE. Se effectiveAudience.
+  const audience: Audience = effectiveAudience(c.get('authType'), c.req.query('audience'));
 
   const sources = (result.rows as Array<Record<string, unknown>>)
     .filter((row) =>

@@ -26,8 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { runChat, buildSystemPrompt, type PriorTurn } from '../services/chat/index.js';
 import { consumeCredits } from '../services/credits.js';
 import {
-  parseAudienceParam,
-  defaultAudienceForAuth,
+  effectiveAudience,
   type Audience,
 } from '../services/audience.js';
 import { stripForAudience } from '../services/chat/postprocess.js';
@@ -181,8 +180,10 @@ chatRoutes.post('/chat', async (c) => {
   // whether retrieveContext surfaces images. Compute it before
   // retrieval so the same value flows into both layers.
   const authType = c.get('authType');
-  const audience: Audience =
-    parseAudienceParam(body.audience ?? null) ?? defaultAudienceForAuth(authType);
+  // F255 — kalderen må INDSNÆVRE, aldrig UDVIDE. Aidan er den vigtigste af de
+  // fem kaldsteder: uden dette kunne en ekstern nøgle stille et spørgsmål med
+  // audience:'curator' og få interne Neuroner ind i SVARET, ikke bare i en liste.
+  const audience: Audience = effectiveAudience(authType, body.audience ?? null);
 
   const { context, citations, images } = await retrieveContext(
     trail,

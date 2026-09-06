@@ -6,8 +6,7 @@ import { parseTags, canonicaliseTag, parseSeqId, kbPrefix, redactSecrets, buildF
 import { resolveKbId, reciprocalRankFusion } from '@trail/core';
 import { vectorSearch, hybridEnabled } from '../services/hybrid-search.js';
 import {
-  parseAudienceParam,
-  defaultAudienceForAuth,
+  effectiveAudience,
   isVisibleToAudience,
   type Audience,
 } from '../services/audience.js';
@@ -30,8 +29,8 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
   // ?audience=. Garbage values silently fall back to default rather
   // than erroring — saves a round-trip when a typo'd param shows up.
   const authType = c.get('authType');
-  const audience: Audience =
-    parseAudienceParam(c.req.query('audience')) ?? defaultAudienceForAuth(authType);
+  // F255 — kalderen må INDSNÆVRE, aldrig UDVIDE. Se effectiveAudience.
+  const audience: Audience = effectiveAudience(authType, c.req.query('audience'));
   // F92 — repeated ?tag= params narrow the hit list to Neurons whose
   // `tags` column contains every tag (AND-semantics). Canonicalise
   // here so `Ops`, `ops`, and `OPS` all collapse to the same filter

@@ -97,7 +97,26 @@ nøgle.
 - **Ingen 4xx ved eskaleringsforsøg.** Anmodningen betjenes med den snævre
   visning. En fejl ville lække at der ER noget mere at se.
 
-## Omfang — hvor mange ruter
+## Omfang — FEM kaldsteder, ikke ét
 
-Tælles under implementeringen og skrives ind her før kortet lukkes. Kendt indtil
-videre: `apps/server/src/routes/search.ts`.
+Talt op, ikke gættet. `grep -rn "parseAudienceParam" apps/ packages/`:
+
+| fil | linje | hvad den betjener |
+|---|---|---|
+| `routes/search.ts` | 34 | søgningen — hvor fejlen blev fundet |
+| `routes/retrieve.ts` | 114 | SDK'ens genfindingslag |
+| `routes/chat.ts` | 185 | **Aidan** |
+| `routes/images-search.ts` | 49 | billedsøgning |
+| `routes/images-search.ts` | 379 | billed-kilder |
+
+**`chat.ts` er den alvorligste.** De øvrige fire udleverer en LISTE en kalder så
+selv skal læse. Chat-ruten fører publikummet videre ind i `retrieveContext`, så
+et internt Neuron ikke bare optræder i et svar — det bliver *formuleret ind i*
+det svar en besøgende på broberg.ai læser. Havde jeg kun rettet søgeruten, hvor
+jeg fandt fejlen, ville den værste vej være blevet stående.
+
+Det er hele grunden til at AC'et krævede en OPTÆLLING og ikke en rettelse: den
+rute jeg fandt fejlen på, var den mindst farlige af de fem.
+
+`routes/images.ts:78` kalder `defaultAudienceForAuth` direkte og læser **ingen**
+parameter. Den kan derfor ikke eskaleres og er med vilje urørt.

@@ -28,8 +28,7 @@ import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
 import { canonicaliseTag, parseTags, kbPrefix, buildFtsQuery } from '@trail/shared';
 import { resolveKbId, stripClaimAnchors } from '@trail/core';
 import {
-  parseAudienceParam,
-  defaultAudienceForAuth,
+  effectiveAudience,
   isVisibleToAudience,
   type Audience,
 } from '../services/audience.js';
@@ -110,9 +109,11 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
   }
 
   const authType = c.get('authType');
-  const audience: Audience =
-    parseAudienceParam(typeof body.audience === 'string' ? body.audience : null) ??
-    defaultAudienceForAuth(authType);
+  // F255 — kalderen må INDSNÆVRE, aldrig UDVIDE. Se effectiveAudience.
+  const audience: Audience = effectiveAudience(
+    authType,
+    typeof body.audience === 'string' ? body.audience : null,
+  );
 
   // Clamp numeric inputs into safe ranges. We don't 400 on out-of-band
   // values — better to silently honour the cap than make an integration
