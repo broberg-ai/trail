@@ -33,7 +33,7 @@ import {
   brokenLinks,
   type TrailDatabase,
 } from '@trail/db';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { slugify, normalizedSlug } from '@trail/shared';
 import { parseWikiLinks } from './backlink-extractor.js';
 import { broadcaster } from './broadcast.js';
@@ -330,6 +330,12 @@ export interface LinkCheckSummary {
   openRecorded: number;
   /** Total links that resolved successfully. */
   resolved: number;
+  /**
+   * F257.2 — fund lukket fordi deres KILDE-dokument er arkiveret. Tælles for
+   * sig, så «linket blev repareret» og «siden findes ikke længere» ikke ser
+   * ens ud i rapporten. To forskellige grunde til at et fund forsvinder.
+   */
+  arkivLukket?: number;
 }
 
 /**
@@ -364,7 +370,40 @@ export async function runFullLinkCheck(
     openRecorded += r.recorded;
     resolved += r.resolved;
   }
-  return { docsScanned: docs.length, openRecorded, resolved };
+
+  /**
+   * F257.2 — LUK FUND HVIS KILDE-DOKUMENT ER ARKIVERET.
+   *
+   * MÅLT 6/9 i broberg.ai: 42 af 178 åbne fund (24 %) kom fra arkiverede
+   * dokumenter. Ikke ét fra et aktivt.
+   *
+   * Løkken ovenfor scanner kun ikke-arkiverede — og det er RIGTIGT; arkiveret
+   * indhold skal ikke gen-evalueres. Men fundene fra dengang dokumentet var
+   * aktivt blev aldrig lukket, så de står åbne for evigt. Arkivér et dokument,
+   * og dets brudte links bliver til permanent inventar på en side ingen kan
+   * gøre færdig.
+   *
+   * Det er den mekanisme der får Link Check til at føles som et job der aldrig
+   * bliver færdigt: en fjerdedel af listen handler om sider der ikke er i
+   * basen længere.
+   *
+   * `status='resolved'` og ikke DELETE: rækken er dokumentation for at linket
+   * ENGANG var brudt. En sletning ville skjule at det nogensinde stod der.
+   */
+  const forældreløse = await trail.db.run(sql`
+    UPDATE broken_links
+       SET status = 'resolved'
+     WHERE tenant_id = ${tenantId}
+       AND knowledge_base_id = ${kbId}
+       AND status = 'open'
+       AND from_document_id IN (
+         SELECT id FROM documents
+          WHERE tenant_id = ${tenantId}
+            AND knowledge_base_id = ${kbId}
+            AND archived = 1)`);
+  const arkivLukket = Number(forældreløse.rowsAffected ?? 0);
+
+  return { docsScanned: docs.length, openRecorded, resolved: resolved + arkivLukket, arkivLukket };
 }
 
 /**
