@@ -13,7 +13,7 @@
  *    (`datetime('now')` i en Fly-container), og et klokkeslæt uden zone bliver
  *    læst i læserens egen — lydløst, og forkert i det vindue hvor ingen kigger.
  */
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 import {
   listBrainVersions,
@@ -65,9 +65,14 @@ export function BrainVersionsPanel() {
   }
   useEffect(() => { void load(); }, [kbId]);
 
+  // Timeren ryddes ved unmount OG ved næste toast — ellers kan en besked fra
+  // for fire sekunder siden slukke den der lige er kommet.
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
   function flash(msg: string) {
     setToast(msg);
-    setTimeout(() => setToast(null), 4000);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 4000);
   }
 
   async function handleTake() {
@@ -89,18 +94,30 @@ export function BrainVersionsPanel() {
     }
   }
 
+  /**
+   * Løbenummer, så et langsomt svar ikke kan lande oven på et nyere.
+   * Klikker man hurtigt på to versioner, ville modalen ellers kunne vise den
+   * ENE versions overskrift med den ANDENS tal — et tilsyneladende korrekt
+   * skærmbillede der beskriver noget andet end det man bad om.
+   */
+  const diffSeq = useRef(0);
+
   async function openDiff(v: BrainVersion) {
+    const seq = ++diffSeq.current;
     setDiffFor(v);
     setDiff(null);
     setResult(null);
     setLoadingDiff(true);
     try {
-      setDiff(await getBrainVersionDiff(v.id));
+      const d = await getBrainVersionDiff(v.id);
+      if (seq !== diffSeq.current) return; // et nyere klik har overhalet dette
+      setDiff(d);
     } catch (e) {
+      if (seq !== diffSeq.current) return;
       flash(`Kunne ikke beregne forskellen: ${(e as Error).message}`);
       setDiffFor(null);
     } finally {
-      setLoadingDiff(false);
+      if (seq === diffSeq.current) setLoadingDiff(false);
     }
   }
 
