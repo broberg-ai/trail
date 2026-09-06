@@ -41,12 +41,40 @@ bliver færdigt.
 `[[Ejer dine data]]` og beslutter så — helt legitimt, prompten siger «Ikke sider
 for trivielle begreber» — ikke at skrive den Neuron. Linket bliver stående.
 
-C er samme fejl en tak finere: den citerede **en lidt anden titel end den skrev**.
+### C målt ordentligt — og min første beskrivelse var forkert
+
+Jeg skrev først at C var «den citerede en lidt anden titel end den skrev», med
+ChatGPT-artiklen som eksempel. **Målt: de to Neuroner er skrevet TO TIMER fra
+hinanden**, altså i hver sit job. Det er ikke én kompilering der er uenig med
+sig selv; det er en artikel der blev omdøbt på sitet, kompileret igen under det
+nye navn, mens ældre Neuroner stadig citerer det gamle.
+
+Den rigtige opdeling af de nære match:
+
+| slags | eksempel | kan automatiseres? |
+|---|---|---|
+| **filnavn i link-teksten** | `[[Agentic CMS.md]]`, `[[/neurons/concepts/tags.md]]` | **ja** — samme regel som F256, på den anden side |
+| **sitets suffiks** | `[[Fire forretninger, én platform]]` → `…-broberg-ai` | **ja** — rent mekanisk |
+| stavefejl | `[[Digital marketsføring]]` → `markedsføring` | nej — foreslå |
+| bøjning | `[[Sanne Andersens]]` → `Sanne Andersen` | nej — foreslå |
+| ental/flertal | `[[Flagskibe]]` → `flagskib` | nej — foreslå |
+| forkortet titel | `[[ChatGPT … mandag]]` → `…-det-vigtigste` | nej — foreslå |
+
+**`[[Agentic CMS.md]]` er F256's fejl i link-teksten i stedet for i titlen.** Den
+er mekanisk og skal rettes ved kilden, ikke foreslås.
+
+### Og et bevis for hvorfor gætteriet ikke må automatiseres
+
+Min egen fuzzy-matcher, kørt over de 178 fund, parrede
 
 ```
-skrev:   «ChatGPT sælger annoncer fra på mandag — broberg.ai»
-citérede: «ChatGPT begynder at sælge annoncer på mandag — broberg.ai»
+[[/neurons/concepts/tags.md]]   →   neurons-concepts-flagskib-md
 ```
+
+**Forkert Neuron.** Havde drømmefasen anvendt det match, havde en påstand om
+tags fået en kilde-henvisning til flagskibe — og set rigtig ud. Det er ikke et
+tænkt eksempel; det er hvad matcheren faktisk gjorde på de rigtige data, første
+gang jeg kørte den.
 
 Begge er compile-side, og **de er hvor arbejdet skal stoppe med at opstå** — ikke
 hvor det skal ryddes op bagefter.
