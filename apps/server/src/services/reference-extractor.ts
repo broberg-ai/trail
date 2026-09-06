@@ -270,6 +270,57 @@ export async function backfillReferencesForKb(
 }
 
 /**
+ * F257.4 — REFERENCER FOR ÉN KILDE, ikke for hele videnbasen.
+ *
+ * MÅLT I PRODUKTION 6/9, og det er ejerens egen observation der fandt den:
+ * «den er utrolig langsom at hente hjem, har vi ikke power nok eller er koden
+ * bare ikke helt super?»
+ *
+ *     POST /documents/:id/local-compiled   →  500 efter 284 SEKUNDER
+ *     GET  /documents?awaitingLocalCompile →  200 efter 224 sekunder
+ *     GET  /api/health                     →  200 efter 0,2 sekunder
+ *
+ * Motoren var rask. Den lavede bare for meget arbejde.
+ *
+ * `backfillReferencesForKb` løber HVER wiki-Neuron i basen igennem — 250+ i
+ * broberg.ai — og henter for hver af dem HELE indholdet plus et kilde-opslag
+ * pr. frontmatter-kilde. Det kaldes ved HVER markering af en kompileret kilde.
+ * Femten kilder i træk = femten fulde gennemløb, og de serialiserer på
+ * databasens skrivelås. Fejlen i loggen er en opdatering af ÉN række på
+ * primærnøglen der venter 284 sekunder på en lås.
+ *
+ * DET SKALERER MED PRODUKTETS SUCCES: en tom base er hurtig, en base i brug er
+ * kvadratisk. Præcis den slags der føles fin i udvikling og bliver værre jo
+ * mere kunden bruger den.
+ *
+ * KUN DE NEURONER DER KUNNE CITERE DENNE KILDE. En Neuron nævner sin kilde i
+ * frontmatterens `sources: [...]`, altså i sin tekst. Ét SELECT med LIKE finder
+ * dem; resten røres ikke. Filnavnet søges bogstaveligt — findes der ingen
+ * kandidater, er svaret nul uden en eneste yderligere rundtur.
+ */
+export async function backfillReferencesForSource(
+  trail: TrailDatabase,
+  kbId: string,
+  sourceFilename: string,
+): Promise<number> {
+  // Basenavnet uden endelse — frontmatteren skriver kilden både med og uden
+  // `.md`/`.pdf`, så LIKE'en skal ramme begge former.
+  const stamme = sourceFilename.replace(/\.[a-z0-9]+$/i, '');
+  if (stamme.length < 3) return 0; // for kort til at være et brugbart filter
+
+  const kandidater = (await trail.execute(
+    `SELECT id FROM documents
+      WHERE knowledge_base_id = ? AND kind = 'wiki' AND archived = 0
+        AND content LIKE ?`,
+    [kbId, `%${stamme}%`],
+  )).rows as Array<{ id: string }>;
+
+  let total = 0;
+  for (const d of kandidater) total += await extractReferencesForDoc(trail, d.id);
+  return total;
+}
+
+/**
  * Boot-time backfill: scan every wiki Neuron in every KB and populate refs.
  * Idempotent — safe to re-run on every restart. Logs a summary when it
  * touches anything, silent otherwise.

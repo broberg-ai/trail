@@ -26,7 +26,7 @@ import { reportLocalIngestRun } from '../lib/ai.js';
 import { storage, sourcePath } from '../lib/storage.js';
 import { broadcaster } from '../services/broadcast.js';
 import { notifyPush } from '../services/push.js';
-import { backfillReferencesForKb } from '../services/reference-extractor.js';
+import { backfillReferencesForSource } from '../services/reference-extractor.js';
 import { recordAccess } from '../services/access-tracker.js';
 import { recordReinforcement } from '../services/reinforcement.js';
 import { isNull } from 'drizzle-orm';
@@ -922,7 +922,7 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { failed?: boolean };
 
   const doc = await trail.db
-    .select({ id: documents.id, kind: documents.kind, knowledgeBaseId: documents.knowledgeBaseId })
+    .select({ id: documents.id, kind: documents.kind, knowledgeBaseId: documents.knowledgeBaseId, filename: documents.filename })
     .from(documents)
     .where(and(eq(documents.id, docId), eq(documents.tenantId, tenant.id)))
     .get();
@@ -960,8 +960,13 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
   // `sources: [...]` frontmatter back to this source. Awaited before the emit so
   // the Station shows the real count on its soft refresh. Skip on failure (no
   // Neurons were written).
+  //
+  // F257.4 — KUN de Neuroner der kunne citere DENNE kilde. Den fulde
+  // KB-fejning her kostede 284 sekunder og et 500-svar i produktion (målt 6/9),
+  // fordi femten markeringer i træk blev til femten gennemløb af 250 Neuroner
+  // der serialiserede på skrivelåsen.
   if (!body.failed) {
-    await backfillReferencesForKb(trail, doc.knowledgeBaseId);
+    await backfillReferencesForSource(trail, doc.knowledgeBaseId, doc.filename);
   }
 
   // F191.8 — tell the Ingest Station (live) that this source left the awaiting

@@ -22,7 +22,7 @@
  */
 import { documents, knowledgeBases, wikiBacklinks, type TrailDatabase } from '@trail/db';
 import { and, eq } from 'drizzle-orm';
-import { slugify } from '@trail/core';
+import { slugify, erSti } from '@trail/core';
 import {
   normalizedSlug,
   parseIntraKbLinks,
@@ -119,13 +119,47 @@ export const parseWikiLinks = parseIntraKbLinks;
  * ambiguous, and we'd rather surface that via the link-checker than
  * guess at resolve-time.
  */
+/**
+ * F257.1 — en link-tekst der ER en sti eller et filnavn, læses som det navn den
+ * peger på.
+ *
+ *     "/neurons/concepts/tags.md"  →  "tags"
+ *     "Agentic CMS.md"             →  "Agentic CMS"
+ *     "Christian Broberg"          →  "Christian Broberg"   (urørt)
+ *
+ * Bruger SAMME prædikat som skrivevejen (F256's `erSti`), så de to sider ikke
+ * kan komme til at være uenige om hvad der er en sti. Var de to kopier, ville
+ * den ene før eller siden lære noget den anden ikke gjorde.
+ */
+export function linkTekstTilNavn(linkText: string): string {
+  const t = linkText.trim();
+  if (!erSti(t)) return t;
+  const sidste = t.split('/').filter(Boolean).pop() ?? t;
+  return sidste.replace(/\.md$/i, '') || t;
+}
+
 function resolveLink(
   pool: WikiNeuronRef[],
   fromDocId: string,
   linkText: string,
   language: string,
 ): { id: string } | null {
-  const target = linkText.trim();
+  // F257.1 — ET FILNAVN BRUGT SOM LINK-TEKST er F256's fejl på den anden side.
+  //
+  // MÅLT 6/9 i broberg.ai blandt de 178 brudte links:
+  //     [[Agentic CMS.md]]              → agentic-cms.md findes
+  //     [[AI-native websites.md]]       → ai-native-websites.md findes
+  //     [[/neurons/concepts/tags.md]]   → tags.md findes
+  //
+  // Alle tre peger på en Neuron der ER der. `slugify` gjorde bare hele stien
+  // eller filendelsen til en del af navnet, så opslaget aldrig ramte. Præcis
+  // som da en STI blev til et Neuron-navn (F256) — her er det bare citatet
+  // frem for titlen der bærer filnavnet.
+  //
+  // DET ER IKKE ET GÆT. En kompilering der skriver [[x.md]] mente Neuronen x;
+  // der findes ingen anden læsning. Derfor normaliseres her, før de fire
+  // eksisterende strategier — ikke som en femte, løsere strategi bagefter.
+  const target = linkTekstTilNavn(linkText.trim());
   if (!target) return null;
 
   // Self-link would loop a Neuron against itself — skip. Explicit guard
