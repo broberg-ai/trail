@@ -936,6 +936,16 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
     .update(documents)
     .set({
       awaitingLocalCompile: false,
+      // F263.1 — RESERVATIONEN SLIPPES HER, i samme skrivning som flaget ryddes.
+      // Ellers bliver lease-felterne stående med et tidspunkt i fremtiden, og en
+      // kilde der bagefter parkeres igen (Stationens «Prøv igen», eller en ny
+      // udgave af samme fil) er USYNLIG for enhver arbejder indtil den gamle
+      // frist udløber — op til fem minutter hvor køen ser tom ud og en kunde
+      // venter. Målt: nøjagtig den situation opstod i aften, hvor
+      // `platform_byg-selv-paa-samme-motor.md` kom retur i køen kort efter at
+      // være kompileret.
+      compileClaimedBy: null,
+      compileLeaseUntil: null,
       ...(body.failed
         ? { status: 'failed' as const, errorMessage: 'local-ingest compile produced no Neurons' }
         : { status: 'ready' as const }),
@@ -1023,6 +1033,11 @@ documentRoutes.post('/documents/:docId/local-recompile', async (c) => {
     .update(documents)
     .set({
       awaitingLocalCompile: true,
+      // F263.1 — en genparkeret kilde starter ALTID ledig. Bæltet ved siden af
+      // selerne ovenfor: skulle en reservation være blevet stående ad en vej vi
+      // ikke har set endnu, må den ikke kunne følge med kilden ind i køen igen.
+      compileClaimedBy: null,
+      compileLeaseUntil: null,
       status: 'ready',
       errorMessage: null,
       updatedAt: new Date().toISOString(),

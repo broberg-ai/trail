@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createLibsqlDatabase, type TrailDatabase } from '@trail/db';
 import {
-  claimCompileJobs, heartbeatCompileJob, releaseCompileJob, compileQueueStatus,
+  claimCompileJobs, heartbeatCompileJob, compileQueueStatus,
   COMPILE_LEASE_MS,
 } from './compile-queue.js';
 
@@ -120,17 +120,6 @@ test('kun kilder der VENTER, og kun kind=source', async () => {
   await kilde('neuron', { kind: 'wiki' });
   const a = await claimCompileJobs(db, A, { worker: 'mac-1', limit: 10 });
   expect(a.map((j) => j.id)).toEqual(['venter']);
-});
-
-test('release gør jobbet ledigt uden at røre flaget', async () => {
-  await kilde('s1');
-  await claimCompileJobs(db, A, { worker: 'mac-1' });
-  await releaseCompileJob(db, A, 's1');
-  const r = (await db.execute(
-    `SELECT awaiting_local_compile AS f, compile_claimed_by AS w FROM documents WHERE id='s1'`)).rows[0];
-  expect(Number((r as { f: unknown }).f)).toBe(1);        // flaget ejes af /local-compiled
-  expect((r as { w: unknown }).w).toBeNull();
-  expect((await claimCompileJobs(db, A, { worker: 'mac-2' })).map((j) => j.id)).toEqual(['s1']);
 });
 
 test('status skelner VENTENDE fra I ARBEJDE og navngiver arbejderen', async () => {

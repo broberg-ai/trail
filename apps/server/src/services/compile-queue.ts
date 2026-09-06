@@ -117,25 +117,6 @@ export async function heartbeatCompileJob(
   return { ok: (res.rowsAffected ?? 0) > 0, leaseUntil };
 }
 
-/**
- * Slip reservationen. Kaldes når jobbet er færdigt eller opgivet.
- *
- * Rydder KUN lease-felterne — flaget selv ejes af `/local-compiled`, som er
- * den vej der også skriver resultatet. To steder der rydder samme flag er
- * hvordan man får et job der ser færdigt ud uden at være det.
- */
-export async function releaseCompileJob(
-  db: TrailDatabase,
-  tenantId: string,
-  docId: string,
-): Promise<void> {
-  await db.execute(
-    `UPDATE documents SET compile_claimed_by = NULL, compile_lease_until = NULL
-      WHERE id = ? AND tenant_id = ?`,
-    [docId, tenantId],
-  );
-}
-
 /** Hvad køen indeholder lige nu — ventende, i arbejde, og hvem der arbejder. */
 export async function compileQueueStatus(
   db: TrailDatabase,
