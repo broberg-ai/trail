@@ -114,6 +114,12 @@ export const knowledgeBases = sqliteTable(
     // for `lastPassAt`, the scheduler survives engine restarts and
     // catches up after downtime.
     lintScheduleDays: integer('lint_schedule_days'),
+    // F254.2 — hybrid genfinding (vektor + ord) for DENNE videnbase.
+    // Slukket som standard: rollout'en går admin først, Aidan sidst, og et
+    // globalt flag ville gøre den rækkefølge umulig.
+    hybridSearchEnabled: integer('hybrid_search_enabled', { mode: 'boolean' })
+      .notNull()
+      .default(false),
     /** F226 — smallest side, in pixels, an extracted image must have to be
      *  stored. NULL means no filter, which is what every KB created before
      *  this column did — an existing Trail must not change behaviour because

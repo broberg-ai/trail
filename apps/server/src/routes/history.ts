@@ -23,8 +23,9 @@ import { Hono } from 'hono';
 import {
   auditEventLogCoverage, repairEventLogCoverage,
   takeBrainVersion, listBrainVersions, getBrainVersion,
-  diffBrainVersion, restoreBrainVersion, resolveKbId,
+  diffBrainVersion, restoreBrainVersion, resolveKbId, coverage,
 } from '@trail/core';
+import { sweepKb } from '../services/indexer.js';
 import { chunkText, storeChunks } from '../services/chunker.js';
 import { requireAuth, getTenant, getTrail, getUser } from '../middleware/auth.js';
 
@@ -152,4 +153,46 @@ historyRoutes.post('/brain-versions/:id/restore', async (c) => {
     // nedbrud — den skal kunne læses af et menneske, ikke logges som 500.
     return c.json({ error: String((err as Error).message) }, 409);
   }
+});
+
+/**
+ * F254.1 — indekseringens tilstand og bagfyldning.
+ *
+ * `GET  /knowledge-bases/:kbId/index` — hvor stor en del er dækket?
+ * `POST /knowledge-bases/:kbId/index` — fej: indeksér alt der mangler eller
+ *   er forældet. Er både bagfyldningen OG det kontinuerlige sikkerhedsnet, og
+ *   det er med vilje samme kode: en fejer der kun bruges én gang bliver aldrig
+ *   afprøvet, og en der kører hver dag er bevist hver dag.
+ */
+historyRoutes.get('/knowledge-bases/:kbId/index', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
+  if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
+  const cov = await coverage(trail, tenant.id, kbId);
+  return c.json({ knowledgeBaseId: kbId, databasePath: trail.path, ...cov });
+});
+
+historyRoutes.post('/knowledge-bases/:kbId/index', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
+  if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
+
+  // ?max= gør det muligt at måle prisen på ti stykker før resten køres. Et tal
+  // ingen har set før en kørsel på 6.796 Neuroner er et gæt.
+  const maxRaw = Number(c.req.query('max'));
+  const max = Number.isFinite(maxRaw) && maxRaw > 0 ? maxRaw : undefined;
+
+  const before = await coverage(trail, tenant.id, kbId);
+  const r = await sweepKb(trail, tenant.id, kbId, { max });
+  return c.json({
+    knowledgeBaseId: kbId,
+    databasePath: trail.path,
+    before: { embedded: before.embedded, chunks: before.chunks, ratio: before.ratio },
+    ...r,
+    costUsd: r.costCents / 100,
+    // Både «jeg skrev N» og «basen er nu dækket X» — to forskellige påstande,
+    // og kun den anden betyder noget.
+  });
 });

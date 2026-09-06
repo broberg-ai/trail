@@ -114,3 +114,13 @@ export { takeBrainVersion, listBrainVersions, getBrainVersion, ensureRecentBrain
 export type { BrainVersion, BrainVersionReason } from './history/versions.js';
 export { diffBrainVersion, restoreBrainVersion } from './history/restore.js';
 export type { RestoreDiff, RestoreChange, RestoreResult } from './history/restore.js';
+
+// F254 — hybrid genfinding: vektorer + fusion. Kompilering og Neuroner urørt.
+export {
+  encodeVector, decodeVector, cosine, contentHash,
+  storeEmbedding, coverage, loadVectors,
+  EMBEDDING_PROVIDER, EMBEDDING_MODEL,
+} from './retrieval/vectors.js';
+export type { EmbeddingRow } from './retrieval/vectors.js';
+export { reciprocalRankFusion, RRF_K } from './retrieval/fusion.js';
+export type { Ranked, FusedHit } from './retrieval/fusion.js';

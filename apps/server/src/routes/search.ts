@@ -3,7 +3,8 @@ import { documents, knowledgeBases } from '@trail/db';
 import { and, eq } from 'drizzle-orm';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
 import { parseTags, canonicaliseTag, parseSeqId, kbPrefix, redactSecrets, buildFtsQuery } from '@trail/shared';
-import { resolveKbId } from '@trail/core';
+import { resolveKbId, reciprocalRankFusion } from '@trail/core';
+import { vectorSearch, hybridEnabled } from '../services/hybrid-search.js';
 import {
   parseAudienceParam,
   defaultAudienceForAuth,
@@ -92,6 +93,56 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
     documents.push(note);
     seenIds.add(note.id);
     if (documents.length >= limit) break;
+  }
+
+  // ── F254.2 — hybrid: betydning ved siden af ord ──────────────────────────
+  //
+  // KANDIDATERNE FØDES IND HER, ØVERST I TRAGTEN — ikke i en parallel svarvej.
+  // Alt nedenfor (F92 tag-filter, F160 publikums-filter, F197 scrubning) gælder
+  // derfor automatisk for vektor-træf. En anden vej ud med sine egne kopier af
+  // de spærrer er præcis hvordan man lækker en intern Neuron til en ekstern
+  // nøgle: kopien glemmer ét filter, og den gamle vej er stadig rigtig, så
+  // ingen opdager det.
+  //
+  // Slukket som standard. `hybrid_search_enabled` sættes pr. videnbase, og
+  // FTS5-vejen ovenfor er uændret når den er slukket — også hvis alt dette
+  // fejler.
+  let hybridInfo: { used: boolean; coverage: number; unavailable?: string } | null = null;
+  if (await hybridEnabled(trail, kbId)) {
+    const vec = await vectorSearch(trail, tenant.id, kbId, query, limit);
+    hybridInfo = { used: vec.hits.length > 0, coverage: vec.coverage, ...(vec.unavailable ? { unavailable: vec.unavailable } : {}) };
+
+    if (vec.hits.length > 0) {
+      // Hent de dokumenter vektor-halvdelen fandt, som ordmatchningen ikke
+      // allerede har. Samme projektion som searchDocuments, så alt nedenfor
+      // ikke kan se forskel på hvor en kandidat kom fra.
+      const nye = vec.hits.map((h: { documentId: string }) => h.documentId).filter((id: string) => !seenIds.has(id));
+      if (nye.length > 0) {
+        const placeholders = nye.map(() => '?').join(',');
+        const rows = (await trail.execute(
+          `SELECT id, filename, path, title, seq_id AS seqId, '' AS highlight
+             FROM documents
+            WHERE tenant_id = ? AND knowledge_base_id = ? AND archived = 0
+              AND id IN (${placeholders})`,
+          [tenant.id, kbId, ...nye],
+        )).rows as Array<Record<string, unknown>>;
+        const byId = new Map(rows.map((r) => [String(r.id), r]));
+        for (const id of nye) {
+          const row = byId.get(id);
+          if (row) { documents.push(row as never); seenIds.add(id); }
+        }
+      }
+
+      // Flet på PLADS, ikke på score: bm25 er negativ og ubegrænset, cosinus
+      // ligger i [-1,1]. De to tal kan ikke sammenlignes.
+      const fused = reciprocalRankFusion({
+        ord: documents.map((d: { id: string }) => ({ id: d.id })),
+        vektor: vec.hits.map((h: { documentId: string }) => ({ id: h.documentId })),
+      });
+      const orden = new Map(fused.map((f, i) => [f.id, i]));
+      documents.sort((a, b) => (orden.get(a.id) ?? 1e9) - (orden.get(b.id) ?? 1e9));
+      documents.length = Math.min(documents.length, limit);
+    }
   }
 
   // F92 tag facet. searchDocuments returns a narrow projection that
