@@ -5,6 +5,7 @@ import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
 import { parseTags, canonicaliseTag, parseSeqId, kbPrefix, redactSecrets, buildFtsQuery } from '@trail/shared';
 import { resolveKbId, reciprocalRankFusion } from '@trail/core';
 import { vectorSearch, hybridEnabled } from '../services/hybrid-search.js';
+import { exactTitleMatches } from '@trail/core';
 import {
   effectiveAudience,
   isVisibleToAudience,
@@ -92,6 +93,47 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
     documents.push(note);
     seenIds.add(note.id);
     if (documents.length >= limit) break;
+  }
+
+  // ── F261 — ET NAVN ER ET OPSLAG ─────────────────────────────────────────
+  //
+  // Ejeren: «hvis jeg søger efter "Cardmem" så leder jeg i min hjerne efter om
+  // der er en præcis reference (en neuron) med det navn.»
+  //
+  // En TITEL er en anden slags bevis end en ordtælling, og den skal derfor
+  // ikke konkurrere på score — den skal ligge FØRST. Målt før reglen: søgning
+  // på «Christian Broberg» gav hans egen Neuron som nr. 17, under seksten
+  // sider der blot nævnte «broberg».
+  //
+  // Træffet ERSTATTER ikke resten. Man vil have sin Neuron først OG stadig se
+  // hvad der ellers nævner navnet.
+  const præcise = await exactTitleMatches(trail, tenant.id, kbId, query);
+  if (præcise.length > 0) {
+    const ids = præcise.map((p) => p.id).filter((id) => !seenIds.has(id));
+    if (ids.length > 0) {
+      const rows = (await trail.execute(
+        `SELECT id, filename, path, title, seq_id AS seqId, '' AS highlight
+           FROM documents
+          WHERE tenant_id = ? AND knowledge_base_id = ? AND archived = 0
+            AND id IN (${ids.map(() => '?').join(',')})`,
+        [tenant.id, kbId, ...ids],
+      )).rows as Array<Record<string, unknown>>;
+      const byId = new Map(rows.map((r) => [String(r.id), r]));
+      for (const id of ids) {
+        const row = byId.get(id);
+        if (row) { documents.unshift(row as never); seenIds.add(id); }
+      }
+    }
+    // Allerede fundet af ordsøgningen? Så flyt det op i stedet for at tilføje
+    // det igen — dét var hele fejlen: dokumentet VAR der, bare på plads 17.
+    const præciseIds = new Set(præcise.map((p) => p.id));
+    // Stabil sortering: kun præcise træf flyttes frem, resten beholder sin
+    // indbyrdes orden fra ordsøgningen.
+    documents.sort((a, b) => {
+      const A = præciseIds.has(String((a as { id: unknown }).id)) ? 0 : 1;
+      const B = præciseIds.has(String((b as { id: unknown }).id)) ? 0 : 1;
+      return A - B;
+    });
   }
 
   // ── F254.2 — hybrid: betydning ved siden af ord ──────────────────────────

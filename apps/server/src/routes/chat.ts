@@ -10,7 +10,7 @@ import {
 import { and, asc, eq, inArray, like, sql } from 'drizzle-orm';
 import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
 import { ChatRequestSchema, buildFtsQuery } from '@trail/shared';
-import { resolveKbId, stripClaimAnchors } from '@trail/core';
+import { exactTitleMatches, resolveKbId, stripClaimAnchors } from '@trail/core';
 import {
   HEURISTIC_PATH,
   computeConfidence,
@@ -635,10 +635,37 @@ async function retrieveContext(
     // confidence DESC so fresher/stronger knowledge leads the context
     // (deemphasising the 0.3-0.5 band rather than dropping it). Generalises the
     // F139 faded-heuristic exclusion to all Neuron types.
+    // F261 — ET NAVN ER ET OPSLAG, OGSÅ FOR CHATTEN.
+    //
+    // Ejeren: «hvis jeg søger efter "Cardmem" så leder jeg i min hjerne efter
+    // om der er en præcis reference (en neuron) med det navn.»
+    //
+    // Uden dette henter chatten på ordfrekvens alene, og et navn der optræder
+    // i hundredvis af Neuroner (broberg, cardmem, trail) trækker de dokumenter
+    // ind der NÆVNER navnet frem for den der ER det. Målt 6/9: spørgsmål om
+    // Christian Broberg citerede demo.md og hosting-broberg-ai.md, mens hans
+    // egen Neuron aldrig kom med — svaret blev rigtigt ved held, fordi nogle af
+    // de hentede stumper tilfældigvis stammede derfra.
+    //
+    // SAMME FUNKTION SOM SØGERUTEN. To kopier ville lade Aidan og søgefeltet
+    // svare forskelligt på det samme navn, og så kan ingen af dem bruges til
+    // at kontrollere den anden.
+    const præcise = await exactTitleMatches(trail, tenantId, kbId, query);
+    const præciseIds = new Set(præcise.map((p) => p.id));
+    for (const p of præcise) {
+      if (!docHits.some((h) => h.id === p.id)) {
+        docHits.push({ id: p.id, title: p.title, filename: p.filename, path: p.path, kind: 'wiki' } as never);
+      }
+    }
+
     const confMap = await loadNeuronConfidence(trail, tenantId, [
       ...chunkHits.map((h) => h.documentId),
       ...docHits.map((h) => h.id),
     ]);
+    // De præcise titel-træf er lagt i docHits ovenfor, så de er MED i
+    // opslaget her. Uden det ville isChatVisible(undefined) → true lade en
+    // FORÆLDET Neuron slippe forbi netop fordi titlen matchede — et hul der
+    // kun ville ramme det opslag der er vigtigst.
 
     for (const hit of chunkHits) {
       if (totalChars >= MAX_CHARS) break;
@@ -676,7 +703,13 @@ async function retrieveContext(
 
     const rankedDocs = docHits
       .filter((h) => h.kind === 'wiki' && !fadedHeuristicIds.has(h.id) && isChatVisible(confMap.get(h.id)))
-      .sort((a, b) => confidenceOf(confMap, b.id) - confidenceOf(confMap, a.id));
+      .sort((a, b) => {
+        // Præcise titel-træf først. Derefter uændret: tillid faldende.
+        const A = præciseIds.has(a.id) ? 0 : 1;
+        const B = præciseIds.has(b.id) ? 0 : 1;
+        if (A !== B) return A - B;
+        return confidenceOf(confMap, b.id) - confidenceOf(confMap, a.id);
+      });
 
     // Fetch CONTENT for the ranked Neurons whose CHUNKS didn't make the cut, so
     // the cited Neuron's actual text reaches the model — not just a citation

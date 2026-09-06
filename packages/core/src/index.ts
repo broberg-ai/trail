@@ -125,3 +125,4 @@ export type { EmbeddingRow } from './retrieval/vectors.js';
 export { reciprocalRankFusion, RRF_K } from './retrieval/fusion.js';
 export type { Ranked, FusedHit } from './retrieval/fusion.js';
 export * from './queue/neuron-name.js';
+export * from './retrieval/exact-title.js';
