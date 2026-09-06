@@ -30,6 +30,7 @@ import {
 import { formatSeqId, buildFtsQuery } from '@trail/shared';
 import { createCandidate } from '../queue/candidates.js';
 import { slugify } from '../slug.js';
+import { neuronTitel } from '../queue/neuron-name.js';
 import { prepareCompiledMarkdown } from '../compile/claim-anchors.js';
 
 export interface CandidateQueueContext {
@@ -477,7 +478,13 @@ export async function write(
 
   if (args.command === 'create') {
     if (!args.title) return { ok: false, error: 'title-required' };
-    const filename = (slugify(args.title) || 'untitled') + '.md';
+    // F256.1 — en STI må aldrig blive til et filnavn. DETTE er den vej
+    // wiki-write, ingest og MCP'en faktisk tager; materialiseringen i
+    // candidates.ts er anden-vagten. Jeg rettede først kun den anden, og
+    // opførslen var uændret i produktion — en rettelse på det forkerte af tre
+    // skrivesteder ser præcis ud som en rettelse der ikke er udrullet.
+    const visningsTitel = neuronTitel(args.title, args.content ?? '');
+    const filename = (slugify(visningsTitel) || 'untitled') + '.md';
     const path = dirPath.endsWith('/') ? dirPath : dirPath + '/';
     // F22 + F101 — inject stable claim-anchors and ensure `type:`
     // frontmatter derived from the document path. Idempotent on

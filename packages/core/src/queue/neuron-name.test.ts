@@ -90,3 +90,43 @@ test('en titel der bare INDEHOLDER et punktum er ikke en fil — kontrollen', ()
   expect(neuronTitel('@broberg/ai-sdk', '')).toBe('@broberg/ai-sdk');
   expect(neuronTitel('cms — broberg.ai', '')).toBe('cms — broberg.ai');
 });
+
+/**
+ * SPÆRREN MOD AT RETTE DET FORKERTE STED IGEN.
+ *
+ * Målt 6/9: jeg rettede candidates.ts (materialiseringen), deployede, og
+ * opførslen i produktion var UÆNDRET — fordi wiki-write danner filnavnet i
+ * candidate-api.ts, LÆNGE før. En rettelse på det forkerte af tre skrivesteder
+ * ser præcis ud som en rettelse der ikke er udrullet.
+ *
+ * Prøven læser de ægte filer. Kommer der et fjerde skrivested, bliver den rød.
+ */
+import { readFileSync } from 'node:fs';
+
+const SKRIVESTEDER = [
+  '../ingest/candidate-api.ts',   // wiki-write · ingest · buddys MCP  ← DEN vigtige
+  './candidates.ts',              // materialisering ved godkendelse
+  '../../../../apps/mcp/src/index.ts', // det selvstændige stdio-MCP
+];
+
+test('INGEN RÅ TITEL når slugify — det var fejlen på tre skrivesteder', () => {
+  // Egenskaben, ikke formen: en mellemvariabel er fint (`slugify(visningsTitel)`),
+  // en rå titel er ikke (`slugify(args.title)`). Det er PRÆCIS det mønster der
+  // stod på alle tre steder, og som gjorde at min første rettelse ikke virkede.
+  const RÅ = /slugify\(\s*(args\.title|candidate\.title|title)\s*[,)]/;
+  for (const sti of SKRIVESTEDER) {
+    const kode = readFileSync(new URL(sti, import.meta.url), 'utf8');
+    const kodelinjer = kode.split('\n').filter(
+      (l) => !l.trim().startsWith('*') && !l.trim().startsWith('//'),
+    );
+    // filen danner faktisk et Neuron-navn …
+    expect(`${sti} kalder slugify`).toBe(
+      kodelinjer.some((l) => l.includes('slugify(')) ? `${sti} kalder slugify` : `${sti} KALDER IKKE slugify`,
+    );
+    // … og gør det aldrig på en rå titel
+    for (const l of kodelinjer) {
+      if (RÅ.test(l)) throw new Error(`RÅ TITEL i ${sti}: ${l.trim()}`);
+    }
+    expect(kode).toContain('neuronTitel');
+  }
+});

@@ -14,7 +14,7 @@ import {
   type TrailDatabase,
 } from '@trail/db';
 import { eq, and, like, sql, desc } from 'drizzle-orm';
-import { createCandidate, slugify } from '@trail/core';
+import { createCandidate, slugify, neuronTitel } from '@trail/core';
 import { formatSeqId, buildFtsQuery } from '@trail/shared';
 
 // MCP-initiated wiki mutations flow through the Curation Queue. The server's
@@ -437,7 +437,8 @@ server.tool(
     if (command === 'create') {
       if (!title) return { content: [{ type: 'text' as const, text: 'Title required for create.' }] };
 
-      const filename = (slugify(title) || 'untitled') + '.md';
+      // F256.1 — samme regel som motorens skrivevej. Tre skrivesteder, én regel.
+      const filename = (slugify(neuronTitel(title, content ?? '')) || 'untitled') + '.md';
       const fullContent = content ?? `# ${title}\n`;
       const path = dirPath.endsWith('/') ? dirPath : dirPath + '/';
 
