@@ -31,12 +31,32 @@ export function encodeVector(v: readonly number[]): Uint8Array {
   return new Uint8Array(buf);
 }
 
-export function decodeVector(b: Uint8Array): Float32Array {
+/**
+ * F260 — DRIVEREN GIVER EN ArrayBuffer, IKKE EN Uint8Array.
+ *
+ * MÅLT 6/9 2026 på produktion: alle 1.205 gemte vektorer afkodede til lutter
+ * nuller, mens de rå bytes i basen var korrekte (4096 bytes, `0080F2BC…` =
+ * −0,0296). Hele den semantiske søgning var død — ikke fordi den var slukket,
+ * men fordi hver eneste vektor blev til ingenting på vejen ud.
+ *
+ * ÅRSAGEN ER EN TAVS INGENTING. `copy.set(b)` forventer noget array-agtigt.
+ * En ArrayBuffer har ingen `length`, så `set` læser nul elementer, skriver
+ * intet — og KASTER IKKE. Resultatet er den rigtige længde, den rigtige type
+ * og det forkerte indhold. Derfor så alt korrekt ud hele vejen: rækkerne
+ * fandtes, dækningen sagde 100 %, og cosine svarede bare `null` hver gang,
+ * hvilket blev læst som «ingen lighed» frem for «kunne ikke beregnes».
+ *
+ * Et BLOB kan lovligt ankomme som begge former afhængigt af driver og
+ * transport (lokal fil vs. sqld over HTTP), så begge håndteres eksplicit
+ * frem for at antage den ene.
+ */
+export function decodeVector(b: Uint8Array | ArrayBuffer): Float32Array {
+  const bytes = b instanceof ArrayBuffer ? new Uint8Array(b) : b;
   // Kopiér frem for at pege ind i bufferen: en Uint8Array fra databasen kan
   // dele hukommelse med driverens egen, og en byteOffset der ikke er delelig
   // med 4 får Float32Array til at kaste.
-  const copy = new Uint8Array(b.byteLength);
-  copy.set(b);
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
   return new Float32Array(copy.buffer);
 }
 
@@ -206,7 +226,7 @@ export async function loadVectors(
         -- råmateriale blive ved med at dukke op i søgningen imens.
         AND d.kind = 'wiki'`,
     [tenantId, knowledgeBaseId, model],
-  )).rows as Array<{ chunkId: string; documentId: string; vector: Uint8Array }>;
+  )).rows as Array<{ chunkId: string; documentId: string; vector: Uint8Array | ArrayBuffer }>;
   return rows.map((r) => ({
     chunkId: r.chunkId, documentId: r.documentId, vector: decodeVector(r.vector),
   }));
