@@ -66,21 +66,66 @@ const PORT = Number(process.env.PORT ?? 3031);
 // Order matters here — keep parity with the historic single-tenant
 // boot order. Adding a new tenant via openTenantPool() runs this
 // exact sequence against the new DB.
-async function bootTenant(db: TrailDatabase): Promise<void> {
-  await db.runMigrations();
-  await db.initFTS();
-  await ensureIngestUser(db);
-  await recoverZombieIngests(db);
-  await rewriteWikiToNeurons(db);
+/**
+ * F259 — ET TRIN DER TAGER TID SKAL SIGE SIT NAVN.
+ *
+ * 6/9 stod motoren af i opstarten med 283 sekunders TAVSHED mellem «åbner
+ * broberg-ai» og processens død. Loggen kunne ikke sige hvilket af de femten
+ * opstartstrin der hang, så diagnosen ville have kostet ét nedbrud pr. gæt.
+ * Nu koster den nul: hvert trin over et sekund skriver sit navn og sin tid.
+ */
+async function trin<T>(slug: string, navn: string, fn: () => Promise<T>): Promise<T> {
+  const t0 = Date.now();
+  try {
+    return await fn();
+  } finally {
+    const ms = Date.now() - t0;
+    if (ms >= 1000) console.log(`[boot] ${slug}/${navn}: ${Math.round(ms / 1000)}s`);
+  }
+}
+
+/**
+ * F259 — DET DER SKAL VÆRE PÅ PLADS FØR EN KUNDE KAN BETJENES.
+ *
+ * Kun tre ting: skemaet, søgeindekset og den bruger de andre rækker peger på.
+ * Alle tre er skema-operationer der ikke skalerer med basens størrelse.
+ *
+ * ALT ANDET ER VEDLIGEHOLDELSE, og den hører ikke til her. Det er ikke en
+ * finpudsning — det er dagens nedbrud: opstarten var ÉN sekventiel kæde, kørt
+ * i en top-level await FØR Bun.serve, for HVER kunde. broberg-ai (7.217
+ * Neuroner, base på den anden side af netværket) hang i 283 sekunder, kastede
+ * en timeout, og en afvist top-level await afslutter processen. Tre kunder lå
+ * ned fordi én kundes vedligeholdelse var langsom.
+ *
+ * Og F258's vagt kunne ikke redde det: den installeres EFTER Bun.serve, og
+ * processen døde før den nåede dertil. En vagt der står bag ved fejlen ser
+ * rigtig ud i koden og har ingen virkning i praksis.
+ */
+async function bootTenantEssential(db: TrailDatabase, slug: string): Promise<void> {
+  await trin(slug, 'migrations', () => db.runMigrations());
+  await trin(slug, 'fts', () => db.initFTS());
+  await trin(slug, 'ingest-user', () => ensureIngestUser(db));
+}
+
+/**
+ * F259 — VEDLIGEHOLDELSE: idempotente engangs-opgaver der må tage den tid de
+ * tager, fordi ingen kunde venter på dem. Kørt EFTER Bun.serve, pr. kunde, og
+ * en fejl her logges uden at stoppe betjeningen.
+ *
+ * Den indbyrdes rækkefølge er bevaret fra den historiske opstart.
+ */
+async function bootTenantMaintenance(db: TrailDatabase, slug: string): Promise<void> {
+  await trin(slug, 'recoverZombieIngests', () => recoverZombieIngests(db));
+  await trin(slug, 'rewriteWikiToNeurons', () => rewriteWikiToNeurons(db));
   // F98 — dismiss pending orphan-findings targeting external-originated
   // Neurons (buddy, MCP, chat, api). Their sources live outside Trail;
   // the orphan detector used to falsely flag them. Idempotent — zero
   // rows to update after the first run is the steady state.
-  await cleanupExternalOrphans(db);
+  await trin(slug, 'cleanupExternalOrphans', () => cleanupExternalOrphans(db));
   // F102 — ensure every KB has /neurons/glossary.md. Idempotent; seeds
   // the Neuron for KBs created before F102 landed so the compile-pipeline
   // has something to str_replace into on subsequent ingests.
-  await seedMissingGlossaryNeurons(db);
+  await trin(slug, 'seedMissingGlossaryNeurons', () => seedMissingGlossaryNeurons(db));
   // Re-run extractor on any source stuck in `status='pending'` with a
   // supported file type (pdf/docx/pptx/xlsx). Covers two cases:
   // (1) uploads that predate the extractor for their type (e.g. a PPTX
@@ -88,40 +133,48 @@ async function bootTenant(db: TrailDatabase): Promise<void> {
   // mid-upload rows. Unsupported types stay pending — they need new
   // pipelines. Fire-and-forget: the processXAsync helpers own their
   // status transitions.
-  await recoverPendingSources(db);
+  await trin(slug, 'recoverPendingSources', () => recoverPendingSources(db));
   // F162 — populate content_hash on legacy source-rows. Idempotent;
   // once everything is hashed, re-runs are a single SELECT returning 0
   // rows. Must run BEFORE the upload route starts accepting requests
   // (which happens later in this file) so a fresh upload doesn't race
   // the backfill on the same row.
-  await backfillContentHash(db);
+  await trin(slug, 'backfillContentHash', () => backfillContentHash(db));
   // F161 — populate document_images for legacy PDFs. Storage scan +
   // PNG-header dim parse + alt-text from compiled markdown. Idempotent;
   // docs with existing rows skipped. Same boot-window placement
   // argument as backfillContentHash.
-  await backfillDocumentImages(db);
+  await trin(slug, 'backfillDocumentImages', () => backfillDocumentImages(db));
   // F161 follow-up — opt-in Vision-rerun. OFF by default; only fires
   // when TRAIL_VISION_RERUN_NULL=1 is set. See rerun-vision.ts for
   // the env-flag contract + recommended rollout.
-  await rerunVisionOnNull(db);
+  await trin(slug, 'rerunVisionOnNull', () => rerunVisionOnNull(db));
   // F230.1 — repair image rows whose filename starts with a slash (the old
   // LocalStorage.list double-slash). SHIPPED DARK: a data transform on a prod
   // table only runs when TRAIL_FIX_IMAGE_SLASH=1 is set deliberately.
-  await fixImageSlash(db);
+  await trin(slug, 'fixImageSlash', () => fixImageSlash(db));
   // F163.2 Phase 5 — opt-in regex-sweep over legacy image descriptions.
   // Stamps auto_flag_signal on rows that predate the [QUALITY:]-marker
   // prompt where the description text matches the regex backstop. Gated
   // by TRAIL_VISION_AUTO_FLAG_SWEEP=1 so we don't surprise tenants on
   // the upgrade.
-  await sweepAutoFlag(db);
+  await trin(slug, 'sweepAutoFlag', () => sweepAutoFlag(db));
   // F156 Phase 0 — top up every tenant to TRAIL_DEV_CREDITS if set.
   // Idempotent; only adds the delta needed to reach the target. Phase 2
   // replaces this with Stripe Checkout self-serve top-up.
-  await seedDevCreditsOnBoot(db);
+  await trin(slug, 'seedDevCreditsOnBoot', () => seedDevCreditsOnBoot(db));
   // F143 — roll any `running` ingest-jobs back to `queued` and kick the
   // scheduler for each KB with work outstanding. Survives restarts without
   // dropping half a 65-file upload batch on the floor.
-  await recoverIngestJobs(db);
+  await trin(slug, 'recoverIngestJobs', () => recoverIngestJobs(db));
+}
+
+// Hele sekvensen under ét. Bruges KUN af provisionTenant, hvor basen er
+// splinterny og tom — dér er vedligeholdelsen øjeblikkelig, og en ny kunde må
+// gerne vente på at hans egen base er helt klar.
+async function bootTenant(db: TrailDatabase): Promise<void> {
+  await bootTenantEssential(db, 'ny');
+  await bootTenantMaintenance(db, 'ny');
 }
 
 // F222.3 — the three link/reference sweeps are OUT of the serving path.
@@ -133,6 +186,9 @@ async function bootTenant(db: TrailDatabase): Promise<void> {
 // run AFTER Bun.serve, per tenant, and a failure is logged, never fatal.
 async function bootTenantDeferred(slug: string, db: TrailDatabase): Promise<void> {
   const t0 = Date.now();
+  // F259 — kundens egen vedligeholdelse først: den lå i serverings-vejen og
+  // var dét der væltede motoren.
+  await bootTenantMaintenance(db, slug);
   await backfillReferences(db);
   await backfillBacklinks(db);
   // F148 — populate broken_links so the admin link-report panel surfaces
@@ -149,7 +205,7 @@ const primaryRemoteUrl = remoteTenantConfig()[inferPrimarySlug(DEFAULT_DB_PATH)]
 const trail = primaryRemoteUrl
   ? await openRemoteTenantDb(inferPrimarySlug(DEFAULT_DB_PATH), primaryRemoteUrl)
   : await createLibsqlDatabase({ path: DEFAULT_DB_PATH });
-await bootTenant(trail);
+await bootTenantEssential(trail, inferPrimarySlug(DEFAULT_DB_PATH));
 
 // F40.2a-C: build the tenant pool. With TRAIL_MULTI_TENANT off the pool
 // has only the primary — engine behaves exactly like F40.1. With the
@@ -160,7 +216,7 @@ const primarySlug = inferPrimarySlug(DEFAULT_DB_PATH);
 const tenantPool = await openTenantPool({
   primarySlug,
   primaryDb: trail,
-  bootSecondary: async (_slug, db) => bootTenant(db),
+  bootSecondary: async (slug, db) => bootTenantEssential(db, slug),
 });
 
 // F40.2a-E: every background service runs for every tenant in the pool.
