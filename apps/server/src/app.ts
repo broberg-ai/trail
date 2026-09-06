@@ -89,7 +89,7 @@ export interface AppBindings {
   };
 }
 
-export function createApp(trail: TrailDatabase, tenantPool: TenantPool): Hono<AppBindings> {
+export function createApp(trail: TrailDatabase | null, tenantPool: TenantPool): Hono<AppBindings> {
   const app = new Hono<AppBindings>();
 
   app.use('*', logger());
@@ -155,7 +155,12 @@ export function createApp(trail: TrailDatabase, tenantPool: TenantPool): Hono<Ap
   // as the primary (back-compat for routes that fire pre-auth like
   // /health and /api/auth/google).
   app.use('*', async (c, next) => {
-    c.set('trail', trail);
+    // F259.5 — den primære base kan være ude af drift. Så sættes den ikke,
+    // og enhver rute der kræver en base får den fra auth-laget, som slår
+    // kunden op i puljen og fejler LUKKET ved miss (401) — aldrig en anden
+    // kundes base. Sættes den til noget uægte her, ville et 401 blive til et
+    // forkert svar, og det er værre end ingen betjening.
+    if (trail) c.set('trail', trail);
     c.set('tenantPool', tenantPool);
     await next();
   });

@@ -52,6 +52,36 @@ const TENANT_COLUMNS = {
  * pool doesn't have it — boot-state mismatch, treated as auth failure
  * rather than 500 so we don't leak which slugs the engine knows about).
  */
+/**
+ * F259.6 — «Invalid or revoked API key» var en LØGN når kunden var ude af drift.
+ *
+ * MÅLT 6/9, på ejerens egen telefon: broberg-ai var udeladt af puljen fordi
+ * dens base var i baglås, og skærmen sagde «Something went wrong — Invalid or
+ * revoked API key». Nøglen fejlede ingenting. Beskeden sendte ham efter et
+ * nøgleproblem der ikke fandtes, mens den ægte årsag stod i motorens log.
+ *
+ * Den gamle begrundelse — «401 keeps us from leaking which slugs we know
+ * about» — gælder ikke her: vi er kun nået hertil fordi opkalderens EGEN
+ * legitimation slog op i indekset og navngav netop denne kunde. Der er intet
+ * at lække; de ved det allerede. Det eneste 401 opnåede var at skjule årsagen
+ * for den ene person der havde brug for den.
+ *
+ * 503, ikke 401, fordi det er en midlertidig tilstand på VORES side — og
+ * klienten skal prøve igen, ikke skifte nøgle.
+ */
+function tenantUdeAfDrift(c: Context, slug: string) {
+  return c.json(
+    {
+      error: 'Tenant temporarily unavailable',
+      tenant: slug,
+      detail:
+        'The engine could not open this tenant database at boot and is retrying. ' +
+        'Your credential is valid — nothing to change on your side.',
+    },
+    503,
+  );
+}
+
 function resolveTenantDb(c: Context, tenantSlug: string): TrailDatabase | null {
   const pool = c.get('tenantPool') as TenantPool | undefined;
   if (!pool) return null;
@@ -126,12 +156,7 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
           return c.json({ error: 'Invalid or revoked API key' }, 401);
         }
         const tenantDb = resolveTenantDb(c, indexed.tenantSlug);
-        if (!tenantDb) {
-          // Index points at a slug the pool doesn't have. Could be a
-          // partially-provisioned tenant or a config drift. 401 keeps
-          // us from leaking which slugs we know about.
-          return c.json({ error: 'Invalid or revoked API key' }, 401);
-        }
+        if (!tenantDb) return tenantUdeAfDrift(c, indexed.tenantSlug);
         const row = await tenantDb.db
           .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS, keyId: apiKeys.id, scope: apiKeys.scope, kbId: apiKeys.kbId })
           .from(apiKeys)
@@ -245,9 +270,7 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
       return c.json({ error: 'Session expired' }, 401);
     }
     const tenantDb = resolveTenantDb(c, indexed.tenantSlug);
-    if (!tenantDb) {
-      return c.json({ error: 'Session expired' }, 401);
-    }
+    if (!tenantDb) return tenantUdeAfDrift(c, indexed.tenantSlug);
     const result = await tenantDb.db
       .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS })
       .from(sessions)

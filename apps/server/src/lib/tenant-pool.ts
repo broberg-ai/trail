@@ -145,7 +145,7 @@ export function inferPrimarySlug(dbPath: string): string {
 
 export interface OpenTenantPoolArgs {
   primarySlug: string;
-  primaryDb: TrailDatabase;
+  primaryDb: TrailDatabase | null;
   /** Hook for per-tenant boot work (migrations, initFTS, ensureIngestUser…)
    * applied to each NEWLY-opened secondary tenant DB. The primary is
    * already booted by the caller — we only run this for secondaries. */
@@ -163,7 +163,7 @@ export interface OpenTenantPoolArgs {
  * 45 sekunder er rigeligt til en rask base (de to sunde brugte under ét
  * sekund) og kort nok til at en syg base ikke er en nedetid for de andre.
  */
-const BOOT_FRIST_MS = 45_000;
+export const TENANT_BOOT_FRIST_MS = 45_000;
 
 /**
  * Vent højst `ms` på `fn`. Det underliggende kald ANNULLERES IKKE — libsql
@@ -195,7 +195,9 @@ export async function medFrist<T>(ms: number, navn: string, fn: () => Promise<T>
  */
 export async function openTenantPool(args: OpenTenantPoolArgs): Promise<TenantPool> {
   const pool: TenantPool = new Map();
-  pool.set(args.primarySlug, args.primaryDb);
+  // F259.5 — er den primære base syg, står den slet ikke i puljen. Den
+  // hentes ind af startTenantRejoin når den svarer igen.
+  if (args.primaryDb) pool.set(args.primarySlug, args.primaryDb);
 
   const multiTenant = process.env.TRAIL_MULTI_TENANT === '1';
   if (!multiTenant) {
@@ -212,7 +214,7 @@ export async function openTenantPool(args: OpenTenantPoolArgs): Promise<TenantPo
     if (pool.has(slug)) continue; // primary handled by the caller
     console.log(`[multi-tenant] opening REMOTE tenant DB: ${slug} → ${url}`);
     try {
-      const db = await medFrist(BOOT_FRIST_MS, `${slug}: åbn + klargør`, async () => {
+      const db = await medFrist(TENANT_BOOT_FRIST_MS, `${slug}: åbn + klargør`, async () => {
         const d = await openRemoteTenantDb(slug, url);
         await args.bootSecondary(slug, d);
         return d;
@@ -235,7 +237,7 @@ export async function openTenantPool(args: OpenTenantPoolArgs): Promise<TenantPo
     if (!existsSync(path)) continue;
     console.log(`[multi-tenant] opening secondary tenant DB: ${slug}`);
     try {
-      const db = await medFrist(BOOT_FRIST_MS, `${slug}: åbn + klargør`, async () => {
+      const db = await medFrist(TENANT_BOOT_FRIST_MS, `${slug}: åbn + klargør`, async () => {
         const d = await createLibsqlDatabase({ path });
         await args.bootSecondary(slug, d);
         return d;
@@ -317,4 +319,74 @@ export async function provisionTenant(args: {
   console.log(`[multi-tenant] provisioned ${slug} → live in pool (${pool.size} tenants)`);
 
   return { slug, path };
+}
+
+
+/**
+ * F259.5 — HENT EN UDELADT KUNDE IND IGEN, UDEN EN GENSTART.
+ *
+ * F259.4 holdt en syg base ude så de raske kunder kunne betjenes. Men
+ * udelukkelsen var PERMANENT indtil nogen genstartede motoren i hånden — og
+ * en rettelse der kræver et menneske om natten er ikke en rettelse.
+ *
+ * MÅLT 6/9: broberg-ais base var rask igen 20 minutter efter den blev
+ * udeladt, og kunden var STADIG lukket ude, fordi puljen kun bygges ved
+ * opstart. Ejeren måtte spørges om lov til en genstart for at få sin egen
+ * Trail tilbage.
+ *
+ * Nu prøver motoren selv, med jævne mellemrum, og en kunde der bliver rask
+ * er tilbage inden for et minut. Den prøver KUN de kunder der mangler —
+ * en rask kunde røres aldrig.
+ */
+export function startTenantRejoin(args: {
+  pool: TenantPool;
+  intervalMs?: number;
+  /**
+   * Åbn OG klargør kunden. Injiceret frem for indbygget, fordi løkken her
+   * kun ejer to ting: hvornår der prøves, og hvornår en kunde er med i
+   * puljen. HVORDAN en base åbnes hører til hos kalderen.
+   *
+   * Det er ikke en abstraktion for dens egen skyld: min første udgave
+   * kaldte openRemoteTenantDb indeni, og så kunne prøven ikke nå logikken —
+   * åbningen fejlede mod en attrap-adresse før noget andet kørte, og
+   * «prøver igen» blev grøn uden at have målt en eneste gentagelse.
+   */
+  tilslut: (slug: string, url: string) => Promise<TrailDatabase>;
+  onJoin: (slug: string, db: TrailDatabase) => void;
+}): () => void {
+  const interval = args.intervalMs ?? 60_000;
+  let stoppet = false;
+
+  const ur = setInterval(() => {
+    void (async () => {
+      if (stoppet) return;
+      for (const [slug, url] of Object.entries(remoteTenantConfig())) {
+        if (stoppet || args.pool.has(slug)) continue;
+        try {
+          const db = await medFrist(TENANT_BOOT_FRIST_MS, `${slug}: gen-tilslutning`, () =>
+            args.tilslut(slug, url),
+          );
+          // Puljen sættes FØRST når basen er klar. En halvåben kunde i
+          // puljen ville svare på kald med en base der ikke er migreret.
+          args.pool.set(slug, db);
+          args.onJoin(slug, db);
+          console.log(`[multi-tenant] KUNDE TILBAGE I DRIFT: ${slug}`);
+        } catch (err) {
+          // Stille med vilje: en syg base er allerede meldt ved opstart, og
+          // en fejllinje hvert minut ville drukne alt andet i loggen.
+          if (process.env.TRAIL_REJOIN_VERBOSE === '1') {
+            console.error(`[multi-tenant] ${slug} svarer stadig ikke: ${err instanceof Error ? err.message : err}`);
+          }
+        }
+      }
+    })();
+  }, interval);
+
+  // unref: en tom gentagelses-løkke må ikke holde processen i live ved nedlukning.
+  if (typeof (ur as { unref?: () => void }).unref === 'function') (ur as { unref: () => void }).unref();
+
+  return () => {
+    stoppet = true;
+    clearInterval(ur);
+  };
 }

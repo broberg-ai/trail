@@ -106,3 +106,86 @@ grøn.
 - **Flys sundhedstjek har 5 sekunders tålmodighed.** Med vedligeholdelsen ude
   af serverings-vejen bør motoren svare hurtigt — men det skal måles, ikke
   antages.
+
+---
+
+## F259.5 — motoren må ALDRIG dø (ejerens ord, 6/9)
+
+> *«Motoren må bare ikke dø. ALDRIG. Der er ingen grund til det med de 2 kunder
+> vi pt. har.»*
+
+Han havde ret på begge punkter. To kunder kan ikke belaste noget — og den
+egentlige årsag var ikke datamængde, men at broberg-ais database var gået i
+**baglås**: 69 tråde, 52 % af kernen brændt, 40 tråde i kø om den samme lås,
+mens ingen spurgte den om noget. Målt på maskinen.
+
+Tre huller stod tilbage efter F259.4, og hvert af dem kunne gøre én kundes
+problem til alles igen:
+
+### 1. Den primære kunde var stadig dødelig
+F259.4 gjorde en SEKUNDÆR kundes base ufarlig. Den primære stod stadig i en
+top-level await. Gik Sannes base i baglås, døde motoren — og fd-aalborg var
+nede af en grund der intet havde med dem at gøre.
+
+Den primære er ikke særlig for betjeningen: auth slår kunden op i **puljen**
+(`pool.get(slug) ?? null`, miss ⇒ fejl), så `trail` er kun en standardværdi der
+altid overskrives. Mangler den, betjenes resten videre.
+
+### 2. Sundhedstjekket ville genindføre fejlen ad bagdøren
+Ruten spurgte den PRIMÆRE base. Var den ude af drift mens to andre kunder blev
+betjent fint, svarede den 503 → Fly erklærer motoren død → genstart → de to
+raske kunder er nede.
+
+**Sund betyder nu «jeg kan betjene nogen», ikke «den primære lever».** Mindst
+én kunde i puljen der svarer = 200. Ingen = 503. `tenants.up/down` viser hvem,
+så en delvis nedetid er synlig frem for at skulle udledes.
+
+### 3. Udelukkelsen var permanent indtil et menneske genstartede
+broberg-ais base var rask igen 20 minutter efter den blev udeladt, og kunden var
+STADIG lukket ude, fordi puljen kun bygges ved opstart. Ejeren måtte spørges om
+lov til en genstart for at få sin egen Trail tilbage.
+
+**En rettelse der kræver et menneske klokken tre om natten er ikke en rettelse.**
+Motoren prøver nu selv hvert minut, kun for de kunder der mangler, og en kunde
+der bliver rask er tilbage inden for et minut — med præcis samme behandling som
+en der var med fra start: tjenester startet, udskudt vedligeholdelse kørt.
+
+### Hvad prøverne måtte lære undervejs
+
+**Min første frist-prøve bestod på 257 ms** — altså uden nogensinde at nå
+fristen, fordi ÅBNINGEN fejlede først. Grøn uden at måle det den påstod.
+
+**Min første gen-tilslutnings-prøve kunne ikke nå logikken:** `openRemoteTenantDb`
+blev kaldt inde i løkken og fejlede mod en attrap-adresse før noget andet kørte.
+Åbningen er derfor **injiceret** — ikke en abstraktion for dens egen skyld, men
+fordi løkken kun ejer to ting: hvornår der prøves, og hvornår en kunde er med.
+
+**Og spærren fra F259 havde selv fået et hul** af min egen ændring: den kiggede
+kun på linjer uden indrykning, så et vedligeholdelses-kald lagt i en try-blok
+ville være sluppet forbi. Den fjerner nu funktions-kroppe og leder efter et
+KALD (`navn(`) frem for at navnet nævnes — importerne meldte sig ellers som
+tolv syndere.
+
+## F259.6 — «Invalid or revoked API key» var en løgn
+
+Ejeren, med skærmbillede fra sin telefon: **Something went wrong — Invalid or
+revoked API key**, på broberg-ai.
+
+Nøglen fejlede ingenting. Kunden var ude af drift. Beskeden sendte ham efter et
+nøgleproblem der ikke fandtes, mens den ægte årsag stod i motorens log.
+
+Den gamle begrundelse — *«401 keeps us from leaking which slugs we know about»* —
+gælder ikke her: vi er kun nået dertil fordi opkalderens EGEN legitimation slog
+op i indekset og navngav netop den kunde. Der er intet at lække. Det eneste 401
+opnåede var at skjule årsagen for den ene person der havde brug for den.
+
+**503, ikke 401** — det er en midlertidig tilstand på vores side, og klienten
+skal prøve igen, ikke skifte nøgle.
+
+## Stadig ikke løst
+
+- **Hvorfor gik basen i baglås?** Genstarten brød låsen, og trådtallet faldt fra
+  69 til 12 af sig selv. Årsagen er ikke fundet, og sqld kørte uden `RUST_LOG`,
+  så den havde intet at sige om sit eget arbejde. Logning bør slås til.
+- **Advarselstegnet fremover** er et højt trådtal **i tomgang** — ikke under
+  belastning, hvor 38 tråde er normalt.

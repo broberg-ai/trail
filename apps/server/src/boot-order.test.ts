@@ -38,34 +38,58 @@ const VEDLIGEHOLDELSE = [
   'recoverIngestJobs',
 ];
 
-/** Alt fra modulets top-level der udføres FØR serveren begynder at lytte. */
+/**
+ * Alt der UDFØRES i modulets top-level før serveren begynder at lytte.
+ *
+ * Funktions-KROPPE fjernes først. Det er ikke en detalje: bootTenantMaintenance
+ * er DEFINERET før Bun.serve, og en simpel tekstsøgning ville derfor melde den
+ * som en synder hver gang. Omvendt — og det er den farlige retning — fangede en
+ * tidligere udgave kun linjer uden indrykning, så et vedligeholdelses-kald lagt
+ * i en try-blok i top-level ville være sluppet forbi. Præcis den form opstod da
+ * den primære kundes opstart blev pakket ind i try/frist (F259.5), så hullet var
+ * ikke hypotetisk.
+ */
 function serveringsVejen(): string {
   const serve = kilde.indexOf('Bun.serve({');
   expect(serve).toBeGreaterThan(0); // uden dette anker beviser resten intet
-  const linjer = kilde.slice(0, serve).split('\n');
-  // Kun top-level sætninger: en linje uden indrykning der begynder med `await`
-  // eller `const … = await`. Funktions-KROPPE er indrykkede og tæller ikke —
-  // bootTenantMaintenance må gerne DEFINERES her, den må bare ikke KALDES.
-  return linjer.filter((l) => /^(await |const .*await |let .*await )/.test(l)).join('\n');
+  let hoved = kilde.slice(0, serve);
+
+  // Fjern hver top-level funktionskrop: fra «function X(» frem til den
+  // afsluttende «}» i kolonne 0.
+  const uden: string[] = [];
+  let i = 0;
+  while (i < hoved.length) {
+    const m = /(?:^|\n)(?:export )?(?:async )?function \w+/.exec(hoved.slice(i));
+    if (!m) { uden.push(hoved.slice(i)); break; }
+    const start = i + m.index;
+    uden.push(hoved.slice(i, start));
+    const slut = hoved.indexOf('\n}', start);
+    if (slut === -1) break;
+    i = slut + 2;
+  }
+  hoved = uden.join('');
+  return hoved;
 }
 
 test('ingen vedligeholdelses-opgave kaldes før Bun.serve', () => {
   const vejen = serveringsVejen();
-  const syndere = VEDLIGEHOLDELSE.filter((navn) => vejen.includes(navn));
+  // `navn(` — et KALD. En import nævner navnet uden parentes, og en tidligere
+  // udgave meldte derfor alle tolv importer som syndere.
+  const syndere = VEDLIGEHOLDELSE.filter((navn) => vejen.includes(`${navn}(`));
   expect(syndere).toEqual([]);
 });
 
 test('bootTenantMaintenance kaldes ikke i serverings-vejen', () => {
   // Den samlende funktion er lige så farlig som de tolv enkeltvis.
-  expect(serveringsVejen()).not.toContain('bootTenantMaintenance');
+  expect(serveringsVejen()).not.toContain('bootTenantMaintenance(');
 });
 
 test('kunderne får KUN det nødvendige før serveren lytter', () => {
   const vejen = serveringsVejen();
   // Positiv kontrol: det nødvendige SKAL stå der. Uden denne ville prøven
   // også være grøn hvis nogen slettede hele opstarten.
-  expect(vejen).toContain('bootTenantEssential');
-  expect(vejen).toContain('openTenantPool');
+  expect(vejen).toContain('bootTenantEssential(');
+  expect(vejen).toContain('openTenantPool(');
 });
 
 test('det nødvendige er kun skema-operationer — intet der skalerer med basen', () => {
@@ -76,7 +100,7 @@ test('det nødvendige er kun skema-operationer — intet der skalerer med basen'
   expect(krop).toContain('runMigrations');
   expect(krop).toContain('initFTS');
   expect(krop).toContain('ensureIngestUser');
-  for (const navn of VEDLIGEHOLDELSE) expect(krop).not.toContain(navn);
+  for (const navn of VEDLIGEHOLDELSE) expect(krop).not.toContain(`${navn}(`);
 });
 
 test('vedligeholdelsen kører EFTER serveren — i den udskudte fejning', () => {

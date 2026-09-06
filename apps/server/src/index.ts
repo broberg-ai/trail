@@ -6,6 +6,9 @@ import {
   provisionTenant,
   remoteTenantConfig,
   openRemoteTenantDb,
+  medFrist,
+  TENANT_BOOT_FRIST_MS,
+  startTenantRejoin,
 } from './lib/tenant-pool.js';
 import { ensureIngestUser } from './bootstrap/ingest-user.js';
 import { seedTenantIdentity } from './bootstrap/seed-tenant.js';
@@ -202,10 +205,40 @@ async function bootTenantDeferred(slug: string, db: TrailDatabase): Promise<void
 // primary and moves last). The explicit TRAIL_DB_REMOTE map decides —
 // never token-presence, never file-absence.
 const primaryRemoteUrl = remoteTenantConfig()[inferPrimarySlug(DEFAULT_DB_PATH)];
-const trail = primaryRemoteUrl
-  ? await openRemoteTenantDb(inferPrimarySlug(DEFAULT_DB_PATH), primaryRemoteUrl)
-  : await createLibsqlDatabase({ path: DEFAULT_DB_PATH });
-await bootTenantEssential(trail, inferPrimarySlug(DEFAULT_DB_PATH));
+
+/**
+ * F259.5 — HELLER IKKE DEN PRIMÆRE KUNDE MÅ KUNNE VÆLTE MOTOREN.
+ *
+ * F259.4 gjorde en SEKUNDÆR kundes syge base ufarlig. Den primære stod
+ * stadig i en top-level await: gik Sannes base i baglås som broberg-ais
+ * gjorde 6/9, døde motoren igen — og så var fd-aalborg nede af en grund der
+ * intet havde med dem at gøre.
+ *
+ * Ejerens krav, ordret: «Motoren må bare ikke dø. ALDRIG.»
+ *
+ * Den primære er ikke særlig for betjeningen: med multi-tenant slået til
+ * slår auth kunden op i PULJEN (`pool.get(slug) ?? null`, miss ⇒ 401), så
+ * `trail` er kun en standardværdi der altid bliver overskrevet. Mangler
+ * den, betjenes de øvrige kunder videre, og den primære hentes ind igen af
+ * gentagelses-løkken nedenfor så snart dens base svarer.
+ */
+let trail: TrailDatabase | null = null;
+try {
+  trail = await medFrist(TENANT_BOOT_FRIST_MS, `${inferPrimarySlug(DEFAULT_DB_PATH)}: åbn + klargør`, async () => {
+    const db = primaryRemoteUrl
+      ? await openRemoteTenantDb(inferPrimarySlug(DEFAULT_DB_PATH), primaryRemoteUrl)
+      : await createLibsqlDatabase({ path: DEFAULT_DB_PATH });
+    await bootTenantEssential(db, inferPrimarySlug(DEFAULT_DB_PATH));
+    return db;
+  });
+} catch (err) {
+  console.error(
+    `[boot] PRIMÆR KUNDE UDE AF DRIFT: ${inferPrimarySlug(DEFAULT_DB_PATH)} — ` +
+      `${err instanceof Error ? err.message : err}\n` +
+      `  Motoren starter alligevel og betjener de kunder der kan betjenes. ` +
+      `Den primære hentes ind igen af sig selv når dens base svarer.`,
+  );
+}
 
 // F40.2a-C: build the tenant pool. With TRAIL_MULTI_TENANT off the pool
 // has only the primary — engine behaves exactly like F40.1. With the
@@ -228,7 +261,15 @@ const tenantPool = await openTenantPool({
 const serviceStops: Array<() => void> = [];
 const jobRunners: Array<{ start(): Promise<void>; stop?: () => void | Promise<void> }> = [];
 
-for (const [slug, db] of tenantPool) {
+/**
+ * F259.5 — en kundes baggrunds-tjenester, startet som ÉN handling.
+ *
+ * Løftet ud af opstarts-løkken med vilje: en kunde der slutter sig til
+ * SENERE (fordi dens base var syg og blev rask) skal have nøjagtig de samme
+ * tjenester som en kunde der var med fra start. To lister der skal holdes
+ * ens bliver det aldrig — så der er kun én.
+ */
+async function startTenantServices(slug: string, db: TrailDatabase): Promise<void> {
   // F21 — periodic backpressure scheduler. Re-ticks queued ingest
   // work every 30s; one timer per tenant so jobs in tenant A never
   // wait on tenant B's rate cap.
@@ -383,7 +424,7 @@ const server = Bun.serve({
 });
 
 console.log(`trail server running on http://localhost:${server.port}`);
-console.log(`  database: ${trail.path}`);
+console.log(`  database: ${trail?.path ?? '(primær base ude af drift — betjener de øvrige)'}`);
 
 /**
  * F258 — EN BAGGRUNDS-FEJNING MÅ ALDRIG VÆLTE BETJENINGEN.
@@ -431,6 +472,36 @@ void (async () => {
     }
   }
 })();
+
+// F259.5 — start tjenesterne for hver kunde der ER i puljen.
+for (const [slug, db] of tenantPool) await startTenantServices(slug, db);
+
+/**
+ * F259.5 — og hent de udeladte ind igen af sig selv.
+ *
+ * En kunde der sluttede sig til senere får PRÆCIS samme behandling som en
+ * der var med fra start: tjenesterne startes, og den udskudte vedligeholdelse
+ * køres. Ellers ville en gen-tilsluttet kunde svare på kald men aldrig få sine
+ * link-fejninger eller sin job-kø — en halv kunde, hvilket er værre end en der
+ * er tydeligt ude.
+ */
+const stopRejoin = startTenantRejoin({
+  pool: tenantPool,
+  tilslut: async (slug, url) => {
+    const db = await openRemoteTenantDb(slug, url);
+    await bootTenantEssential(db, slug);
+    return db;
+  },
+  onJoin: (slug, db) => {
+    void startTenantServices(slug, db).catch((err) => {
+      console.error(`[rejoin] ${slug}: kunne ikke starte tjenester:`, err);
+    });
+    void bootTenantDeferred(slug, db).catch((err) => {
+      console.error(`[rejoin] ${slug}: udskudt fejning fejlede:`, err);
+    });
+  },
+});
+serviceStops.push(stopRejoin);
 
 // F196 — self-report this deploy to upmetrics (one success POST on boot,
 // fail-soft + no-op unless UPMETRICS_API_KEY + UPMETRICS_SITE are set).
