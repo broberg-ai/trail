@@ -153,6 +153,39 @@ export interface OpenTenantPoolArgs {
 }
 
 /**
+ * F259.4 — HVOR LÆNGE VI VENTER PÅ ÉN KUNDES BASE.
+ *
+ * Målt 6/9: broberg-ais sqld tog imod LÆSNINGER (0,2–8s) men svarede aldrig på
+ * en SKRIVNING — heller ikke `CREATE TABLE IF NOT EXISTS` på en tom tabel.
+ * Klientens egen frist er ~285s, og indtil den udløb ventede opstarten. Tre
+ * kunder stod stille mens én base tav.
+ *
+ * 45 sekunder er rigeligt til en rask base (de to sunde brugte under ét
+ * sekund) og kort nok til at en syg base ikke er en nedetid for de andre.
+ */
+const BOOT_FRIST_MS = 45_000;
+
+/**
+ * Vent højst `ms` på `fn`. Det underliggende kald ANNULLERES IKKE — libsql
+ * giver os ingen måde at afbryde en igangværende forespørgsel — så det kører
+ * videre og afvises senere. Det er netop dét F258's proces-vagt fanger; uden
+ * den ville en forsinket afvisning her lukke motoren.
+ */
+export async function medFrist<T>(ms: number, navn: string, fn: () => Promise<T>): Promise<T> {
+  let ur: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      fn(),
+      new Promise<never>((_, afvis) => {
+        ur = setTimeout(() => afvis(new Error(`frist på ${ms / 1000}s udløb — ${navn}`)), ms);
+      }),
+    ]);
+  } finally {
+    if (ur) clearTimeout(ur);
+  }
+}
+
+/**
  * Build the tenant pool. Always includes the primary; includes
  * secondaries only when TRAIL_MULTI_TENANT === '1'.
  *
@@ -178,9 +211,20 @@ export async function openTenantPool(args: OpenTenantPoolArgs): Promise<TenantPo
   for (const [slug, url] of Object.entries(remote)) {
     if (pool.has(slug)) continue; // primary handled by the caller
     console.log(`[multi-tenant] opening REMOTE tenant DB: ${slug} → ${url}`);
-    const db = await openRemoteTenantDb(slug, url);
-    await args.bootSecondary(slug, db);
-    pool.set(slug, db);
+    try {
+      const db = await medFrist(BOOT_FRIST_MS, `${slug}: åbn + klargør`, async () => {
+        const d = await openRemoteTenantDb(slug, url);
+        await args.bootSecondary(slug, d);
+        return d;
+      });
+      pool.set(slug, db);
+    } catch (err) {
+      console.error(
+        `[multi-tenant] KUNDE UDE AF DRIFT: ${slug} — ${err instanceof Error ? err.message : err}\n` +
+          `  Motoren betjener de øvrige kunder videre. Kald til ${slug} svarer 401 ` +
+          `(manglende slug i puljen), ALDRIG en anden kundes data.`,
+      );
+    }
   }
 
   const slugs = discoverTenantSlugs();
@@ -190,9 +234,18 @@ export async function openTenantPool(args: OpenTenantPoolArgs): Promise<TenantPo
     const path = join(DATA_DIR, slug, 'trail.db');
     if (!existsSync(path)) continue;
     console.log(`[multi-tenant] opening secondary tenant DB: ${slug}`);
-    const db = await createLibsqlDatabase({ path });
-    await args.bootSecondary(slug, db);
-    pool.set(slug, db);
+    try {
+      const db = await medFrist(BOOT_FRIST_MS, `${slug}: åbn + klargør`, async () => {
+        const d = await createLibsqlDatabase({ path });
+        await args.bootSecondary(slug, d);
+        return d;
+      });
+      pool.set(slug, db);
+    } catch (err) {
+      console.error(
+        `[multi-tenant] KUNDE UDE AF DRIFT: ${slug} — ${err instanceof Error ? err.message : err}`,
+      );
+    }
   }
 
   console.log(
