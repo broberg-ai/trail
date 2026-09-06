@@ -136,7 +136,7 @@ export function BrainVersionsPanel() {
     }
   }
 
-  if (!versions && !error) return <CenteredLoader />;
+  if (!versions && !error) return <CenteredLoader variant="list" />;
 
   return (
     <div class="page-shell" data-testid="brain-versions-root">

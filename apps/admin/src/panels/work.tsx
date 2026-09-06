@@ -141,7 +141,7 @@ export function WorkPanel() {
         </div>
       ) : null}
 
-      {items === null ? <CenteredLoader /> : null}
+      {items === null ? <CenteredLoader variant="list" /> : null}
 
       {items !== null ? (
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

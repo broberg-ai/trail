@@ -191,7 +191,7 @@ export function JobsPanel() {
         </div>
       ) : null}
 
-      {!jobs && !error ? <CenteredLoader /> : null}
+      {!jobs && !error ? <CenteredLoader variant="list" /> : null}
 
       {filtered && filtered.length === 0 ? (
         <div class="text-center py-16 text-[color:var(--color-fg-subtle)]">

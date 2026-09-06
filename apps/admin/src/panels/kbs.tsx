@@ -111,7 +111,7 @@ export function KnowledgeBasesPanel() {
     // than trusting the localStorage value at this point.
     return (
       <div class="page-shell">
-        <CenteredLoader label="Loading…" />
+        <CenteredLoader variant="list" />
       </div>
     );
   }

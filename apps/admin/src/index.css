@@ -811,3 +811,42 @@ html[data-theme="dark"] .menu-item.is-danger:hover { background: rgba(249,115,22
 @media (prefers-reduced-motion: reduce) {
   .sidebar-item__pulse { animation: none; }
 }
+
+/* F257.4 — vente-tilstanden. Skelettets skimmer og pulsens sweep.
+   Begge er rene CSS-animationer på temaets egne tokens, så de følger
+   lys/mørk uden en eneste hardkodet farve. */
+.skeleton-bar {
+  background: linear-gradient(
+    90deg,
+    var(--color-border) 25%,
+    color-mix(in srgb, var(--color-border) 40%, transparent) 37%,
+    var(--color-border) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+.pulse-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 38%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--color-accent), transparent);
+  animation: pulse-sweep 1.25s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes pulse-sweep {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(370%); }
+}
+
+/* Respektér at brugeren har bedt om mindre bevægelse. En vente-tilstand er
+   præcis den slags konstante animation der udløser ubehag hos nogle. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bar { animation: none; }
+  .pulse-track::after { animation: none; opacity: .5; width: 100%; }
+}

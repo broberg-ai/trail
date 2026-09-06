@@ -58,7 +58,7 @@ export function ManageTenantsPanel() {
   if (!me) {
     return (
       <div style={{ padding: 60 }}>
-        <CenteredLoader label="Loading…" />
+        <CenteredLoader variant="list" />
       </div>
     );
   }

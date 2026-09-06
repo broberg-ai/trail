@@ -1,30 +1,28 @@
 /**
- * CenteredLoader — full-area centered NeuronLoader + label.
+ * CenteredLoader — panelets vente-tilstand.
  *
- * For whole-panel or whole-app loading states where the old tiny
- * "Henter…" text looked like the app had stalled. Uses the same
- * 400ms fade-in delay as `.loading-delayed` so fast loads don't
- * flash it. Neurons pulse, synapses draw in — same language as the
- * auto-link button animation, scaled up.
+ * F257.4: erstattede den 320px store neuron-animation i et 60vh-felt. Den
+ * fyldte omkring en tredjedel af skærmen for at sige «vent», og den sagde
+ * ikke andet end det.
+ *
+ * NAVNET ER BEHOLDT MED VILJE. 22 kaldesteder bruger det, og at omdøbe dem
+ * alle sammen i samme ombæring ville gøre diff'en umulig at læse — og
+ * blande «vi skiftede udseendet» sammen med «vi rørte 22 filer». Formen
+ * ligger i {@link WaitingState}; denne er den tynde indpakning kaldestederne
+ * allerede kender.
  */
-import { NeuronLoader } from './neuron-loader';
+import { WaitingState } from './waiting-state';
 import { t } from '../lib/i18n';
 
 interface Props {
-  /** Optional override for the label below the animation. Defaults to common.loading. */
+  /** Tekst under pulsen. Skelet-varianten er tekstløs og ignorerer den. */
   label?: string;
-  /** Pixel size of the loader. Defaults to 320px — hero size, commands the screen. */
-  size?: number;
+  /** `list` → skelet-rækker. `value` → pulslinje (standard). */
+  variant?: 'list' | 'value';
+  /** Antal skelet-rækker. Kun for `list`. */
+  rows?: number;
 }
 
-export function CenteredLoader({ label, size = 320 }: Props) {
-  // gap-16 (64px) clears the pulse ring at peak scale 1.1 which
-  // extends ~47px below the SVG's layout box at size=320. Without
-  // this the label overlaps the ring stroke.
-  return (
-    <div class="loading-delayed flex flex-col items-center justify-center gap-16 min-h-[60vh] text-[color:var(--color-fg-muted)]">
-      <NeuronLoader size={size} />
-      <span class="text-sm tracking-wide">{label ?? t('common.loading')}</span>
-    </div>
-  );
+export function CenteredLoader({ label, variant, rows }: Props) {
+  return <WaitingState label={label ?? t('common.loading')} variant={variant} rows={rows} />;
 }

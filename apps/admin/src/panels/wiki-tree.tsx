@@ -314,7 +314,7 @@ export function WikiTreePanel() {
         </div>
       ) : null}
 
-      {!pages && !error ? <CenteredLoader /> : null}
+      {!pages && !error ? <CenteredLoader variant="list" /> : null}
 
       {grouped?.length === 0 ? (
         <div class="text-center py-16 text-[color:var(--color-fg-subtle)]">

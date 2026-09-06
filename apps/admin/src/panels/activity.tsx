@@ -131,7 +131,7 @@ export function ActivityPanel() {
       </div>
     );
   }
-  if (!filtered) return <CenteredLoader />;
+  if (!filtered) return <CenteredLoader variant="list" />;
 
   return (
     <div class="page-shell" data-testid="activity-root">

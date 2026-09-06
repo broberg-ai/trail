@@ -182,12 +182,23 @@ const SECTIONS: Section[] = [
   {
     id: 'centered-loader',
     navLabel: 'Panel loader',
-    title: 'CenteredLoader — full-panel loading state',
+    title: 'CenteredLoader — vente-tilstanden (F257.4)',
     blurb:
-      'What KbsPanel (/) renders while listKnowledgeBases() is pending. 400ms fade-in so fast loads don\'t flash.',
+      'Godkendt mockup 6/9: skelet til lister, puls til alt andet. Ingenting renderes de første 300 ms, så et hurtigt svar aldrig viser en animation — genindlæs siden for at se forsinkelsen.',
     render: () => (
-      <div class="rounded-md border border-[color:var(--color-border)] overflow-hidden">
-        <CenteredLoader />
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="rounded-md border border-[color:var(--color-border)] overflow-hidden">
+          <div class="border-b border-[color:var(--color-border)] px-3 py-2 text-[11px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)]">
+            variant=&quot;list&quot; — skelettet
+          </div>
+          <CenteredLoader variant="list" />
+        </div>
+        <div class="rounded-md border border-[color:var(--color-border)] overflow-hidden">
+          <div class="border-b border-[color:var(--color-border)] px-3 py-2 text-[11px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)]">
+            variant=&quot;value&quot; — pulsen (standard)
+          </div>
+          <CenteredLoader />
+        </div>
       </div>
     ),
   },

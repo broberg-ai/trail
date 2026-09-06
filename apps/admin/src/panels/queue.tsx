@@ -908,7 +908,7 @@ export function QueuePanel() {
         </div>
       ) : null}
 
-      {!data && !error ? <CenteredLoader /> : null}
+      {!data && !error ? <CenteredLoader variant="list" /> : null}
 
       {data && data.items.length === 0 ? (
         <div class="text-center py-16 text-[color:var(--color-fg-subtle)]">

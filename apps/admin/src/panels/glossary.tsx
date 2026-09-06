@@ -29,7 +29,7 @@ export function GlossaryPanel() {
         <p class="text-[color:var(--color-fg-muted)] text-sm">{t('glossary.subtitle')}</p>
       </header>
 
-      {!glossary ? <CenteredLoader /> : null}
+      {!glossary ? <CenteredLoader variant="list" /> : null}
 
       <ul class="space-y-6">
         {sorted.map((term) => (

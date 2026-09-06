@@ -52,7 +52,7 @@ importers:
         version: 10.29.1
       preact-iso:
         specifier: ^2.9.0
-        version: 2.11.1(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
+        version: 2.11.1(preact-render-to-string@6.7.0(preact@10.29.1))(preact@10.29.1)
       sigma:
         specifier: ^3.0.1
         version: 3.0.2(graphology-types@0.24.8)
@@ -69,6 +69,9 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17
+      preact-render-to-string:
+        specifier: ^6.7.0
+        version: 6.7.0(preact@10.29.1)
       tailwindcss:
         specifier: ^4.1.15
         version: 4.2.2
@@ -218,7 +221,7 @@ importers:
         version: 10.29.1
       preact-iso:
         specifier: ^2.9.0
-        version: 2.11.1(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1)
+        version: 2.11.1(preact-render-to-string@6.7.0(preact@10.29.1))(preact@10.29.1)
       tailwindcss:
         specifier: ^4.1.15
         version: 4.2.2
@@ -3240,8 +3243,8 @@ packages:
       preact: '>=10 || >= 11.0.0-0'
       preact-render-to-string: '>=6.4.0'
 
-  preact-render-to-string@6.6.7:
-    resolution: {integrity: sha512-3XdbsX3+vn9dQW+jJI/FsI9rlkgl6dbeUpqLsChak6jp3j3auFqBCkno7VChbMFs5Q8ylBj6DrUkKRwtVN3nvw==}
+  preact-render-to-string@6.7.0:
+    resolution: {integrity: sha512-Z4WR8fmLMRpdYqJ9i7vrlXSsSrxVJydwrkEXHapexfARbWfGb7vGcnvNQnIzN0cXciMVOlz/XLoiMCi9gUsy9Q==}
     peerDependencies:
       preact: '>=10 || >= 11.0.0-0'
 
@@ -6439,12 +6442,12 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  preact-iso@2.11.1(preact-render-to-string@6.6.7(preact@10.29.1))(preact@10.29.1):
+  preact-iso@2.11.1(preact-render-to-string@6.7.0(preact@10.29.1))(preact@10.29.1):
     dependencies:
       preact: 10.29.1
-      preact-render-to-string: 6.6.7(preact@10.29.1)
+      preact-render-to-string: 6.7.0(preact@10.29.1)
 
-  preact-render-to-string@6.6.7(preact@10.29.1):
+  preact-render-to-string@6.7.0(preact@10.29.1):
     dependencies:
       preact: 10.29.1
 

@@ -336,7 +336,7 @@ export function ImagesPanel() {
         </div>
       ) : null}
 
-      {hits.length === 0 && loading ? <CenteredLoader /> : null}
+      {hits.length === 0 && loading ? <CenteredLoader variant="list" /> : null}
 
       {hits.length > 0 && view === 'cards' ? (
         <div

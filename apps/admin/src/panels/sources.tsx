@@ -463,7 +463,7 @@ export function SourcesPanel() {
         </div>
       ) : null}
 
-      {!docs && !error ? <CenteredLoader /> : null}
+      {!docs && !error ? <CenteredLoader variant="list" /> : null}
 
       {docs && docs.length === 0 ? (
         <div class="text-center py-16 text-[color:var(--color-fg-subtle)]">

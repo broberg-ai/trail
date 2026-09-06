@@ -231,7 +231,7 @@ function ReaderView() {
         </div>
       ) : null}
 
-      {!pages && !error ? <CenteredLoader /> : null}
+      {!pages && !error ? <CenteredLoader variant="list" /> : null}
 
       {pages && !d ? (
         <div class="text-center py-16">

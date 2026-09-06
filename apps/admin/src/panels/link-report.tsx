@@ -168,7 +168,7 @@ export function LinkReportPanel() {
         </div>
       ) : null}
 
-      {findings === null ? <CenteredLoader /> : null}
+      {findings === null ? <CenteredLoader variant="list" /> : null}
 
       {findings !== null && findings.length === 0 ? (
         <div class="text-center py-16 text-[color:var(--color-fg-muted)]">
