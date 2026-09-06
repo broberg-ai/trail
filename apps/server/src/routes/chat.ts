@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { vectorSearch, hybridEnabled } from '../services/hybrid-search.js';
 import {
   documents,
   documentImages,
@@ -650,11 +651,51 @@ async function retrieveContext(
     // SAMME FUNKTION SOM SØGERUTEN. To kopier ville lade Aidan og søgefeltet
     // svare forskelligt på det samme navn, og så kan ingen af dem bruges til
     // at kontrollere den anden.
+    // F262 — AIDAN FÅR BETYDNINGS-SØGNINGEN.
+    //
+    // Målt 6/9: «vector», «embed», «cosine» og «hybrid» fandtes IKKE i denne
+    // fil. Chatten hentede på ordfrekvens alene, så hele det semantiske
+    // indeks — 1.205 vektorer, 100 % dækning — var usynligt for Aidan. Alt
+    // arbejdet med F254 og F260 gjorde derfor ingenting for det ene sted hvor
+    // et menneske faktisk stiller spørgsmål.
+    //
+    // Konsekvensen var ikke bare dårligere svar, men en anden SLAGS svar:
+    // «hvem er grundlæggeren» har ingen ordmatch på «grundlægger», så
+    // spørgsmål der ikke bruger Neuronernes egne ord kunne slet ikke besvares.
+    //
+    // KANDIDATERNE FØDES IND HER, ØVERST I TRAGTEN — samme valg som søgeruten
+    // traf i F254.2, og af samme grund: alt nedenfor (kind-filter, faded
+    // heuristics, isChatVisible, publikums-filter) gælder så automatisk. En
+    // parallel vej med sine egne kopier af de spærrer er hvordan man lækker en
+    // intern Neuron til en offentlig chat.
+    let vektorIds: string[] = [];
+    if (await hybridEnabled(trail, kbId)) {
+      const vec = await vectorSearch(trail, tenantId, kbId, query, PER_KB_DOCS);
+      vektorIds = vec.hits.map((h) => h.documentId);
+    }
+
     const præcise = await exactTitleMatches(trail, tenantId, kbId, query);
     const præciseIds = new Set(præcise.map((p) => p.id));
     for (const p of præcise) {
       if (!docHits.some((h) => h.id === p.id)) {
         docHits.push({ id: p.id, title: p.title, filename: p.filename, path: p.path, kind: 'wiki' } as never);
+      }
+    }
+
+    // Vektor-træf som ordsøgningen ikke allerede havde. Hentes med deres
+    // rigtige identitet, så de kan krediteres — en Neuron uden filnavn kan
+    // bidrage til svaret og aldrig nævnes (F261.3).
+    const nyeVektorIds = vektorIds.filter((id) => !docHits.some((h) => h.id === id));
+    if (nyeVektorIds.length > 0) {
+      const rows = (await trail.execute(
+        `SELECT id, title, filename, path FROM documents
+          WHERE tenant_id = ? AND knowledge_base_id = ? AND archived = 0 AND kind = 'wiki'
+            AND id IN (${nyeVektorIds.map(() => '?').join(',')})`,
+        [tenantId, kbId, ...nyeVektorIds],
+      )).rows as Array<{ id: string; title: string; filename: string; path: string }>;
+      for (const r of rows) {
+        docHits.push({ id: String(r.id), title: String(r.title ?? ''), filename: String(r.filename ?? ''),
+                       path: String(r.path ?? ''), kind: 'wiki' } as never);
       }
     }
 
