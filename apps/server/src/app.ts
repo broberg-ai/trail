@@ -9,6 +9,7 @@ import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { kbRoutes } from './routes/knowledge-bases.js';
 import { documentRoutes } from './routes/documents.js';
+import { compileJobRoutes } from './routes/compile-jobs.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { searchRoutes } from './routes/search.js';
 import { retrieveRoutes } from './routes/retrieve.js';
@@ -180,6 +181,7 @@ export function createApp(trail: TrailDatabase | null, tenantPool: TenantPool): 
   app.route('/api/v1', ambientRoutes);
   app.route('/api/v1', kbRoutes);
   app.route('/api/v1', documentRoutes);
+  app.route('/api/v1', compileJobRoutes);
   app.route('/api/v1', uploadRoutes);
   app.route('/api/v1', searchRoutes);
   app.route('/api/v1', retrieveRoutes);

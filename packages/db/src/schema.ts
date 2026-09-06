@@ -200,6 +200,12 @@ export const documents = sqliteTable(
     // Neurons (both are status='ready', neuronCount 0). Default false →
     // existing uploads are untouched (compile fires as today).
     awaitingLocalCompile: integer('awaiting_local_compile', { mode: 'boolean' }).notNull().default(false),
+    // F263.1 — jobkøens LEASE. `awaitingLocalCompile` siger at kilden venter;
+    // disse to siger HVEM der arbejder på den og HVOR LÆNGE reservationen
+    // gælder. En tid og ikke en lås: udløber den, bliver jobbet ledigt af sig
+    // selv, så en arbejder der dør ikke kan blokere en kilde for evigt.
+    compileClaimedBy: text('compile_claimed_by'),
+    compileLeaseUntil: text('compile_lease_until'),
     // F25/F47 prep — pre-ingest extraction cost (vision-call for image
     // sources, Whisper-transcription for audio, future OCR for scans).
     // Complements ingest_jobs.cost_cents (F149) which tracks compile-fasen.

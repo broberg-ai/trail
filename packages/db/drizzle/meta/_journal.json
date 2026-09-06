@@ -372,6 +372,13 @@
       "when": 1788570000000,
       "tag": "0052_hybrid_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "6",
+      "when": 1788728484975,
+      "tag": "0053_compile_job_lease",
+      "breakpoints": true
     }
   ]
 }
