@@ -189,7 +189,10 @@ historyRoutes.post('/knowledge-bases/:kbId/index', async (c) => {
   return c.json({
     knowledgeBaseId: kbId,
     databasePath: trail.path,
-    before: { embedded: before.embedded, chunks: before.chunks, ratio: before.ratio },
+    before: {
+      embedded: before.embedded, chunks: before.chunks, ratio: before.ratio,
+      byKind: before.byKind,
+    },
     ...r,
     costUsd: r.costCents / 100,
     // Både «jeg skrev N» og «basen er nu dækket X» — to forskellige påstande,

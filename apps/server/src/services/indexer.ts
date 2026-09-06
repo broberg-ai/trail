@@ -32,6 +32,7 @@
 import { contentHash, storeEmbedding, coverage, EMBEDDING_MODEL } from '@trail/core';
 import type { TrailDatabase } from '@trail/db';
 import { embed } from './embedder.js';
+import { chunkText, storeChunks } from './chunker.js';
 
 /**
  * PORTIONER MÅLES I TOKENS, IKKE I ANTAL — og det er en rettelse målt 6/9.
@@ -173,7 +174,23 @@ export async function sweepKb(
   tenantId: string,
   knowledgeBaseId: string,
   opts: { max?: number; onProgress?: (done: number, total: number, cents: number) => void } = {},
-): Promise<IndexResult & { coverageAfter: number }> {
+): Promise<IndexResult & {
+  coverageAfter: number;
+  backfilledDocuments: number;
+  backfilledChunks: number;
+  byKind: Record<string, { chunks: number; embedded: number }>;
+}> {
+  // F254.5 — stykker FØR vektorer. En Neuron uden stykker er usynlig for
+  // vektor-søgningen, og var det for hele korpusset indtil 6/9. Rækkefølgen er
+  // bærende: bagfyldes der efter embeddingen, bliver de nye stykker først
+  // vektoriseret ved NÆSTE fejning, og en bagfyldning ville melde færdig med
+  // halvdelen af arbejdet gjort.
+  const bagfyldt = await backfillChunks(db, tenantId, knowledgeBaseId, async (documentId, kbId, content) => {
+    const stykker = chunkText(content);
+    if (stykker.length > 0) await storeChunks(db, documentId, tenantId, kbId, stykker);
+    return stykker.length;
+  });
+
   let rows = await stale(db, { tenantId, knowledgeBaseId });
   if (opts.max) rows = rows.slice(0, opts.max);
 
@@ -203,6 +220,76 @@ export async function sweepKb(
   return {
     chunks: rows.length, embedded, skipped, costCents, inputTokens,
     ...(errors.length > 0 ? { errors } : {}),
+    backfilledDocuments: bagfyldt.documents,
+    backfilledChunks: bagfyldt.chunks,
     coverageAfter: cov.ratio,
+    byKind: cov.byKind,
   };
+}
+
+/**
+ * F254.5 — BAGFYLD TEKSTSTYKKER FØR DU EMBEDDER.
+ *
+ * Målt 6. september 2026, mens den sidste indeksering kørte: hvert eneste
+ * tekststykke i hver eneste videnbase tilhørte et `kind='source'`-dokument.
+ * Ikke én Neuron. Fordelingen er entydig — stykke-tallet er fuldt forklaret af
+ * kilderne alene:
+ *
+ *     base              kilder  Neuroner  stykker   stykker/kilde
+ *     broberg-ai           116       202      343            2,96
+ *     sanne-andersen        82       239      569            6,94
+ *     buddy-sessions         2     5.699       44           22,00
+ *     cb-m1                  2       552        1            0,50
+ *
+ * ÅRSAGEN: `storeChunks` kaldes seks steder — upload, redigering,
+ * gen-kompilering, ambient, gendannelse — og INGEN af dem er den vej en Neuron
+ * bliver født. Kandidat-godkendelsen (`wiki-write`, og dermed trail_save,
+ * MCP'en, local-ingest, chat-gem) har aldrig skrevet et stykke.
+ *
+ * Det ramte ikke tekst-søgningen, og derfor lå det uopdaget: `documents_fts`
+ * indekserer dokumenterne selv, uafhængigt af stykker. Stykke-tabellen gav kun
+ * passage-niveauet — et savn, ikke et brud. Den blev bærende den dag F254 kom,
+ * for vektorerne lægges på STYKKER. Så vektor-indekset dækkede den skrabede
+ * halvdel af korpusset og ikke den skrevne — præcis omvendt af hele præmissen.
+ *
+ * OG MIN EGEN DÆKNINGSMÅLER KUNNE IKKE SE DET. `coverage()` tæller stykker med
+ * vektor ud af stykker DER FINDES. Findes stykket ikke, indgår det hverken i
+ * tælleren eller i nævneren — så en base uden ét eneste Neuron-stykke melder
+ * 100 %, sandt om en population der udelader netop det der mangler. Det er
+ * søsteren til den falsk-røde nævner fra i går (392fb00): samme funktion,
+ * modsat fortegn. En måler hvis population skrumper når fejlen sker, kan ikke
+ * se fejlen. Derfor rapporterer `/index` nu fordelt på dokumenttype.
+ *
+ * FEJER, IKKE KROG — samme valg som resten af filen, og her stærkere: skrive-
+ * vejen har ikke seks kaldsteder der glemmer at kalde, den har NUL. En krog ét
+ * sted er et løfte hvert fremtidigt skrivested skal huske at holde; en fejer
+ * der spørger basen «hvilke dokumenter har ingen stykker?» kan ikke narres.
+ * Og den bagfylder de ~6.700 eksisterende Neuroner i samme mekanisme.
+ */
+export async function backfillChunks(
+  db: TrailDatabase,
+  tenantId: string,
+  knowledgeBaseId: string,
+  storeChunksFn: (documentId: string, kbId: string, content: string) => Promise<number>,
+): Promise<{ documents: number; chunks: number }> {
+  const rows = (await db.execute(
+    `SELECT d.id AS id, d.content AS content
+       FROM documents d
+      WHERE d.tenant_id = ? AND d.knowledge_base_id = ? AND d.archived = 0
+        AND NOT EXISTS (SELECT 1 FROM document_chunks c WHERE c.document_id = d.id)`,
+    [tenantId, knowledgeBaseId],
+  )).rows as Array<{ id: string; content: string | null }>;
+
+  let documents = 0;
+  let chunks = 0;
+  for (const r of rows) {
+    // Et tomt dokument springes over UDEN at kalde storeChunks. Et kald med nul
+    // stykker ville rydde og genindsætte ingenting i en transaktion, og
+    // dokumentet ville stadig mangle stykker ved næste fejning — arbejde der
+    // gentages for evigt uden at flytte noget.
+    if (!r.content || r.content.trim().length === 0) continue;
+    const n = await storeChunksFn(r.id, knowledgeBaseId, r.content);
+    if (n > 0) { documents += 1; chunks += n; }
+  }
+  return { documents, chunks };
 }

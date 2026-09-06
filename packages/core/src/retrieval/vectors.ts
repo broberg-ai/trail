@@ -116,7 +116,25 @@ export async function coverage(
   tenantId: string,
   knowledgeBaseId: string,
   model = EMBEDDING_MODEL,
-): Promise<{ chunks: number; embedded: number; stale: number; ratio: number }> {
+): Promise<{
+  chunks: number;
+  embedded: number;
+  stale: number;
+  ratio: number;
+  /**
+   * F254.5 — FORDELT PÅ DOKUMENTTYPE, og det er ikke pynt.
+   *
+   * Målt 6/9 2026: hvert eneste tekststykke i hver eneste base tilhørte et
+   * kind='source'-dokument. Nul Neuroner. Alligevel meldte denne funktion
+   * 100 % — helt korrekt, om en population der udelod netop det der manglede,
+   * fordi et stykke der ikke findes hverken tælles i tælleren eller i nævneren.
+   *
+   * Et samlet forholdstal kan derfor aldrig afsløre at den ene halvdel af
+   * korpusset er fraværende. Et tal der siger «wiki: 0/202» kan ingen læse som
+   * succes. Det er hele grunden til at feltet er her.
+   */
+  byKind: Record<string, { chunks: number; embedded: number }>;
+}> {
   const r = (await db.execute(
     `SELECT
        (SELECT COUNT(*) FROM document_chunks c
@@ -145,7 +163,28 @@ export async function coverage(
 
   const chunks = Number(r.chunks);
   const embedded = Number(r.with_any) - stale;
-  return { chunks, embedded, stale, ratio: chunks === 0 ? 1 : embedded / chunks };
+
+  // Forældede indgår her som «embedded», modsat totalen ovenfor. Fordelingen
+  // svarer på ét spørgsmål — «er den skrevne halvdel overhovedet med?» — og
+  // dét spørgsmål ændrer en forældet vektor ikke svaret på.
+  const kindRows = (await db.execute(
+    `SELECT d.kind AS kind,
+            COUNT(*) AS chunks,
+            SUM(CASE WHEN e.chunk_id IS NULL THEN 0 ELSE 1 END) AS embedded
+       FROM document_chunks c
+       JOIN documents d ON d.id = c.document_id
+       LEFT JOIN chunk_embeddings e ON e.chunk_id = c.id AND e.model = ?
+      WHERE c.tenant_id = ? AND c.knowledge_base_id = ? AND d.archived = 0
+      GROUP BY d.kind`,
+    [model, tenantId, knowledgeBaseId],
+  )).rows as Array<{ kind: string; chunks: number; embedded: number }>;
+
+  const byKind: Record<string, { chunks: number; embedded: number }> = {};
+  for (const k of kindRows) {
+    byKind[k.kind] = { chunks: Number(k.chunks), embedded: Number(k.embedded) };
+  }
+
+  return { chunks, embedded, stale, ratio: chunks === 0 ? 1 : embedded / chunks, byKind };
 }
 
 /** Alle brugbare vektorer i en videnbase. Ved 2,4 MB er det billigere end et indeks. */
