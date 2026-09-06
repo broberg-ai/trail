@@ -329,6 +329,41 @@ const server = Bun.serve({
 console.log(`trail server running on http://localhost:${server.port}`);
 console.log(`  database: ${trail.path}`);
 
+/**
+ * F258 — EN BAGGRUNDS-FEJNING MÅ ALDRIG VÆLTE BETJENINGEN.
+ *
+ * MÅLT 6/9 2026, produktionen NEDE i et nedbruds-loop:
+ *
+ *     TimeoutError: The operation timed out.
+ *     Main child exited normally with code: 1
+ *     [  308.349265] reboot: Restarting system
+ *
+ * Motoren kørte 308 sekunder, styrtede, genstartede, styrtede igen. Alt
+ * autentificeret svarede 503 efter 35 sekunder; kun admin-serverens eget
+ * /api/health svarede hurtigt — og DEN rører aldrig motoren, så hver «0,2s
+ * health»-måling den dag målte den forkerte proces.
+ *
+ * Fejningerne nedenfor ER pakket i try/catch. Det hjalp ikke: libsql-klientens
+ * timeout ankommer som en AFVIST PROMISE uden for det await der blev fanget,
+ * og Bun afslutter processen ved en ubehandlet afvisning. En catch dækker den
+ * kode den står om — ikke alt det arbejde kaldet satte i gang.
+ *
+ * Vagten er derfor på PROCESSEN, ikke på kaldestedet. En fejning er
+ * vedligeholdelse; den må fejle, larme og prøve igen senere. Den må aldrig
+ * lukke butikken for tre kunder.
+ *
+ * BEVIDST IKKE FOR uncaughtException: dér kan tilstanden være korrupt, og at
+ * køre videre er værre end at genstarte. En afvist promise fra et
+ * baggrundskald er en anden sag — der er intet korrupt, der er bare noget der
+ * ikke blev færdigt.
+ */
+process.on('unhandledRejection', (grund) => {
+  console.error(
+    '[unhandled] en baggrunds-opgave fejlede — motoren kører videre:',
+    grund instanceof Error ? `${grund.name}: ${grund.message}` : grund,
+  );
+});
+
 // F222.3 — deferred maintenance sweeps run now that customers are served.
 // Sequential per tenant (one sweep at a time keeps the DB machine calm).
 void (async () => {
