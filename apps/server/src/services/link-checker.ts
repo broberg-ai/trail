@@ -363,14 +363,6 @@ export async function runFullLinkCheck(
     )
     .all();
 
-  let openRecorded = 0;
-  let resolved = 0;
-  for (const d of docs) {
-    const r = await rescanDocLinks(trail, d.id);
-    openRecorded += r.recorded;
-    resolved += r.resolved;
-  }
-
   /**
    * F257.2 — LUK FUND HVIS KILDE-DOKUMENT ER ARKIVERET.
    *
@@ -387,6 +379,14 @@ export async function runFullLinkCheck(
    * bliver færdigt: en fjerdedel af listen handler om sider der ikke er i
    * basen længere.
    *
+   * RÆKKEFØLGEN ER BÆRENDE, og den er målt: oprydningen kører FØR den lange
+   * løkke. En fuld scanning af broberg.ai (250+ dokumenter, hver med en
+   * rundtur til sqld) overlever ikke admin-proxyens timeout — kaldet svarede
+   * «engine unreachable» tre gange i træk 6/9. Lå oprydningen bagefter, ville
+   * den aldrig nå at køre på præcis de baser hvor den betyder mest.
+   *
+   * Én billig, sikker UPDATE først; den lange, afbrydelige del bagefter.
+   *
    * `status='resolved'` og ikke DELETE: rækken er dokumentation for at linket
    * ENGANG var brudt. En sletning ville skjule at det nogensinde stod der.
    */
@@ -402,6 +402,15 @@ export async function runFullLinkCheck(
             AND knowledge_base_id = ${kbId}
             AND archived = 1)`);
   const arkivLukket = Number(forældreløse.rowsAffected ?? 0);
+
+
+  let openRecorded = 0;
+  let resolved = 0;
+  for (const d of docs) {
+    const r = await rescanDocLinks(trail, d.id);
+    openRecorded += r.recorded;
+    resolved += r.resolved;
+  }
 
   return { docsScanned: docs.length, openRecorded, resolved: resolved + arkivLukket, arkivLukket };
 }

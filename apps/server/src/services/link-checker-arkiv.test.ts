@@ -47,3 +47,15 @@ test('arkiv-lukninger tælles FOR SIG i rapporten', () => {
   // en reparation.
   expect(kilde).toContain('arkivLukket');
 });
+
+test('OPRYDNINGEN KØRER FØR DEN LANGE LØKKE — ellers når den aldrig at køre', () => {
+  // MÅLT 6/9: en fuld scanning af broberg.ai (250+ dokumenter) overlever ikke
+  // admin-proxyens timeout — «engine unreachable» tre gange i træk. Lå
+  // oprydningen bagefter løkken, ville den aldrig køre på præcis de baser hvor
+  // den betyder mest. Én billig sikker UPDATE først, den afbrydelige del efter.
+  const iOprydning = kilde.indexOf('UPDATE broken_links');
+  const iLoekke = kilde.indexOf('for (const d of docs)');
+  expect(iOprydning).toBeGreaterThan(-1);
+  expect(iLoekke).toBeGreaterThan(-1);
+  expect(iOprydning).toBeLessThan(iLoekke);
+});
