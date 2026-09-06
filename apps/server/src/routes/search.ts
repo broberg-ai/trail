@@ -112,7 +112,7 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
     const ids = præcise.map((p) => p.id).filter((id) => !seenIds.has(id));
     if (ids.length > 0) {
       const rows = (await trail.execute(
-        `SELECT id, filename, path, title, seq_id AS seqId, '' AS highlight
+        `SELECT id, filename, path, title, seq AS seqId, '' AS highlight
            FROM documents
           WHERE tenant_id = ? AND knowledge_base_id = ? AND archived = 0
             AND id IN (${ids.map(() => '?').join(',')})`,
@@ -161,7 +161,7 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
       if (nye.length > 0) {
         const placeholders = nye.map(() => '?').join(',');
         const rows = (await trail.execute(
-          `SELECT id, filename, path, title, seq_id AS seqId, '' AS highlight
+          `SELECT id, filename, path, title, seq AS seqId, '' AS highlight
              FROM documents
             WHERE tenant_id = ? AND knowledge_base_id = ? AND archived = 0
               AND id IN (${placeholders})`,
