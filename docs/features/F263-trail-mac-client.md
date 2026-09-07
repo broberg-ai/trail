@@ -214,6 +214,66 @@ lavede hvad brydes.
 det er ingen ny omkostning — kun en der skal siges højt, fordi en stor fil
 gennem en tynd forbindelse er det man ville have gættet vi undgik.
 
+## Konto-vælgeren — hvorfor den ikke bare er en dropdown (F263.8)
+
+> **Ejeren, 7. september 2026:** *«Jeg har fuld Tenant admin kontrol på
+> app.trailmem.com så selvfølgelig skal jeg kunne have det samme på Ambient. Det
+> er sådan jeg vil have det — min Mac bliver ikke stjålet, jeg sidder med den
+> foran mig 15 timer i døgnet, og når jeg ikke sidder med den så sover jeg :)»*
+
+Risikoen blev forelagt (en konto-spændende enheds-nøgle når ALLE hans kunder,
+også Sannes) og afvist af ejeren. Det er hans maskine og hans vurdering.
+
+**F263.7 leverede en ETIKET i stedet for en vælger,** med den begrundelse at
+enhedens nøgle er mintet til én konto. Det var rigtigt om nutiden og forkert som
+konklusion: det er en ting der ikke er bygget, ikke en ting der ikke kan bygges.
+
+### Hvorfor det er tre lag og ikke ét
+
+Målt 7. september, og hver linje er en selvstændig blokering:
+
+| lag | hvad der står i vejen |
+|---|---|
+| **minten** | Enhedens nøgle skrives KUN i tenantens egen motor-db (`routes/ambient.ts`). Kontrol-planet har aldrig set den. |
+| **proxyen** | `app.trailmem.com` slår nøgler op i `controlApiKeys`. En ukendt nøgle → `null` → fald tilbage til cookie → **401**. Ambient kan altså ikke engang tale med den flade der kan skifte konto. |
+| **scopet** | Kun `scope === 'all'` udløser konto-valget (`proxy.ts:156`). |
+
+### Fælden, og den er hele grunden til at kortet har en plan
+
+Den oplagte rettelse er at minte enheds-nøglen som `scope: 'all'`. Så virker
+konto-valget — **og motorens rute-allowlist falder bort.** `scopeAllows` i
+`middleware/auth.ts` er skrevet sådan at alt der ikke er `ambient` eller
+`partner` er **ubegrænset**:
+
+```ts
+if (scope === PARTNER_SCOPE) return partnerAllows(kbId, method, path);
+if (scope !== 'ambient') return { allowed: true };     // ← 'all' lander her
+```
+
+Enheden ville dermed få hele API'et — indstillinger, nøgler, brugere, sletning.
+**Ejeren bad om konto-kontrol, ikke om at gøre enheden ubegrænset**, og de to
+ligner hinanden lige indtil man læser den linje.
+
+### Designet: to scopes, to lag, to spørgsmål
+
+```
+   kontrol-planet          →  HVILKEN KONTO   scope='all'      (begrænset af medlemskaber)
+   motoren                 →  HVILKE RUTER    scope='ambient'  (allowlisten fra F263.7, urørt)
+```
+
+Det er husets egen **«selector, not grant»**-regel anvendt præcist: kontrol-planet
+*vælger* konto blandt dem brugeren allerede har adgang til, motoren *tildeler*
+ruter. To tabeller, to kolonner — de kan bære hver sit svar.
+
+**Konsekvensen der skal siges højt:** samme token får en række i kontrol-planet
+OG en række i hver konto den skal kunne nå. Det giver tilbagekaldelse **pr.
+konto** — en styrke, men også en fælde: at tilbagekalde enheden ét sted lukker
+den ikke de andre steder. Det står i kortets krav, så det ikke opdages den dag
+nogen tror maskinen er lukket ude.
+
+**Ingen naken omlægning:** motor-adressen fjernes ikke i samme ændring.
+Parringen og HUD'en kører videre ad den vej indtil den nye er bevist i drift.
+
 ## Hvem det er til, og hvornår
 
 > *«nu er det også primært mig der kommer til at anvende trail til Ingest her i
@@ -290,7 +350,8 @@ usynlig for enhver arbejder i op til fem minutter. Rettet i samme runde.
 | **F263.3** | Ambient sætter kompileringen i gang i en ægte cc-session — ALDRIG `claude -p` | **kernen** |
 | **F263.4** | Fladen viser hvilken motor der kørte | |
 | **F263.5** | Ærlig fallback: ingen arbejder → skyen tager den, synligt | |
-| **F263.7** | Ambients egen webflade på en lokal port — den anden afleverings-vej | |
+| **F263.7** | Ambients egen ingest-flade (bygget i Swift, ikke serveret) | ✅ **bygget 7/9** |
+| **F263.8** | Konto-vælger i Ambient — samme kontrol som på app.trailmem.com | **næste** |
 
 **F263.6 er nedlagt.** Den hed «Mac-menubar som indpakning af den lokale motor»
 og forudsatte at motoren var et selvstændigt program der skulle pakkes ind.
