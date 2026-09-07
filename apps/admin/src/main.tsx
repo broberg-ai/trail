@@ -32,6 +32,7 @@ import { ensureAnchorMarkedExtensions } from './lib/markdown';
 import { init as initUpmetrics } from '@upmetrics/sdk';
 import { UPMETRICS_DSN } from '@trail/shared';
 import './index.css';
+import { erAppSti } from './notification-route';
 
 // Upmetrics fleet-dogfooding — browser telemetry (auto-instruments
 // window.onerror / unhandledrejection / failed-fetch). DSN is the single
@@ -73,9 +74,9 @@ function NotifikationsRuter() {
     const paa = (e: MessageEvent) => {
       const d = e.data as { type?: string; navigate?: string } | undefined;
       if (d?.type !== 'trail:navigate' || !d.navigate) return;
-      // Kun stier inden for appen. En absolut URL fra en push-nyttelast er
-      // noget udefra, og en router der følger den blindt er en åben dør.
-      if (!d.navigate.startsWith('/') || d.navigate.startsWith('//')) return;
+      // Kun stier inden for appen — se erAppSti. Filteret ligger i sin egen
+      // fil så det kan prøves af; her ville en test ikke kunne nå det.
+      if (!erAppSti(d.navigate)) return;
       route(d.navigate);
     };
     navigator.serviceWorker.addEventListener('message', paa);
