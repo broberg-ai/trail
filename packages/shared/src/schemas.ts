@@ -157,6 +157,14 @@ export const DocumentSchema = z.object({
   workAssignee: z.string().nullable().optional(),
   workDueAt: z.string().nullable().optional(),
   workKind: WorkKindEnum.nullable().optional(),
+  // F191/F263 — parkeret til lokal kompilering. Serveren har SENDT feltet
+  // siden F191, men det stod ikke i skemaet, så admin-fladens Document-type
+  // kendte det ikke og INGEN flade kunne vise det. Ejeren fandt det 7/9: han
+  // indsendte en tekst i Ambient, så «Queued» dér, og kunne ikke se jobbet på
+  // app.trailmem.com. Et felt der sendes uden at være deklareret er usynligt
+  // på præcis den måde der ligner at data mangler.
+  // Valgfrit på tråden, så ældre snapshots stadig parser.
+  awaitingLocalCompile: z.boolean().optional(),
   // F145 — per-KB monotone sequence. Nullable on the schema for pre-0008
   // snapshots; every row should have one after the migration backfill.
   seq: z.number().int().nullable().optional(),

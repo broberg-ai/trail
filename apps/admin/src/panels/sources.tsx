@@ -4,6 +4,7 @@ import { marked } from 'marked';
 import type { Document } from '@trail/shared';
 import {
   listSources,
+  compileQueueStatus,
   archiveDocument,
   restoreDocument,
   retryDocument,
@@ -197,6 +198,19 @@ export function SourcesPanel() {
       return bd.localeCompare(ad);
     });
   }, [allDocs, filter]);
+  // F263.9 — køens tilstand, hentet ved siden af listen. Genindlæses når
+  // listen gør, så en netop indsendt kilde ikke står med et forældet tal.
+  const [queue, setQueue] = useState<{ waiting: number; working: number; workers: string[] } | null>(null);
+  useEffect(() => {
+    let levende = true;
+    compileQueueStatus()
+      .then((q) => { if (levende) setQueue(q); })
+      // Køen er OPLYSNING, ikke betjening: fejler den, skal kildelisten stå
+      // uændret frem for at vise en fejl om noget andet.
+      .catch(() => { if (levende) setQueue(null); });
+    return () => { levende = false; };
+  }, [kbId, allDocs]);
+
   const tabCounts = useMemo(() => {
     if (!allDocs) return null;
     return {
@@ -428,6 +442,37 @@ export function SourcesPanel() {
           upload={async (file) => { onUploaded(await uploadSource(kbId, file)); }}
         />
       </section>
+
+      {/* F263.9 — KØ-LINJEN. Svarer på det spørgsmål fladen ikke kunne før:
+          venter der noget, og hvem kompilerer det. Vises kun når der ER noget
+          i køen — en permanent «0 venter» er støj, og en linje der altid står
+          der holder man op med at læse. */}
+      {queue && (queue.waiting > 0 || queue.working > 0) ? (
+        <div
+          class="mb-5 flex items-center gap-2 rounded-md border border-[color:var(--color-warning,#f59e0b)]/30 bg-[color:var(--color-warning,#f59e0b)]/5 px-3 py-2 text-sm"
+          data-testid="sources-compile-queue"
+        >
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-[color:var(--color-warning,#f59e0b)]" />
+          <span>
+            {queue.waiting > 0
+              ? `${queue.waiting} source${queue.waiting === 1 ? '' : 's'} waiting`
+              : null}
+            {queue.waiting > 0 && queue.working > 0 ? ' · ' : null}
+            {queue.working > 0
+              ? `${queue.working} compiling`
+              : null}
+          </span>
+          <span class="text-[color:var(--color-fg-muted)]">
+            {queue.workers.length > 0
+              // Navngiv maskinen. «Kompileres» uden HVOR er den slags svar der
+              // ikke kan handles på — og den maskine er ofte hans egen.
+              ? `on ${queue.workers.join(', ')} · $0`
+              // Ingen arbejder er IKKE en fejl: leasen udløber og skyen tager
+              // den. Men det skal STÅ, ellers ligner det at intet sker.
+              : 'no machine connected — the cloud takes it after the deadline'}
+          </span>
+        </div>
+      ) : null}
 
       {/* Filter strip — same grammar as Queue's status tabs. Active is
           default; Archived shows soft-deleted sources with a Restore
@@ -751,6 +796,7 @@ function SourceRow({
             })()}
             <StatusBadge
               status={doc.status}
+              awaiting={doc.awaitingLocalCompile === true}
               neuronCount={
                 (doc as Document & { neuronCount?: number }).neuronCount ?? null
               }
@@ -937,9 +983,19 @@ function ExpandedSource({ doc }: { doc: Document }) {
 function StatusBadge({
   status,
   neuronCount,
+  awaiting,
 }: {
   status: Document['status'];
   neuronCount?: number | null;
+  /**
+   * F263.9 — parkeret til lokal kompilering. PARKERET ER IKKE DET SAMME SOM
+   * AT ARBEJDE, og den forskel er hele grunden til dette felt: en parkeret
+   * kilde har `status='processing'`, så fladen sagde «processing» om noget
+   * hvor der ikke skete en pind. Ejeren indsendte en tekst i Ambient 7/9, så
+   * «Queued» dér, og kunne ikke finde jobbet her — fordi det stod som om det
+   * allerede var i gang.
+   */
+  awaiting?: boolean;
 }) {
   // Differentiate "extract done but compile yielded nothing" from
   // "extract done AND at least one Neuron cites this Source". Both
@@ -948,8 +1004,11 @@ function StatusBadge({
   // EXTRACTED (neutral amber) signals "file is here, LLM compile
   // produced nothing — re-ingest to retry".
   const extractedButEmpty = status === 'ready' && (neuronCount ?? 0) === 0;
-  const tone =
-    status === 'failed'
+  // Parkeret vinder over status: den er sand om HVOR jobbet er, hvor
+  // `processing` kun er sand om hvilken kasse rækken ligger i.
+  const tone = awaiting
+    ? 'bg-[color:var(--color-warning,#f59e0b)]/15 text-[color:var(--color-warning,#f59e0b)]'
+    : status === 'failed'
       ? 'bg-[color:var(--color-danger)]/10 text-[color:var(--color-danger)]'
       : status === 'processing'
       ? 'bg-[color:var(--color-accent)]/15 text-[color:var(--color-accent)]'
@@ -958,12 +1017,16 @@ function StatusBadge({
       : status === 'ready'
       ? 'bg-[color:var(--color-success)]/15 text-[color:var(--color-success)]'
       : 'bg-[color:var(--color-bg)] border border-[color:var(--color-border)] text-[color:var(--color-fg-muted)]';
-  const label = extractedButEmpty
+  const label = awaiting
+    ? 'in queue'
+    : extractedButEmpty
     ? 'extracted'
     : status === 'ready'
     ? 'success'
     : status;
-  const title = extractedButEmpty
+  const title = awaiting
+    ? 'Parked for local compile — waiting for a connected machine (or the cloud after the deadline). Nothing is running yet.'
+    : extractedButEmpty
     ? 'Extracted successfully, but the LLM compile produced no Neurons. Click re-ingest to try again.'
     : undefined;
   return (

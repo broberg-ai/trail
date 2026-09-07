@@ -816,6 +816,22 @@ export function listSources(
   );
 }
 
+/**
+ * F263.9 — kompilerings-køens tilstand: hvad venter, og HVEM arbejder.
+ *
+ * Ejeren indsendte en tekst i Ambient 7/9, så «Queued» dér, og kunne ikke se
+ * jobbet på app.trailmem.com. Målt: admin-fladen kaldte aldrig dette
+ * endepunkt, og ordet `awaitingLocalCompile` fandtes ikke ét sted i appen.
+ * Køen har eksisteret siden F263.1; den var bare usynlig på nettet.
+ */
+export function compileQueueStatus(): Promise<{
+  waiting: number;
+  working: number;
+  workers: string[];
+}> {
+  return api('/api/v1/compile-jobs/status');
+}
+
 /** Fetch a document + its full content + F112 user-note + F112.1 share-flag. */
 export function getDocumentContent(
   docId: string,
