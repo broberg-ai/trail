@@ -44,6 +44,9 @@ final class IngestModel: ObservableObject {
     var kbNavn: String { kbs.first { $0.id == valgtKb }?.name ?? TrailClient.cachedKbName }
 
     func hentAlt() async {
+        // F263.8 — ret en konto der står gemt under sit NAVN, før vi bruger den
+        // som id (buddys jobs hedder slug'en). Gør intet når alt er som det skal.
+        if await IngestClient.repareerKontoSlugs() > 0 { genlaesKontoer() }
         await hentKbs()
         await opdater()
         await opdaterMotor()

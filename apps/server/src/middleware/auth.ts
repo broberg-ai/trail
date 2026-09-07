@@ -125,6 +125,10 @@ const AMBIENT_ALLOWED: ReadonlyArray<{ method: string; pattern: RegExp }> = [
   { method: 'GET', pattern: /^\/api\/v1\/documents$/ },
   { method: 'POST', pattern: /^\/api\/v1\/knowledge-bases\/[^/]+\/documents\/upload$/ },
   { method: 'GET', pattern: /^\/api\/v1\/compile-jobs\/status$/ },
+  // F263.8 — «hvilken konto er jeg i?». Nøglen er allerede bundet til kontoen,
+  // så svaret er noget kalderen implicit ved; det gør en forkert gemt konto
+  // reparerbar uden en ny parring.
+  { method: 'GET', pattern: /^\/api\/v1\/ambient\/whoami$/ },
 ];
 
 /**

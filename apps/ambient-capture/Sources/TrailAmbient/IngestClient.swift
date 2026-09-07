@@ -66,8 +66,8 @@ enum IngestClient {
     private static let engine = "https://engine-001.trailmem.com"
     private static var token: String? { DeviceAuth.loadToken() }
 
-    private static func request(_ path: String, method: String = "GET") throws -> URLRequest {
-        guard let token else { throw IngestError.ikkeForbundet }
+    private static func request(_ path: String, method: String = "GET", token brug: String? = nil) throws -> URLRequest {
+        guard let token = brug ?? token else { throw IngestError.ikkeForbundet }
         guard let url = URL(string: engine + path) else { throw IngestError.uventetSvar }
         var r = URLRequest(url: url)
         r.httpMethod = method
@@ -120,6 +120,45 @@ enum IngestClient {
             working: o["working"] as? Int ?? 0,
             workers: o["workers"] as? [String] ?? []
         )
+    }
+
+    /// F263.8 — «hvilken konto tilhører denne nøgle?».
+    static func whoami(token: String) async throws -> (slug: String, name: String) {
+        let data = try await send(try request("/api/v1/ambient/whoami", token: token))
+        guard let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let slug = o["slug"] as? String, !slug.isEmpty
+        else { throw IngestError.uventetSvar }
+        return (slug, o["name"] as? String ?? slug)
+    }
+
+    /// Retter en konto der blev gemt under sit NAVN i stedet for sin slug.
+    ///
+    /// Parringen leverede kun navnet indtil i dag, så en allerede parret Mac
+    /// bærer «Broberg.ai» hvor buddys jobs hedder «broberg-ai» — enhver
+    /// «der ligger arbejde nu»-besked bar det forkerte navn, og 120-sekunders
+    /// proben dækkede over det. Uden den her skulle man parre om for at rette
+    /// noget man ikke kan se er galt.
+    ///
+    /// Fejler kaldet, laves der INGENTING. En reparation der gætter er værre
+    /// end den forkerte værdi, for så kan man ikke se hvad der skete.
+    @discardableResult
+    static func repareerKontoSlugs() async -> Int {
+        var rettet = 0
+        for konto in TenantStore.kontoer {
+            guard let t = TenantStore.token(for: konto.slug) else { continue }
+            guard let svar = try? await whoami(token: t) else { continue }
+            guard svar.slug != konto.slug else { continue }
+            let varAktiv = TenantStore.aktivSlug == konto.slug
+            TenantStore.fjern(slug: konto.slug)
+            TenantStore.gem(
+                slug: svar.slug, token: t, name: svar.name,
+                deviceName: konto.deviceName, email: konto.email,
+                kbIds: konto.kbIds, kbNames: konto.kbNames
+            )
+            if varAktiv { TenantStore.aktivSlug = svar.slug }
+            rettet += 1
+        }
+        return rettet
     }
 
     // MARK: - Skriv

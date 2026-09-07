@@ -160,7 +160,18 @@ ambientRoutes.post('/ambient/token', async (c) => {
   // UX). The scoped key belongs to the approving user; join through it.
   const kbIds = JSON.parse(row.kbIds) as string[];
   const account = await trail.db
-    .select({ email: users.email, displayName: users.displayName, tenant: tenants.name })
+    .select({
+      email: users.email,
+      displayName: users.displayName,
+      tenant: tenants.name,
+      // F263.8 — SLUG'EN, ikke kun navnet. `tenant` blev tilføjet som en
+      // ETIKET («Forbundet: <navn> · <konto>») og var rigtig til det. Den dag
+      // F263.3 begyndte at bruge den som et ID til buddys jobs, blev den
+      // forkert: kontoen hedder «Broberg.ai», jobbet hedder «broberg-ai».
+      // Målt på ejerens egen Mac 7/9 — enhver dispatch bar det forkerte navn,
+      // og buddys 120-sekunders probe dækkede over det.
+      tenantSlug: tenants.slug,
+    })
     .from(apiKeys)
     .innerJoin(users, eq(users.id, apiKeys.userId))
     .innerJoin(tenants, eq(tenants.id, users.tenantId))
@@ -180,5 +191,19 @@ ambientRoutes.post('/ambient/token', async (c) => {
     email: account?.email ?? null,
     displayName: account?.displayName ?? null,
     tenant: account?.tenant ?? null,
+    tenantSlug: account?.tenantSlug ?? null,
   });
+});
+
+/**
+ * F263.8 — «hvilken konto tilhører denne nøgle?» Enheden kender kun det NAVN
+ * parringen gav den, og et navn er ikke et id. Ruten lader en allerede parret
+ * Mac reparere sig selv i stedet for at skulle parres om.
+ *
+ * Den afslører intet nyt: nøglen ER allerede bundet til kontoen, så svaret er
+ * en oplysning kalderen implicit har i forvejen.
+ */
+ambientRoutes.get('/ambient/whoami', requireAuth, async (c) => {
+  const tenant = getTenant(c);
+  return c.json({ slug: tenant.slug, name: tenant.name });
 });

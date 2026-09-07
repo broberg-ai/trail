@@ -133,6 +133,9 @@ final class DeviceAuth {
         let email: String?
         let displayName: String?
         let tenant: String?
+        /// F263.8 — kontoens SLUG. `tenant` er dens NAVN og blev brugt som id;
+        /// motoren hedder «Broberg.ai», buddys job hedder «broberg-ai».
+        let tenantSlug: String?
     }
 
     private func tryClaim(code: String) async -> Bool {
@@ -148,10 +151,11 @@ final class DeviceAuth {
             Self.storeToken(claim.token)
             // F263.8 — samme parring, nu også som en konto i vælgeren. Den
             // arvede post skrives stadig ovenfor: ingen naken omlægning.
-            if let slug = claim.tenant, !slug.isEmpty {
+            if let slug = claim.tenantSlug ?? claim.tenant, !slug.isEmpty {
                 TenantStore.gem(
                     slug: slug,
                     token: claim.token,
+                    name: claim.tenant,
                     deviceName: claim.deviceName,
                     email: claim.email,
                     kbIds: claim.kbIds,

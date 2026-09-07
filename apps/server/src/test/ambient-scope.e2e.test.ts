@@ -32,7 +32,7 @@ beforeAll(async () => {
   for (const f of [p, `${p}-wal`, `${p}-shm`]) { try { rmSync(f, { force: true }); } catch { /* frisk */ } }
   trail = await createLibsqlDatabase({ path: p });
   await trail.runMigrations();
-  await trail.db.insert(tenants).values({ id: T, slug: 'amb', name: 'Amb', plan: 'hobby' }).run();
+  await trail.db.insert(tenants).values({ id: T, slug: 'amb', name: 'Ambient Kunde A/S', plan: 'hobby' }).run();
   await trail.db.insert(users).values({ id: U, tenantId: T, email: 'a@local.trail', displayName: 'A', role: 'owner', onboarded: true }).run();
   await trail.db.insert(knowledgeBases).values({ id: KB, tenantId: T, createdBy: U, name: 'KB', slug: 'kb', language: 'da' }).run();
   const hash = (k: string) => createHash('sha256').update(k).digest('hex');
@@ -101,6 +101,7 @@ const TILLADT: Array<[string, string, string]> = [
   ['F263.7 ventende kilder',   'GET',  '/api/v1/documents?awaitingLocalCompile=true'],
   ['F263.7 upload',            'POST', `/api/v1/knowledge-bases/${SLUG}/documents/upload`],
   ['F263.7 motor-status',      'GET',  '/api/v1/compile-jobs/status'],
+  ['F263.8 hvilken konto',     'GET',  '/api/v1/ambient/whoami'],
 ];
 
 for (const [navn, method, sti] of TILLADT) {
@@ -118,6 +119,18 @@ test('en ambient-nøgle når faktisk IGENNEM til motor-status og får tal', asyn
   });
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({ waiting: 0, working: 0, workers: [] });
+});
+
+test('F263.8: whoami svarer med SLUG og navn — og de er ikke det samme', async () => {
+    // Hele grunden til at ruten findes. Parringen gav enheden kontoens NAVN
+    // («Broberg.ai») og Ambient brugte det som et id, hvor buddys jobs hedder
+    // «broberg-ai». Prøven ville bestå på en rute der returnerede navnet to
+    // gange, hvis den ikke krævede at de to felter er forskellige her.
+    const res = await app.request('http://engine.local/api/v1/ambient/whoami', {
+      headers: { Authorization: `Bearer ${AMBIENT}` },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ slug: 'amb', name: 'Ambient Kunde A/S' });
 });
 
 test('en UKENDT rute er forbudt — allowlist, ikke denylist', async () => {
@@ -147,6 +160,7 @@ test('de nye LÆSE-ruter svarer 200 — ikke bare «ikke afvist af scopet»', as
     `/api/v1/knowledge-bases/${SLUG}/documents`,
     '/api/v1/documents?awaitingLocalCompile=true',
     '/api/v1/compile-jobs/status',
+    '/api/v1/ambient/whoami',
   ]) {
     const res = await app.request(`http://engine.local${sti}`, {
       headers: { Authorization: `Bearer ${AMBIENT}` },
