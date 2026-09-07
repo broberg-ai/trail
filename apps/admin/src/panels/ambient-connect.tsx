@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { approveAmbientDevice, listKnowledgeBases } from '../api';
+import { approveAmbientDevice, fetchAuthMe, listKnowledgeBases, type AuthMe } from '../api';
 import type { KnowledgeBase } from '@trail/shared';
 import { t } from '../lib/i18n';
 
@@ -24,11 +24,19 @@ export function AmbientConnectPanel() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [phase, setPhase] = useState<'pick' | 'saving' | 'done' | 'denied'>('pick');
   const [error, setError] = useState<string | null>(null);
+  // F263.8 — HVILKEN KONTO godkender jeg i? Siden godkender ind i den konto
+  // sessionen står i, og sagde det ikke. Med flere konti i Ambient er det
+  // forskellen på at give sin Mac adgang til den rigtige kunde og den forkerte
+  // — og et forkert valg ville ikke se forkert ud bagefter.
+  const [me, setMe] = useState<AuthMe | null>(null);
 
   useEffect(() => {
     listKnowledgeBases()
       .then(setKbs)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+    fetchAuthMe()
+      .then(setMe)
+      .catch(() => setMe(null));
   }, []);
 
   const toggle = (id: string) => {
@@ -96,6 +104,19 @@ export function AmbientConnectPanel() {
           >
             {deviceName}
           </div>
+
+          {me?.tenant ? (
+            <p
+              data-testid="ambient-connect-tenant"
+              style={{ marginTop: 14, fontSize: 13, color: 'var(--color-fg-muted)' }}
+            >
+              {t('ambient.connect.intoTenant')}{' '}
+              <strong style={{ color: 'var(--color-fg)' }}>{me.tenant.name}</strong>{' '}
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-fg-subtle)' }}>
+                {me.tenant.slug}
+              </span>
+            </p>
+          ) : null}
 
           <h2 style={{ marginTop: 26, fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-fg-muted)' }}>
             {t('ambient.connect.pickKbs')}

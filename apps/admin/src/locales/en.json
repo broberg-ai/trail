@@ -1175,6 +1175,7 @@
       "intro": "A Trail Ambient device is asking to save gated, redacted captures into your Trails. Approve only if you started this from your own Mac.",
       "invalidCode": "The connect link is missing a valid device code. Start the connection from the Trail Ambient app on your Mac.",
       "pickKbs": "Which Trails may this device write to?",
+      "intoTenant": "Approving into account",
       "noKbs": "No Trails in this tenant yet — create one first.",
       "approve": "Approve device",
       "approving": "Approving…",

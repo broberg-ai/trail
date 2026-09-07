@@ -32,6 +32,11 @@ BIN=".build/debug/TrailAmbient"
 echo "[ambient-capture] --selftest (pause gate + menubar icon visibility)"
 "$BIN" --selftest
 
+echo "[ambient-capture] --tenanttest (konto-lageret: én nøgle pr. konto + arvet parring)"
+# Ren lokal prøve i sit eget navnerum — rører hverken den rigtige Keychain
+# eller netværket, så den kan køre ved hver `pnpm test`.
+"$BIN" --tenanttest
+
 echo "[ambient-capture] --enginetest (motor-kontakten LÆSER buddys jobs)"
 # KUN læsning. `--enginetoggletest` findes ved siden af og beviser at kontakten
 # SKRIVER — men den slår rigtige jobs fra og til igen, så den køres i hånden,

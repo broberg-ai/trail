@@ -20,7 +20,11 @@ import UniformTypeIdentifiers
 @MainActor
 final class IngestModel: ObservableObject {
     @Published var kbs: [KnowledgeBaseRef] = []
-    @Published var valgtKb: String = UserDefaults.standard.string(forKey: "trail.kbId") ?? ""
+    @Published var valgtKb: String =
+        UserDefaults.standard.string(forKey: TenantStore.kbNoegle(for: TenantStore.aktivSlug)) ?? ""
+    /// F263.8 — de konti Ambient faktisk har en nøgle til.
+    @Published var kontoer: [ConnectedTenant] = TenantStore.kontoer
+    @Published var aktivKonto: String = TenantStore.aktivSlug ?? ""
     @Published var kilder: [IngestSource] = []
     @Published var status: CompileStatus = .tom
     @Published var fejl: String?
@@ -43,6 +47,28 @@ final class IngestModel: ObservableObject {
         await hentKbs()
         await opdater()
         await opdaterMotor()
+    }
+
+    /// F263.8 — skift konto. Nøglen skiftes i TenantStore, og ALT hentes
+    /// forfra fra API'et. Listen må aldrig blive stående fra den forrige
+    /// konto: en kildeliste der hører til en anden kunde er værre end en tom.
+    func skiftKonto(til slug: String) async {
+        guard slug != aktivKonto else { return }
+        TenantStore.aktivSlug = slug
+        aktivKonto = slug
+        kilder = []
+        kbs = []
+        status = .tom
+        fejl = nil
+        harHentet = false
+        valgtKb = UserDefaults.standard.string(forKey: TenantStore.kbNoegle(for: slug)) ?? ""
+        await hentAlt()
+    }
+
+    /// Læs konto-listen igen (efter en parring eller et lokalt fjern).
+    func genlaesKontoer() {
+        kontoer = TenantStore.kontoer
+        aktivKonto = TenantStore.aktivSlug ?? ""
     }
 
     private func hentKbs() async {
@@ -188,6 +214,13 @@ struct IngestView: View {
         .foregroundColor(Palette.fg)
         .task { await model.hentAlt() }
         .sheet(isPresented: $viserIndsaet) { indsaetArk }
+        // En ny parring lander som en ny konto mens vinduet står åbent —
+        // uden det her ville vælgeren mangle den til vinduet blev lukket.
+        .onReceive(NotificationCenter.default.publisher(for: .trailKontoerAendret)) { _ in
+            let foer = model.aktivKonto
+            model.genlaesKontoer()
+            if model.aktivKonto != foer { Task { await model.hentAlt() } }
+        }
     }
 
     // MARK: Værktøjslinje
@@ -201,26 +234,23 @@ struct IngestView: View {
     private var vaerktoejslinje: some View {
         HStack(spacing: 10) {
             Text(S.ingestWindowTitle).font(.system(size: 13, weight: .semibold))
-            // F263.7 — kontoen står som en ETIKET, ikke som en vælger.
-            // Mockuppen havde to pull-downs, fordi web-fladen har dem: dér
-            // bærer ejerens nøgle FLERE kunder og vælger én pr. forespørgsel
-            // med en header. Enhedens nøgle gør ikke det — den er mintet til
-            // én konto ved parringen, og enheden taler direkte med motoren
-            // uden om den proxy der overhovedet kan skifte konto.
-            // En vælger med præcis ét punkt er ikke et valg; den er en løgn
-            // om at der er noget at vælge. Vil man skifte konto, parrer man om.
-            if let konto = DeviceAuth.gemtTenant {
-                Text("\(S.ingestTenantPrefix) \(konto)")
-                    .font(.system(size: 11.5)).foregroundColor(Palette.fgMuted)
-                    .accessibilityIdentifier("ingest-tenant-label")
-            }
+            // F263.8 — KONTO-VÆLGEREN. Hvert punkt er en konto Ambient har en
+            // nøgle til; at skifte skifter hvilken nøgle der bruges, og alt
+            // hentes forfra fra motoren.
+            //
+            // Listen kan ikke rumme en konto ejeren ikke må: en nøgle opstår
+            // kun ved en godkendelse i den konto, på app.trailmem.com, med
+            // hans egen session. Derfor er «Tilføj konto…» ikke en bekvemhed —
+            // det ER adgangskontrollen, og den ligger dér hvor den hører til.
+            kontoVaelger
             Spacer()
             if model.kbs.count > 1 {
                 Picker("", selection: Binding(
                     get: { model.valgtKb },
                     set: { ny in
                         model.valgtKb = ny
-                        UserDefaults.standard.set(ny, forKey: "trail.kbId")
+                        UserDefaults.standard.set(
+                            ny, forKey: TenantStore.kbNoegle(for: model.aktivKonto))
                         Task { await model.opdater() }
                     })) {
                     ForEach(model.kbs) { kb in Text(kb.name).tag(kb.id) }
@@ -241,6 +271,44 @@ struct IngestView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(Palette.bgTop)
+    }
+
+    /// Ét punkt pr. forbundet konto + en vej til at tilføje en. Er der kun én,
+    /// står den stadig som en menu: den bærer «Tilføj konto…», og en etiket
+    /// ville skjule at der er noget at gøre.
+    private var kontoVaelger: some View {
+        Menu {
+            ForEach(model.kontoer) { k in
+                Button {
+                    Task { await model.skiftKonto(til: k.slug) }
+                } label: {
+                    if k.slug == model.aktivKonto {
+                        Label(k.visningsnavn, systemImage: "checkmark")
+                    } else {
+                        Text(k.visningsnavn)
+                    }
+                }
+            }
+            if !model.kontoer.isEmpty { Divider() }
+            Button(S.ingestAddTenant) {
+                NotificationCenter.default.post(name: .trailTilfoejKonto, object: nil)
+            }
+            .accessibilityIdentifier("ingest-add-tenant")
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "person.crop.circle").font(.system(size: 11))
+                Text(model.aktivKonto.isEmpty
+                     ? S.ingestNoTenant
+                     : (model.kontoer.first { $0.slug == model.aktivKonto }?.visningsnavn
+                        ?? model.aktivKonto))
+                    .font(.system(size: 11.5))
+            }
+            .foregroundColor(Palette.fgMuted)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help(S.ingestTenantHelp)
+        .accessibilityIdentifier("ingest-tenant-picker")
     }
 
     // MARK: Drop-felt

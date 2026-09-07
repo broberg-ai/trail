@@ -45,7 +45,9 @@ final class DeviceAuth {
     var tenantLabel: String? { UserDefaults.standard.string(forKey: "trail.tenant") }
 
     /// F263.7 — samme værdi, læst uden en instans (Ingest-vinduet holder ingen).
-    nonisolated static var gemtTenant: String? { UserDefaults.standard.string(forKey: "trail.tenant") }
+    nonisolated static var gemtTenant: String? {
+        TenantStore.aktivKonto?.slug ?? UserDefaults.standard.string(forKey: "trail.tenant")
+    }
     var kbLabel: String? {
         (UserDefaults.standard.array(forKey: "trail.kbNames") as? [String])?.joined(separator: ", ")
     }
@@ -55,6 +57,8 @@ final class DeviceAuth {
     }
 
     init() {
+        // Løfter en Mac parret FØR F263.8 ind i konto-formen. Idempotent.
+        TenantStore.migrerArvetParring()
         state = isConnected ? .connected : .disconnected
     }
 
@@ -114,6 +118,7 @@ final class DeviceAuth {
         pendingCode = nil
         state = .disconnected
         Self.deleteToken()
+        TenantStore.ryd()
         for key in ["trail.deviceName", "trail.kbIds", "trail.kbNames", "trail.email", "trail.displayName", "trail.tenant"] {
             UserDefaults.standard.removeObject(forKey: key)
         }
@@ -141,6 +146,18 @@ final class DeviceAuth {
         case 200:
             guard let claim = try? JSONDecoder().decode(ClaimResponse.self, from: data) else { return false }
             Self.storeToken(claim.token)
+            // F263.8 — samme parring, nu også som en konto i vælgeren. Den
+            // arvede post skrives stadig ovenfor: ingen naken omlægning.
+            if let slug = claim.tenant, !slug.isEmpty {
+                TenantStore.gem(
+                    slug: slug,
+                    token: claim.token,
+                    deviceName: claim.deviceName,
+                    email: claim.email,
+                    kbIds: claim.kbIds,
+                    kbNames: claim.kbNames ?? []
+                )
+            }
             let d = UserDefaults.standard
             d.set(claim.deviceName, forKey: "trail.deviceName")
             d.set(claim.kbIds, forKey: "trail.kbIds")
@@ -177,18 +194,10 @@ final class DeviceAuth {
 
     // nonisolated: a pure Keychain read with no actor state, so the HUD's
     // networking (off the main actor) can read the token directly.
-    nonisolated static func loadToken() -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainService,
-            kSecAttrAccount as String: keychainAccount,
-            kSecReturnData as String: true,
-        ]
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
+    // F263.8 — nøglen for den VALGTE konto. TenantStore falder tilbage til den
+    // arvede enkelt-nøgle når Macen endnu ikke er migreret, så en allerede
+    // parret maskine bliver ved med at virke uden at parre om.
+    nonisolated static func loadToken() -> String? { TenantStore.aktivToken() }
 
     private static func deleteToken() {
         let query: [String: Any] = [

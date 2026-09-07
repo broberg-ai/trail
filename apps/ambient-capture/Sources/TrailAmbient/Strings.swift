@@ -119,6 +119,9 @@ struct UIStrings {
     let ingestPasteSave: String
     let ingestCancel: String
     let ingestTenantPrefix: String
+    let ingestAddTenant: String
+    let ingestNoTenant: String
+    let ingestTenantHelp: String
     let ingestEngineNotSetUp: String
     let engineDaemonUnreachable: String
     let engineDaemonUnexpected: String
@@ -233,6 +236,9 @@ extension UIStrings {
         ingestPasteSave: "Add to Trail",
         ingestCancel: "Cancel",
         ingestTenantPrefix: "Account:",
+        ingestAddTenant: "Add account…",
+        ingestNoTenant: "No account",
+        ingestTenantHelp: "Switch account — each one has its own key on this Mac.",
         ingestEngineNotSetUp: "this Mac is not an engine yet",
         engineDaemonUnreachable: "buddy is not running — the engine switch is unavailable",
         engineDaemonUnexpected: "buddy answered in an unexpected shape",
@@ -345,6 +351,9 @@ extension UIStrings {
         ingestPasteSave: "Føj til Trail",
         ingestCancel: "Annullér",
         ingestTenantPrefix: "Konto:",
+        ingestAddTenant: "Tilføj konto…",
+        ingestNoTenant: "Ingen konto",
+        ingestTenantHelp: "Skift konto — hver har sin egen nøgle på denne Mac.",
         ingestEngineNotSetUp: "denne Mac er ikke motor endnu",
         engineDaemonUnreachable: "buddy kører ikke — motor-kontakten er utilgængelig",
         engineDaemonUnexpected: "buddy svarede i en uventet form",

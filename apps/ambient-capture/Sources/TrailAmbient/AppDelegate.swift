@@ -28,6 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var avatarFetching = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(tilfoejKonto),
+            name: .trailTilfoejKonto, object: nil)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         installEditMenu()
         render()
@@ -331,6 +334,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.render()
         }
     }
+
+    /// F263.8 — «Tilføj konto…» fra Ingest-vinduet. Går bevidst gennem
+    /// beginConnect frem for at starte en parring ved siden af: dens
+    /// to-koders-spærre er grunden til at ejeren ikke skal godkende to gange.
+    /// Han skifter selv konto på app.trailmem.com før han godkender — det er
+    /// dét trin der gør listen til en adgangskontrol og ikke en liste.
+    @objc func tilfoejKonto() { connectToTrail() }
 
     @objc private func disconnectFromTrail() {
         deviceAuth.disconnect()
