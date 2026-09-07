@@ -79,6 +79,9 @@ export interface AppBindings {
      * Undefined for every non-partner caller.
      */
     partnerKbId?: string | null;
+    // F263.8 — de Trails en ambient-enhed er godkendt til. null = ingen
+    // begrænsning optaget på nøglen (mintet før 7/9 2026).
+    ambientKbIds?: string[] | null;
     /**
      * F160 — how the request was authenticated. Lets routes pick
      * sane defaults for audience-aware behaviour: external Bearer

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { documents, knowledgeBases, wikiBacklinks, type TrailDatabase } from '@trail/db';
 import { CreateKBSchema, UpdateKBSchema } from '@trail/shared';
 import { eq, and } from 'drizzle-orm';
-import { requireAuth, getUser, getTenant, getTrail } from '../middleware/auth.js';
+import { requireAuth, getUser, getTenant, getTrail, getAmbientKbGrant } from '../middleware/auth.js';
 import { uniqueSlug, createCandidate, resolveKbId, logActivity, kbSizes } from '@trail/core';
 import { storage } from '../lib/storage.js';
 import { broadcaster } from '../services/broadcast.js';
@@ -73,8 +73,15 @@ kbRoutes.get('/knowledge-bases', async (c) => {
     }),
   ]);
 
+  // F263.8 — en ambient-enhed ser KUN de Trails den er godkendt til. Listen
+  // navngiver ingen Trail i stien, så middlewaren kan ikke nægte den; her er
+  // det eneste sted filtreringen kan ske. Ejeren gav enheden 2 Trails og fik
+  // alle 11 i Ingest-vinduet — dét var symptomet.
+  const grant = getAmbientKbGrant(c);
   const byId = new Map(sizes.map((s) => [s.knowledgeBaseId, s]));
-  const rows = (result.rows as Array<Record<string, unknown>>).map((r) => {
+  const raa = (result.rows as Array<Record<string, unknown>>)
+    .filter((r) => (grant === null ? true : grant.includes(String(r.id))));
+  const rows = raa.map((r) => {
     const s = byId.get(String(r.id));
     return s ? { ...r, size: s } : r;
   });

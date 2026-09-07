@@ -6,6 +6,7 @@ import { PARTNER_SCOPE, partnerAllows } from './partner-scope.js';
 import { and, eq, gt, isNull } from 'drizzle-orm';
 import { INGEST_USER_ID } from '../bootstrap/ingest-user.js';
 import { resolveBearer, resolveSession } from '../lib/key-index.js';
+import { resolveKbId } from '@trail/core';
 import type { TenantPool } from '../lib/tenant-pool.js';
 
 const MULTI_TENANT = process.env.TRAIL_MULTI_TENANT === '1';
@@ -132,6 +133,68 @@ const AMBIENT_ALLOWED: ReadonlyArray<{ method: string; pattern: RegExp }> = [
 ];
 
 /**
+ * F263.8 — de Trails kalderen er godkendt til, eller null når der ikke er
+ * nogen begrænsning. Læses gennem en funktion, som getTrail/getTenant, fordi
+ * kbRoutes er en utypet Hono-router.
+ */
+export function getAmbientKbGrant(c: Context): string[] | null {
+  return (c.get('ambientKbIds') as string[] | null | undefined) ?? null;
+}
+
+/**
+ * F263.8 — de Trails en ambient-enhed er godkendt til, eller null når nøglen
+ * ikke bærer nogen begrænsning (mintet før 7/9 2026). Null = som i dag.
+ */
+export function parseKbGrant(raw: string | null | undefined): string[] | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as unknown;
+    if (!Array.isArray(v)) return null;
+    const ids = v.filter((x): x is string => typeof x === 'string' && x.length > 0);
+    // En TOM liste er ikke «ingen begrænsning» — den ville lydløst blive til
+    // fuld adgang, altså præcis den fejl den her kolonne findes for at lukke.
+    return ids.length > 0 ? ids : [];
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Trækker Trail-segmentet ud af en sti, eller null når stien ikke navngiver én.
+ * `/api/v1/knowledge-bases/<id-eller-slug>/…` er den eneste form der gør.
+ */
+export function kbSegment(path: string): string | null {
+  const m = /^\/api\/v1\/knowledge-bases\/([^/]+)(?:\/|$)/.exec(path);
+  if (!m?.[1]) return null;
+  try { return decodeURIComponent(m[1]); } catch { return m[1]; }
+}
+
+/**
+ * Nægter adgang når stien navngiver en Trail der ligger UDEN FOR enhedens
+ * godkendelse. Returnerer en fejltekst, eller null når kaldet må fortsætte.
+ *
+ * Stien kan bære enten id eller slug (`resolveKbId` tager begge), så
+ * sammenligningen sker på det opslåede id — ellers ville en slug slippe forbi
+ * en liste af id'er uden at nogen kunne se hvorfor.
+ *
+ * `grant === null` = nøglen bærer ingen begrænsning (mintet før 7/9 2026) og
+ * opfører sig som hidtil. En TOM liste nægter alt, som den skal.
+ */
+async function kbGrantRefusal(
+  trail: TrailDatabase,
+  tenantId: string,
+  grant: string[] | null,
+  path: string,
+): Promise<string | null> {
+  if (grant === null) return null;
+  const seg = kbSegment(path);
+  if (!seg) return null;   // stien navngiver ingen Trail — listen filtreres i ruten
+  const id = await resolveKbId(trail, tenantId, seg);
+  if (id && grant.includes(id)) return null;
+  return 'This device was not granted access to that Trail';
+}
+
+/**
  * F205.1 — returns a DECISION rather than a boolean so a refusal can say why.
  * An opaque 403 leaves an external partner integrator guessing; they cannot
  * read our source to work it out.
@@ -181,7 +244,7 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
         const tenantDb = resolveTenantDb(c, indexed.tenantSlug);
         if (!tenantDb) return tenantUdeAfDrift(c, indexed.tenantSlug);
         const row = await tenantDb.db
-          .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS, keyId: apiKeys.id, scope: apiKeys.scope, kbId: apiKeys.kbId })
+          .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS, keyId: apiKeys.id, scope: apiKeys.scope, kbId: apiKeys.kbId, scopeKbIds: apiKeys.scopeKbIds })
           .from(apiKeys)
           .innerJoin(users, eq(users.id, apiKeys.userId))
           .innerJoin(tenants, eq(tenants.id, users.tenantId))
@@ -195,6 +258,10 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
         if (!decision.allowed) {
           return c.json({ error: `API key scope does not allow this endpoint${decision.reason ? `: ${decision.reason}` : ''}` }, 403);
         }
+        const grant = parseKbGrant(row.scopeKbIds);
+        const naegtet = await kbGrantRefusal(tenantDb, row.tenant.id, grant, c.req.path);
+        if (naegtet) return c.json({ error: naegtet }, 403);
+        c.set('ambientKbIds', grant);
         // F205.1 — the KB a partner key is confined to. Read from the KEY, so
         // the upload endpoint never takes a kbId the caller could tamper with.
         c.set('partnerKbId', row.kbId);
@@ -215,7 +282,7 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
       // Single-tenant path (TRAIL_MULTI_TENANT unset): historical
       // F40.1 behaviour, query the primary DB directly.
       const row = await trail.db
-        .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS, keyId: apiKeys.id, scope: apiKeys.scope, kbId: apiKeys.kbId })
+        .select({ user: USER_COLUMNS, tenant: TENANT_COLUMNS, keyId: apiKeys.id, scope: apiKeys.scope, kbId: apiKeys.kbId, scopeKbIds: apiKeys.scopeKbIds })
         .from(apiKeys)
         .innerJoin(users, eq(users.id, apiKeys.userId))
         .innerJoin(tenants, eq(tenants.id, users.tenantId))
@@ -228,6 +295,10 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
       if (!decision.allowed) {
         return c.json({ error: `API key scope does not allow this endpoint${decision.reason ? `: ${decision.reason}` : ''}` }, 403);
       }
+      const grant = parseKbGrant(row.scopeKbIds);
+      const naegtet = await kbGrantRefusal(trail, row.tenant.id, grant, c.req.path);
+      if (naegtet) return c.json({ error: naegtet }, 403);
+      c.set('ambientKbIds', grant);
       c.set('partnerKbId', row.kbId);
       c.set('user', row.user);
       c.set('tenant', row.tenant);

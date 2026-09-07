@@ -1,0 +1,16 @@
+-- F263.8 — enhedens Trail-tilladelse skal FAKTISK gælde.
+--
+-- Godkendelses-siden spørger «hvilke Trails må denne enhed skrive til?», og
+-- svaret blev gemt på device-code-rækken og leveret til Macen ved parringen.
+-- Det var alt. INGEN forespørgsel har nogensinde kontrolleret det: målt 7/9
+-- 2026 er `kbIds` kun læst i ambient.ts (godkend + udlever), aldrig i
+-- middleware, aldrig på en rute. Ejeren så det selv — han gav enheden 2 Trails
+-- og Ingest-vinduet viste alle 11.
+--
+-- En tilladelse der ikke håndhæves er værre end ingen: den ser ud som en
+-- grænse, og man træffer beslutninger ud fra at den er der.
+--
+-- Kolonnen er en JSON-liste af KB-id'er. NULL betyder «ingen begrænsning
+-- optaget» og opfører sig som i dag — ingen naken omlægning, en allerede
+-- parret Mac holder op med at virke af INGEN anden grund end at den parres om.
+ALTER TABLE api_keys ADD COLUMN scope_kb_ids TEXT;

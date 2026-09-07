@@ -379,6 +379,13 @@
       "when": 1788728484975,
       "tag": "0053_compile_job_lease",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "6",
+      "when": 1788746400000,
+      "tag": "0054_ambient_kb_grant",
+      "breakpoints": true
     }
   ]
 }

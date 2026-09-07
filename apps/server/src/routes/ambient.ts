@@ -88,6 +88,10 @@ ambientRoutes.post('/ambient/approve', requireAuth, async (c) => {
     name: `ambient:${deviceName}:${keyId.slice(0, 8)}`,
     keyHash: createHash('sha256').update(raw).digest('hex'),
     scope: 'ambient',
+    // F263.8 — tilladelsen bor på NØGLEN, ikke kun på device-code-rækken.
+    // Indtil i dag blev den gemt dér og leveret til Macen, og aldrig
+    // kontrolleret: ejeren gav enheden 2 Trails og så alle 11.
+    scopeKbIds: JSON.stringify(kbIds),
   });
   addBearer({ keyHash: createHash('sha256').update(raw).digest('hex'), tenantSlug: tenant.slug, userId: user.id, createdAt });
 

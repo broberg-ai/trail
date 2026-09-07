@@ -834,6 +834,12 @@ export const apiKeys = sqliteTable(
     // every other scope. This is what the request CANNOT override: the partner
     // upload endpoint takes no kbId, so there is no path segment to tamper with.
     kbId: text('kb_id').references(() => knowledgeBases.id, { onDelete: 'cascade' }),
+    // F263.8 — de Trails en AMBIENT-enhed er godkendt til, som JSON-liste af
+    // id'er. Godkendelses-siden har spurgt om det siden F201.2, men svaret blev
+    // aldrig kontrolleret nogen steder — enheden kunne læse og skrive i hele
+    // kontoen. NULL = ingen begrænsning optaget (nøgler mintet før 7/9 2026);
+    // de opfører sig som før, indtil enheden parres om.
+    scopeKbIds: text('scope_kb_ids'),
     lastUsedAt: text('last_used_at'),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
     revokedAt: text('revoked_at'),
