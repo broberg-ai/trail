@@ -135,17 +135,13 @@ final class IngestModel: ObservableObject {
     }
 }
 
-// MARK: - Palet (Trails egen, ikke systemets)
-
-private extension Color {
-    static let tCream = Color(red: 0.980, green: 0.976, blue: 0.961)
-    static let tInk   = Color(red: 0.102, green: 0.090, blue: 0.082)
-    static let tMuted = Color(red: 0.541, green: 0.506, blue: 0.459)
-    static let tLine  = Color(red: 0.906, green: 0.886, blue: 0.847)
-    static let tAcc   = Color(red: 0.722, green: 0.463, blue: 0.180)
-    static let tOk    = Color(red: 0.290, green: 0.486, blue: 0.349)
-    static let tErr   = Color(red: 0.702, green: 0.329, blue: 0.247)
-}
+// MARK: - Farver
+//
+// Ingest-vinduet bruger APPENS palet (Palette i HudView.swift), ikke sin egen.
+// Første udgave havde sin egen lyse cremefarvede kopi, fordi mockuppen var
+// tegnet lys — og så stod vinduet lyst inde i en app hvis HUD er mørk. Ejeren
+// så det på første skærmbillede. To paletter i ét program er to steder en
+// farve skal rettes.
 
 // MARK: - Vinduet
 
@@ -170,32 +166,37 @@ struct IngestView: View {
                 }
                 .padding(18)
             }
-            .background(Color.tCream)
-            Divider()
+            .background(indholdsBaggrund)
+            Divider().background(Palette.hairline)
             statuslinje
         }
         .frame(minWidth: 620, minHeight: 520)
-        .background(Color.tCream)
+        .background(indholdsBaggrund)
         // F263.7 — MØRK TILSTAND GJORDE HALVDELEN AF TEKSTEN USYNLIG.
         // Ejeren så det med det samme på det første skærmbillede: «Drop files
         // here» var der ikke. Den var der — hvid på cremefarvet. SwiftUI giver
         // Text systemets label-farve, og på en Mac i mørkt tema er den hvid,
         // mens Trails flade med vilje er lys.
         //
-        // Fejlformen er kendt: kun de tekster JEG havde farvet (.tMuted, .tAcc)
+        // Fejlformen er kendt: kun de tekster JEG havde farvet (Palette.fgMuted, Palette.accent)
         // overlevede, så fladen så *næsten* rigtig ud — og et skærmbillede uden
         // en manglende overskrift ligner et layout-valg, ikke en fejl.
         //
         // Fladen er en LYS flade. Det er ikke en undladelse af at understøtte
         // mørk tilstand: paletten ER Trails cremefarvede, den blev godkendt
         // sådan, og en halvt omfarvet udgave ville være en tredje palet.
-        .environment(\.colorScheme, .light)
-        .foregroundColor(.tInk)
+        .foregroundColor(Palette.fg)
         .task { await model.hentAlt() }
         .sheet(isPresented: $viserIndsaet) { indsaetArk }
     }
 
     // MARK: Værktøjslinje
+
+    /// Samme lodrette forløb som HUD'en, så de to flader ligner ét program.
+    private var indholdsBaggrund: some View {
+        LinearGradient(colors: [Palette.bgTop, Palette.bgBottom],
+                       startPoint: .top, endPoint: .bottom)
+    }
 
     private var vaerktoejslinje: some View {
         HStack(spacing: 10) {
@@ -210,7 +211,7 @@ struct IngestView: View {
             // om at der er noget at vælge. Vil man skifte konto, parrer man om.
             if let konto = DeviceAuth.gemtTenant {
                 Text("\(S.ingestTenantPrefix) \(konto)")
-                    .font(.system(size: 11.5)).foregroundColor(.tMuted)
+                    .font(.system(size: 11.5)).foregroundColor(Palette.fgMuted)
                     .accessibilityIdentifier("ingest-tenant-label")
             }
             Spacer()
@@ -228,7 +229,7 @@ struct IngestView: View {
                 .frame(maxWidth: 200)
                 .accessibilityIdentifier("ingest-kb-picker")
             } else if !model.kbNavn.isEmpty {
-                Text(model.kbNavn).font(.system(size: 12)).foregroundColor(.tMuted)
+                Text(model.kbNavn).font(.system(size: 12)).foregroundColor(Palette.fgMuted)
             }
             Button { Task { await model.opdater() } } label: {
                 Image(systemName: "arrow.clockwise")
@@ -239,7 +240,7 @@ struct IngestView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Palette.bgTop)
     }
 
     // MARK: Drop-felt
@@ -248,26 +249,26 @@ struct IngestView: View {
         VStack(spacing: 6) {
             Image(systemName: "arrow.up.doc")
                 .font(.system(size: 26, weight: .light))
-                .foregroundColor(.tInk.opacity(0.45))
+                .foregroundColor(Palette.fg.opacity(0.45))
             Text(slipper ? "\(S.ingestUploading)…" : S.ingestDropTitle)
                 .font(.system(size: 13, weight: .semibold))
             Text(S.ingestAccepted)
                 .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.tMuted)
+                .foregroundColor(Palette.fgMuted)
             if model.uploaderAntal > 0 {
                 Text("\(S.ingestUploading) \(model.uploaderAntal)…")
-                    .font(.system(size: 11)).foregroundColor(.tAcc)
+                    .font(.system(size: 11)).foregroundColor(Palette.accent)
             } else {
-                Text(S.ingestDropHint).font(.system(size: 11.5)).foregroundColor(.tAcc)
+                Text(S.ingestDropHint).font(.system(size: 11.5)).foregroundColor(Palette.accent)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 26)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Palette.card))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
-                .foregroundColor(slipper ? .tAcc : .tLine)
+                .foregroundColor(slipper ? Palette.accent : Palette.hairline)
         )
         .contentShape(Rectangle())
         .onTapGesture { vaelgFiler() }
@@ -310,10 +311,10 @@ struct IngestView: View {
             TextEditor(text: $indsaetTekst)
                 .font(.system(size: 12.5))
                 .frame(minHeight: 220)
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.tLine))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Palette.hairline))
                 .accessibilityIdentifier("ingest-paste-body")
             if indsaetTekst.isEmpty {
-                Text(S.ingestPastePlaceholder).font(.system(size: 11)).foregroundColor(.tMuted)
+                Text(S.ingestPastePlaceholder).font(.system(size: 11)).foregroundColor(Palette.fgMuted)
             }
             HStack {
                 Spacer()
@@ -333,9 +334,8 @@ struct IngestView: View {
         }
         .padding(18)
         .frame(width: 520)
-        .background(Color.tCream)
-        .environment(\.colorScheme, .light)
-        .foregroundColor(.tInk)
+        .background(Palette.bgBottom)
+        .foregroundColor(Palette.fg)
     }
 
     private func vaelgFiler() {
@@ -368,18 +368,18 @@ struct IngestView: View {
         return VStack(spacing: 0) {
             if raekker.isEmpty {
                 Text(model.fane == .koe ? S.ingestEmptyQueue : S.ingestEmptyDone)
-                    .font(.system(size: 12)).foregroundColor(.tMuted)
+                    .font(.system(size: 12)).foregroundColor(Palette.fgMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 18).padding(.horizontal, 12)
             } else {
                 ForEach(Array(raekker.enumerated()), id: \.element.id) { i, k in
                     raekke(k)
-                    if i < raekker.count - 1 { Divider().background(Color.tLine) }
+                    if i < raekker.count - 1 { Divider().background(Palette.hairline) }
                 }
             }
         }
-        .background(RoundedRectangle(cornerRadius: 9).fill(Color.white))
-        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Color.tLine))
+        .background(RoundedRectangle(cornerRadius: 9).fill(Palette.card))
+        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Palette.hairline))
         .accessibilityIdentifier("ingest-source-list")
     }
 
@@ -387,12 +387,12 @@ struct IngestView: View {
         HStack(spacing: 10) {
             Text(k.fileType.uppercased())
                 .font(.system(size: 9, weight: .bold, design: .rounded))
-                .foregroundColor(.tMuted)
+                .foregroundColor(Palette.fgMuted)
                 .frame(width: 38, alignment: .leading)
             VStack(alignment: .leading, spacing: 1) {
                 Text(k.visningsnavn).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
                 if let s = undertekst(k) {
-                    Text(s).font(.system(size: 11)).foregroundColor(.tMuted).lineLimit(1)
+                    Text(s).font(.system(size: 11)).foregroundColor(Palette.fgMuted).lineLimit(1)
                 }
             }
             Spacer(minLength: 8)
@@ -410,10 +410,10 @@ struct IngestView: View {
 
     private func maerkat(_ k: IngestSource) -> some View {
         let (tekst, farve): (String, Color) =
-            k.erFejlet ? (S.ingestStateFailed, .tErr)
-            : k.awaitingLocalCompile ? (S.ingestStateWaiting, .tMuted)
-            : k.erIKoe ? (S.ingestStateCompiling, .tAcc)
-            : ("\(k.neuronCount) \(S.ingestNeuronsSuffix)", .tOk)
+            k.erFejlet ? (S.ingestStateFailed, Palette.err)
+            : k.awaitingLocalCompile ? (S.ingestStateWaiting, Palette.fgMuted)
+            : k.erIKoe ? (S.ingestStateCompiling, Palette.accent)
+            : ("\(k.neuronCount) \(S.ingestNeuronsSuffix)", Palette.ok)
         return Text(tekst)
             .font(.system(size: 10.5, weight: .medium))
             .foregroundColor(farve)
@@ -425,16 +425,16 @@ struct IngestView: View {
 
     private func fejlbanner(_ tekst: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.tErr)
-            Text(tekst).font(.system(size: 12)).foregroundColor(.tErr)
+            Image(systemName: "exclamationmark.triangle.fill").foregroundColor(Palette.err)
+            Text(tekst).font(.system(size: 12)).foregroundColor(Palette.err)
             Spacer()
             Button(S.ingestRetry) { Task { await model.opdater() } }
                 .buttonStyle(.borderless).font(.system(size: 12))
                 .accessibilityIdentifier("ingest-error-retry")
         }
         .padding(10)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.tErr.opacity(0.07)))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.tErr.opacity(0.3)))
+        .background(RoundedRectangle(cornerRadius: 8).fill(Palette.err.opacity(0.07)))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Palette.err.opacity(0.3)))
         .accessibilityIdentifier("ingest-error")
     }
 
@@ -451,16 +451,16 @@ struct IngestView: View {
             Circle().fill(prikFarve).frame(width: 7, height: 7)
             Text(motorTekst).font(.system(size: 12, weight: .medium))
             if let n = motorNote {
-                Text("· \(n)").font(.system(size: 11)).foregroundColor(.tMuted)
+                Text("· \(n)").font(.system(size: 11)).foregroundColor(Palette.fgMuted)
                     .accessibilityIdentifier("ingest-engine-why")
             }
             Spacer()
             if arbejder != nil || motorErTil {
                 Text("$0")
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.tOk)
+                    .foregroundColor(Palette.ok)
                     .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(RoundedRectangle(cornerRadius: 5).fill(Color.tOk.opacity(0.12)))
+                    .background(RoundedRectangle(cornerRadius: 5).fill(Palette.ok.opacity(0.12)))
             }
             if motorKanSkiftes {
                 Toggle("", isOn: Binding(
@@ -473,7 +473,7 @@ struct IngestView: View {
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 9)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Palette.bgTop)
         .accessibilityIdentifier("ingest-engine-status")
     }
 
@@ -490,9 +490,9 @@ struct IngestView: View {
 
     private var prikFarve: Color {
         switch model.motor {
-        case .til: return .tOk
-        case .blandet: return .tAcc
-        case .fra, .ukendt: return .tMuted
+        case .til: return Palette.ok
+        case .blandet: return Palette.accent
+        case .fra, .ukendt: return Palette.fgMuted
         }
     }
 

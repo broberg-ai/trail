@@ -244,8 +244,13 @@ final class HudModel: ObservableObject {
     }
 }
 
-// Trail palette.
-private enum Palette {
+// Trail palette. ÉN palet for hele appen — HUD'en og Ingest-vinduet deler den.
+//
+// Ikke længere `private`: F263.7 begyndte med sin EGEN kopi (tCream/tInk/…), og
+// ejeren så det med det samme — Ingest-vinduet stod lyst mens appen omkring det
+// er mørk. To paletter i ét program er to steder en farve skal rettes, og den
+// ene bliver glemt. Nu er der én.
+enum Palette {
     static let accent = Color(red: 0xE8/255.0, green: 0xA8/255.0, blue: 0x7C/255.0)
     static let bgTop = Color(red: 0.13, green: 0.115, blue: 0.10)
     static let bgBottom = Color(red: 0.09, green: 0.08, blue: 0.072)
@@ -255,6 +260,10 @@ private enum Palette {
     static let fg = Color(red: 0.96, green: 0.94, blue: 0.91)
     static let fgMuted = Color.white.opacity(0.55)
     static let fgSubtle = Color.white.opacity(0.32)
+    // F263.7 — tilstandsfarver til Ingest-listen. Tilføjet HER frem for i
+    // IngestView, så paletten bliver ved med at være ét sted.
+    static let ok = Color(red: 0.42, green: 0.72, blue: 0.51)
+    static let err = Color(red: 0.90, green: 0.47, blue: 0.40)
 }
 
 struct HudView: View {
