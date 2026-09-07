@@ -102,6 +102,57 @@ natten — er vejen kort, netop fordi arbejder-løkken bygges mod køens HTTP-fl
 og ikke mod noget Mac-specifikt. Det er derfor F263.3's krav siger *«løkken må
 ikke afhænge af AppKit»*.
 
+## Ambient kompilerer IKKE selv — den sætter en ægte session i gang
+
+> **Ejeren, 7. september 2026:** *«Ambient må på INGEN måde afvikle CC som -p —
+> men det ved du godt. Den skal køre i denne session eller en headless session
+> spawned the Cardmem way.»*
+
+**Det retter en fejl i denne plans egen første udgave.** F263.3 sagde at Ambient
+skulle «køre prompten gennem Claude Code», og pegede på at appen ikke er
+sandkasset og derfor må starte `claude` som underproces. Den korteste vej fra
+den sætning er `claude -p` — og **den vej er API-betalt.**
+
+Det ville have ødelagt kortets eget formål. Hele F263 findes for at kompilere
+til **$0** på Max-abonnementet. En underproces der fakturerer pr. token er ikke
+en billigere motor; det er den dyre motor med en menulinje foran.
+
+### Arbejdsdelingen
+
+```
+   Ambient                          en ÆGTE interaktiv cc-session (Max, $0)
+   ┌─────────────────┐              ┌──────────────────────────────┐
+   │ ser arbejde i køen             │                              │
+   │ viser det i menuen             │                              │
+   │ TÆNDER LYSET  ────────────────►│ claimer selv fra køen        │
+   │                 │              │ kompilerer                   │
+   │ (rører aldrig et job)          │ afleverer op                 │
+   └─────────────────┘              └──────────────────────────────┘
+```
+
+**Ambient claimer ikke.** Sessionen claimer selv gennem F263.1's kø, så leasen
+og arbejdet ligger samme sted. En reservation der holdes af én proces mens en
+anden laver arbejdet, er to steder en fejl kan opstå — og det er præcis den
+fejlklasse F263.1's review lige har lukket.
+
+### Det er ikke et nyt design — det er kæden der allerede kører
+
+```
+buddy-probe hvert 120. sek  →  «/local-ingest broberg-ai»  →  sessionen claimer  →  kompilerer  →  $0
+```
+
+Syv kilder gik gennem den kæde 6.–7. september. **Ambient overtager kun rollen
+som den der opdager arbejdet og starter sessionen**, så kæden ikke afhænger af
+at buddy poller — og så der er et ansigt på den.
+
+### Spærren er en test, ikke denne sætning
+
+Repoet har allerede `spawnClaude` i sky-motoren (`apps/server/src/services/claude.ts`
+og de to CLI-backends). Den kode er lovlig dér og må **ikke** kopieres ind i
+Ambient eller arbejder-stien. En prøve skanner efter `claude -p`, `--print` og
+`spawnClaude` og bliver rød hvis nogen tilføjer dem — mutations-bevist, ellers
+er den kun en påstand om sig selv.
+
 ## Ambient får sin egen webflade — to steder at aflevere, ét sted der kompilerer
 
 > **Ejeren, 7. september 2026:** *«Jeg tænker også at du kan køre webserveren ind
@@ -208,7 +259,8 @@ røre datamodellen. Og efter beslutningen ovenfor gælder: skulle F146 en dag gi
 Macen en lokal Trail, hører den også hjemme i **Ambient**, ikke i app nummer to.
 
 **Non-goals, eksplicit:** ingen CRDT, ingen lokal database, ingen offline-Trail
-(alt det er F146's) · **ingen kunde-API-nøgler** · **intet nyt Mac-program.**
+(alt det er F146's) · **ingen kunde-API-nøgler** · **intet nyt Mac-program** ·
+**intet `claude -p`** — den vej er betalt, og $0 er hele grunden til kortet.
 
 ## Hvad der var galt med mekanismen i dag
 
@@ -235,7 +287,7 @@ usynlig for enhver arbejder i op til fem minutter. Rettet i samme runde.
 |---|---|---|
 | **F263.1** | Jobkøen: claim / hjerteslag / lease | ✅ **udrullet 6/9** |
 | **F263.2** | Ambient melder sig som ARBEJDER — og skyen kan se hvem der er hjemme | næste |
-| **F263.3** | Ambient claimer og kompilerer — arbejder-løkken i den app der findes | **kernen** |
+| **F263.3** | Ambient sætter kompileringen i gang i en ægte cc-session — ALDRIG `claude -p` | **kernen** |
 | **F263.4** | Fladen viser hvilken motor der kørte | |
 | **F263.5** | Ærlig fallback: ingen arbejder → skyen tager den, synligt | |
 | **F263.7** | Ambients egen webflade på en lokal port — den anden afleverings-vej | |
