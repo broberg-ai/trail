@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trail Ingest i Ambient — native Mac-flade</title>
+<style>
+  :root{
+    /* Trails egen palet — uændret fra apps/ingest-station/src/index.css */
+    --cream:#faf9f5; --ink:#1a1715; --muted:#8a8175; --line:#e7e2d8;
+    --accent:#b8762e; --ok:#4a7c59; --err:#b3543f;
+    /* macOS-systemfarver */
+    --sys-blue:#0a84ff; --win:#ffffff; --chrome:#f2f0ec;
+    --sep:rgba(0,0,0,.09); --shadow:0 22px 70px rgba(0,0,0,.28),0 2px 8px rgba(0,0,0,.14);
+    --radius:11px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:48px 32px 80px;
+    font:13px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Inter,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(1200px 700px at 20% -10%, #d9cfc0 0%, transparent 60%),
+      radial-gradient(900px 600px at 90% 10%, #c9d4cd 0%, transparent 55%),
+      #b9b2a6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto}
+  .lede{max-width:760px;margin:0 auto 40px;color:#2b2621;background:rgba(255,255,255,.72);
+        backdrop-filter:blur(20px);padding:22px 26px;border-radius:14px;box-shadow:0 6px 30px rgba(0,0,0,.12)}
+  .lede h1{margin:0 0 8px;font:600 22px/1.2 -apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif;letter-spacing:-.02em}
+  .lede p{margin:0 0 8px}
+  .lede p:last-child{margin:0}
+  .lede code{font:11.5px/1 ui-monospace,"SF Mono",Menlo,monospace;background:rgba(0,0,0,.06);padding:2px 5px;border-radius:4px}
+  .row{display:flex;gap:34px;align-items:flex-start;flex-wrap:wrap;justify-content:center}
+  .cap{margin:14px auto 0;max-width:520px;text-align:center;color:#3a332c;font-size:12px;
+       background:rgba(255,255,255,.6);padding:8px 14px;border-radius:8px}
+  .cap b{color:#1a1715}
+
+  /* ─────────── macOS-vindue ─────────── */
+  .win{width:720px;background:var(--win);border-radius:var(--radius);box-shadow:var(--shadow);
+       overflow:hidden;border:.5px solid rgba(0,0,0,.22)}
+  .titlebar{height:52px;display:flex;align-items:center;gap:14px;padding:0 14px;
+            background:linear-gradient(180deg,#fbfaf8,var(--chrome));border-bottom:.5px solid var(--sep)}
+  .lights{display:flex;gap:8px;flex:0 0 auto}
+  .lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .l1{background:#ff5f57;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12)}
+  .l2{background:#febc2e;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12)}
+  .l3{background:#28c840;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12)}
+  .wtitle{font:600 13px/1 -apple-system,sans-serif;letter-spacing:-.01em;margin-left:4px}
+  .wtitle small{display:block;font-weight:400;color:var(--muted);font-size:11px;margin-top:3px}
+  .tbspace{flex:1}
+  /* pull-down (NSPopUpButton) */
+  .pull{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;
+        background:#fff;border:.5px solid rgba(0,0,0,.16);border-radius:6px;
+        box-shadow:0 1px 1.5px rgba(0,0,0,.07);font-size:12px;cursor:default;white-space:nowrap}
+  .pull .chev{width:9px;height:9px;opacity:.45;flex:0 0 auto}
+  .pull .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:0 0 auto}
+
+  .body{padding:20px;background:var(--cream)}
+
+  /* drop-zone */
+  .drop{border:2px dashed var(--line);border-radius:12px;padding:30px 20px;text-align:center;
+        background:#fff;transition:.18s;cursor:default}
+  .drop.over{border-color:var(--accent);background:rgba(184,118,46,.06)}
+  .drop .glyph{width:34px;height:34px;margin:0 auto 10px;opacity:.42}
+  .drop b{font-weight:600;font-size:13.5px}
+  .drop p{margin:5px 0 0;color:var(--muted);font:11px/1.4 ui-monospace,"SF Mono",Menlo,monospace}
+  .drop .hint{font-family:inherit;font-size:11.5px;margin-top:9px;color:var(--muted)}
+
+  .paste{margin-top:10px;display:flex;justify-content:center}
+  .btn{height:24px;padding:0 12px;border-radius:6px;border:.5px solid rgba(0,0,0,.16);background:#fff;
+       font:500 12px/1 -apple-system,sans-serif;color:var(--ink);box-shadow:0 1px 1.5px rgba(0,0,0,.06);
+       display:inline-flex;align-items:center;gap:6px;cursor:default}
+  .btn:active{background:#ececec}
+  .btn.primary{background:var(--sys-blue);border-color:transparent;color:#fff;box-shadow:0 1px 2px rgba(10,132,255,.35)}
+
+  /* segmented control */
+  .seg{display:inline-flex;background:rgba(0,0,0,.055);border-radius:7px;padding:2px;margin:18px 0 10px}
+  .seg button{border:0;background:transparent;font:500 12px/1 -apple-system,sans-serif;color:var(--ink);
+              padding:5px 14px;border-radius:5.5px;cursor:default;display:inline-flex;align-items:center;gap:6px}
+  .seg button[aria-selected="true"]{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.13)}
+  .seg .n{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .seg .sd{width:6px;height:6px;border-radius:50%}
+
+  /* liste */
+  .list{border:.5px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}
+  .li{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:.5px solid var(--line)}
+  .li:last-child{border-bottom:0}
+  .li:nth-child(even){background:#fdfcfa}
+  .fi{width:19px;height:23px;flex:0 0 auto}
+  .li .nm{flex:1;min-width:0}
+  .li .nm b{display:block;font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .li .nm span{display:block;color:var(--muted);font-size:11px;margin-top:1px}
+  .pill{font-size:10.5px;padding:2.5px 8px;border-radius:99px;white-space:nowrap;font-weight:500}
+  .p-work{background:rgba(184,118,46,.13);color:#8d5a20}
+  .p-wait{background:rgba(0,0,0,.055);color:var(--muted)}
+  .p-done{background:rgba(74,124,89,.14);color:#3a6547}
+  .p-err{background:rgba(179,84,63,.13);color:var(--err)}
+  .spin{width:11px;height:11px;border:1.6px solid rgba(184,118,46,.28);border-top-color:var(--accent);
+        border-radius:50%;display:inline-block;vertical-align:-1px;margin-right:5px;animation:sp .8s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  /* status-bjælke — det NYE */
+  .status{display:flex;align-items:center;gap:10px;padding:9px 14px;
+          background:linear-gradient(180deg,#fbfaf8,var(--chrome));border-top:.5px solid var(--sep)}
+  .engine{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:500}
+  .live{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(74,124,89,.18)}
+  .status .sub{color:var(--muted);font-weight:400}
+  .free{margin-left:auto;font:600 11px/1 ui-monospace,"SF Mono",Menlo,monospace;color:var(--ok);
+        background:rgba(74,124,89,.12);padding:4px 8px;border-radius:5px}
+  /* switch */
+  .sw{width:38px;height:22px;border-radius:99px;background:var(--ok);position:relative;flex:0 0 auto;
+      box-shadow:inset 0 0 0 .5px rgba(0,0,0,.08)}
+  .sw i{position:absolute;top:2px;left:18px;width:18px;height:18px;border-radius:50%;background:#fff;
+        box-shadow:0 1px 3px rgba(0,0,0,.28);display:block}
+  .sw.off{background:rgba(0,0,0,.14)} .sw.off i{left:2px}
+
+  /* banner */
+  .banner{margin-top:14px;border:.5px solid rgba(184,118,46,.35);background:rgba(184,118,46,.07);
+          border-radius:9px;padding:10px 12px;font-size:12px;display:flex;gap:9px;align-items:flex-start}
+  .banner svg{flex:0 0 auto;margin-top:1px}
+
+  /* ─────────── menulinje ─────────── */
+  .menubar{width:300px}
+  .mbstrip{height:26px;border-radius:7px 7px 0 0;background:rgba(255,255,255,.82);backdrop-filter:blur(20px);
+           display:flex;align-items:center;justify-content:flex-end;padding:0 10px;gap:14px;
+           border:.5px solid rgba(0,0,0,.1);border-bottom:0}
+  .mbstrip svg{opacity:.72}
+  .mbstrip .active-icon{opacity:1}
+  .menu{background:rgba(246,245,243,.94);backdrop-filter:blur(28px) saturate(180%);
+        border:.5px solid rgba(0,0,0,.14);border-radius:9px;box-shadow:var(--shadow);padding:5px;
+        margin-top:5px}
+  .mi{display:flex;align-items:center;gap:9px;padding:5px 9px;border-radius:5px;font-size:13px}
+  .mi.dis{color:var(--muted)}
+  .mi.sel{background:var(--sys-blue);color:#fff}
+  .mi .k{margin-left:auto;font-size:12px;opacity:.55}
+  .mi.sel .k{opacity:.85}
+  .msep{height:.5px;background:rgba(0,0,0,.11);margin:5px 9px}
+  .acct{display:flex;align-items:center;gap:9px;padding:6px 9px}
+  .av{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#8d5a20);
+      color:#fff;font:600 11px/26px -apple-system,sans-serif;text-align:center;flex:0 0 auto}
+  .acct .t b{display:block;font-size:12.5px;font-weight:600}
+  .acct .t span{display:block;font-size:11px;color:var(--muted)}
+  .badge-n{margin-left:auto;background:var(--err);color:#fff;font:600 10.5px/1 -apple-system,sans-serif;
+           padding:3px 6px;border-radius:99px}
+
+  .note{max-width:1180px;margin:44px auto 0;background:rgba(255,255,255,.78);backdrop-filter:blur(20px);
+        border-radius:14px;padding:24px 28px;box-shadow:0 6px 30px rgba(0,0,0,.12)}
+  .note h2{margin:0 0 12px;font:600 15px/1.3 -apple-system,sans-serif}
+  .note table{border-collapse:collapse;width:100%;font-size:12.5px}
+  .note td,.note th{padding:7px 10px;border-bottom:.5px solid rgba(0,0,0,.09);text-align:left;vertical-align:top}
+  .note th{font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  .note tr:last-child td{border-bottom:0}
+  .tag{display:inline-block;font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:99px;
+       background:rgba(10,132,255,.13);color:#0a5fb8}
+  .tag.new{background:rgba(74,124,89,.15);color:#3a6547}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="lede">
+    <h1>Trail Ingest — inde i Ambient</h1>
+    <p>Den samme flade som <code>app.trailmem.com</code>s Ingest Station, oversat til Mac-idiomer:
+       systemets segmenterede knap i stedet for faner, pull-down i værktøjslinjen i stedet for
+       dropdowns, og en statuslinje i bunden.</p>
+    <p><b>Trails palet er uændret</b> — cream, blæk og den brændte orange. Det er mekanikken der
+       bliver Apple, ikke farverne. Ellers holder appen op med at ligne Trail.</p>
+  </div>
+
+  <div class="row">
+
+    <!-- ══ MENULINJEN ══ -->
+    <div>
+      <div class="menubar">
+        <div class="mbstrip">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a1715" stroke-width="1.7"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg>
+          <svg class="active-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a1715" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a1715" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </div>
+        <div class="menu">
+          <div class="acct">
+            <div class="av">CB</div>
+            <div class="t"><b>Christian Broberg</b><span>broberg-ai</span></div>
+          </div>
+          <div class="mi dis">Skriver til <b style="margin-left:3px">broberg.ai</b></div>
+          <div class="msep"></div>
+          <div class="mi dis">
+            <span style="width:7px;height:7px;border-radius:50%;background:#4a7c59;display:inline-block"></span>
+            Aktiv · kompilerer 1 kilde
+          </div>
+          <div class="msep"></div>
+          <div class="mi sel">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3"/></svg>
+            Åbn Trail Ingest…
+            <span class="badge-n">3</span>
+          </div>
+          <div class="mi">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+            Slå op i Trail<span class="k">⌃⌥T</span>
+          </div>
+          <div class="msep"></div>
+          <div class="mi">Sæt optagelse på pause<span class="k">⌘P</span></div>
+          <div class="mi">Indstillinger…<span class="k">⌘,</span></div>
+          <div class="mi">Afslut Trail<span class="k">⌘Q</span></div>
+        </div>
+      </div>
+      <div class="cap" style="max-width:300px">
+        <b>Vejen ind.</b> Ét nyt punkt i den menu der findes i dag —
+        med antallet der venter, så køen er synlig uden at åbne noget.
+      </div>
+    </div>
+
+    <!-- ══ VINDUET ══ -->
+    <div>
+      <div class="win">
+        <div class="titlebar">
+          <div class="lights"><i class="l1"></i><i class="l2"></i><i class="l3"></i></div>
+          <div class="wtitle">Trail Ingest<small>broberg.ai</small></div>
+          <div class="tbspace"></div>
+          <div class="pull"><span class="dot"></span>broberg.ai
+            <svg class="chev" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 4L5 6.5 7.5 4"/></svg>
+          </div>
+          <div class="pull">broberg-ai
+            <svg class="chev" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 4L5 6.5 7.5 4"/></svg>
+          </div>
+        </div>
+
+        <div class="body">
+          <div class="drop" id="dz">
+            <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="#1a1715" stroke-width="1.5">
+              <path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3"/>
+            </svg>
+            <b id="dzt">Slip filer her</b>
+            <p>pdf · docx · md · txt · png · jpg · mp3 · m4a · wav</p>
+            <div class="hint">eller <span style="color:var(--accent)">vælg filer…</span></div>
+          </div>
+
+          <div class="paste">
+            <button class="btn">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M9 4h6v3H9zM7 6H5v14h14V6h-2"/></svg>
+              Indsæt tekst…
+            </button>
+          </div>
+
+          <div class="seg" role="tablist">
+            <button aria-selected="true" data-tab="q"><span class="sd" style="background:var(--accent)"></span>Kø <span class="n">3</span></button>
+            <button aria-selected="false" data-tab="d"><span class="sd" style="background:var(--ok)"></span>Færdig <span class="n">128</span></button>
+          </div>
+
+          <div class="list" id="lq">
+            <div class="li">
+              <svg class="fi" viewBox="0 0 20 24"><rect x=".5" y=".5" width="19" height="23" rx="2.5" fill="#fff" stroke="#e7e2d8"/><path d="M13 .5v5h6" fill="none" stroke="#e7e2d8"/><text x="10" y="17" font-size="6.5" font-weight="700" fill="#b3543f" text-anchor="middle" font-family="-apple-system">PDF</text></svg>
+              <div class="nm"><b>Aarsrapport-2026-fdsundhed.pdf</b><span>PDF · 41 sider · 8,2 MB</span></div>
+              <span class="pill p-work"><span class="spin"></span>kompilerer</span>
+            </div>
+            <div class="li">
+              <svg class="fi" viewBox="0 0 20 24"><rect x=".5" y=".5" width="19" height="23" rx="2.5" fill="#fff" stroke="#e7e2d8"/><path d="M13 .5v5h6" fill="none" stroke="#e7e2d8"/><text x="10" y="17" font-size="6.5" font-weight="700" fill="#8a8175" text-anchor="middle" font-family="-apple-system">MD</text></svg>
+              <div class="nm"><b>platform_byg-selv-paa-samme-motor.md</b><span>Markdown · 7.850 tegn</span></div>
+              <span class="pill p-wait">i kø</span>
+            </div>
+            <div class="li">
+              <svg class="fi" viewBox="0 0 20 24"><rect x=".5" y=".5" width="19" height="23" rx="2.5" fill="#fff" stroke="#e7e2d8"/><path d="M13 .5v5h6" fill="none" stroke="#e7e2d8"/><text x="10" y="17" font-size="6" font-weight="700" fill="#4a7c59" text-anchor="middle" font-family="-apple-system">M4A</text></svg>
+              <div class="nm"><b>samtale-med-sanne-06-09.m4a</b><span>Lyd · 34 min</span></div>
+              <span class="pill p-wait">i kø</span>
+            </div>
+          </div>
+
+          <div class="list" id="ld" style="display:none">
+            <div class="li">
+              <svg class="fi" viewBox="0 0 20 24"><rect x=".5" y=".5" width="19" height="23" rx="2.5" fill="#fff" stroke="#e7e2d8"/><path d="M13 .5v5h6" fill="none" stroke="#e7e2d8"/><text x="10" y="17" font-size="6.5" font-weight="700" fill="#8a8175" text-anchor="middle" font-family="-apple-system">MD</text></svg>
+              <div class="nm"><b>en_platform_build-your-own…md</b><span>Markdown · kompileret på denne Mac · 21:47</span></div>
+              <span class="pill p-done">1 neuron</span>
+            </div>
+            <div class="li">
+              <svg class="fi" viewBox="0 0 20 24"><rect x=".5" y=".5" width="19" height="23" rx="2.5" fill="#fff" stroke="#e7e2d8"/><path d="M13 .5v5h6" fill="none" stroke="#e7e2d8"/><text x="10" y="17" font-size="6.5" font-weight="700" fill="#b3543f" text-anchor="middle" font-family="-apple-system">PDF</text></svg>
+              <div class="nm"><b>cv-christian-broberg.pdf</b><span>PDF · 4 sider · kompileret i skyen · i går</span></div>
+              <span class="pill p-done">6 neuroner</span>
+            </div>
+            <div class="li">
+              <svg class="fi" viewBox="0 0 20 24"><rect x=".5" y=".5" width="19" height="23" rx="2.5" fill="#fff" stroke="#e7e2d8"/><path d="M13 .5v5h6" fill="none" stroke="#e7e2d8"/><text x="10" y="17" font-size="6" font-weight="700" fill="#8a8175" text-anchor="middle" font-family="-apple-system">DOCX</text></svg>
+              <div class="nm"><b>tilbud-aalborg-kommune.docx</b><span>Word · kunne ikke læses</span></div>
+              <span class="pill p-err">prøv igen</span>
+            </div>
+          </div>
+
+          <div class="banner">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b8762e" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+            <div><b>Denne Mac er valgt som motor.</b> Kilder du dropper her —
+            <i>og dem du dropper på app.trailmem.com</i> — kompileres begge her, gratis.</div>
+          </div>
+        </div>
+
+        <div class="status">
+          <span class="live"></span>
+          <div class="engine">Denne Mac kompilerer <span class="sub">· Christians MacBook</span></div>
+          <span class="free">$0</span>
+          <div class="sw"><i></i></div>
+        </div>
+      </div>
+
+      <div class="cap">
+        <b>Fladen.</b> Samme indhold som web-udgaven, Mac-mekanik udenom.
+        Klik på fanerne og på drop-feltet — de virker.
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <h2>Hvad der oversættes, og hvad der er nyt</h2>
+    <table>
+      <tr><th style="width:30%">web i dag</th><th style="width:34%">Mac-udgaven</th><th>hvorfor</th></tr>
+      <tr><td>Faner «Kø / Færdig» med understregning</td><td>Segmenteret knap</td><td>Det er Apples idiom for præcis to ligeværdige visninger. Understregede faner er et web-mønster.</td></tr>
+      <tr><td>Egne dropdowns til tenant + videnbase</td><td>Pull-down i værktøjslinjen</td><td>Hører til vinduets kontekst, ikke til indholdet. Frigør plads over drop-feltet.</td></tr>
+      <tr><td>«Log ud» i toppen</td><td>Flyttet til menulinjens Indstillinger</td><td>Man logger ikke ud af en Mac-app i vinduets hjørne. Parringen hører til appen, ikke til fladen.</td></tr>
+      <tr><td>Nøglefelt: indsæt <code>trail_…</code></td><td><span class="tag">bortfalder</span></td><td>Ambient har allerede tokenet i Keychain fra parringen. Nøglen skal aldrig kopieres eller ligge i en browser.</td></tr>
+      <tr><td>Banner: «kør <code>/local-ingest</code> i en cc-session»</td><td>Banner: «Denne Mac er valgt som motor»</td><td>Beskeden var en instruks til et menneske om at gøre noget manuelt. Nu gør appen det.</td></tr>
+      <tr><td>—</td><td><span class="tag new">ny</span> Statuslinje: motor · maskinnavn · $0 · afbryder</td><td>Hele F263 handler om hvem der kompilerer. Det skal stå på fladen, ikke gættes.</td></tr>
+      <tr><td>—</td><td><span class="tag new">ny</span> «kompileret på denne Mac» pr. kilde</td><td>Bagefter skal man kunne se hvem der tog jobbet — også når skyen tog det.</td></tr>
+      <tr><td>—</td><td><span class="tag new">ny</span> Tæller på menupunktet</td><td>Køen er synlig uden at åbne vinduet. Det er hele grunden til at bo i menulinjen.</td></tr>
+    </table>
+    <p style="margin:16px 0 0;font-size:12.5px;color:#3a332c">
+      <b>Én ting at være opmærksom på:</b> når fladen bygges i Swift, findes ingest-fladen
+      to steder — web og Mac. De må ikke drive fra hinanden. Det de deler er
+      <i>API-kontrakten</i>, ikke koden: samme endepunkter, samme tilstande
+      («i kø», «kompilerer», «neuroner», «prøv igen»). Kommer der en tilstand mere,
+      skal begge sider have den.
+    </p>
+  </div>
+</div>
+
+<script>
+  const seg = document.querySelectorAll('.seg button');
+  seg.forEach(b => b.addEventListener('click', () => {
+    seg.forEach(x => x.setAttribute('aria-selected', String(x === b)));
+    const q = b.dataset.tab === 'q';
+    document.getElementById('lq').style.display = q ? '' : 'none';
+    document.getElementById('ld').style.display = q ? 'none' : '';
+  }));
+  const dz = document.getElementById('dz'), dzt = document.getElementById('dzt');
+  dz.addEventListener('click', () => {
+    dz.classList.toggle('over');
+    dzt.textContent = dz.classList.contains('over') ? 'Slip for at tilføje 3 filer' : 'Slip filer her';
+  });
+</script>
+</body>
+</html>
