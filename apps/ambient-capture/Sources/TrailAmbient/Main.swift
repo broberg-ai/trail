@@ -36,6 +36,37 @@ struct TrailAmbientMain {
         if CommandLine.arguments.contains("--enginetoggletest") {
             EngineTest.toggle(); exit(0)
         }
+        // F263.8 — sæt den personlige nøgle uden at den nogensinde står i argv.
+        // `ps` viser argumenter til enhver bruger på maskinen; stdin gør ikke.
+        if CommandLine.arguments.contains("--setkey") {
+            guard let linje = readLine(strippingNewline: true)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines), !linje.isEmpty else {
+                print("SETKEY: ingen nøgle på stdin"); exit(1)
+            }
+            TenantStore.personligNoegle = linje
+            let gemt = TenantStore.personligNoegle
+            // Læs den TILBAGE frem for at melde succes på at kaldet ikke fejlede.
+            print(gemt == linje ? "SETKEY OK (\(linje.prefix(6))… \(linje.count) tegn)" : "SETKEY FEJL: nøglen kunne ikke læses tilbage")
+            exit(gemt == linje ? 0 : 1)
+        }
+        // F263.8 — måleren. Siger HVAD der gik galt frem for at give en tom
+        // liste, som ikke kan skelnes fra «du har ingen konti».
+        if CommandLine.arguments.contains("--tenantsprobe") {
+            print("harNoegle=\(TenantStore.harNoegle)")
+            Task {
+                do {
+                    let liste = try await IngestClient.tenants()
+                    print("TENANTSPROBE OK \(liste.count): \(liste.map(\.slug).joined(separator: ", "))")
+                    TenantStore.gemKontoer(liste)
+                    print("gemt=\(TenantStore.kontoer.map(\.slug).joined(separator: ", ")) aktiv=\(TenantStore.aktivSlug ?? "-")")
+                    exit(0)
+                } catch {
+                    print("TENANTSPROBE FEJL: \(error.localizedDescription)")
+                    exit(1)
+                }
+            }
+            RunLoop.main.run()
+        }
         if CommandLine.arguments.contains("--tenanttest") {
             TenantTest.run(); exit(0)
         }

@@ -45,8 +45,11 @@ final class DeviceAuth {
     var tenantLabel: String? { UserDefaults.standard.string(forKey: "trail.tenant") }
 
     /// F263.7 — samme værdi, læst uden en instans (Ingest-vinduet holder ingen).
+    /// Kontoens SLUG — det buddys jobs er navngivet med. Falder tilbage til
+    /// navnet for en Mac parret før 7/9 2026, hvor slug'en ikke blev leveret.
     nonisolated static var gemtTenant: String? {
-        TenantStore.aktivKonto?.slug ?? UserDefaults.standard.string(forKey: "trail.tenant")
+        UserDefaults.standard.string(forKey: "trail.tenantSlug")
+            ?? UserDefaults.standard.string(forKey: "trail.tenant")
     }
     var kbLabel: String? {
         (UserDefaults.standard.array(forKey: "trail.kbNames") as? [String])?.joined(separator: ", ")
@@ -57,8 +60,6 @@ final class DeviceAuth {
     }
 
     init() {
-        // Løfter en Mac parret FØR F263.8 ind i konto-formen. Idempotent.
-        TenantStore.migrerArvetParring()
         state = isConnected ? .connected : .disconnected
     }
 
@@ -118,8 +119,7 @@ final class DeviceAuth {
         pendingCode = nil
         state = .disconnected
         Self.deleteToken()
-        TenantStore.ryd()
-        for key in ["trail.deviceName", "trail.kbIds", "trail.kbNames", "trail.email", "trail.displayName", "trail.tenant"] {
+        for key in ["trail.deviceName", "trail.kbIds", "trail.kbNames", "trail.email", "trail.displayName", "trail.tenant", "trail.tenantSlug"] {
             UserDefaults.standard.removeObject(forKey: key)
         }
         EventLog.shared.log(kind: "device_auth_disconnected")
@@ -149,19 +149,6 @@ final class DeviceAuth {
         case 200:
             guard let claim = try? JSONDecoder().decode(ClaimResponse.self, from: data) else { return false }
             Self.storeToken(claim.token)
-            // F263.8 — samme parring, nu også som en konto i vælgeren. Den
-            // arvede post skrives stadig ovenfor: ingen naken omlægning.
-            if let slug = claim.tenantSlug ?? claim.tenant, !slug.isEmpty {
-                TenantStore.gem(
-                    slug: slug,
-                    token: claim.token,
-                    name: claim.tenant,
-                    deviceName: claim.deviceName,
-                    email: claim.email,
-                    kbIds: claim.kbIds,
-                    kbNames: claim.kbNames ?? []
-                )
-            }
             let d = UserDefaults.standard
             d.set(claim.deviceName, forKey: "trail.deviceName")
             d.set(claim.kbIds, forKey: "trail.kbIds")
@@ -169,6 +156,12 @@ final class DeviceAuth {
             if let email = claim.email { d.set(email, forKey: "trail.email") }
             if let name = claim.displayName { d.set(name, forKey: "trail.displayName") }
             if let tenant = claim.tenant { d.set(tenant, forKey: "trail.tenant") }
+            // F263.8 — SLUG'EN, ikke kun navnet. `trail.tenant` er kontoens NAVN
+            // («Broberg.ai») og blev brugt som id til buddys jobs, som hedder
+            // slug'en («broberg-ai»). Hver «der ligger arbejde nu»-besked bar
+            // altså et navn der ikke findes, og 120-sekunders proben hentede
+            // kilden alligevel — så ingen kunne se det.
+            if let slug = claim.tenantSlug { d.set(slug, forKey: "trail.tenantSlug") }
             EventLog.shared.log(kind: "device_auth_connected")
             return true
         case 404:
@@ -198,10 +191,18 @@ final class DeviceAuth {
 
     // nonisolated: a pure Keychain read with no actor state, so the HUD's
     // networking (off the main actor) can read the token directly.
-    // F263.8 — nøglen for den VALGTE konto. TenantStore falder tilbage til den
-    // arvede enkelt-nøgle når Macen endnu ikke er migreret, så en allerede
-    // parret maskine bliver ved med at virke uden at parre om.
-    nonisolated static func loadToken() -> String? { TenantStore.aktivToken() }
+    nonisolated static func loadToken() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: keychainAccount,
+            kSecReturnData as String: true,
+        ]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
 
     private static func deleteToken() {
         let query: [String: Any] = [

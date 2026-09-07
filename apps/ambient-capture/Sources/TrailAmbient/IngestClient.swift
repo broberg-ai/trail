@@ -47,6 +47,7 @@ struct KnowledgeBaseRef: Identifiable, Equatable {
 
 enum IngestError: LocalizedError {
     case ikkeForbundet
+    case ingenNoegle
     case http(Int, String)
     case netvaerk(String)
     case uventetSvar
@@ -54,6 +55,7 @@ enum IngestError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .ikkeForbundet:      return S.ingestNotConnected
+        case .ingenNoegle:        return S.ingestNoKey
         case .http(403, _):       return S.ingestForbidden
         case .http(let c, let b): return "\(S.ingestServerError) (\(c)) \(b)"
         case .netvaerk(let m):    return "\(S.ingestNetworkError) \(m)"
@@ -63,16 +65,48 @@ enum IngestError: LocalizedError {
 }
 
 enum IngestClient {
-    private static let engine = "https://engine-001.trailmem.com"
-    private static var token: String? { DeviceAuth.loadToken() }
+    // F263.8 — SAMME VEJ SOM WEB CLIPPER, ikke en parallel af den.
+    // apps/web-clipper/src/popup/Popup.tsx taler med app.trailmem.com, henter
+    // konto-listen fra /api/v1/me/tenants og vælger konto pr. kald med
+    // X-Trail-Tenant. Én personlig nøgle, alle konti, alle Trails.
+    private static let app = "https://app.trailmem.com"
+    private static var token: String? { TenantStore.personligNoegle }
 
-    private static func request(_ path: String, method: String = "GET", token brug: String? = nil) throws -> URLRequest {
-        guard let token = brug ?? token else { throw IngestError.ikkeForbundet }
-        guard let url = URL(string: engine + path) else { throw IngestError.uventetSvar }
+    private static func request(
+        _ path: String,
+        method: String = "GET",
+        token brug: String? = nil,
+        tenant: String?? = .none
+    ) throws -> URLRequest {
+        guard let token = brug ?? token else { throw IngestError.ingenNoegle }
+        guard let url = URL(string: app + path) else { throw IngestError.uventetSvar }
         var r = URLRequest(url: url)
         r.httpMethod = method
         r.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // Web Clippers F215.4, set fra vores side: kaldet må IKKE bære cookies.
+        // Gør det det, kan en indlogget session overtrumfe nøglen — vælgeren
+        // siger én konto og kaldet går til en anden. Det kostede dem en rigtig
+        // fejl; URLSession sender den delte cookie-butik med som standard.
+        r.httpShouldHandleCookies = false
+        // .none = brug det aktive valg; .some(nil) = send ingen header
+        // (konto-listen selv skal ikke bindes til en konto).
+        let slug: String? = tenant ?? TenantStore.aktivSlug
+        if let slug, !slug.isEmpty { r.setValue(slug, forHTTPHeaderField: "X-Trail-Tenant") }
         return r
+    }
+
+    /// Konto-listen — nøjagtig samme rute Web Clipper bruger, besvaret af
+    /// kontrol-planet ud fra DE SAMME medlemskaber proxyen håndhæver, så
+    /// vælgeren ikke kan tilbyde en konto der bliver afvist bagefter.
+    static func tenants() async throws -> [ConnectedTenant] {
+        let data = try await send(try request("/api/v1/me/tenants", tenant: .some(nil)))
+        guard let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let rows = o["tenants"] as? [[String: Any]]
+        else { throw IngestError.uventetSvar }
+        return rows.compactMap { r in
+            guard let slug = r["slug"] as? String else { return nil }
+            return ConnectedTenant(slug: slug, name: r["name"] as? String ?? slug, role: r["role"] as? String)
+        }
     }
 
     private static func send(_ req: URLRequest) async throws -> Data {
@@ -120,45 +154,6 @@ enum IngestClient {
             working: o["working"] as? Int ?? 0,
             workers: o["workers"] as? [String] ?? []
         )
-    }
-
-    /// F263.8 — «hvilken konto tilhører denne nøgle?».
-    static func whoami(token: String) async throws -> (slug: String, name: String) {
-        let data = try await send(try request("/api/v1/ambient/whoami", token: token))
-        guard let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let slug = o["slug"] as? String, !slug.isEmpty
-        else { throw IngestError.uventetSvar }
-        return (slug, o["name"] as? String ?? slug)
-    }
-
-    /// Retter en konto der blev gemt under sit NAVN i stedet for sin slug.
-    ///
-    /// Parringen leverede kun navnet indtil i dag, så en allerede parret Mac
-    /// bærer «Broberg.ai» hvor buddys jobs hedder «broberg-ai» — enhver
-    /// «der ligger arbejde nu»-besked bar det forkerte navn, og 120-sekunders
-    /// proben dækkede over det. Uden den her skulle man parre om for at rette
-    /// noget man ikke kan se er galt.
-    ///
-    /// Fejler kaldet, laves der INGENTING. En reparation der gætter er værre
-    /// end den forkerte værdi, for så kan man ikke se hvad der skete.
-    @discardableResult
-    static func repareerKontoSlugs() async -> Int {
-        var rettet = 0
-        for konto in TenantStore.kontoer {
-            guard let t = TenantStore.token(for: konto.slug) else { continue }
-            guard let svar = try? await whoami(token: t) else { continue }
-            guard svar.slug != konto.slug else { continue }
-            let varAktiv = TenantStore.aktivSlug == konto.slug
-            TenantStore.fjern(slug: konto.slug)
-            TenantStore.gem(
-                slug: svar.slug, token: t, name: svar.name,
-                deviceName: konto.deviceName, email: konto.email,
-                kbIds: konto.kbIds, kbNames: konto.kbNames
-            )
-            if varAktiv { TenantStore.aktivSlug = svar.slug }
-            rettet += 1
-        }
-        return rettet
     }
 
     // MARK: - Skriv

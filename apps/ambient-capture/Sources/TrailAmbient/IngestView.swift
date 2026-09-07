@@ -44,9 +44,7 @@ final class IngestModel: ObservableObject {
     var kbNavn: String { kbs.first { $0.id == valgtKb }?.name ?? TrailClient.cachedKbName }
 
     func hentAlt() async {
-        // F263.8 — ret en konto der står gemt under sit NAVN, før vi bruger den
-        // som id (buddys jobs hedder slug'en). Gør intet når alt er som det skal.
-        if await IngestClient.repareerKontoSlugs() > 0 { genlaesKontoer() }
+        await hentKontoer()
         await hentKbs()
         await opdater()
         await opdaterMotor()
@@ -68,7 +66,22 @@ final class IngestModel: ObservableObject {
         await hentAlt()
     }
 
-    /// Læs konto-listen igen (efter en parring eller et lokalt fjern).
+    /// Hent konto-listen fra serveren — /api/v1/me/tenants, samme rute Web
+    /// Clipper bruger. Fejler den, beholdes den forrige liste: en tom vælger
+    /// og «du har ingen konti» ser ens ud, og kun den ene er sandt.
+    func hentKontoer() async {
+        guard TenantStore.harNoegle else { kontoer = []; aktivKonto = ""; return }
+        do {
+            let r = try await IngestClient.tenants()
+            TenantStore.gemKontoer(r)
+            genlaesKontoer()
+            fejl = nil
+        } catch {
+            fejl = error.localizedDescription
+        }
+    }
+
+    /// Læs den lokale cache igen (efter et skift eller en ny nøgle).
     func genlaesKontoer() {
         kontoer = TenantStore.kontoer
         aktivKonto = TenantStore.aktivSlug ?? ""
@@ -178,6 +191,8 @@ struct IngestView: View {
     @ObservedObject var model: IngestModel
     @State private var slipper = false
     @State private var viserIndsaet = false
+    @State private var viserNoegle = false
+    @State private var noegleUdkast = ""
     @State private var indsaetTitel = ""
     @State private var indsaetTekst = ""
 
@@ -217,6 +232,7 @@ struct IngestView: View {
         .foregroundColor(Palette.fg)
         .task { await model.hentAlt() }
         .sheet(isPresented: $viserIndsaet) { indsaetArk }
+        .sheet(isPresented: $viserNoegle) { noegleArk }
         // En ny parring lander som en ny konto mens vinduet står åbent —
         // uden det her ville vælgeren mangle den til vinduet blev lukket.
         .onReceive(NotificationCenter.default.publisher(for: .trailKontoerAendret)) { _ in
@@ -293,15 +309,13 @@ struct IngestView: View {
                 }
             }
             if !model.kontoer.isEmpty { Divider() }
-            Button(S.ingestAddTenant) {
-                NotificationCenter.default.post(name: .trailTilfoejKonto, object: nil)
-            }
-            .accessibilityIdentifier("ingest-add-tenant")
+            Button(S.ingestAddTenant) { viserNoegle = true }
+                .accessibilityIdentifier("ingest-add-tenant")
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "person.crop.circle").font(.system(size: 11))
                 Text(model.aktivKonto.isEmpty
-                     ? S.ingestNoTenant
+                     ? (TenantStore.harNoegle ? S.ingestNoTenant : S.ingestNoKey)
                      : (model.kontoer.first { $0.slug == model.aktivKonto }?.visningsnavn
                         ?? model.aktivKonto))
                     .font(.system(size: 11.5))
@@ -312,6 +326,36 @@ struct IngestView: View {
         .fixedSize()
         .help(S.ingestTenantHelp)
         .accessibilityIdentifier("ingest-tenant-picker")
+    }
+
+    /// Ét felt, én gang: samme slags nøgle Web Clipper bruger. Herefter kommer
+    /// konto-listen fra serveren og der skal ikke parres pr. konto.
+    private var noegleArk: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(S.ingestKeyPrompt).font(.system(size: 14, weight: .semibold))
+            Text(S.ingestKeyHelp).font(.system(size: 11.5)).foregroundColor(Palette.fgMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            SecureField("trail_…", text: $noegleUdkast)
+                .textFieldStyle(.roundedBorder)
+                .accessibilityIdentifier("ingest-key-field")
+            HStack {
+                Spacer()
+                Button(S.ingestKeyCancel) { viserNoegle = false }
+                    .accessibilityIdentifier("ingest-key-cancel")
+                Button(S.ingestKeySave) {
+                    TenantStore.personligNoegle = noegleUdkast
+                    noegleUdkast = ""
+                    viserNoegle = false
+                    Task { await model.hentAlt() }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(noegleUdkast.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityIdentifier("ingest-key-save")
+            }
+        }
+        .padding(18)
+        .frame(width: 420)
+        .background(Palette.bgTop)
     }
 
     // MARK: Drop-felt

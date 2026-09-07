@@ -28,14 +28,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var avatarFetching = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(tilfoejKonto),
-            name: .trailTilfoejKonto, object: nil)
-        // F263.8 — ret ved OPSTART en konto der står gemt under sit navn i
-        // stedet for sin slug. Ligger reparationen kun i Ingest-vinduet, bliver
-        // en Mac der aldrig åbner vinduet ved med at sende det forkerte navn
-        // til buddy — og det er netop den vej fejlen kom ind ad.
-        Task { _ = await IngestClient.repareerKontoSlugs() }
+        // F263.8 — hent konto-listen ved opstart når der er en nøgle, så
+        // vælgeren er rigtig i det sekund vinduet åbnes. Fejler kaldet, sker
+        // der intet: den forrige liste bliver stående frem for at blive tom,
+        // og en tom vælger ville ligne «du har ingen konti».
+        if TenantStore.harNoegle {
+            Task {
+                if let liste = try? await IngestClient.tenants(), !liste.isEmpty {
+                    TenantStore.gemKontoer(liste)
+                }
+            }
+        }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         installEditMenu()
         render()
@@ -340,12 +343,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// F263.8 — «Tilføj konto…» fra Ingest-vinduet. Går bevidst gennem
-    /// beginConnect frem for at starte en parring ved siden af: dens
-    /// to-koders-spærre er grunden til at ejeren ikke skal godkende to gange.
-    /// Han skifter selv konto på app.trailmem.com før han godkender — det er
-    /// dét trin der gør listen til en adgangskontrol og ikke en liste.
-    @objc func tilfoejKonto() { connectToTrail() }
+
 
     @objc private func disconnectFromTrail() {
         deviceAuth.disconnect()

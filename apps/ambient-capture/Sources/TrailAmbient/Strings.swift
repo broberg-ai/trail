@@ -120,6 +120,11 @@ struct UIStrings {
     let ingestCancel: String
     let ingestTenantPrefix: String
     let ingestAddTenant: String
+    let ingestNoKey: String
+    let ingestKeyPrompt: String
+    let ingestKeyHelp: String
+    let ingestKeySave: String
+    let ingestKeyCancel: String
     let ingestNoTenant: String
     let ingestTenantHelp: String
     let ingestEngineNotSetUp: String
@@ -236,7 +241,12 @@ extension UIStrings {
         ingestPasteSave: "Add to Trail",
         ingestCancel: "Cancel",
         ingestTenantPrefix: "Account:",
-        ingestAddTenant: "Add account…",
+        ingestAddTenant: "Trail key…",
+        ingestNoKey: "No Trail key yet — add one to pick an account.",
+        ingestKeyPrompt: "Paste your Trail API key",
+        ingestKeyHelp: "Settings → API keys on app.trailmem.com. The same kind of key the Web Clipper uses — it reaches every account you are a member of.",
+        ingestKeySave: "Save",
+        ingestKeyCancel: "Cancel",
         ingestNoTenant: "No account",
         ingestTenantHelp: "Switch account — each one has its own key on this Mac.",
         ingestEngineNotSetUp: "this Mac is not an engine yet",
@@ -351,7 +361,12 @@ extension UIStrings {
         ingestPasteSave: "Føj til Trail",
         ingestCancel: "Annullér",
         ingestTenantPrefix: "Konto:",
-        ingestAddTenant: "Tilføj konto…",
+        ingestAddTenant: "Trail-nøgle…",
+        ingestNoKey: "Ingen Trail-nøgle endnu — tilføj én for at vælge konto.",
+        ingestKeyPrompt: "Indsæt din Trail API-nøgle",
+        ingestKeyHelp: "Indstillinger → API-nøgler på app.trailmem.com. Samme slags nøgle som Web Clipper bruger — den når alle de konti du er medlem af.",
+        ingestKeySave: "Gem",
+        ingestKeyCancel: "Annullér",
         ingestNoTenant: "Ingen konto",
         ingestTenantHelp: "Skift konto — hver har sin egen nøgle på denne Mac.",
         ingestEngineNotSetUp: "denne Mac er ikke motor endnu",
