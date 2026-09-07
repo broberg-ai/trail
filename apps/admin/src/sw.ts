@@ -26,7 +26,7 @@ declare const self: ServiceWorkerGlobalScope;
 // kommentarer, så et kommentar-bump gav en byte-identisk sw.js og browseren
 // så aldrig en ny version (målt: flow b215c53d, toasten udeblev i 120s).
 // Bump den ved et bevis-run; logges så en DevTools-kigger kan se revisionen.
-const SW_REV = 'r13';
+const SW_REV = 'r14';
 console.log('[trail-sw]', SW_REV);
 
 const SHELL_CACHE = 'trail-shell-v1';
@@ -51,7 +51,50 @@ self.addEventListener(
     defaultBadgeIcon: '/icon-192.png',
   }),
 );
-self.addEventListener('notificationclick', (event) => handleNotificationClick(event));
+/**
+ * F263.10 — ET TRYK PÅ EN NOTIFIKATION SKAL LANDE DET RIGTIGE STED.
+ *
+ * Ejer-rapporteret 7/9 fra sin iPhone: «Når jeg trykker på denne APN så kommer
+ * jeg godt nok ind i PWA, men jeg kommer ikke til en relevant skærm.»
+ *
+ * ÅRSAGEN, målt i pakkens egen dist: @broberg/webpush' handleNotificationClick
+ * fokuserer vinduet og kalder derefter `WindowClient.navigate(url)` — inde i et
+ * `try { … } catch {}`. **iOS implementerer ikke `WindowClient.navigate`.** Så
+ * kastet bliver slugt, appen får fokus, og man står præcis hvor man var. Intet
+ * fejler, intet logges, og adressen i notifikationen bliver aldrig brugt.
+ *
+ * Det er husets gennemgående fejlform: en tom catch gør «virkede ikke» og
+ * «virkede» til samme udfald.
+ *
+ * FIXET SENDER EN BESKED I STEDET FOR AT NAVIGERE. Appen ejer sin egen router,
+ * så den kan flytte sig selv uden en sideindlæsning — og det virker på iOS,
+ * hvor `navigate()` ikke gør. Pakkens handler kaldes stadig BAGEFTER som
+ * fallback: den dækker det tilfælde hvor der slet ikke er et åbent vindue
+ * (openWindow), og browsere hvor `navigate()` faktisk virker.
+ *
+ * MELDT TIL components som et gap i @broberg/webpush, så rettelsen kan lande i
+ * pakken for hele flåden. Det her er ikke en omgåelse af den delte pakke —
+ * beskeden til klienten er noget pakken IKKE gør, og fallbacket er dens eget.
+ */
+self.addEventListener('notificationclick', (event) => {
+  const navigate = (event.notification.data as { navigate?: string } | undefined)?.navigate;
+  if (navigate) {
+    event.waitUntil(
+      (async () => {
+        const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        for (const w of wins) {
+          // Fokus FØRST: uden det åbner iOS ikke appen overhovedet, og en
+          // besked til et vindue ingen kan se er ingen hjælp.
+          if ('focus' in w) await (w as WindowClient).focus();
+          w.postMessage({ type: 'trail:navigate', navigate });
+        }
+      })(),
+    );
+  }
+  // Pakkens egen adfærd bagefter: openWindow når intet vindue er åbent, og
+  // navigate() i de browsere hvor den findes. Beskeden ovenfor er additiv.
+  handleNotificationClick(event);
+});
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(

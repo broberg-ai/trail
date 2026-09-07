@@ -56,9 +56,38 @@ function KbIndexRedirect({ kbId }: { kbId?: string }) {
   return null;
 }
 
+/**
+ * F263.10 — modtag «gå hertil» fra service-workeren, når et notifikations-tryk
+ * skal føre et sted hen.
+ *
+ * SKAL ligge INDE i LocationProvider: den router med appens egen navigation, så
+ * der ikke sker en fuld sideindlæsning — og det er den ENESTE vej der virker på
+ * iOS, hvor `WindowClient.navigate()` ikke findes og pakkens forsøg bliver slugt
+ * af en tom catch. Uden denne lytter blev adressen i notifikationen aldrig brugt
+ * til noget: appen fik fokus på den skærm den tilfældigvis stod på.
+ */
+function NotifikationsRuter() {
+  const { route } = useLocation();
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const paa = (e: MessageEvent) => {
+      const d = e.data as { type?: string; navigate?: string } | undefined;
+      if (d?.type !== 'trail:navigate' || !d.navigate) return;
+      // Kun stier inden for appen. En absolut URL fra en push-nyttelast er
+      // noget udefra, og en router der følger den blindt er en åben dør.
+      if (!d.navigate.startsWith('/') || d.navigate.startsWith('//')) return;
+      route(d.navigate);
+    };
+    navigator.serviceWorker.addEventListener('message', paa);
+    return () => navigator.serviceWorker.removeEventListener('message', paa);
+  }, [route]);
+  return null;
+}
+
 function Main() {
   return (
     <LocationProvider>
+      <NotifikationsRuter />
       <App>
         <Router>
           <Route path="/" component={KnowledgeBasesPanel} />
