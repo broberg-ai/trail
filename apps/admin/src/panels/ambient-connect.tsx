@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { approveAmbientDevice, fetchAuthMe, listKnowledgeBases, type AuthMe } from '../api';
+import {
+  approveAmbientDevice,
+  fetchAuthMe,
+  listKnowledgeBases,
+  switchTenant,
+  type AuthMe,
+} from '../api';
 import type { KnowledgeBase } from '@trail/shared';
 import { t } from '../lib/i18n';
 
@@ -29,6 +35,7 @@ export function AmbientConnectPanel() {
   // forskellen på at give sin Mac adgang til den rigtige kunde og den forkerte
   // — og et forkert valg ville ikke se forkert ud bagefter.
   const [me, setMe] = useState<AuthMe | null>(null);
+  const [skifter, setSkifter] = useState<string | null>(null);
 
   useEffect(() => {
     listKnowledgeBases()
@@ -105,17 +112,62 @@ export function AmbientConnectPanel() {
             {deviceName}
           </div>
 
+          {/* F263.8 — KONTOEN VÆLGES HER. Siden godkendte før ind i den konto
+              SPA'en tilfældigvis stod i, og sagde det ikke engang. Ejeren
+              7/9: «Dette er jo ikke en Tenant tilladelse!!!!» — han havde
+              ret: listen nedenfor er Trails, ikke konti, og de to ligner
+              hinanden fordi hans Trails er navngivet efter kunder. */}
           {me?.tenant ? (
-            <p
-              data-testid="ambient-connect-tenant"
-              style={{ marginTop: 14, fontSize: 13, color: 'var(--color-fg-muted)' }}
-            >
-              {t('ambient.connect.intoTenant')}{' '}
-              <strong style={{ color: 'var(--color-fg)' }}>{me.tenant.name}</strong>{' '}
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-fg-subtle)' }}>
-                {me.tenant.slug}
-              </span>
-            </p>
+            <>
+              <h2 style={{ marginTop: 26, fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-fg-muted)' }}>
+                {t('ambient.connect.pickTenant')}
+              </h2>
+              <div
+                data-testid="ambient-connect-tenant"
+                style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}
+              >
+                {(me.tenants ?? [me.tenant]).map((k) => {
+                  const aktiv = k.slug === me.tenant?.slug;
+                  return (
+                    <button
+                      key={k.slug}
+                      type="button"
+                      data-testid={`ambient-connect-tenant-${k.slug}`}
+                      aria-pressed={aktiv}
+                      disabled={aktiv || skifter !== null || phase !== 'pick'}
+                      onClick={async () => {
+                        setSkifter(k.slug);
+                        try {
+                          await switchTenant(k.slug);
+                          // Genindlæs SAMME adresse: enheds-koden står i
+                          // query-strengen, så den overlever. Et hop til '/'
+                          // ville smide parringen væk midt i flowet.
+                          window.location.reload();
+                        } catch (e) {
+                          setError(e instanceof Error ? e.message : String(e));
+                          setSkifter(null);
+                        }
+                      }}
+                      class="active:scale-[0.98] transition disabled:cursor-default"
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '8px 12px', borderRadius: 8,
+                        cursor: aktiv ? 'default' : 'pointer',
+                        border: `1px solid ${aktiv ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                        background: aktiv ? 'var(--color-accent-soft)' : 'var(--color-bg-card)',
+                        color: 'var(--color-fg)', fontSize: 14,
+                      }}
+                    >
+                      <span style={{ fontSize: 12 }}>{aktiv ? '\u25CF' : '\u25CB'}</span>
+                      {k.name}
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-fg-subtle)' }}>
+                        {skifter === k.slug ? t('ambient.connect.switching') : k.slug}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           ) : null}
 
           <h2 style={{ marginTop: 26, fontSize: 13, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-fg-muted)' }}>
