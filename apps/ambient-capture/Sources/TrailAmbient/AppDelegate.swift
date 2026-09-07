@@ -31,6 +31,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(
             self, selector: #selector(tilfoejKonto),
             name: .trailTilfoejKonto, object: nil)
+        // F263.8 — ret ved OPSTART en konto der står gemt under sit navn i
+        // stedet for sin slug. Ligger reparationen kun i Ingest-vinduet, bliver
+        // en Mac der aldrig åbner vinduet ved med at sende det forkerte navn
+        // til buddy — og det er netop den vej fejlen kom ind ad.
+        Task { _ = await IngestClient.repareerKontoSlugs() }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         installEditMenu()
         render()
