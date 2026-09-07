@@ -28,6 +28,11 @@ struct TrailAmbientMain {
         if CommandLine.arguments.contains("--dicttest") {
             DictTest.run()
         }
+        if let i = CommandLine.arguments.firstIndex(of: "--enginetrigger") {
+            let t = CommandLine.arguments.count > i + 1 ? CommandLine.arguments[i + 1] : "broberg-ai"
+            let sess = CommandLine.arguments.count > i + 2 ? CommandLine.arguments[i + 2] : "trail"
+            EngineTest.trigger(tenant: t, session: sess); exit(0)
+        }
         if CommandLine.arguments.contains("--enginetoggletest") {
             EngineTest.toggle(); exit(0)
         }

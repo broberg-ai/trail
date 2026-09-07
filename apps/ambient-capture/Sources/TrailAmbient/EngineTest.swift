@@ -59,6 +59,24 @@ enum EngineTest {
     }
 
 
+    /// F263.3 — bevis på den ØJEBLIKKELIGE trigger. Beder buddy sende
+    /// «/local-ingest <kunde>» til den kørende session, som selv claimer og
+    /// kompilerer. Ambient rører aldrig et job.
+    static func trigger(tenant: String, session: String = "trail") {
+        let sem = DispatchSemaphore(value: 0)
+        var linje = "ENGINETRIGGER INCONCLUSIVE"
+        Task {
+            if let f = await EngineControl.triggerNow(tenant: tenant, session: session) {
+                linje = "ENGINETRIGGER tenant=\(tenant) session=\(session) AFVIST(\(f))"
+            } else {
+                linje = "ENGINETRIGGER tenant=\(tenant) session=\(session) PASS(buddy tog imod)"
+            }
+            sem.signal()
+        }
+        _ = sem.wait(timeout: .now() + 15)
+        print(linje)
+    }
+
     static func run() {
         let sem = DispatchSemaphore(value: 0)
         var resultat = "ENGINETEST INCONCLUSIVE"

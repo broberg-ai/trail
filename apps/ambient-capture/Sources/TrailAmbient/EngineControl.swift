@@ -142,16 +142,24 @@ enum EngineControl {
     /// deres probe. Proben bliver stående som sikkerhedsnet: de to gør ikke
     /// det samme — den ene reagerer på en hændelse, den anden fanger det vi
     /// måtte misse.
-    static func triggerNow(tenant: String) async -> String? {
+    static func triggerNow(tenant: String, session: String = "trail") async -> String? {
         guard let req = request("/api/intercom/dispatch", method: "POST", body: [
-            "targetSession": "trail",
+            "targetSession": session,
             "repo": "broberg-ai/trail",
             "message": "/local-ingest \(tenant)",
             "severity": "info",
             "from": "trail-ambient",
         ]) else { return S.engineDaemonUnexpected }
-        guard let (_, resp) = try? await URLSession.shared.data(for: req) else {
-            return S.engineDaemonUnreachable
+        let resp: URLResponse
+        let krop: Data
+        do { (krop, resp) = try await URLSession.shared.data(for: req) }
+        catch {
+            // SAMME DEFEKT SOM I jobs(), ét kaldested længere henne: et `try?`
+            // slugte den rigtige årsag, så «dæmonen er nede» og «serveren
+            // afviste kaldet» kom ud som samme sætning. Fundet fordi
+            // --enginetrigger meldte «buddy kører ikke» mens jobs() lige havde
+            // læst 12 jobs fra den. At tælle ÉT kaldested er ikke at tælle dem.
+            return "\(S.engineDaemonUnreachable): \(error.localizedDescription)"
         }
         let kode = (resp as? HTTPURLResponse)?.statusCode ?? 0
         if (200..<300).contains(kode) { return nil }
@@ -159,6 +167,6 @@ enum EngineControl {
         // jobbet: kilden bliver liggende, leasen udløber, og skyen tager den
         // synligt (F263.5). Sig hvad der skete frem for at tie.
         if kode == 503 { return S.engineNoSession }
-        return "\(S.engineDaemonUnexpected) (\(kode))"
+        return "\(S.engineDaemonUnexpected) (\(kode)): \(String(data: krop, encoding: .utf8)?.prefix(160) ?? "")"
     }
 }
