@@ -26,7 +26,7 @@ declare const self: ServiceWorkerGlobalScope;
 // kommentarer, så et kommentar-bump gav en byte-identisk sw.js og browseren
 // så aldrig en ny version (målt: flow b215c53d, toasten udeblev i 120s).
 // Bump den ved et bevis-run; logges så en DevTools-kigger kan se revisionen.
-const SW_REV = 'r14';
+const SW_REV = 'r15';
 console.log('[trail-sw]', SW_REV);
 
 const SHELL_CACHE = 'trail-shell-v1';
@@ -82,11 +82,25 @@ self.addEventListener('notificationclick', (event) => {
     event.waitUntil(
       (async () => {
         const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        // BESKEDEN FØRST, TIL ALLE VINDUER. components fandt 7/9 at pakkens egen
+        // løkke `return`-er efter det første fokuserbare vindue, så resten aldrig
+        // får besked. Min første udgave havde samme hul i en anden form: den
+        // await'ede focus() midt i løkken, og et afvist focus ville have afbrudt
+        // den, så vinduerne bagefter intet fik. Ruten er den bærende halvdel —
+        // den sendes før noget der kan fejle.
+        for (const w of wins) w.postMessage({ type: 'trail:navigate', navigate });
+        // Derefter fokus, så appen faktisk kommer frem. Kun ét vindue kan have
+        // fokus, så vi stopper ved det første der tager imod. Fejler det, er
+        // ruten allerede sendt — men vi sluger det IKKE i tavshed, for en tom
+        // catch er præcis den fejlform der gjorde den her bug usynlig.
         for (const w of wins) {
-          // Fokus FØRST: uden det åbner iOS ikke appen overhovedet, og en
-          // besked til et vindue ingen kan se er ingen hjælp.
-          if ('focus' in w) await (w as WindowClient).focus();
-          w.postMessage({ type: 'trail:navigate', navigate });
+          if (!('focus' in w)) continue;
+          try {
+            await (w as WindowClient).focus();
+            break;
+          } catch (err) {
+            console.warn('[trail-sw] focus afvist', err);
+          }
         }
       })(),
     );
