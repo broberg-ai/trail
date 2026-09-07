@@ -82,6 +82,29 @@ describe('notificationclick', () => {
     expect(pakkensHandler).toHaveBeenCalled();
   });
 
+  test('INTET vindue åbent: vi sender intet, og pakkens openWindow-vej er stadig i spil', async () => {
+    // Halvdelen af AC#4 der kan måles her. At openWindow så faktisk lander på
+    // den rigtige adresse er pakkens egen adfærd på en rigtig enhed — den er
+    // IKKE bevist af denne test, og AC'en står ufluebenet indtil ejeren har
+    // trykket på en notifikation med appen lukket.
+    const førPost = clients.posted.length;
+    pakkensHandler.mockClear();
+    const oprindelig = clients.api.matchAll;
+    clients.api.matchAll = (async () => []) as typeof clients.api.matchAll;
+    try {
+      const venter: Promise<unknown>[] = [];
+      listeners.get('notificationclick')!({
+        notification: { data: { navigate: '/kb/abc/queue' } },
+        waitUntil: (p: Promise<unknown>) => venter.push(p),
+      });
+      await Promise.all(venter);
+    } finally {
+      clients.api.matchAll = oprindelig;
+    }
+    expect(clients.posted.length).toBe(førPost);
+    expect(pakkensHandler).toHaveBeenCalled();
+  });
+
   test('uden navigate sendes ingen besked — kun pakkens fallback', async () => {
     const før = clients.posted.length;
     const handler = listeners.get('notificationclick');
