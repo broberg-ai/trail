@@ -27,6 +27,9 @@ final class IngestModel: ObservableObject {
     @Published var uploaderAntal: Int = 0
     @Published var fane: Fane = .koe
     @Published var harHentet = false
+    /// Motorens tilstand LÆST fra buddy — ikke vores egen kopi.
+    @Published var motor: EngineState = .ukendt("")
+    @Published var motorSkifter = false
 
     enum Fane: Hashable { case koe, faerdig }
 
@@ -39,6 +42,7 @@ final class IngestModel: ObservableObject {
     func hentAlt() async {
         await hentKbs()
         await opdater()
+        await opdaterMotor()
     }
 
     private func hentKbs() async {
@@ -51,6 +55,17 @@ final class IngestModel: ObservableObject {
         } catch {
             fejl = error.localizedDescription
         }
+    }
+
+    func opdaterMotor() async { motor = await EngineState.hent() }
+
+    /// Slå den lokale motor til/fra. Skriver til buddys job og LÆSER tilstanden
+    /// tilbage bagefter — knappen viser aldrig sit eget ønske som et faktum.
+    func skiftMotor(til paa: Bool) async {
+        motorSkifter = true
+        defer { motorSkifter = false }
+        if let f = await EngineControl.setEnabled(paa) { fejl = f }
+        await opdaterMotor()
     }
 
     func opdater() async {
@@ -104,6 +119,19 @@ final class IngestModel: ObservableObject {
             catch { fejl = "\(u.lastPathComponent): \(error.localizedDescription)" }
         }
         await opdater()
+        // F263.3 — «der ligger arbejde NU». Uden den ville en kilde man lige
+        // har sluppet ligge op til 120 sekunder før buddys probe opdager den.
+        // Proben bliver stående som sikkerhedsnet: de to gør ikke det samme.
+        if case .til = motor, let slug = tenantSlug() {
+            if let f = await EngineControl.triggerNow(tenant: slug) { fejl = f }
+        }
+        await opdaterMotor()
+    }
+
+    /// Kundens slug — buddys jobs er navngivet med den, ikke med et id.
+    private func tenantSlug() -> String? {
+        guard let t = DeviceAuth.gemtTenant?.lowercased(), !t.isEmpty else { return nil }
+        return t
     }
 }
 
@@ -413,35 +441,81 @@ struct IngestView: View {
     /// Statuslinjen SIGER hvem der kompilerer. Den gætter ikke, og den påstår
     /// ikke «lokal» før en arbejder faktisk har taget et job — en tilsluttet
     /// maskine er ikke det samme som en maskine der arbejder (F263.4).
+    /// Statuslinjen SIGER hvem der kompilerer — og kontakten SKRIVER til
+    /// buddys job, ikke til et flag vi selv holder. To steder der afgør om
+    /// Macen tager arbejde ville drive fra hinanden første gang nogen slog
+    /// jobbet fra i buddys dashboard.
     private var statuslinje: some View {
         let arbejder = model.status.workers.first
-        let (tekst, farve): (String, Color) =
-            arbejder != nil ? ("\(S.ingestEngineThisMac) · \(arbejder!)", .tOk)
-            : model.status.waiting > 0 ? (S.ingestEngineNobody, .tMuted)
-            : (S.ingestEngineCloud, .tMuted)
-        // «Skyen kompilerer» er en AFLÆSNING, ikke en indstilling nogen har
-        // valgt — og uden begrundelsen læses den som et valg man kan lave om
-        // et sted man ikke kan finde. Den siger derfor HVORFOR: der er ingen
-        // arbejder, fordi arbejder-løkken (F263.3) ikke er bygget endnu.
-        let hvorfor = arbejder == nil ? S.ingestEngineNotSetUp : nil
         return HStack(spacing: 9) {
-            Circle().fill(farve).frame(width: 7, height: 7)
-            Text(tekst).font(.system(size: 12, weight: .medium))
-            if let hvorfor {
-                Text("· \(hvorfor)").font(.system(size: 11)).foregroundColor(.tMuted)
+            Circle().fill(prikFarve).frame(width: 7, height: 7)
+            Text(motorTekst).font(.system(size: 12, weight: .medium))
+            if let n = motorNote {
+                Text("· \(n)").font(.system(size: 11)).foregroundColor(.tMuted)
                     .accessibilityIdentifier("ingest-engine-why")
             }
             Spacer()
-            if arbejder != nil {
+            if arbejder != nil || motorErTil {
                 Text("$0")
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundColor(.tOk)
                     .padding(.horizontal, 8).padding(.vertical, 4)
                     .background(RoundedRectangle(cornerRadius: 5).fill(Color.tOk.opacity(0.12)))
             }
+            if motorKanSkiftes {
+                Toggle("", isOn: Binding(
+                    get: { motorErTil },
+                    set: { ny in Task { await model.skiftMotor(til: ny) } }))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .disabled(model.motorSkifter)
+                    .accessibilityIdentifier("ingest-engine-toggle")
+            }
         }
         .padding(.horizontal, 14).padding(.vertical, 9)
         .background(Color(nsColor: .windowBackgroundColor))
         .accessibilityIdentifier("ingest-engine-status")
+    }
+
+    private var motorErTil: Bool { if case .til = model.motor { return true }; return false }
+
+    /// Kontakten vises KUN når vi ved hvad den står på. Er buddy nede, ville en
+    /// afbryder i «fra»-stilling påstå noget vi ikke har målt.
+    private var motorKanSkiftes: Bool {
+        switch model.motor {
+        case .til, .fra, .blandet: return true
+        case .ukendt: return false
+        }
+    }
+
+    private var prikFarve: Color {
+        switch model.motor {
+        case .til: return .tOk
+        case .blandet: return .tAcc
+        case .fra, .ukendt: return .tMuted
+        }
+    }
+
+    private var motorTekst: String {
+        switch model.motor {
+        case .til: return S.engineOn
+        case .fra: return S.engineOff
+        case .blandet: return S.engineMixedFmt
+        case .ukendt: return S.ingestEngineCloud
+        }
+    }
+
+    /// Den lille forklaring efter prikken. Uden den læses «Skyen kompilerer»
+    /// som et valg man kan lave om et sted man ikke kan finde.
+    private var motorNote: String? {
+        switch model.motor {
+        case .til(let naeste):
+            guard let naeste else { return nil }
+            let sek = max(0, Int(naeste.timeIntervalSinceNow))
+            return "\(S.engineNextIn) \(sek)s"
+        case .fra: return nil
+        case .blandet(let til, let af): return "\(til)/\(til + af)"
+        case .ukendt(let hvorfor): return hvorfor.isEmpty ? S.ingestEngineNotSetUp : hvorfor
+        }
     }
 }

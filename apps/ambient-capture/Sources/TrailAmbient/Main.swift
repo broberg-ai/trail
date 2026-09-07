@@ -28,6 +28,12 @@ struct TrailAmbientMain {
         if CommandLine.arguments.contains("--dicttest") {
             DictTest.run()
         }
+        if CommandLine.arguments.contains("--enginetoggletest") {
+            EngineTest.toggle(); exit(0)
+        }
+        if CommandLine.arguments.contains("--enginetest") {
+            EngineTest.run(); exit(0)
+        }
         if CommandLine.arguments.contains("--minetest") {
             MineTool.runTest()
         }

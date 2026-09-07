@@ -120,6 +120,16 @@ struct UIStrings {
     let ingestCancel: String
     let ingestTenantPrefix: String
     let ingestEngineNotSetUp: String
+    let engineDaemonUnreachable: String
+    let engineDaemonUnexpected: String
+    let engineNoJobs: String
+    let engineToggleFailed: String
+    let engineNoSession: String
+    let engineOn: String
+    let engineOff: String
+    let engineMixedFmt: String
+    let engineNextIn: String
+    let engineTriggered: String
 }
 
 extension UIStrings {
@@ -223,8 +233,17 @@ extension UIStrings {
         ingestPasteSave: "Add to Trail",
         ingestCancel: "Cancel",
         ingestTenantPrefix: "Account:",
-        ingestEngineNotSetUp: "this Mac is not an engine yet"
-    )
+        ingestEngineNotSetUp: "this Mac is not an engine yet",
+        engineDaemonUnreachable: "buddy is not running — the engine switch is unavailable",
+        engineDaemonUnexpected: "buddy answered in an unexpected shape",
+        engineNoJobs: "no local-ingest job is registered with buddy",
+        engineToggleFailed: "buddy refused the change — the switch is unchanged",
+        engineNoSession: "no live session to compile in — the cloud will take it",
+        engineOn: "This Mac compiles",
+        engineOff: "This Mac is switched off",
+        engineMixedFmt: "Partly on",
+        engineNextIn: "next check in",
+        engineTriggered: "asked for it now"    )
 
     /// Original Danish — preserved so the UI can flip back with one line.
     static let da = UIStrings(
@@ -326,8 +345,17 @@ extension UIStrings {
         ingestPasteSave: "Føj til Trail",
         ingestCancel: "Annullér",
         ingestTenantPrefix: "Konto:",
-        ingestEngineNotSetUp: "denne Mac er ikke motor endnu"
-    )
+        ingestEngineNotSetUp: "denne Mac er ikke motor endnu",
+        engineDaemonUnreachable: "buddy kører ikke — motor-kontakten er utilgængelig",
+        engineDaemonUnexpected: "buddy svarede i en uventet form",
+        engineNoJobs: "der er ikke registreret et local-ingest-job hos buddy",
+        engineToggleFailed: "buddy afviste ændringen — kontakten står uændret",
+        engineNoSession: "ingen levende session at kompilere i — skyen tager den",
+        engineOn: "Denne Mac kompilerer",
+        engineOff: "Denne Mac er slået fra",
+        engineMixedFmt: "Delvist slået til",
+        engineNextIn: "næste tjek om",
+        engineTriggered: "bedt om det nu"    )
 }
 
 /// The active UI language. Flip to `UIStrings.da` to switch the whole app.

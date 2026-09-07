@@ -6,6 +6,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# F263.3 — spærren mod den BETALTE vej kører FØR platform-tjekket, med vilje.
+# Den er ren grep og har ingen Swift- eller macOS-afhængighed, så den skal også
+# være rød på Linux-CI. Lægges den efter tjekket nedenfor, springes præcis den
+# regel over netop dér hvor ingen sidder og kigger.
+bash scripts/guard-no-metered-claude.sh
+
 # The guard used to ask "is swift installed?", which is the wrong question:
 # GitHub's ubuntu runner HAS swift, so the check passed and the build then died
 # on AppKit/AVFoundation/CoreML — this is a macOS menubar app and cannot be
@@ -25,6 +31,13 @@ BIN=".build/debug/TrailAmbient"
 
 echo "[ambient-capture] --selftest (pause gate + menubar icon visibility)"
 "$BIN" --selftest
+
+echo "[ambient-capture] --enginetest (motor-kontakten LÆSER buddys jobs)"
+# KUN læsning. `--enginetoggletest` findes ved siden af og beviser at kontakten
+# SKRIVER — men den slår rigtige jobs fra og til igen, så den køres i hånden,
+# ikke ved hver `pnpm test`. En prøvesuite der flipper produktions-jobs er en
+# prøvesuite folk holder op med at køre.
+"$BIN" --enginetest
 
 echo "[ambient-capture] --ocrtest (on-device Vision OCR + delta guard)"
 "$BIN" --ocrtest
