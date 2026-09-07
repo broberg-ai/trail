@@ -106,6 +106,25 @@ const AMBIENT_ALLOWED: ReadonlyArray<{ method: string; pattern: RegExp }> = [
   // "writing to" label after a rename (name + slug only — NOT the full-row
   // GET /knowledge-bases/:id, which would expose settings the device shouldn't read).
   { method: 'GET', pattern: /^\/api\/v1\/knowledge-bases\/[^/]+\/name$/ },
+
+  // ── F263.7 — the Ingest surface inside the menubar app ──────────────────
+  //
+  // The device stopped being write-only the day it got a window. Dropping a
+  // source and watching it compile needs FOUR things the capture device never
+  // needed, and each is listed on purpose rather than opened as a prefix:
+  //
+  //   the KB pull-down · the source list · the drop-zone · "who is compiling"
+  //
+  // WHAT THIS COSTS, stated rather than buried: a stolen device token can now
+  // READ the tenant's source list and UPLOAD a file. That is a real widening
+  // over "write a candidate, read search". It is bounded by being an
+  // ALLOWLIST — settings, keys, users, deletion and every admin surface stay
+  // out — and by per-device revocation (the token is minted per machine).
+  { method: 'GET', pattern: /^\/api\/v1\/knowledge-bases$/ },
+  { method: 'GET', pattern: /^\/api\/v1\/knowledge-bases\/[^/]+\/documents$/ },
+  { method: 'GET', pattern: /^\/api\/v1\/documents$/ },
+  { method: 'POST', pattern: /^\/api\/v1\/knowledge-bases\/[^/]+\/documents\/upload$/ },
+  { method: 'GET', pattern: /^\/api\/v1\/compile-jobs\/status$/ },
 ];
 
 /**

@@ -87,6 +87,32 @@ struct UIStrings {
     let enrollTooShort: String
     let enrollBuilding: String
     let enrollDoneFmt: String
+
+    // F263.7 — Ingest-vinduet
+    let ingestWindowTitle: String
+    let ingestDropTitle: String
+    let ingestDropHint: String
+    let ingestChooseFiles: String
+    let ingestAccepted: String
+    let ingestTabQueue: String
+    let ingestTabDone: String
+    let ingestEmptyQueue: String
+    let ingestEmptyDone: String
+    let ingestNeuronsSuffix: String
+    let ingestStateWaiting: String
+    let ingestStateCompiling: String
+    let ingestStateFailed: String
+    let ingestEngineThisMac: String
+    let ingestEngineCloud: String
+    let ingestEngineNobody: String
+    let ingestOpenWindow: String
+    let ingestUploading: String
+    let ingestNotConnected: String
+    let ingestForbidden: String
+    let ingestServerError: String
+    let ingestNetworkError: String
+    let ingestUnexpected: String
+    let ingestRetry: String
 }
 
 extension UIStrings {
@@ -159,7 +185,31 @@ extension UIStrings {
         enrollFailed: "Couldn't start recording — try again",
         enrollTooShort: "Not enough speech — hold longer and try again",
         enrollBuilding: "Building your voice-print…",
-        enrollDoneFmt: "✓ Voice-print saved (%.0fs)"
+        enrollDoneFmt: "✓ Voice-print saved (%.0fs)",
+        ingestWindowTitle: "Trail Ingest",
+        ingestDropTitle: "Drop files here",
+        ingestDropHint: "or choose files…",
+        ingestChooseFiles: "Choose files…",
+        ingestAccepted: "pdf · docx · md · txt · png · jpg · mp3 · m4a · wav",
+        ingestTabQueue: "Queue",
+        ingestTabDone: "Done",
+        ingestEmptyQueue: "Nothing waiting. Drop a file above.",
+        ingestEmptyDone: "No compiled sources yet.",
+        ingestNeuronsSuffix: "neurons",
+        ingestStateWaiting: "in queue",
+        ingestStateCompiling: "compiling",
+        ingestStateFailed: "failed",
+        ingestEngineThisMac: "This Mac compiles",
+        ingestEngineCloud: "The cloud compiles",
+        ingestEngineNobody: "No machine connected",
+        ingestOpenWindow: "Open Trail Ingest…",
+        ingestUploading: "Uploading",
+        ingestNotConnected: "Not connected to Trail — pair this Mac first.",
+        ingestForbidden: "This device is not allowed to do that.",
+        ingestServerError: "Trail answered with an error",
+        ingestNetworkError: "Could not reach Trail:",
+        ingestUnexpected: "Trail answered in a shape we did not expect.",
+        ingestRetry: "Try again"
     )
 
     /// Original Danish — preserved so the UI can flip back with one line.
@@ -231,7 +281,31 @@ extension UIStrings {
         enrollFailed: "Kunne ikke starte optagelse — prøv igen",
         enrollTooShort: "Ikke nok tale — hold længere og prøv igen",
         enrollBuilding: "Bygger dit stemme-aftryk…",
-        enrollDoneFmt: "✓ Stemme-aftryk gemt (%.0fs)"
+        enrollDoneFmt: "✓ Stemme-aftryk gemt (%.0fs)",
+        ingestWindowTitle: "Trail Ingest",
+        ingestDropTitle: "Slip filer her",
+        ingestDropHint: "eller vælg filer…",
+        ingestChooseFiles: "Vælg filer…",
+        ingestAccepted: "pdf · docx · md · txt · png · jpg · mp3 · m4a · wav",
+        ingestTabQueue: "Kø",
+        ingestTabDone: "Færdig",
+        ingestEmptyQueue: "Intet venter. Slip en fil ovenfor.",
+        ingestEmptyDone: "Ingen kompilerede kilder endnu.",
+        ingestNeuronsSuffix: "neuroner",
+        ingestStateWaiting: "i kø",
+        ingestStateCompiling: "kompilerer",
+        ingestStateFailed: "fejlede",
+        ingestEngineThisMac: "Denne Mac kompilerer",
+        ingestEngineCloud: "Skyen kompilerer",
+        ingestEngineNobody: "Ingen maskine tilsluttet",
+        ingestOpenWindow: "Åbn Trail Ingest…",
+        ingestUploading: "Uploader",
+        ingestNotConnected: "Ikke forbundet til Trail — par denne Mac først.",
+        ingestForbidden: "Denne enhed må ikke gøre det.",
+        ingestServerError: "Trail svarede med en fejl",
+        ingestNetworkError: "Kunne ikke nå Trail:",
+        ingestUnexpected: "Trail svarede i en form vi ikke forventede.",
+        ingestRetry: "Prøv igen"
     )
 }
 

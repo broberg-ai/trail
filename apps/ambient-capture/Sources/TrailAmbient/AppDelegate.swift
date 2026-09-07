@@ -10,6 +10,8 @@ import Carbon.HIToolbox
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
+    // F263.7 — Ingest-vinduet. Doven: der bygges intet vindue før nogen åbner det.
+    private let ingest = IngestWindowController()
     private let focusWatcher = FocusWatcher()
     private let deviceAuth = DeviceAuth()
     private let hud = HudController()
@@ -151,6 +153,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         if deviceAuth.isConnected {
+            // F263.7 — vejen ind i Ingest-fladen. Står FØR «slå op», fordi det
+            // er den handling man kommer til menuen for når man har en fil.
+            let ingestItem = NSMenuItem(title: S.ingestOpenWindow, action: #selector(openIngest), keyEquivalent: "i")
+            ingestItem.keyEquivalentModifierMask = [.control, .option]
+            ingestItem.target = self
+            menu.addItem(ingestItem)
+
             let lookup = NSMenuItem(title: S.lookUpInTrail, action: #selector(openHud), keyEquivalent: "t")
             lookup.keyEquivalentModifierMask = [.control, .option]
             lookup.target = self
@@ -298,6 +307,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openHud() { hud.toggle() }
+    @objc private func openIngest() { ingest.vis() }
 
     @objc private func togglePause() {
         paused.toggle()
