@@ -113,6 +113,13 @@ struct UIStrings {
     let ingestNetworkError: String
     let ingestUnexpected: String
     let ingestRetry: String
+    let ingestPaste: String
+    let ingestPasteTitle: String
+    let ingestPastePlaceholder: String
+    let ingestPasteSave: String
+    let ingestCancel: String
+    let ingestTenantPrefix: String
+    let ingestEngineNotSetUp: String
 }
 
 extension UIStrings {
@@ -209,7 +216,14 @@ extension UIStrings {
         ingestServerError: "Trail answered with an error",
         ingestNetworkError: "Could not reach Trail:",
         ingestUnexpected: "Trail answered in a shape we did not expect.",
-        ingestRetry: "Try again"
+        ingestRetry: "Try again",
+        ingestPaste: "Paste text…",
+        ingestPasteTitle: "Title (optional)",
+        ingestPastePlaceholder: "Paste or type the text you want Trail to learn…",
+        ingestPasteSave: "Add to Trail",
+        ingestCancel: "Cancel",
+        ingestTenantPrefix: "Account:",
+        ingestEngineNotSetUp: "this Mac is not an engine yet"
     )
 
     /// Original Danish — preserved so the UI can flip back with one line.
@@ -305,7 +319,14 @@ extension UIStrings {
         ingestServerError: "Trail svarede med en fejl",
         ingestNetworkError: "Kunne ikke nå Trail:",
         ingestUnexpected: "Trail svarede i en form vi ikke forventede.",
-        ingestRetry: "Prøv igen"
+        ingestRetry: "Prøv igen",
+        ingestPaste: "Indsæt tekst…",
+        ingestPasteTitle: "Titel (valgfri)",
+        ingestPastePlaceholder: "Indsæt eller skriv den tekst Trail skal lære…",
+        ingestPasteSave: "Føj til Trail",
+        ingestCancel: "Annullér",
+        ingestTenantPrefix: "Konto:",
+        ingestEngineNotSetUp: "denne Mac er ikke motor endnu"
     )
 }
 

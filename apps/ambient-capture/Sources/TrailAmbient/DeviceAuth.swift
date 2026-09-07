@@ -43,6 +43,9 @@ final class DeviceAuth {
 
     var accountEmail: String? { UserDefaults.standard.string(forKey: "trail.email") }
     var tenantLabel: String? { UserDefaults.standard.string(forKey: "trail.tenant") }
+
+    /// F263.7 — samme værdi, læst uden en instans (Ingest-vinduet holder ingen).
+    nonisolated static var gemtTenant: String? { UserDefaults.standard.string(forKey: "trail.tenant") }
     var kbLabel: String? {
         (UserDefaults.standard.array(forKey: "trail.kbNames") as? [String])?.joined(separator: ", ")
     }

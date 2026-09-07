@@ -69,6 +69,32 @@ final class IngestModel: ObservableObject {
         harHentet = true
     }
 
+    /// Indsat tekst gemmes som en .md-fil og lægges op ad NØJAGTIG samme vej
+    /// som en droppet fil. Ingen anden skrivevej: to veje ind i basen er to
+    /// steder kontrakten skal rettes, og den ene bliver glemt.
+    func indsaet(titel: String, tekst: String) async {
+        let rent = tekst.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rent.isEmpty else { return }
+        let t = titel.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Tidsstemplet i filnavnet gør en indsat note umulig at forveksle med
+        // en dublet — web-fladen gør det samme, af samme grund.
+        let stempel = ISO8601DateFormatter().string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+        let base = t.isEmpty ? "note-\(stempel)" : "\(sikkertNavn(t))-\(stempel)"
+        let krop = t.isEmpty ? rent : "# \(t)\n\n\(rent)"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(base).md")
+        do { try krop.write(to: url, atomically: true, encoding: .utf8) }
+        catch { fejl = error.localizedDescription; return }
+        defer { try? FileManager.default.removeItem(at: url) }
+        await upload([url])
+    }
+
+    private func sikkertNavn(_ s: String) -> String {
+        let tilladt = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let r = s.unicodeScalars.map { tilladt.contains($0) ? Character($0) : "-" }
+        return String(String(r).prefix(60))
+    }
+
     func upload(_ urls: [URL]) async {
         guard !valgtKb.isEmpty else { return }
         uploaderAntal += urls.count
@@ -98,6 +124,9 @@ private extension Color {
 struct IngestView: View {
     @ObservedObject var model: IngestModel
     @State private var slipper = false
+    @State private var viserIndsaet = false
+    @State private var indsaetTitel = ""
+    @State private var indsaetTekst = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -107,6 +136,7 @@ struct IngestView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     if let f = model.fejl { fejlbanner(f) }
                     dropfelt
+                    HStack { Spacer(); indsaetKnap; Spacer() }
                     faneVaelger
                     liste
                 }
@@ -118,7 +148,23 @@ struct IngestView: View {
         }
         .frame(minWidth: 620, minHeight: 520)
         .background(Color.tCream)
+        // F263.7 — MØRK TILSTAND GJORDE HALVDELEN AF TEKSTEN USYNLIG.
+        // Ejeren så det med det samme på det første skærmbillede: «Drop files
+        // here» var der ikke. Den var der — hvid på cremefarvet. SwiftUI giver
+        // Text systemets label-farve, og på en Mac i mørkt tema er den hvid,
+        // mens Trails flade med vilje er lys.
+        //
+        // Fejlformen er kendt: kun de tekster JEG havde farvet (.tMuted, .tAcc)
+        // overlevede, så fladen så *næsten* rigtig ud — og et skærmbillede uden
+        // en manglende overskrift ligner et layout-valg, ikke en fejl.
+        //
+        // Fladen er en LYS flade. Det er ikke en undladelse af at understøtte
+        // mørk tilstand: paletten ER Trails cremefarvede, den blev godkendt
+        // sådan, og en halvt omfarvet udgave ville være en tredje palet.
+        .environment(\.colorScheme, .light)
+        .foregroundColor(.tInk)
         .task { await model.hentAlt() }
+        .sheet(isPresented: $viserIndsaet) { indsaetArk }
     }
 
     // MARK: Værktøjslinje
@@ -126,6 +172,19 @@ struct IngestView: View {
     private var vaerktoejslinje: some View {
         HStack(spacing: 10) {
             Text(S.ingestWindowTitle).font(.system(size: 13, weight: .semibold))
+            // F263.7 — kontoen står som en ETIKET, ikke som en vælger.
+            // Mockuppen havde to pull-downs, fordi web-fladen har dem: dér
+            // bærer ejerens nøgle FLERE kunder og vælger én pr. forespørgsel
+            // med en header. Enhedens nøgle gør ikke det — den er mintet til
+            // én konto ved parringen, og enheden taler direkte med motoren
+            // uden om den proxy der overhovedet kan skifte konto.
+            // En vælger med præcis ét punkt er ikke et valg; den er en løgn
+            // om at der er noget at vælge. Vil man skifte konto, parrer man om.
+            if let konto = DeviceAuth.gemtTenant {
+                Text("\(S.ingestTenantPrefix) \(konto)")
+                    .font(.system(size: 11.5)).foregroundColor(.tMuted)
+                    .accessibilityIdentifier("ingest-tenant-label")
+            }
             Spacer()
             if model.kbs.count > 1 {
                 Picker("", selection: Binding(
@@ -197,6 +256,58 @@ struct IngestView: View {
             return true
         }
         .accessibilityIdentifier("ingest-dropzone")
+    }
+
+    /// Mockuppens «Indsæt tekst…». Den findes fordi det meste man vil lære
+    /// Trail ikke er en fil — det er et afsnit fra en mail, en note, et
+    /// referat. Uden den skal man først gemme en fil for at kunne aflevere
+    /// tre linjer.
+    private var indsaetKnap: some View {
+        Button {
+            indsaetTitel = ""; indsaetTekst = ""; viserIndsaet = true
+        } label: {
+            Label(S.ingestPaste, systemImage: "doc.on.clipboard")
+                .font(.system(size: 12))
+        }
+        .buttonStyle(.bordered)
+        .accessibilityIdentifier("ingest-paste-open")
+    }
+
+    private var indsaetArk: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(S.ingestPaste).font(.system(size: 14, weight: .semibold))
+            TextField(S.ingestPasteTitle, text: $indsaetTitel)
+                .textFieldStyle(.roundedBorder)
+                .accessibilityIdentifier("ingest-paste-title")
+            TextEditor(text: $indsaetTekst)
+                .font(.system(size: 12.5))
+                .frame(minHeight: 220)
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.tLine))
+                .accessibilityIdentifier("ingest-paste-body")
+            if indsaetTekst.isEmpty {
+                Text(S.ingestPastePlaceholder).font(.system(size: 11)).foregroundColor(.tMuted)
+            }
+            HStack {
+                Spacer()
+                Button(S.ingestCancel) { viserIndsaet = false }
+                    .accessibilityIdentifier("ingest-paste-cancel")
+                Button(S.ingestPasteSave) {
+                    let titel = indsaetTitel, tekst = indsaetTekst
+                    viserIndsaet = false
+                    Task { await model.indsaet(titel: titel, tekst: tekst) }
+                }
+                .keyboardShortcut(.defaultAction)
+                // Tom tekst kan ikke gemmes. En knap der «lykkes» på ingenting
+                // er den slags grøn vi bruger dagen på at fjerne.
+                .disabled(indsaetTekst.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityIdentifier("ingest-paste-save")
+            }
+        }
+        .padding(18)
+        .frame(width: 520)
+        .background(Color.tCream)
+        .environment(\.colorScheme, .light)
+        .foregroundColor(.tInk)
     }
 
     private func vaelgFiler() {
@@ -308,9 +419,18 @@ struct IngestView: View {
             arbejder != nil ? ("\(S.ingestEngineThisMac) · \(arbejder!)", .tOk)
             : model.status.waiting > 0 ? (S.ingestEngineNobody, .tMuted)
             : (S.ingestEngineCloud, .tMuted)
+        // «Skyen kompilerer» er en AFLÆSNING, ikke en indstilling nogen har
+        // valgt — og uden begrundelsen læses den som et valg man kan lave om
+        // et sted man ikke kan finde. Den siger derfor HVORFOR: der er ingen
+        // arbejder, fordi arbejder-løkken (F263.3) ikke er bygget endnu.
+        let hvorfor = arbejder == nil ? S.ingestEngineNotSetUp : nil
         return HStack(spacing: 9) {
             Circle().fill(farve).frame(width: 7, height: 7)
             Text(tekst).font(.system(size: 12, weight: .medium))
+            if let hvorfor {
+                Text("· \(hvorfor)").font(.system(size: 11)).foregroundColor(.tMuted)
+                    .accessibilityIdentifier("ingest-engine-why")
+            }
             Spacer()
             if arbejder != nil {
                 Text("$0")
