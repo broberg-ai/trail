@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { vaelgNeuronRute } from '../lib/neuron-link.js';
 import { documents, documentImages, knowledgeBases, documentChunks, wikiEvents, queueCandidates, documentReferences, jobs as jobsTable } from '@trail/db';
 import {
   CreateNoteSchema,
@@ -1022,13 +1023,63 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
     failed: !!body.failed,
   });
 
-  // F247.3 — push: lokal-kompileret kilde færdig/fejlet.
+  // F247.3 + F263.13 — push: lokal-kompileret kilde færdig/fejlet.
+  //
+  // NOTIFIKATIONEN PEGER PÅ NEURONEN, ikke på kildelisten. Ejeren 8/9:
+  // «de linker ikke til noget relevant. Skal linke til en neuron.»
+  //
+  // Han har ret, og pointen er hvad beskeden LOVER: «en kilde er kompileret og
+  // søgbar» handler om det der blev SKREVET. Et tryk der lander på listen over
+  // hvad man har fodret ind, svarer på et andet spørgsmål end det beskeden
+  // stillede — og på en telefon er der ingen nem vej videre derfra.
+  //
+  // Vi kan svare præcist, fordi backfillReferencesForSource lige har knyttet
+  // hver ny Neuron til DENNE kilde. Adressen er Neuronens filnavn uden .md —
+  // samme form læseren selv matcher på (wiki-reader.tsx: filename.replace(/\.md$/i,'')).
+  //
+  // KILDE-REFERATET FORETRÆKKES når en kilde gav flere Neuroner: det er den
+  // side der handler om netop denne kilde, og den linker videre til de øvrige.
+  // At vælge «den første» ville være vilkårligt, og på en begrebsside ville
+  // læseren ikke kunne se hvad den havde med hans upload at gøre.
+  //
+  // Findes der INGEN Neuron (fejlet kilde, eller en der intet gav), falder vi
+  // tilbage til kildelisten som før. Ingen naken omlægning.
+  let navigateTil = `/kb/${doc.knowledgeBaseId}/sources`;
+  let neuronTitel: string | null = null;
+  if (!body.failed) {
+    const neuroner = await trail.db
+      .select({
+        filename: documents.filename,
+        path: documents.path,
+        title: documents.title,
+      })
+      .from(documentReferences)
+      .innerJoin(documents, eq(documents.id, documentReferences.wikiDocumentId))
+      .where(
+        and(
+          eq(documentReferences.tenantId, tenant.id),
+          eq(documentReferences.sourceDocumentId, doc.id),
+        ),
+      )
+      .all()
+      .catch(() => []);
+
+    const rute = vaelgNeuronRute(neuroner, doc.knowledgeBaseId);
+    navigateTil = rute.navigate;
+    neuronTitel = rute.titel;
+  }
+
+  // NAVNGIV KILDEN. «En kilde er kompileret» fortæller ikke HVILKEN, og der kan
+  // ligge flere notifikationer i træk på låseskærmen — som der gjorde på hans.
+  const kildeNavn = doc.filename.replace(/\.[a-z0-9]+$/i, '');
   void notifyPush(trail, tenant.id, 'ingest', {
     title: body.failed ? 'Trail — kilde fejlede' : 'Trail — kilde klar',
     body: body.failed
-      ? 'En kilde kunne ikke kompileres (local-ingest gav ingen Neuroner)'
-      : 'En kilde er kompileret og søgbar',
-    navigate: `/kb/${doc.knowledgeBaseId}/sources`,
+      ? `«${kildeNavn}» kunne ikke kompileres (local-ingest gav ingen Neuroner)`
+      : neuronTitel
+        ? `«${neuronTitel}» er skrevet og søgbar`
+        : `«${kildeNavn}» er kompileret og søgbar`,
+    navigate: navigateTil,
     icon: '/icon-192.png',
     tag: 'trail-ingest',
   });
