@@ -35,7 +35,7 @@ function hex(bytes: number): string {
  * signed — the cookie value IS the random `sessions.id` — so we return it raw;
  * the package fills domain/path/secure/expires.
  */
-export async function mintLensCookie(ctx: LensSessionContext): Promise<LensCookie> {
+export async function mintLensCookie(ctx: LensSessionContext): Promise<LensCookie[]> {
   const slug = process.env.LENS_TENANT_SLUG ?? 'broberg-ai';
   const tenant = await db.query.controlTenants.findFirst({
     where: eq(schema.controlTenants.slug, slug),
@@ -86,7 +86,28 @@ export async function mintLensCookie(ctx: LensSessionContext): Promise<LensCooki
     })
     .run();
 
-  return { name: COOKIE_NAME, value: sessionId };
+  // F198.2 — LAND I DEN RIGTIGE TENANT MED DET SAMME.
+  //
+  // Målt 9/9 mod prod: en frisk mintet session svarede
+  // `tenant: { slug: "fd-aalborg" }` — en KUNDES tenant. Principalen er
+  // read-only, så intet blev skrevet og intet forlod huset; men hvert
+  // Lens-skærmbillede af «vores» admin var taget i FD Aalborgs data, og
+  // hver KB-opslag mod broberg-ai svarede 404.
+  //
+  // Den aktive tenant er en cookie (F186), og den sættes normalt af
+  // `POST /api/auth/switch-tenant`. Den POST 403'er `lensReadOnlyGuard`
+  // nedenfor — så sessionen kunne ikke komme væk fra det forkerte sted.
+  // Flowet klikkede på tenant-vælgeren, KLIKKET bestod, kaldet bagved blev
+  // nægtet, og resten af kørslen målte den forkerte tenant mens den så grøn ud.
+  //
+  // At udstede cookien her giver INGEN ny adgang: medlemskabet ovenfor er
+  // det samme, vagten er uændret, og en cookie for en tenant man ikke er
+  // medlem af ville blive afvist opstrøms. Det eneste der ændrer sig er at
+  // sessionen starter det sted den altid skulle have startet.
+  return [
+    { name: COOKIE_NAME, value: sessionId },
+    { name: 'trail-active-tenant', value: tenant.slug },
+  ];
 }
 
 /** The configured `POST /api/lens-session` handler (package + Trail's minter). */

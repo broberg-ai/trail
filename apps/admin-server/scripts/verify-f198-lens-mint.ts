@@ -48,10 +48,19 @@ const ctx = { principal: LENS_EMAIL, host: 'app.trailmem.com', secure: true, ttl
 
 // ── 1. mint ─────────────────────────────────────────────────────────────────
 console.log('[1] mintLensCookie (Trail createSession callback)');
-const cookie = await mintLensCookie(ctx);
-assert(cookie.name === 'trail-session', 'returns the trail-session cookie');
-assert(typeof cookie.value === 'string' && cookie.value.length === 64, 'value = raw 64-hex session id (unsigned)');
-const sessionId = cookie.value;
+// F198.2 — minteren returnerer nu TO cookies: sessionen og den aktive tenant.
+const cookies = await mintLensCookie(ctx);
+const sessionCookie = cookies.find((c) => c.name === 'trail-session');
+const tenantCookie = cookies.find((c) => c.name === 'trail-active-tenant');
+assert(!!sessionCookie, 'returns the trail-session cookie');
+assert(
+  typeof sessionCookie?.value === 'string' && sessionCookie.value.length === 64,
+  'value = raw 64-hex session id (unsigned)',
+);
+// Uden den her landede sessionen i den FØRSTE tenant brugeren er medlem af —
+// målt 9/9 til fd-aalborg, en kundes tenant. Se F198.2.
+assert(tenantCookie?.value === 'broberg-ai', 'active-tenant cookie pins broberg-ai (F198.2)');
+const sessionId = sessionCookie!.value;
 
 // ── 2. dedicated NON-cb principal, broberg-ai only, TTL clamped ─────────────
 console.log('\n[2] dedicated read-only principal (never cb@)');
@@ -71,7 +80,7 @@ assert(
 
 // ── 3. idempotent — no duplicate principal, fresh session each mint ─────────
 console.log('\n[3] idempotent find-or-create');
-const cookie2 = await mintLensCookie(ctx);
+const cookie2 = (await mintLensCookie(ctx)).find((c) => c.name === 'trail-session')!;
 const lensUsers = await db.select().from(schema.controlUsers).where(eq(schema.controlUsers.email, LENS_EMAIL)).all();
 assert(lensUsers.length === 1, 'exactly ONE lens user after two mints (no dupe)');
 assert(cookie2.value !== sessionId, 'each mint issues a fresh session');
