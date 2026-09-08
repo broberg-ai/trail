@@ -27,7 +27,7 @@ final class IngestWindowController {
             return
         }
 
-        let v = NSWindow(
+        let v = IngestNSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 680, height: 620),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false
@@ -35,7 +35,28 @@ final class IngestWindowController {
         v.title = S.ingestWindowTitle
         v.titlebarAppearsTransparent = true
         v.isReleasedWhenClosed = false
-        v.center()
+        // F263.8 — VINDUET BLIVER STÅENDE TIL DU LUKKER DET.
+        //
+        // Ejeren 8/9, med skærmbillede: «hvordan skulle jeg ellers kunne komme
+        // over i Finder og finde filer jeg kan trække IND i dialogen?»
+        //
+        // Målt: intet i koden lukkede vinduet. Appen er .accessory — menulinje,
+        // intet Dock-ikon — så et klik i en anden app sendte vinduet BAGOM, og
+        // der var ingen vej til at hente det frem igen. Fra brugerens stol er
+        // «bagom uden vej tilbage» og «lukket» det samme, og et drop-felt man
+        // ikke kan se mens man leder efter filen, er intet drop-felt.
+        //
+        // .floating holder det synligt mens man er i Finder. Det lukkes med
+        // Escape, ⌘W eller den røde knap — ejerens eget forslag, og det rigtige:
+        // et vindue der forsvinder af sig selv kan man ikke trække noget ind i.
+        v.level = .floating
+        // Følg med til det skrivebord man arbejder på, og læg dig over et
+        // fuldskærms-vindue frem for at blive efterladt på et andet skrivebord.
+        v.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        // Husk størrelse og placering mellem åbninger — man arbejder i det her
+        // vindue, og et der hopper til midten hver gang er et man flytter hver gang.
+        v.setFrameAutosaveName("trail-ingest-window")
+        if v.frame.origin == .zero { v.center() }
         v.contentView = NSHostingView(rootView: IngestView(model: model))
         v.delegate = LukVagt.delt
         LukVagt.delt.vedLuk = { [weak self] in self?.stopOpdatering() }
@@ -65,6 +86,15 @@ final class IngestWindowController {
         opdaterTimer?.invalidate()
         opdaterTimer = nil
     }
+}
+
+/// Escape lukker vinduet. NSWindow sender `cancelOperation` op ad
+/// responder-kæden når Escape trykkes; uden den her ender den som et bip.
+final class IngestNSWindow: NSWindow {
+    override func cancelOperation(_ sender: Any?) { performClose(sender) }
+    // Et vindue uden titellinje-fokus skal stadig kunne modtage tastetryk —
+    // ellers ville Escape kun virke når et felt tilfældigvis havde fokus.
+    override var canBecomeKey: Bool { true }
 }
 
 /// Vinduets delegate — holder styr på at pollingen stopper når det lukkes.
