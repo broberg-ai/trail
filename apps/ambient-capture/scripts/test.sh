@@ -32,6 +32,9 @@ BIN=".build/debug/TrailAmbient"
 echo "[ambient-capture] --selftest (pause gate + menubar icon visibility)"
 "$BIN" --selftest
 
+echo "[ambient-capture] --spawntest (Ambient åbner selv sessionen — og ALDRIG med -p)"
+"$BIN" --spawntest
+
 echo "[ambient-capture] --statustest (MÅLINGEN slår indstillingen i statuslinjen)"
 "$BIN" --statustest
 

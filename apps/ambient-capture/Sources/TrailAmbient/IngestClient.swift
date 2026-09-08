@@ -145,8 +145,11 @@ enum IngestClient {
         return rows.compactMap(parseSource)
     }
 
-    static func status() async throws -> CompileStatus {
-        let data = try await send(try request("/api/v1/compile-jobs/status"))
+    /// `tenant: nil` = den valgte konto. Vagten (IngestWatcher) spørger hver
+    /// konto for sig, uden at flytte brugerens valg.
+    static func status(tenant: String? = nil) async throws -> CompileStatus {
+        let data = try await send(
+            try request("/api/v1/compile-jobs/status", tenant: tenant.map { .some($0) } ?? .none))
         guard let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { throw IngestError.uventetSvar }
         return CompileStatus(

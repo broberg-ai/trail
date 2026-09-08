@@ -28,6 +28,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var avatarFetching = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // F263.14 — vagten kører uanset om vinduet er åbent. En menulinje-app
+        // der kun virker mens man kigger på den, er ikke en motor — og hele
+        // pointen er at den lokale kompilering ikke skal afhænge af at buddy
+        // svarer.
+        Task { await IngestWatcher.shared.start() }
         // F263.8 — hent konto-listen ved opstart når der er en nøgle, så
         // vælgeren er rigtig i det sekund vinduet åbnes. Fejler kaldet, sker
         // der intet: den forrige liste bliver stående frem for at blive tom,
