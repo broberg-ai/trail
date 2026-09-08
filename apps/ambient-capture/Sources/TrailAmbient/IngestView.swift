@@ -99,7 +99,45 @@ final class IngestModel: ObservableObject {
         }
     }
 
-    func opdaterMotor() async { motor = await EngineState.hent() }
+    /// Sidste tilstand vi FAKTISK har målt, og hvornår.
+    private var sidstKendt: EngineState?
+    private var sidstMaalt: Date?
+    private var fejlIStribe = 0
+
+    /// ÉT fejlet opslag er ikke en måling af at motoren er slukket.
+    ///
+    /// Målt 8/9 på ejerens Mac: buddys dæmon taber ca. hver ottende forbindelse
+    /// på 127.0.0.1:4123 (7 af 8 svarede under 0,01s, én droppede). Appen
+    /// spørger hvert 15. sekund, så statuslinjen skiftede tilstand flere gange
+    /// i timen — uden at noget som helst havde ændret sig.
+    ///
+    /// Nu beholdes den sidst målte tilstand, og fejlen står som en NOTE i
+    /// stedet for at overskrive svaret. Først efter tre fejl i træk (45
+    /// sekunder) opgiver vi og siger ukendt — for da er det sandsynligvis
+    /// dæmonen der er nede, og dét er værd at vide.
+    func opdaterMotor() async {
+        let ny = await EngineState.hent()
+        if case .ukendt = ny {
+            fejlIStribe += 1
+            if fejlIStribe < 3, let kendt = sidstKendt {
+                motor = kendt
+                return
+            }
+            motor = ny
+            return
+        }
+        fejlIStribe = 0
+        sidstKendt = ny
+        sidstMaalt = Date()
+        motor = ny
+    }
+
+    /// «for 20s siden» — kun når det sidste opslag fejlede, så et tal på
+    /// skærmen aldrig kan forveksles med en frisk måling.
+    var motorAlder: Int? {
+        guard fejlIStribe > 0, let t = sidstMaalt else { return nil }
+        return max(0, Int(Date().timeIntervalSince(t)))
+    }
 
     /// Slå den lokale motor til/fra. Skriver til buddys job og LÆSER tilstanden
     /// tilbage bagefter — knappen viser aldrig sit eget ønske som et faktum.
@@ -565,6 +603,13 @@ struct IngestView: View {
         return HStack(spacing: 9) {
             Circle().fill(prikFarve).frame(width: 7, height: 7)
             Text(motorTekst).font(.system(size: 12, weight: .medium))
+            // Alderen står FØRST når den findes: den kvalificerer alt til
+            // højre for sig, og en læser der stopper efter to ord skal have
+            // fanget at tallet ikke er nyt.
+            if let g = motorAldersNote {
+                Text("· \(g)").font(.system(size: 11)).foregroundColor(Palette.fgMuted)
+                    .accessibilityIdentifier("ingest-engine-stale")
+            }
             if let n = motorNote {
                 Text("· \(n)").font(.system(size: 11)).foregroundColor(Palette.fgMuted)
                     .accessibilityIdentifier("ingest-engine-why")
@@ -616,7 +661,19 @@ struct IngestView: View {
         case .til: return S.engineOn
         case .fra: return S.engineOff
         case .blandet: return S.engineMixedFmt
-        case .ukendt: return S.ingestEngineCloud
+        // «Ved ikke» må ALDRIG renderes som en tilstand — og slet ikke som den
+        // DYRE. Her stod S.ingestEngineCloud: kunne appen ikke nå buddy, sagde
+        // statuslinjen «Skyen kompilerer», mens denne Mac i virkeligheden
+        // kompilerede (målt 8/9: buddy timede ud, jobbene kørte, skærmen løj).
+        //
+        // Hele grunden til at linjen findes er at svare på HVEM der kompilerer
+        // og hvad det koster. At gætte det svar — i den forkerte retning — når
+        // målingen fejler, er værre end at sige at man ikke ved det.
+        //
+        // Tre linjer længere oppe stod det rigtige ræsonnement allerede om
+        // KONTAKTEN («en afbryder i fra-stilling ville påstå noget vi ikke har
+        // målt»). Etiketten ved siden af gjorde præcis det den kontakt lod være.
+        case .ukendt: return S.ingestEngineUnknown
         }
     }
 
@@ -632,5 +689,12 @@ struct IngestView: View {
         case .blandet(let til, let af): return "\(til)/\(til + af)"
         case .ukendt(let hvorfor): return hvorfor.isEmpty ? S.ingestEngineNotSetUp : hvorfor
         }
+    }
+
+    /// Står der en ALDER, er tallet ved siden af ikke nyt. Uden den ville en
+    /// bevaret tilstand se ud som en frisk måling — samme løgn, blot pænere.
+    private var motorAldersNote: String? {
+        guard let sek = model.motorAlder else { return nil }
+        return "\(S.ingestEngineStale) \(sek)s"
     }
 }

@@ -104,6 +104,8 @@ struct UIStrings {
     let ingestStateFailed: String
     let ingestEngineThisMac: String
     let ingestEngineCloud: String
+    let ingestEngineUnknown: String
+    let ingestEngineStale: String
     let ingestEngineNobody: String
     let ingestOpenWindow: String
     let ingestUploading: String
@@ -226,6 +228,8 @@ extension UIStrings {
         ingestStateFailed: "failed",
         ingestEngineThisMac: "This Mac compiles",
         ingestEngineCloud: "The cloud compiles",
+        ingestEngineUnknown: "Engine state unknown",
+        ingestEngineStale: "could not reach buddy · last measured",
         ingestEngineNobody: "No machine connected",
         ingestOpenWindow: "Ingest…",
         ingestUploading: "Uploading",
@@ -346,6 +350,8 @@ extension UIStrings {
         ingestStateFailed: "fejlede",
         ingestEngineThisMac: "Denne Mac kompilerer",
         ingestEngineCloud: "Skyen kompilerer",
+        ingestEngineUnknown: "Motorens tilstand er ukendt",
+        ingestEngineStale: "kunne ikke nå buddy · sidst målt for",
         ingestEngineNobody: "Ingen maskine tilsluttet",
         ingestOpenWindow: "Ingest…",
         ingestUploading: "Uploader",
