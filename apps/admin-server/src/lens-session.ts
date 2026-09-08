@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { lensSessionHandler } from '@broberg/lens/hono';
 import type { LensSessionContext, LensCookie } from '@broberg/lens';
 import { db, schema } from './db.js';
+import { LENS_PRINCIPAL_EMAIL } from '@trail/shared';
 
 /**
  * F198 — Lens mint endpoint. Built on the fleet package `@broberg/lens`
@@ -20,7 +21,7 @@ import { db, schema } from './db.js';
  */
 
 /** The dedicated synthetic principal. NEVER cb@webhouse.dk. */
-export const LENS_EMAIL = 'lens@trailmem.com';
+export const LENS_EMAIL = LENS_PRINCIPAL_EMAIL;
 const COOKIE_NAME = 'trail-session';
 
 function hex(bytes: number): string {

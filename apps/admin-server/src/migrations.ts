@@ -1,5 +1,5 @@
 import { client } from './db.js';
-import { ownerIdentitiesSqlList, OWNER_IDENTITIES } from '@trail/shared';
+import { ownerIdentitiesSqlList, OWNER_IDENTITIES, LENS_PRINCIPAL_EMAIL } from '@trail/shared';
 
 /**
  * Bootstrap migrations for control.db. Idempotent — runs every boot,
@@ -216,12 +216,29 @@ export async function runMigrations(): Promise<void> {
   //     self-heal.
   const OWNERS = ownerIdentitiesSqlList();
 
+  // F198.2 — LENS-PRINCIPALEN ER UNDTAGET FRA STEP 1.
+  //
+  // Målt 9/9: en frisk mintet Lens-session sad i FD Aalborgs tenant. Det var
+  // ikke en løs række — det var DET HER kald der uddelte den, ved hver boot.
+  // Lens-brugeren oprettes med vores egen organisation, FD Aalborgs tenant
+  // ligger i samme organisation, og så matcher den JOIN'en som enhver anden
+  // bruger. At slette rækken ville derfor ikke virke: næste deploy gav den
+  // tilbage.
+  //
+  // lens-session.ts siger selv «member membership in broberg-ai ONLY — never
+  // a customer tenant». Det var hensigten; det her kald var det der stille
+  // brød den. Undtagelsen genopretter altså en dokumenteret invariant frem
+  // for at indføre en ny regel.
+  //
+  // Kun step 1 undtages. Step 2 (ejer-identiteterne) rører ikke Lens —
+  // owner-identities.ts udelukker den eksplicit fra listen.
   const seeded = await client.execute(
     `INSERT INTO control_memberships (user_id, tenant_id, role)
      SELECT u.id, t.id, 'member'
        FROM control_users u
        JOIN control_tenants t ON t.organization_id = u.organization_id
-      WHERE NOT EXISTS (
+      WHERE lower(trim(u.email)) <> '${LENS_PRINCIPAL_EMAIL}'
+        AND NOT EXISTS (
         SELECT 1 FROM control_memberships m
          WHERE m.user_id = u.id AND m.tenant_id = t.id
       )`,

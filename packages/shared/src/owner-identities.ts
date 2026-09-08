@@ -24,6 +24,21 @@
  * must never appear in this list.
  */
 
+/**
+ * F198.2 — the read-only Lens principal, as ONE constant.
+ *
+ * It lives beside the owner identities because the two are decided together:
+ * this file already had to say "not an owner identity", and a rule stated in
+ * a comment while the address is retyped elsewhere is a rule that drifts.
+ *
+ * Read by the minter (apps/admin-server/src/lens-session.ts) and by the
+ * membership backfill (apps/admin-server/src/migrations.ts), which must
+ * EXCLUDE it — see F198.2: the backfill was handing this principal a
+ * membership on every tenant in our organisation, customer tenants included,
+ * on every boot.
+ */
+export const LENS_PRINCIPAL_EMAIL = 'lens@trailmem.com';
+
 /** Every address the owner may sign in with. Lower-case; compare folded. */
 export const OWNER_IDENTITIES = [
   'cb@webhouse.dk',
