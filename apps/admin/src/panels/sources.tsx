@@ -203,7 +203,7 @@ export function SourcesPanel() {
   const [queue, setQueue] = useState<{ waiting: number; working: number; workers: string[] } | null>(null);
   useEffect(() => {
     let levende = true;
-    compileQueueStatus()
+    compileQueueStatus(kbId)
       .then((q) => { if (levende) setQueue(q); })
       // Køen er OPLYSNING, ikke betjening: fejler den, skal kildelisten stå
       // uændret frem for at vise en fejl om noget andet.

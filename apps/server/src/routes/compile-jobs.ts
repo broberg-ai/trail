@@ -92,9 +92,17 @@ compileJobRoutes.post('/compile-jobs/:id/heartbeat', async (c) => {
   return c.json({ ok: true, leaseUntil: r.leaseUntil }, 200);
 });
 
-/** GET /api/v1/compile-jobs/status — hvad venter, hvem arbejder. */
+/**
+ * GET /api/v1/compile-jobs/status — hvad venter, hvem arbejder.
+ *
+ * F263.9 — `?knowledgeBaseId=` afgrænser til ÉN Trail. Udeladt = hele
+ * kunden, som før. Ambients vagt og /local-ingest spørger bredt (de arbejder
+ * bredt); en Trails Kilder-side spørger smalt, fordi den viser svaret som om
+ * det handlede om netop den Trail.
+ */
 compileJobRoutes.get('/compile-jobs/status', async (c) => {
   const trail = getTrail(c);
   const tenant = getTenant(c);
-  return c.json(await compileQueueStatus(trail, tenant.id), 200);
+  const kbId = c.req.query('knowledgeBaseId') || undefined;
+  return c.json(await compileQueueStatus(trail, tenant.id, new Date(), kbId), 200);
 });

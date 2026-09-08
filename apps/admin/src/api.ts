@@ -824,12 +824,16 @@ export function listSources(
  * endepunkt, og ordet `awaitingLocalCompile` fandtes ikke ét sted i appen.
  * Køen har eksisteret siden F263.1; den var bare usynlig på nettet.
  */
-export function compileQueueStatus(): Promise<{
+export function compileQueueStatus(kbId?: string): Promise<{
   waiting: number;
   working: number;
   workers: string[];
 }> {
-  return api('/api/v1/compile-jobs/status');
+  // F263.9 — spørg om DENNE Trail. Uden kbId svarede endepunktet for hele
+  // kunden, og linjen står på én Trails side: elleve Trails i broberg-ai, så
+  // «1 compiling» kunne være en helt anden Trails arbejde.
+  const q = kbId ? `?knowledgeBaseId=${encodeURIComponent(kbId)}` : '';
+  return api(`/api/v1/compile-jobs/status${q}`);
 }
 
 /** Fetch a document + its full content + F112 user-note + F112.1 share-flag. */

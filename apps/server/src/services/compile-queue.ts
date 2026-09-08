@@ -117,27 +117,44 @@ export async function heartbeatCompileJob(
   return { ok: (res.rowsAffected ?? 0) > 0, leaseUntil };
 }
 
-/** Hvad køen indeholder lige nu — ventende, i arbejde, og hvem der arbejder. */
+/**
+ * Hvad køen indeholder lige nu — ventende, i arbejde, og hvem der arbejder.
+ *
+ * F263.9 — `kbId` AFGRÆNSER SVARET TIL ÉN TRAIL, og den findes fordi det
+ * brede svar blev læst som et smalt. Kø-linjen står på ÉN Trails Kilder-side;
+ * uden aksen her fodredes den af hele kundens kø. Målt: broberg-ai har elleve
+ * Trails, så «1 compiling» på den ene sides skærm kunne være arbejde i en
+ * anden. Den der læser står på en bestemt Trail og konkluderer rimeligvis at
+ * det er DEN der kompilerer.
+ *
+ * Udeladt = tenant-bredt, uændret. Det er ikke bagudkompatibilitet for dens
+ * egen skyld: Ambients vagt og /local-ingest ARBEJDER tenant-bredt (én
+ * maskine tømmer hele kunden), så det brede svar er det rigtige DÉR. Det er
+ * kun forkert når det vises som om det handlede om én Trail.
+ */
 export async function compileQueueStatus(
   db: TrailDatabase,
   tenantId: string,
   now: Date = new Date(),
+  kbId?: string,
 ): Promise<{ waiting: number; working: number; workers: string[] }> {
   const iso = now.toISOString();
+  const kbFilter = kbId ? ' AND knowledge_base_id = ?' : '';
+  const kbArg = kbId ? [kbId] : [];
   const r = (await db.execute(
     `SELECT
        SUM(CASE WHEN compile_lease_until IS NULL OR compile_lease_until < ? THEN 1 ELSE 0 END) AS waiting,
        SUM(CASE WHEN compile_lease_until >= ? THEN 1 ELSE 0 END) AS working
      FROM documents
-     WHERE tenant_id = ? AND awaiting_local_compile = 1 AND kind = 'source' AND archived = 0`,
-    [iso, iso, tenantId],
+     WHERE tenant_id = ? AND awaiting_local_compile = 1 AND kind = 'source' AND archived = 0${kbFilter}`,
+    [iso, iso, tenantId, ...kbArg],
   )).rows[0] as { waiting?: unknown; working?: unknown } | undefined;
 
   const w = (await db.execute(
     `SELECT DISTINCT compile_claimed_by AS worker FROM documents
       WHERE tenant_id = ? AND awaiting_local_compile = 1 AND compile_lease_until >= ?
-        AND compile_claimed_by IS NOT NULL`,
-    [tenantId, iso],
+        AND compile_claimed_by IS NOT NULL${kbFilter}`,
+    [tenantId, iso, ...kbArg],
   )).rows as Array<{ worker: unknown }>;
 
   return {

@@ -21,6 +21,10 @@ import {
 const dir = mkdtempSync(join(tmpdir(), 'f263-'));
 let db: TrailDatabase;
 const A = 't-a', B = 't-b', KB = 'kb-1', KB_B = 'kb-b';
+// F263.9 — en ANDEN Trail hos SAMME kunde. Tenant-akse og Trail-akse er to
+// forskellige spørgsmål, og kb-b ligger hos kunde B, så den kan ikke svare på
+// det andet. Uden kb-2 kunne prøven ikke skelne dem.
+const KB2 = 'kb-2';
 
 async function kilde(id: string, o: { tenant?: string; kb?: string; venter?: number; kind?: string; tid?: string } = {}) {
   await db.execute(
@@ -41,6 +45,7 @@ beforeAll(async () => {
   await db.execute(`INSERT INTO users (id, tenant_id, email, role) VALUES (?,?,?,?)`, ['u-2', B, 'b@b.dk', 'owner']);
   await db.execute(`INSERT INTO knowledge_bases (id, tenant_id, created_by, slug, name) VALUES (?,?,?,?,?)`, [KB, A, 'u-1', 'kb1', 'KB1']);
   await db.execute(`INSERT INTO knowledge_bases (id, tenant_id, created_by, slug, name) VALUES (?,?,?,?,?)`, [KB_B, B, 'u-2', 'kbb', 'KBB']);
+  await db.execute(`INSERT INTO knowledge_bases (id, tenant_id, created_by, slug, name) VALUES (?,?,?,?,?)`, [KB2, A, 'u-1', 'kb2', 'KB2']);
 });
 afterAll(async () => { await db.close(); rmSync(dir, { recursive: true, force: true }); });
 
@@ -163,4 +168,61 @@ test('REGRESSION: lease-kolonnerne er TOMME på en kilde ingen har claimet', asy
   expect(r.l).toBeNull();
   // …og den er dermed ledig for den allerførste arbejder.
   expect((await claimCompileJobs(db, A, { worker: 'mac-1' })).map((j) => j.id)).toEqual(['s1']);
+});
+
+/**
+ * F263.9 — KØ-LINJEN STÅR PÅ ÉN TRAILS SIDE, SÅ DEN SKAL SVARE OM DEN TRAIL.
+ *
+ * Fejlen den erstatter: endepunktet svarede tenant-bredt, mens svaret blev vist
+ * på én Trails Kilder-side. Målt på prod havde kunden ELLEVE Trails, så
+ * «1 compiling» kunne være arbejde i en helt anden. Den der læser står på en
+ * bestemt Trail og konkluderer rimeligvis at det er DEN der kompilerer.
+ *
+ * De to påstande her kan ikke bestå af samme grund: den ene kræver at det
+ * fremmede IKKE tælles med, den anden at det brede svar stadig tæller det.
+ * Uden nummer to ville «kbId returnerer altid nul» bestå.
+ */
+test('F263.9 kbId TÆLLER KUN sin egen Trail — nabo-Trailen hos samme kunde holdes ude', async () => {
+  await kilde('d1', { kb: KB });     // hjemme
+  await kilde('d2', { kb: KB2 });    // nabo, SAMME kunde
+  await kilde('d3', { kb: KB2 });    // nabo
+
+  const kun = await compileQueueStatus(db, A, new Date(), KB);
+  expect(kun.waiting).toBe(1);
+  expect(kun.working).toBe(0);
+
+  const nabo = await compileQueueStatus(db, A, new Date(), KB2);
+  expect(nabo.waiting).toBe(2);
+});
+
+test('F263.9 NEGATIV KONTROL: uden kbId er svaret stadig tenant-bredt', async () => {
+  // Ambients vagt og /local-ingest arbejder tenant-bredt — én maskine tømmer
+  // hele kunden. Snævredes det brede svar også ind, ville de holde op med at
+  // se arbejde de skal tage. Så den her prøve beskytter den ANDEN kaldevej.
+  await kilde('d1', { kb: KB });
+  await kilde('d2', { kb: KB2 });
+  await kilde('d3', { kb: KB2 });
+
+  const bredt = await compileQueueStatus(db, A);
+  expect(bredt.waiting).toBe(3);
+});
+
+test('F263.9 arbejderen navngives kun for den Trail der faktisk kompilerer', async () => {
+  // «Hvem arbejder» led af nøjagtig samme fejl som tallene: maskinnavnet blev
+  // hentet tenant-bredt, så en Trail uden arbejde kunne vise en maskine.
+  await kilde('d1', { kb: KB });
+  await kilde('d2', { kb: KB2 });
+  const fremtid = new Date(Date.now() + 60_000).toISOString();
+  await db.execute(
+    `UPDATE documents SET compile_claimed_by = ?, compile_lease_until = ? WHERE id = ?`,
+    ['nabo-maskine', fremtid, 'd2'],
+  );
+
+  const hjemme = await compileQueueStatus(db, A, new Date(), KB);
+  expect(hjemme.workers).toEqual([]);        // ingen maskine HER
+  expect(hjemme.working).toBe(0);
+
+  const nabo = await compileQueueStatus(db, A, new Date(), KB2);
+  expect(nabo.workers).toEqual(['nabo-maskine']);
+  expect(nabo.working).toBe(1);
 });
