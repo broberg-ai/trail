@@ -169,3 +169,13 @@ enum TenantStore {
         SecItemDelete(q as CFDictionary)
     }
 }
+
+/// F263.8 — maskinens navn, som det står i et claim på et kompilerings-job.
+/// Samme streng begge steder, så fladen kan afgøre om det er DENNE Mac der
+/// arbejder — og ikke bare «en eller anden session».
+enum Vaert {
+    static let navn: String = {
+        let n = Host.current().localizedName ?? ProcessInfo.processInfo.hostName
+        return "\(n) · cc"
+    }()
+}

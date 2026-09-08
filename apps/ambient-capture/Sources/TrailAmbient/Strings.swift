@@ -106,6 +106,10 @@ struct UIStrings {
     let ingestEngineCloud: String
     let ingestEngineUnknown: String
     let ingestEngineStale: String
+    let ingestCompiledOn: String
+    let ingestRetryHere: String
+    let ingestRetryHereHelp: String
+    let ingestWaitingForEngine: String
     let ingestEngineNobody: String
     let ingestOpenWindow: String
     let ingestUploading: String
@@ -230,6 +234,10 @@ extension UIStrings {
         ingestEngineCloud: "The cloud compiles",
         ingestEngineUnknown: "Engine state unknown",
         ingestEngineStale: "could not reach buddy · last measured",
+        ingestCompiledOn: "Compiling on",
+        ingestRetryHere: "Retry here",
+        ingestRetryHereHelp: "Queue it for THIS Mac instead of the cloud — free, and a different model than the one that failed.",
+        ingestWaitingForEngine: "waiting for an engine",
         ingestEngineNobody: "No machine connected",
         ingestOpenWindow: "Ingest…",
         ingestUploading: "Uploading",
@@ -352,6 +360,10 @@ extension UIStrings {
         ingestEngineCloud: "Skyen kompilerer",
         ingestEngineUnknown: "Motorens tilstand er ukendt",
         ingestEngineStale: "kunne ikke nå buddy · sidst målt for",
+        ingestCompiledOn: "Kompilerer på",
+        ingestRetryHere: "Prøv her",
+        ingestRetryHereHelp: "Sæt den i kø til DENNE Mac i stedet for skyen — gratis, og en anden model end den der fejlede.",
+        ingestWaitingForEngine: "venter på en motor",
         ingestEngineNobody: "Ingen maskine tilsluttet",
         ingestOpenWindow: "Ingest…",
         ingestUploading: "Uploader",

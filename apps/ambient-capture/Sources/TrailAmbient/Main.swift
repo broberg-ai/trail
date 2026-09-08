@@ -67,6 +67,9 @@ struct TrailAmbientMain {
             }
             RunLoop.main.run()
         }
+        if CommandLine.arguments.contains("--statustest") {
+            StatusTest.run(); exit(0)
+        }
         if CommandLine.arguments.contains("--tenanttest") {
             TenantTest.run(); exit(0)
         }

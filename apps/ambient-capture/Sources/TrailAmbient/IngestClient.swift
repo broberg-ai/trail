@@ -156,6 +156,19 @@ enum IngestClient {
         )
     }
 
+    /// F263.12 — PRØV IGEN, men på DENNE Mac.
+    ///
+    /// En fejlet kilde er næsten altid fejlet i SKYEN («ingest chain exhausted;
+    /// last error: openrouter/google/gemini-2.5-flash produced…»). At sende den
+    /// samme vej igen er at betale for det samme udfald én gang til.
+    ///
+    /// `/local-recompile` parkerer den til lokal kompilering i stedet: gratis,
+    /// og en anden model. Ruten rydder samtidig enhver stående reservation, så
+    /// en kilde der fejlede MIDT i et job ikke kommer tilbage i køen som optaget.
+    static func genkompiler(docId: String) async throws {
+        _ = try await send(try request("/api/v1/documents/\(enc(docId))/local-recompile", method: "POST"))
+    }
+
     // MARK: - Skriv
 
     /// Læg en fil op og PARKÉR den til lokal kompilering (`localCompile=true`),

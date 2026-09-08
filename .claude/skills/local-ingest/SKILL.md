@@ -89,7 +89,40 @@ Print the count + filenames. Stop.
 
 1. **List pending** (same curl as Step 1) → the parked sources.
 
-2. **For each source `S` (id `$SID`):**
+1b. **CLAIM THE WORK — this is what makes the Ingest window able to say who is
+   compiling.** F263.1 built claim/heartbeat/lease and NOTHING ever called it, so
+   `GET /compile-jobs/status` answered `{waiting:0, working:0, workers:[]}` even
+   while a drain was running. The status line then had to ask buddy instead, and
+   a network blip to buddy became a claim about who compiles and what it costs.
+
+   Claim BEFORE compiling. The worker name is human and names the MACHINE, because
+   it is rendered as «kompileres på <navn>»:
+
+   ```bash
+   WORKER="$(scutil --get ComputerName 2>/dev/null || hostname -s) · cc"
+   curl -s -X POST -H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT" \
+     -H "Content-Type: application/json" \
+     "$TRAIL_CLOUD_API/api/v1/compile-jobs/claim" -d "{\"worker\":\"$WORKER\",\"limit\":5}"
+   # → { jobs: [{ id, knowledgeBaseId, promptUrl, completeUrl, … }], leaseMs }
+   ```
+
+   The response carries `promptUrl` and `completeUrl` per job, so DON'T construct
+   those addresses yourself — two ways to build the same URL is two places the
+   compile contract has to be corrected, and one of them gets forgotten.
+
+   **A claim that returns `jobs: []` means someone else already took them.** That is
+   not an error and not an empty queue — stop, and say which of the two it was.
+
+   **Long drain?** Send a heartbeat before the lease (`leaseMs`) runs out, or the
+   source becomes free for another worker mid-compile:
+   ```bash
+   curl -s -X POST -H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT" \
+     -H "Content-Type: application/json" \
+     "$TRAIL_CLOUD_API/api/v1/compile-jobs/$SID/heartbeat" -d "{\"worker\":\"$WORKER\"}"
+   # 409 = the lease expired and someone else has it. STOP working on that source.
+   ```
+
+2. **For each source `S` (id `$SID`) you CLAIMED:**
 
    a0. **Local vision first (F191.7 — free, you describe the images).** The pending
       list includes `fileType`. Cloud vision is deliberately deferred to you here.

@@ -29,6 +29,8 @@ final class IngestModel: ObservableObject {
     @Published var status: CompileStatus = .tom
     @Published var fejl: String?
     @Published var uploaderAntal: Int = 0
+    /// Kilder der lige nu sættes i kø igen — så knappen kan vise at den arbejder.
+    @Published var genkompilerer: Set<String> = []
     @Published var fane: Fane = .koe
     @Published var harHentet = false
     /// Motorens tilstand LÆST fra buddy — ikke vores egen kopi.
@@ -79,6 +81,17 @@ final class IngestModel: ObservableObject {
         } catch {
             fejl = error.localizedDescription
         }
+    }
+
+    /// Sæt en fejlet kilde i kø til DENNE Mac igen. Læser listen tilbage
+    /// bagefter — knappen viser aldrig sit eget ønske som et faktum.
+    func proevIgen(_ k: IngestSource) async {
+        genkompilerer.insert(k.id)
+        defer { genkompilerer.remove(k.id) }
+        do { try await IngestClient.genkompiler(docId: k.id) }
+        catch { fejl = error.localizedDescription; return }
+        await opdater()
+        fane = .koe
     }
 
     /// Læs den lokale cache igen (efter et skift eller en ny nøgle).
@@ -549,6 +562,23 @@ struct IngestView: View {
                 }
             }
             Spacer(minLength: 8)
+            // Kun på fejlede: en «prøv igen» på noget der lykkedes er en
+            // invitation til at betale for det samme to gange.
+            if k.erFejlet {
+                Button {
+                    Task { await model.proevIgen(k) }
+                } label: {
+                    if model.genkompilerer.contains(k.id) {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text(S.ingestRetryHere).font(.system(size: 11, weight: .medium))
+                    }
+                }
+                .buttonStyle(.borderless)
+                .disabled(model.genkompilerer.contains(k.id))
+                .help(S.ingestRetryHereHelp)
+                .accessibilityIdentifier("ingest-retry")
+            }
             maerkat(k)
         }
         .padding(.vertical, 9).padding(.horizontal, 12)
@@ -649,6 +679,8 @@ struct IngestView: View {
     }
 
     private var prikFarve: Color {
+        if model.status.workers.first != nil { return Palette.ok }
+        if model.status.waiting > 0 { return Palette.accent }
         switch model.motor {
         case .til: return Palette.ok
         case .blandet: return Palette.accent
@@ -656,7 +688,30 @@ struct IngestView: View {
         }
     }
 
+    /// F263.8 — HVEM KOMPILERER: MÅLINGEN FØRST, INDSTILLINGEN KUN NÅR DER
+    /// IKKE ER NOGET AT MÅLE.
+    ///
+    /// Ejeren 8/9: «hvorfor skal du anvende buddy for at vi kan lave lokal
+    /// ingest & compile? Det giver 0 (NULL) mening.»
+    ///
+    /// Han har ret om statuslinjen. buddy er ægte nødvendig til ÉN ting — at
+    /// VÆKKE cc-sessionen, som ikke kan vække sig selv — men den var også
+    /// blevet svaret på «hvem kompilerer», og det er et spørgsmål Trails eget
+    /// API besvarer bedre: `workers` er dem der FAKTISK har taget arbejde,
+    /// ikke et flag der beskriver hvad der burde ske.
+    ///
+    /// Rækkefølgen er hele pointen:
+    ///   sker der noget   → sig hvad der SKER   (målt, buddy er ude af det)
+    ///   venter der noget → sig at det venter   (målt)
+    ///   er alt stille    → sig hvad der er SAT (buddy — og kun her)
+    ///
+    /// Derfor kan en tabt forbindelse til buddy ikke længere modsige en
+    /// måling. Den kan kun gøre den sidste linje uvis, og dét er sandt.
+    private var arbejdeTekst: String? { Motorlinje.maalt(model.status, vaert: Vaert.navn) }
+
     private var motorTekst: String {
+        // Måling slår indstilling. Altid.
+        if let t = arbejdeTekst { return t }
         switch model.motor {
         case .til: return S.engineOn
         case .fra: return S.engineOff
@@ -680,6 +735,7 @@ struct IngestView: View {
     /// Den lille forklaring efter prikken. Uden den læses «Skyen kompilerer»
     /// som et valg man kan lave om et sted man ikke kan finde.
     private var motorNote: String? {
+        if arbejdeTekst != nil { return nil }
         switch model.motor {
         case .til(let naeste):
             guard let naeste else { return nil }
@@ -694,6 +750,8 @@ struct IngestView: View {
     /// Står der en ALDER, er tallet ved siden af ikke nyt. Uden den ville en
     /// bevaret tilstand se ud som en frisk måling — samme løgn, blot pænere.
     private var motorAldersNote: String? {
+        // Viser vi en MÅLING, er buddys alder irrelevant og ville kun forvirre.
+        guard arbejdeTekst == nil else { return nil }
         guard let sek = model.motorAlder else { return nil }
         return "\(S.ingestEngineStale) \(sek)s"
     }
