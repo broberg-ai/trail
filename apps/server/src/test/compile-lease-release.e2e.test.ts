@@ -81,6 +81,49 @@ test('færdigmelding SLIPPER reservationen — læst tilbage fra basen', async (
   expect(efter.until).toBeNull();
 });
 
+test('F263.3 — SVARET er læst tilbage fra rækken, ikke bygget af forespørgslen', async () => {
+  // Fundet 8/9 under en afstemning med upmetrics. Svaret var
+  //   { id: doc.id, awaitingLocalCompile: false, failed: !!body.failed }
+  // altså kalderens egne ord spejlet tilbage, med `false` som en KONSTANT. En
+  // skrivning der landede og en der gjorde ingenting gav identiske svar — i det
+  // ene endepunkt hvis opgave er at melde arbejde færdigt.
+  //
+  // DERFOR ASSERTERES DER PÅ `updatedAt` — men med et ærligt forbehold om HVAD
+  // prøven kan og ikke kan, målt frem for antaget:
+  //
+  //   mutation = præcis den gamle form (intet updatedAt i svaret)  → RØD
+  //   mutation = en handler der FABRIKERER new Date().toISOString() → GRØN
+  //
+  // Den anden er ikke dækket, og det skyldes at begge tidsstempler skrives
+  // inden for samme millisekund, så ISO-strengene bliver ens. Jeg lod først
+  // den grønne kørsel stå som «mutations-bevist» — den beviste kun at to ure
+  // aflæses samtidig.
+  //
+  // Prøven vogter altså REGRESSIONEN (svaret mister sin tilbagelæsning), ikke
+  // den bredere klasse (en handler der finder på et plausibelt svar). At skærpe
+  // den ville kræve et felt kun rækken kan kende, og det findes ikke i dette
+  // svar. Det står skrevet her frem for at blive opdaget af den næste der
+  // stoler på ordet «mutations-bevist».
+  await parker();
+  const foer = await trail.db
+    .select({ updatedAt: documents.updatedAt }).from(documents)
+    .where(eq(documents.id, DOC)).get();
+
+  const res = await kald(`/documents/${DOC}/local-compiled`);
+  expect(res.status).toBe(200);
+  const krop = (await res.json()) as { updatedAt?: string; awaitingLocalCompile?: boolean };
+
+  const efter = await trail.db
+    .select({ updatedAt: documents.updatedAt }).from(documents)
+    .where(eq(documents.id, DOC)).get();
+
+  // Svarets tidsstempel er RÆKKENS tidsstempel — ikke «et tidspunkt», rækkens.
+  expect(krop.updatedAt).toBe(efter!.updatedAt!);
+  // Og rækken har faktisk flyttet sig, så vi ikke sammenligner to uændrede felter.
+  expect(efter!.updatedAt).not.toBe(foer!.updatedAt);
+  expect(krop.awaitingLocalCompile).toBe(false);
+});
+
 test('DEN ÆGTE RÆKKEFØLGE: kompileret → parkeret igen → straks ledig for næste arbejder', async () => {
   await parker();
   expect(await claim('mac-2')).toEqual([DOC]);

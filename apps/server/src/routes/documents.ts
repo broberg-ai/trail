@@ -954,11 +954,42 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
     .where(eq(documents.id, doc.id))
     .run();
 
+  // F263.3 — SVARET LÆSES TILBAGE, det bygges ikke af forespørgslen.
+  //
+  // Her stod `{ id: doc.id, awaitingLocalCompile: false, failed: !!body.failed }`
+  // — altså det kalderen sendte, spejlet tilbage som om det var en kendsgerning.
+  // `false` var en KONSTANT. En skrivning der landede og en der gjorde ingenting
+  // gav byte-identiske svar, i netop det endepunkt hvis eneste opgave er at melde
+  // arbejde færdigt.
+  //
+  // Fundet 8/9 under en afstemning med upmetrics, hvor et dokuments updatedAt
+  // stod på gårsdagens tidspunkt efter et kald der havde svaret 200. Skrivningen
+  // VAR i orden — men det kunne kun afgøres ved at spørge en ANDEN forespørgsel,
+  // og et svar man skal efterprøve et andet sted er ikke et svar.
+  const efter = await trail.db
+    .select({
+      awaitingLocalCompile: documents.awaitingLocalCompile,
+      status: documents.status,
+      updatedAt: documents.updatedAt,
+    })
+    .from(documents)
+    .where(eq(documents.id, doc.id))
+    .get();
+
+  // Forsvandt rækken mellem skrivningen og læsningen, er det ikke en succes.
+  // 200 med et gæt ville være den samme løgn i en ny indpakning.
+  if (!efter) return c.json({ error: 'Document vanished during local-compile' }, 500);
+
   // F191.5 — record a FREE ($0) ingest run to upmetrics for this source so the
   // cost panel reflects local-ingest VOLUME alongside paid cloud ingest. Stamped
   // server-side (key stays here); fire-and-forget, never blocks the response.
   if (!body.failed) {
-    void reportLocalIngestRun({ tenantId: tenant.id, kbId: doc.knowledgeBaseId });
+    void reportLocalIngestRun({
+      tenantId: tenant.id,
+      kbId: doc.knowledgeBaseId,
+      sourceId: doc.id,
+      completedAt: efter.updatedAt ?? undefined,
+    });
   }
 
   // F191.8 — populate document_references for the Neurons this drain just wrote.
@@ -1002,7 +1033,13 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
     tag: 'trail-ingest',
   });
 
-  return c.json({ id: doc.id, awaitingLocalCompile: false, failed: !!body.failed }, 200);
+
+  return c.json({
+    id: doc.id,
+    awaitingLocalCompile: efter.awaitingLocalCompile,
+    failed: efter.status === 'failed',
+    updatedAt: efter.updatedAt,
+  }, 200);
 });
 
 /**

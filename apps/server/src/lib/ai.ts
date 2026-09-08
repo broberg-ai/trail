@@ -73,6 +73,18 @@ const telemetrySink = buildSink();
 export async function reportLocalIngestRun(opts: {
   tenantId: string;
   kbId: string;
+  /** F263.3 — HVILKEN kilde. Uden den kan «to kilder i samme Trail» og «samme
+   *  kald talt to gange» aldrig skilles ad — heller ikke bagudrettet. Målt 8/9:
+   *  to rækker med samme sekund og samme kbId, og hverken vi eller upmetrics
+   *  kunne afgøre hvad de var. (Det viste sig at være to ægte kilder, men kun
+   *  fordi VORES dokument-tidsstempler kunne svare — deres data kunne ikke.) */
+  sourceId?: string;
+  /** Rækkens eget tidsstempel efter færdigmeldingen. Sammen med sourceId
+   *  identificerer det KALDET, så upmetrics kan upserte i stedet for at
+   *  indsætte. Bevidst IKKE datoen: `sourceId:dato` ville slå to ægte
+   *  genkørsler samme dag sammen til én — og det er præcis det tal en
+   *  «hvor meget kompilerer vi lokalt»-opgørelse skal kunne se. */
+  completedAt?: string;
   model?: string;
 }): Promise<void> {
   const usage: Usage = {
@@ -95,7 +107,15 @@ export async function reportLocalIngestRun(opts: {
     subprocess: true,
     purpose: 'local-ingest',
     latencyMs: 0,
-    labels: { tenantId: opts.tenantId, kbId: opts.kbId, connector: 'mcp:claude-code' },
+    labels: {
+      tenantId: opts.tenantId,
+      kbId: opts.kbId,
+      connector: 'mcp:claude-code',
+      ...(opts.sourceId ? { sourceId: opts.sourceId } : {}),
+      ...(opts.sourceId && opts.completedAt
+        ? { idempotencyKey: `${opts.sourceId}:${opts.completedAt}` }
+        : {}),
+    },
     ts: new Date().toISOString(),
   };
   try {
