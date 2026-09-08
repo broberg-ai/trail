@@ -15,9 +15,44 @@ fejl=0; blokeret=0; med_udvej=0
 # jobbet maa jo ikke gaa i staa». Derfor asserteres BEGGE halvdele: at den
 # spaerrer, OG at beskeden navngiver vejen videre. En spaerre uden en vej
 # videre er en arbejdsstandsning, ikke en port.
+# EXIT 1 ER SIN EGEN UDGANG, og det er components' maaling der bragte den hertil
+# (intercom 8/9): deres daglige overvaagning spurgte «var svaret exit 1?» og
+# laeste aldrig exit 2. Et tjek der KRAKKEDE gav derfor et GROENT job.
+#
+# Vores havde spejlbilledet. `[ $k -eq 2 ] && RAAD || TAVS` er rigtig for
+# blokeringen — en krakket vagt bliver TAVS og enhver RAAD-sag gaar roed. Men
+# hver TAVS-sag bestod uanset: «vagten koerte og tillod det» og «vagten
+# krakkede» var samme udfald, og TAVS-sagerne er flertallet.
+#
+# MAALT, ikke skoennet: med en vagt der bare goer `exit 1` bestod 36 af 63
+# sager under den gamle praedikat. Nu fejler 62 og navngiver aarsagen.
+#
+# REGLEN, i components' skaerpede form (intercom 8/9 #26838) — deres udgave er
+# bedre end min foerste, som ville have flaget hver eneste boolean:
+#
+#   Det afgoerende er ikke om betingelsen naevner en fejlvaerdi. Det er om
+#   vaerdimaengden er AABEN eller LUKKET.
+#
+#     if [ "$skip" = false ]     # to-grenet, LUKKET maengde  → sikker
+#     if [ "$kode" -eq 1 ]       # exit-koder er AABNE         → farlig
+#
+#   At teste mod den ene af to vaerdier UDTOEMMER den anden. En exit-kode kan
+#   vaere 0, 1, 2, 137, hvad som helst — saa `-eq 1` lader alt uforudset falde
+#   igennem som «fint».
+#
+# Kontrolspoergsmaalet, som kan stilles uden at kende domaenet:
+#   «hvor mange vaerdier KAN feltet antage, og har jeg en gren til dem alle?»
+# Kan du ikke opremse dem, skal betingelsen naevne SUCCES-vaerdien.
+#
+# Derfor navngives 1 her som KRAK, som ingen sag forventer.
 proev() { # navn forventet json
   local ud; ud=$(printf '%s' "$3" | bash "$H" 2>&1 >/dev/null)
-  local k=$?; local fik; [ $k -eq 2 ] && fik=RAAD || fik=TAVS
+  local k=$?; local fik
+  case "$k" in
+    2) fik=RAAD;;
+    0) fik=TAVS;;
+    *) fik="KRAK(exit $k)";;
+  esac
   if [ "$fik" = RAAD ]; then
     blokeret=$((blokeret+1))
     # cardmem (F149.11) skaerpede denne: det er ikke nok at ORDET staar der.
