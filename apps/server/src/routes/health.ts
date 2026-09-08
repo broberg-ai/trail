@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { sql } from 'drizzle-orm';
 import type { AppBindings } from '../app.js';
+import { telemetriTab } from '../lib/ai.js';
 
 /**
  * Health endpoint for Fly.io's HTTP checks + human-readable smoke test.
@@ -54,6 +55,16 @@ healthRoutes.get('/health', async (c) => {
       // Bevaret for bagudkompatibilitet: de gamle vagter læser `db`.
       db: kanBetjene ? 'ok' : 'error',
       tenants: { up: oppe, down: nede },
+      // F263.3 — hvor mange omkostnings-stempler der er GÅET TABT siden boot.
+      // Nul er det forventede svar; er det ikke nul, er der kørsler der fandt
+      // sted uden at blive talt, og så er «gratis-volumen» underrapporteret.
+      // Står her frem for i en tabel, fordi et tal der forhåbentlig er nul
+      // ikke skal koste en migration før målingen siger at det er nødvendigt.
+      telemetry: {
+        lostStamps: telemetriTab.antal,
+        lastError: telemetriTab.sidsteFejl,
+        lastErrorAt: telemetriTab.sidsteTidspunkt,
+      },
       version: VERSION,
     },
     kanBetjene ? 200 : 503,

@@ -29,6 +29,36 @@ import {
   type Usage,
 } from '@broberg/ai-sdk';
 
+/**
+ * F263.3 — TÆLLEREN FOR TABTE STEMPLER.
+ *
+ * upmetrics' forslag 8/9, og det er det rigtige næste skridt netop fordi det
+ * IKKE ændrer nogen adfærd: onError skrev en linje og gik videre, så et tabt
+ * stempel var usynligt. Nu er det et tal.
+ *
+ * HVORFOR DET ER OS DER SKAL TÆLLE: upmetrics målte at de aldrig kan se det.
+ * De kan i princippet tælle det de AFVISER; et kald der aldrig ankom —
+ * netværkshikke, deres proces nede, Macen der swapper — efterlader intet spor
+ * hos dem. Kun afsenderen kender forskellen på «afvist» og «kom aldrig frem».
+ *
+ * Vi PRØVER IKKE IGEN. @broberg/ai-sdk 0.38's sink har ét fetch og ingen
+ * retry-løkke (målt i dens dist), og vores side kalder den én gang. Så et
+ * mislykket stempel er tabt — kørslen fandt sted, arbejdet blev gjort, og
+ * tallet findes ikke. Retry er en ændring i hvad et $0-tal BETYDER og er
+ * Christians beslutning; det her gør blot beslutningen til et regnestykke
+ * frem for en fornemmelse.
+ *
+ * Tælleren er i-processen og nulstilles ved genstart. Det er med vilje: den
+ * skal besvare «taber vi noget lige nu», ikke være et regnskab. Et vedvarende
+ * tal ville kræve en tabel, og en tabel til et tal der forhåbentlig er nul er
+ * arbejde før målingen siger at det er nødvendigt.
+ */
+export const telemetriTab = {
+  antal: 0,
+  sidsteFejl: null as string | null,
+  sidsteTidspunkt: null as string | null,
+};
+
 function buildSink(): CostSink {
   const apiKey = process.env.UPMETRICS_API_KEY;
   if (!apiKey) return noopSink; // no key → no-op; never blocks the LLM call
@@ -37,10 +67,16 @@ function buildSink(): CostSink {
     apiKey,
     agentName: 'trail',
     agentKind: 'chatbot',
-    onError: (err) =>
-      console.warn(
-        `[ai-sdk] upmetrics sink error: ${err instanceof Error ? err.message : String(err)}`,
-      ),
+    onError: (err) => {
+      const besked = err instanceof Error ? err.message : String(err);
+      telemetriTab.antal += 1;
+      telemetriTab.sidsteFejl = besked.slice(0, 200);
+      telemetriTab.sidsteTidspunkt = new Date().toISOString();
+      // Tallet står i linjen, så en log-læser ser om det er det første tab
+      // eller det halvfjerdsindstyvende. «Der skete en fejl» og «der er sket
+      // 70 fejl» er to forskellige beskeder.
+      console.warn(`[ai-sdk] upmetrics sink error (#${telemetriTab.antal}): ${besked}`);
+    },
   });
 }
 
@@ -60,7 +96,23 @@ export const ai = createAI({ costSink: buildSink() });
 // (the local-ingest compile is the interactive cc session's own work, not an
 // SDK call). Reusing the same upmetricsSink keeps ONE source of truth for the
 // agent_runs POST contract. noopSink when no key — never throws into a request.
-const telemetrySink = buildSink();
+/**
+ * F263.3 — BYGGET VED KALDET, ikke ved import.
+ *
+ * Stod før som `const telemetrySink = buildSink()`, altså afgjort i det
+ * øjeblik modulet blev indlæst. I produktion er env sat før boot, så det
+ * virkede — men det betyder at nøglen ikke KAN sættes efter opstart, og at
+ * enhver prøve der vil ramme den ægte sti er afhængig af hvilken fil der
+ * tilfældigvis importerede modulet først. Målt: min egen prøve bestod alene
+ * og fejlede i fuld suite, af netop den grund.
+ *
+ * En sink pr. stempel er et lille objekt foran et netværkskald der allerede
+ * er fire-and-forget. Prisen er ingenting; egenskaben er at koden gør det
+ * samme uanset rækkefølgen af imports.
+ */
+function telemetrySink(): CostSink {
+  return buildSink();
+}
 
 /**
  * F191.5 — record a FREE ($0) ingest run to upmetrics for a source compiled by
@@ -119,7 +171,7 @@ export async function reportLocalIngestRun(opts: {
     ts: new Date().toISOString(),
   };
   try {
-    await telemetrySink.record(usage);
+    await telemetrySink().record(usage);
   } catch (err) {
     // Telemetry must never break the request that triggered it.
     console.warn(
