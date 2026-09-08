@@ -10,7 +10,7 @@ set -uo pipefail
 H="$(cd "$(dirname "$0")" && pwd)/pre-tool-use-deploy-background.sh"
 [ -x "$H" ] || { echo "FEJL: $H findes ikke eller er ikke eksekverbar"; exit 1; }
 
-fejl=0; blokeret=0; med_udvej=0
+fejl=0; blokeret=0; med_udvej=0; koert=0
 # Vagten BLOKERER (exit 2) — ejerens valg 31/8: «den maa godt blokkes, men
 # jobbet maa jo ikke gaa i staa». Derfor asserteres BEGGE halvdele: at den
 # spaerrer, OG at beskeden navngiver vejen videre. En spaerre uden en vej
@@ -46,6 +46,7 @@ fejl=0; blokeret=0; med_udvej=0
 #
 # Derfor navngives 1 her som KRAK, som ingen sag forventer.
 proev() { # navn forventet json
+  koert=$((koert+1))
   local ud; ud=$(printf '%s' "$3" | bash "$H" 2>&1 >/dev/null)
   local k=$?; local fik
   case "$k" in
@@ -223,6 +224,24 @@ proev 'heredoc: ordet forrest paa linjen' TAVS  '{"tool_name": "Bash", "tool_inp
 proev 'cms: grep over en workflow-fil'   TAVS    '{"tool_name": "Bash", "tool_input": {"command": "grep -nE '"'"'branches:|- main|flyctl deploy|fly deploy'"'"' \"$f\" "}}'
 proev 'awk med -F pipe'                  TAVS    '{"tool_name": "Bash", "tool_input": {"command": "awk -F'"'"'|'"'"' '"'"'{print $2}'"'"' fil"}}'
 proev 'jq med pipe i filteret'           TAVS    '{"tool_name": "Bash", "tool_input": {"command": "jq '"'"'.[]|.x'"'"' data.json"}}'
+
+# GULVET (components, intercom 8/9 #26847). Maalt her foerst: sletter man 54 af
+# de 60 sager, sagde suiten stadig «alle bestod». Hver enkelt UDGANG var
+# spaerret — en vagt der aldrig blokerer fanges af SCOPE nedenfor — men
+# POPULATIONEN var ubevogtet, saa daekningen kunne skrumpe i stilhed.
+#
+# Det er samme fejlform som resten af aftenen, en etage laengere ude: vi havde
+# begge bygget vagter for «hvad svarede den» og ingen for «hvor mange spurgte
+# vi overhovedet».
+#
+# Tallet maa kun stige. Tilfoejer man sager, bestaar den; fjerner man en,
+# fejler den ved navn. Samme asymmetri som design-drift-baselinen i dette repo.
+GULV=60
+if [ "$koert" -lt "$GULV" ]; then
+  echo "  FAIL GULV: kun $koert sager koerte, gulvet er $GULV — daekning er FORSVUNDET"; fejl=$((fejl+1))
+else
+  echo "  ok   GULV: $koert sager koerte (gulv $GULV)"
+fi
 
 if [ "$blokeret" -lt 5 ]; then
   echo "  FAIL SCOPE: kun $blokeret fik et raad — vagten ser ingenting"; fejl=$((fejl+1))
