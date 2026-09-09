@@ -85,8 +85,24 @@ healthRoutes.get('/health', async (c) => {
       // kan et loft på 200 MB ikke afgøres mod en maskine på 1024 MB, og
       // «cachen fylder 58 MB» bliver en påstand frem for en måling.
       // rss = alt processen har i fysisk hukommelse; heapUsed = det JS'en
-      // faktisk holder på. Vektorerne er Float32Array uden for heap'en, så
-      // de to bevæger sig IKKE ens — og netop derfor står begge her.
+      // faktisk holder på.
+      //
+      // JEG FORUDSAGDE AT DE TO IKKE VILLE FØLGES AD, og målingen modbeviste
+      // det. Float32Array ligger uden for heap'en i mange runtimes, men i Bun
+      // tælles bagvedliggende buffer med i heapUsed — målt på prod med
+      // buddy-sessions (11.017 vektorer):
+      //
+      //   tom cache   rss 195,4 MB   heap  46,9 MB   cache  0 MB
+      //   ét opslag   rss 255,0 MB   heap  90,8 MB   cache 44,2 MB
+      //                   +59,6           +43,9            +44,2
+      //
+      // heap fulgte cachens eget tal næsten præcist. rss voksede MERE, fordi
+      // indlæsningen selv allokerer undervejs — og fortsatte med at vokse over
+      // de næste tre søgninger (281,3 MB) mens cachens tal stod helt stille.
+      //
+      // Derfor står begge alligevel: cachens tal er det stabile, rss er det
+      // ærlige loft mod maskinen. Bruges rss til at måle cachens størrelse,
+      // måler man GC-forsinkelse.
       processHukommelse: {
         rssBytes: process.memoryUsage.rss(),
         heapUsedBytes: process.memoryUsage().heapUsed,
