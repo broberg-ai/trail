@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { documents, knowledgeBases, sikkertUddrag } from '@trail/db';
+import { documents, knowledgeBases, sikkertUddrag, type TrailDatabase } from '@trail/db';
 import { and, eq } from 'drizzle-orm';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
 import { parseTags, canonicaliseTag, parseSeqId, kbPrefix, redactSecrets, buildFtsQuery } from '@trail/shared';
@@ -17,6 +17,40 @@ export const searchRoutes = new Hono<AppBindings>();
 
 searchRoutes.use('*', requireAuth);
 
+/**
+ * F265.8 — HELE NEURONEN, KUN NÅR NOGEN BEDER OM DEN.
+ *
+ * cms målte at Aidan fik 7 % af en artikel: 337 tegn af 4.441. Årsagen var
+ * min egen ændring samme dag. Indtil F265.3 var `highlight` HELE dokumentet
+ * (SQLites highlight() giver hele kolonnen), og cms læste feltet som
+ * indholdet — hvilket virkede, netop fordi fejlen gav dem hele artiklen.
+ *
+ * At rulle tilbage ville genindføre ~3.770 tokens pr. opslag for enhver
+ * agent, og dét tal er hele grunden til at flåden holdt op med at søge. Den
+ * rigtige rettelse er ikke at give uddraget indholdets betydning tilbage —
+ * det er at der FINDES en måde at bede om indholdet på.
+ *
+ * OPT-IN med vilje: buddys agenter kalder samme rute. Blev indhold standard,
+ * ville de betale for noget de netop har målt sig fri af.
+ *
+ * Hentes EFTER publikums-filteret, så flaget aldrig kan bruges til at nå en
+ * Neuron man ikke måtte se uddraget af — og redaktøren kører på det, fordi
+ * 5.000 tegn er en større angrebsflade for en lækket hemmelighed end 300.
+ */
+export async function hentIndhold(
+  trail: TrailDatabase,
+  tenantId: string,
+  ids: string[],
+): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const rows = (await trail.execute(
+    `SELECT id, content FROM documents
+      WHERE tenant_id = ? AND archived = 0 AND id IN (${ids.map(() => '?').join(',')})`,
+    [tenantId, ...ids],
+  )).rows as Array<{ id: unknown; content: unknown }>;
+  return new Map(rows.map((r) => [String(r.id), String(r.content ?? '')]));
+}
+
 searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
   const trail = getTrail(c);
   const tenant = getTenant(c);
@@ -32,6 +66,8 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
   const authType = c.get('authType');
   // F255 — kalderen må INDSNÆVRE, aldrig UDVIDE. Se effectiveAudience.
   const audience: Audience = effectiveAudience(authType, c.req.query('audience'));
+  // F265.8 — opt-in: hele Neuronen i stedet for kun uddraget.
+  const medIndhold = c.req.query('includeContent') === 'true';
   // F92 — repeated ?tag= params narrow the hit list to Neurons whose
   // `tags` column contains every tag (AND-semantics). Canonicalise
   // here so `Ops`, `ops`, and `OPS` all collapse to the same filter
@@ -268,14 +304,22 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
     // F197 — egress guardrail: redact any leaked credential out of the hits
     // (title/highlight/userNote + chunk content) before they leave the API, so
     // a secret that slipped into a Neuron can't surface in search results.
+    // F265.8 — hentes EFTER filtrene, aldrig før: et dokument der er filtreret
+    // væk må ikke kunne hentes hjem af flaget.
+    const indhold = medIndhold
+      ? await hentIndhold(trail, tenant.id, filtered.map((d) => d.id))
+      : new Map<string, string>();
+
     return c.json({
       documents: filtered.map((d) => {
         const un = (d as { userNote?: unknown }).userNote;
+        const fuldt = indhold.get(d.id);
         return {
           ...d,
           tags: tagMap.get(d.id) ?? null,
           title: d.title == null ? d.title : redactSecrets(d.title).redacted,
           highlight: redactSecrets(d.highlight).redacted,
+          ...(fuldt !== undefined ? { content: redactSecrets(fuldt).redacted } : {}),
           ...(typeof un === 'string' ? { userNote: redactSecrets(un).redacted } : {}),
         };
       }),
