@@ -95,12 +95,14 @@ export function SearchPanel() {
           autoFocus
           placeholder={t('searchPanel.placeholder')}
           value={input}
+          data-testid="search-input"
           onInput={(e) => setInput((e.currentTarget as HTMLInputElement).value)}
           class="w-full rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)]/80 px-4 py-3 pr-10 text-base focus:outline-none focus:border-[color:var(--color-accent)] transition"
         />
         {input ? (
           <button
             onClick={onClear}
+            data-testid="search-clear"
             class="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--color-fg-subtle)] hover:text-[color:var(--color-fg)] transition text-sm"
             aria-label="Clear search"
           >
@@ -127,7 +129,12 @@ export function SearchPanel() {
       {!input.trim() ? (
         <EmptyHint />
       ) : loading && !results ? (
-        <div class="loading-delayed text-[color:var(--color-fg-muted)] text-sm">{t('searchPanel.searching')}</div>
+        <div
+          class="loading-delayed text-[color:var(--color-fg-muted)] text-sm"
+          data-testid="search-loading"
+        >
+          {t('searchPanel.searching')}
+        </div>
       ) : results ? (
         <Results kbId={kbId} results={results} query={input.trim()} />
       ) : null}
@@ -239,7 +246,7 @@ function Results({
   const total = results.documents.length + results.chunks.length;
   if (total === 0) {
     return (
-      <div class="text-center py-16 text-[color:var(--color-fg-subtle)]">
+      <div class="text-center py-16 text-[color:var(--color-fg-subtle)]" data-testid="search-empty">
         No matches for <code class="font-mono">{query}</code> in this Trail.
       </div>
     );
@@ -249,7 +256,7 @@ function Results({
   const sources = results.documents.filter((d) => d.kind === 'source');
 
   return (
-    <div class="space-y-8">
+    <div class="space-y-8" data-testid="search-results">
       {neurons.length ? (
         <section>
           <SectionHeader label="Neurons" count={neurons.length} />
