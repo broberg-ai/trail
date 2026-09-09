@@ -19,7 +19,14 @@ import { cosine, loadVectors, coverage } from '@trail/core';
 import type { TrailDatabase } from '@trail/db';
 import { embed } from './embedder.js';
 
-export interface VectorHit { documentId: string; score: number }
+export interface VectorHit {
+  documentId: string;
+  score: number;
+  /** F265.5 — DET STYKKE DER FAKTISK MATCHEDE. Det var kendt hele tiden og
+   *  blev smidt væk to linjer efter det blev fundet, så søgesvaret kunne kun
+   *  give en titel. En agent kunne se HVAD der blev fundet, aldrig HVORFOR. */
+  chunkId: string;
+}
 
 export interface VectorSearchResult {
   hits: VectorHit[];
@@ -61,16 +68,16 @@ export async function vectorSearch(
 
   // Bedste tekststykke pr. DOKUMENT. Uden dette ville en lang Neuron med ti
   // stykker fylde hele resultatlisten med sig selv.
-  const best = new Map<string, number>();
+  const best = new Map<string, { score: number; chunkId: string }>();
   for (const r of rows) {
     const s = cosine(q, r.vector);
     if (s === null) continue; // kan ikke beregnes — ikke det samme som 0
     const cur = best.get(r.documentId);
-    if (cur === undefined || s > cur) best.set(r.documentId, s);
+    if (cur === undefined || s > cur.score) best.set(r.documentId, { score: s, chunkId: r.chunkId });
   }
 
   const hits = [...best.entries()]
-    .map(([documentId, score]) => ({ documentId, score }))
+    .map(([documentId, v]) => ({ documentId, score: v.score, chunkId: v.chunkId }))
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
 

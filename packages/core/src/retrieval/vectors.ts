@@ -194,13 +194,13 @@ export async function coverage(
         WHERE c.tenant_id = ? AND c.knowledge_base_id = ? AND e.model = ?
           AND c.id > ?
         ORDER BY c.id
-        LIMIT 500`,
+        LIMIT 200`,
       [tenantId, knowledgeBaseId, model, sidsteId],
     )).rows as Array<{ id: string; content: string; h: string }>;
     if (side.length === 0) break;
     for (const row of side) if (contentHash(row.content) !== row.h) stale += 1;
     sidsteId = String(side[side.length - 1]!.id);
-    if (side.length < 500) break;
+    if (side.length < 200) break;
   }
 
   const chunks = Number(r.chunks);
@@ -236,6 +236,11 @@ export async function loadVectors(
   knowledgeBaseId: string,
   model = EMBEDDING_MODEL,
 ): Promise<EmbeddingRow[]> {
+  // F265.5 — 200, ikke 500. Prøven i hele-laesevejen.test.ts MÅLTE at 500
+  // stykker à ~2 kB giver 1.056.001 bytes i ét svar — altså stadig over
+  // loftet. Mit eget fix var ikke færdigt, og det var en prøve der fandt det,
+  // ikke en fejl i produktionen.
+  //
   // F265.4 — hent i sider. Målt 9/9: søgningen svarede 500 RESPONSE_TOO_LARGE
   // på HVER forespørgsel minutter efter at indekset nåede 100 %. Den virkede
   // perfekt ved nul vektorer — den gik i stykker AF at blive fyldt. Fuld
@@ -255,13 +260,16 @@ export async function loadVectors(
           AND d.kind = 'wiki'
           AND e.chunk_id > ?
         ORDER BY e.chunk_id
-        LIMIT 1000`,
+        -- F265.5 — 200, ikke 1.000. En vektor er 1.024 floats = 4 kB, så
+        -- 1.000 ad gangen er 4,1 MB pr. svar — fire gange over loftet. Målt af
+        -- prøven, ikke af produktionen; mit første fix var ikke færdigt.
+        LIMIT 200`,
       [tenantId, knowledgeBaseId, model, efter],
     )).rows as Array<{ chunkId: string; documentId: string; vector: Uint8Array | ArrayBuffer }>;
     if (side.length === 0) break;
     rows.push(...side);
     efter = String(side[side.length - 1]!.chunkId);
-    if (side.length < 1000) break;
+    if (side.length < 200) break;
   }
   return rows.map((r) => ({
     chunkId: r.chunkId, documentId: r.documentId, vector: decodeVector(r.vector),

@@ -160,17 +160,50 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
       const nye = vec.hits.map((h: { documentId: string }) => h.documentId).filter((id: string) => !seenIds.has(id));
       if (nye.length > 0) {
         const placeholders = nye.map(() => '?').join(',');
+        // F265.5 — UDDRAGET FOR ET VEKTOR-TRÆF ER DET STYKKE DER MATCHEDE.
+        //
+        // Stod før som `'' AS highlight`. Målt 9/9, minutter efter at indekset
+        // blev fyldt: hvert eneste vektor-fundne dokument kom tilbage med
+        // TOMT uddrag. Agenten fik en titel og ingen kontekst — den kunne se
+        // HVAD der blev fundet og aldrig HVORFOR, og måtte hente hele
+        // dokumentet for at afgøre om træffet var brugbart.
+        //
+        // Stykket var kendt hele vejen: vectorSearch finder det bedste stykke
+        // pr. dokument og kasserede id'et to linjer senere. Nu bæres det med,
+        // og teksten hentes herfra. Ordmatch-stien har sit eget uddrag fra
+        // snippet() og røres ikke.
+        const stykkeFor = new Map(vec.hits.map((h: { documentId: string; chunkId: string }) => [h.documentId, h.chunkId]));
         const rows = (await trail.execute(
-          `SELECT id, filename, path, title, seq AS seqId, '' AS highlight
-             FROM documents
-            WHERE tenant_id = ? AND knowledge_base_id = ? AND archived = 0
-              AND id IN (${placeholders})`,
+          `SELECT d.id, d.filename, d.path, d.title, d.seq AS seqId,
+                  c.id AS matchChunkId, c.content AS matchContent
+             FROM documents d
+             LEFT JOIN document_chunks c
+               ON c.document_id = d.id
+            WHERE d.tenant_id = ? AND d.knowledge_base_id = ? AND d.archived = 0
+              AND d.id IN (${placeholders})`,
           [tenant.id, kbId, ...nye],
         )).rows as Array<Record<string, unknown>>;
-        const byId = new Map(rows.map((r) => [String(r.id), r]));
+        // Behold KUN det stykke vektor-søgningen pegede på. JOIN'en giver én
+        // række pr. stykke; uden dette filter ville en Neuron med ti stykker
+        // optræde ti gange.
+        const byId = new Map<string, Record<string, unknown>>();
+        for (const r of rows) {
+          const id = String(r.id);
+          if (String(r.matchChunkId ?? '') !== stykkeFor.get(id)) continue;
+          byId.set(id, r);
+        }
         for (const id of nye) {
           const row = byId.get(id);
-          if (row) { documents.push(row as never); seenIds.add(id); }
+          if (!row) continue;
+          const tekst = String(row.matchContent ?? '').trim();
+          // Samme længde som snippet()-vinduet på ordmatch-stien, så de to
+          // slags træf ikke ser forskellige ud i en liste.
+          const uddrag = tekst.length > 300 ? `${tekst.slice(0, 300)}…` : tekst;
+          documents.push({
+            id: row.id, filename: row.filename, path: row.path,
+            title: row.title, seqId: row.seqId, highlight: uddrag,
+          } as never);
+          seenIds.add(id);
         }
       }
 
