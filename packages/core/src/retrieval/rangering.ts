@@ -34,6 +34,11 @@ export interface RangerArgs<T> {
   ord: readonly { id: string }[];
   /** Betydnings-søgningens rangering, i dens egen rækkefølge. Tom = slukket. */
   vektor: readonly { id: string }[];
+  /** F265.2 — dokumenter der rummer HVERT betydningsbærende ord (AND-formen).
+   *  Et EKSTRA signal, aldrig et filter: listen kan være tom uden at noget
+   *  forsvinder, og et dokument på den overtrumfer ikke noget — det får blot
+   *  et bidrag mere i fusionen. Er alle tre lister enige, vinder dokumentet. */
+  alleOrd?: readonly { id: string }[];
   /** Reserve for kandidater ingen af halvdelene rangerede. Uden den: uændret orden. */
   reserve?: (a: T, b: T) => number;
 }
@@ -51,6 +56,7 @@ export function rangerKandidater<T extends { id: string }>(
   const fusion = reciprocalRankFusion({
     ord: args.ord.map((o) => ({ id: o.id })),
     vektor: args.vektor.map((v) => ({ id: v.id })),
+    ...(args.alleOrd ? { alleOrd: args.alleOrd.map((a) => ({ id: a.id })) } : {}),
   });
   const orden = new Map(fusion.map((f, i) => [f.id, i]));
 

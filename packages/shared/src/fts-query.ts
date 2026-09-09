@@ -75,6 +75,19 @@ export function ftsTerms(raw: string): string[] {
  * no alphanumeric characters at all; callers treat that as "don't search".
  */
 export interface FtsQueryOptions {
+  /** F265.2 — bind termerne med AND i stedet for OR.
+   *
+   *  OR-formen er den brede: den finder ALT der rører ét af ordene, og et
+   *  dokument der rammer fem ALMINDELIGE ord kan derved slå det der rammer det
+   *  ene SJÆLDNE. Målt: «hvordan undgår vi dobbeltlevering af beskeder mellem
+   *  sessioner» gav fem træf hvor kun «session» og «beskeder» var fremhævet —
+   *  det sjældne ord optrådte ikke i nogen af dem.
+   *
+   *  AND-formen er den smalle: KUN dokumenter der rummer hvert eneste
+   *  betydningsbærende ord. Den bruges ALDRIG alene — en enkelt tastefejl
+   *  ville give nul træf — men som et EKSTRA signal ved siden af de to andre,
+   *  så et dokument alle tre er enige om rykker frem. */
+  operator?: 'OR' | 'AND';
   /** F219.2 — add the words a document is likely to use for the words the
    *  question asks with ("koster" → "pris"). On by default; pass false for a
    *  surface that must match literally. */
@@ -101,6 +114,13 @@ export function buildFtsQuery(raw: string, opts: FtsQueryOptions = {}): string {
   // "no ask-word is also a stopword" in fts-query.test.ts. That test goes red
   // the day someone adds an entry like `hvor: ['adresse']`, which is the exact
   // change that would make expansion start firing on filler.
-  const expanded = opts.expand === false ? terms : [...terms, ...expandTerms(terms)];
-  return expanded.map((t) => `"${t}"*`).join(' OR ');
+  // F265.2 — SYNONYMER OG «AND» ER UFORENELIGE, og det er ikke en detalje:
+  // udvidelsen tilføjer de ord et dokument SANDSYNLIGVIS bruger. Kræver man
+  // dem ALLE, kræver man at dokumentet indeholder både spørgsmålets ord og
+  // hvert gæt på et synonym — hvilket giver nul træf på næsten alt. AND-formen
+  // bruger derfor kun spørgsmålets egne betydningsbærende ord.
+  const operator = opts.operator ?? 'OR';
+  const expanded =
+    operator === 'AND' || opts.expand === false ? terms : [...terms, ...expandTerms(terms)];
+  return expanded.map((t) => `"${t}"*`).join(` ${operator} `);
 }

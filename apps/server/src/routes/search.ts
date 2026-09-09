@@ -129,16 +129,36 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
 
   const ftsQuery = buildFtsQuery(query);
   if (!ftsQuery) return c.json({ documents: [], chunks: [] });
+  // F265.2 — DEN SMALLE FORESPØRGSEL, som ET SIGNAL ved siden af den brede.
+  //
+  // Den brede (OR) finder alt der rører ét af ordene. Målt på prod: «hvordan
+  // undgår vi dobbeltlevering af beskeder mellem sessioner» gav fem træf hvor
+  // kun de ALMINDELIGE ord var fremhævet — «session», «beskeder» — mens det
+  // sjældne «dobbeltlevering» ikke optrådte i nogen af dem. Fem almindelige
+  // ord slog det ene sjældne.
+  //
+  // Den smalle (AND) rammer kun dokumenter der rummer HVERT betydningsbærende
+  // ord. Den bruges ALDRIG alene — ét ord der ikke står i teksten ville give
+  // nul træf, og det er præcis den skrøbelighed planen advarede imod. Den
+  // fødes ind som en TREDJE liste i fusionen, så et dokument alle tre metoder
+  // er enige om rykker frem, og et tomt resultat koster ingenting.
+  const ftsAlleOrd = buildFtsQuery(query, { operator: 'AND' });
 
   // F112.2 — also search shared user-notes (LIKE on user_note column).
   // Notes opted-in via F112.1's share-flag are surfaced as
   // document-level hits, deduplicated against FTS hits below so a
   // Neuron whose body AND note both match shows once with the FTS
   // hit (richer highlight) rather than twice.
-  const [documents, chunks, noteHits] = await Promise.all([
+  const [documents, chunks, noteHits, alleOrdHits] = await Promise.all([
     trail.searchDocuments(ftsQuery, kbId, tenant.id, kandidater),
     trail.searchChunks(ftsQuery, kbId, tenant.id, kandidater),
     trail.searchUserNotes(query, kbId, tenant.id, kandidater),
+    // Samme indeks, samme filtre — kun operatoren adskiller den fra den brede.
+    // Fejler den (et enkelt ord kan gøre udtrykket tomt), er listen tom og
+    // rangeringen falder tilbage til de to den altid har haft.
+    ftsAlleOrd && ftsAlleOrd !== ftsQuery
+      ? trail.searchDocuments(ftsAlleOrd, kbId, tenant.id, kandidater).catch(() => [])
+      : Promise.resolve([]),
   ]);
 
   // Merge note-hits with FTS document-hits, dropping duplicates by id.
@@ -302,11 +322,30 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
         præcise: new Set(præcise.map((p) => p.id)),
         ord: documents.map((d: { id: string }) => ({ id: d.id })),
         vektor: vec.hits.map((h: { documentId: string }) => ({ id: h.documentId })),
+        alleOrd: (alleOrdHits as Array<{ id: string }>).map((d) => ({ id: d.id })),
       });
       documents.length = 0;
       documents.push(...(rangeret as never[]));
       documents.length = Math.min(documents.length, kandidater);
     }
+  } else if (alleOrdHits.length > 0) {
+    // F265.2 — EN TRAIL UDEN BETYDNINGS-SØGNING SKAL HAVE SAMME FORDEL.
+    //
+    // Boostet lå oprindeligt kun inde i hybrid-grenen, så en videnbase med
+    // hybrid slukket ville HENTE den smalle liste og aldrig bruge den —
+    // arbejde udført og smidt væk, og en rettelse der kun gælder halvdelen af
+    // kunderne uden at nogen kan se hvilken halvdel.
+    //
+    // Samme funktion, tom vektor-liste. rangerKandidater dokumenterer selv at
+    // «tom = slukket», så det er den afprøvede vej og ikke en parallel kopi.
+    const rangeret = rangerKandidater(documents as Array<{ id: string }>, {
+      præcise: new Set(præcise.map((p) => p.id)),
+      ord: documents.map((d: { id: string }) => ({ id: d.id })),
+      vektor: [],
+      alleOrd: (alleOrdHits as Array<{ id: string }>).map((d) => ({ id: d.id })),
+    });
+    documents.length = 0;
+    documents.push(...(rangeret as never[]));
   }
 
   // F92 tag facet. searchDocuments returns a narrow projection that
