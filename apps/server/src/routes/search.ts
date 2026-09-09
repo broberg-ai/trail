@@ -246,6 +246,25 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
     hybridInfo = { used: vec.hits.length > 0, coverage: vec.coverage, coverageSlags: vec.coverageSlags, ...(vec.unavailable ? { unavailable: vec.unavailable } : {}) };
 
     if (vec.hits.length > 0) {
+      // F265.2 — ORDMATCHNINGENS RANGERING, TAGET FØR VEKTOR-TRÆFFENE FLETTES IND.
+      //
+      // Herunder får `documents` tilføjet de dokumenter KUN vektorerne fandt.
+      // Rangeringen længere nede fik så `documents` som sin «ord»-liste — og
+      // dermed blev et dokument ordmatchningen ALDRIG fandt krediteret som et
+      // ordmatch. Det talte to gange, én gang for hver metode, og fusionen
+      // belønner netop det at to metoder er enige.
+      //
+      // MÅLT PÅ PROD: søgt på ordet «dobbeltlevering», som findes i præcis TO
+      // af Trailens dokumenter. De lå på plads 20 og 36. Nitten dokumenter der
+      // ikke indeholder ordet lå foran de to der gør.
+      //
+      //   ord-liste = FTS + vektor-tilføjede   →  vektor-doc: 1/61 + 1/63 = 0,0323
+      //   ægte ordmatch, svagt vektor-match    →  1/61 + 1/210 = 0,0212
+      //
+      // Et semantisk gæt slog altså et bogstaveligt træf. Snapshottet her er
+      // hvad ordmatchningen FAKTISK fandt.
+      const ordRangering = documents.map((d: { id: string }) => ({ id: d.id }));
+
       // Hent de dokumenter vektor-halvdelen fandt, som ordmatchningen ikke
       // allerede har. Samme projektion som searchDocuments, så alt nedenfor
       // ikke kan se forskel på hvor en kandidat kom fra.
@@ -320,7 +339,7 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
       // træf blive skåret væk inden det blev flyttet frem.
       const rangeret = rangerKandidater(documents as Array<{ id: string }>, {
         præcise: new Set(præcise.map((p) => p.id)),
-        ord: documents.map((d: { id: string }) => ({ id: d.id })),
+        ord: ordRangering,
         vektor: vec.hits.map((h: { documentId: string }) => ({ id: h.documentId })),
         alleOrd: (alleOrdHits as Array<{ id: string }>).map((d) => ({ id: d.id })),
       });

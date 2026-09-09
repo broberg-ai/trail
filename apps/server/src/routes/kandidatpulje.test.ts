@@ -128,3 +128,57 @@ test('F265.2 boostet gælder OGSÅ en Trail uden betydnings-søgning', () => {
   expect(efterElse).toContain('rangerKandidater');
   expect(efterElse).toContain('vektor: []');
 });
+
+// ── F265.2, tredje fund: et vektor-træf blev talt som et ordmatch ──────────
+
+test('F265.2 DEN BÆRENDE: ord-listen er taget FØR vektor-træffene flettes ind', () => {
+  // Fejlen var én linje: `ord: documents.map(...)` blev læst EFTER at
+  // vektor-halvdelens dokumenter var skubbet ind i `documents`. Så et dokument
+  // ordmatchningen aldrig fandt blev krediteret som ordmatch OG som vektormatch
+  // — talt to gange, og fusionen belønner netop enighed mellem to metoder.
+  //
+  // Målt på prod: ordet «dobbeltlevering» findes i præcis TO dokumenter. De lå
+  // på plads 20 og 36. Nitten dokumenter uden ordet lå foran dem.
+  const rute = readFileSync(new URL('./search.ts', import.meta.url), 'utf8');
+
+  const iSnapshot = rute.indexOf('const ordRangering = documents.map');
+  const iFletning = rute.indexOf('documents.push(...(rows as never[]))') >= 0
+    ? rute.indexOf('documents.push(...(rows as never[]))')
+    : rute.indexOf('const nye = vec.hits.map');
+  expect(iSnapshot).toBeGreaterThan(-1);
+  expect(iSnapshot).toBeLessThan(iFletning);   // snapshot FØR fletningen
+
+  // Og HYBRID-grenen skal bruge snapshottet, ikke den sammenlagte liste.
+  // Kun hybrid-grenen: i grenen UDEN vektorer ER `documents` ordmatchningens
+  // egen liste, og dér er `documents.map(...)` det rigtige. En prøve der
+  // forbød udtrykket overalt ville have krævet en forkert rettelse.
+  const hybridGren = rute.slice(iSnapshot, rute.indexOf('} else if (alleOrdHits.length > 0)'));
+  expect(hybridGren).toContain('ord: ordRangering,');
+  expect(hybridGren).not.toContain('ord: documents.map(');
+});
+
+test('F265.2 et dokument fundet KUN af vektorerne tælles kun ÉN gang', () => {
+  // Prods form, ikke en symmetrisk legetøjssag: «a» er det ÆGTE ordmatch og
+  // har kun et SVAGT vektor-træf (plads 20). «b» er toppen af vektor-listen og
+  // rørte aldrig ordet.
+  //
+  // MIN FØRSTE UDGAVE KUNNE IKKE SKELNE: den gav begge dokumenter symmetriske
+  // pladser, så begge fik nøjagtig samme fusionstal og udfaldet blev afgjort
+  // af id-sorteringen. Den ville have bestået uanset om fejlen var rettet.
+  const kandidater = [{ id: 'a' }, { id: 'b' }];
+  const vektor = [{ id: 'b' }, ...Array.from({ length: 18 }, (_, i) => ({ id: `x${i}` })), { id: 'a' }];
+
+  const rigtigt = rangerKandidater(kandidater, {
+    præcise: new Set(),
+    ord: [{ id: 'a' }],                // KUN det ordmatchningen faktisk fandt
+    vektor,
+  });
+  expect(rigtigt[0]!.id).toBe('a');    // det bogstavelige træf vinder
+
+  const forkert = rangerKandidater(kandidater, {
+    præcise: new Set(),
+    ord: [{ id: 'a' }, { id: 'b' }],   // b snuppet med fra den SAMMENLAGTE liste
+    vektor,
+  });
+  expect(forkert[0]!.id).toBe('b');    // fejlen som den stod på prod
+});
