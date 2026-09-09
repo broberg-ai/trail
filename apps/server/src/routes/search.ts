@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { documents, knowledgeBases } from '@trail/db';
+import { documents, knowledgeBases, sikkertUddrag } from '@trail/db';
 import { and, eq } from 'drizzle-orm';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
 import { parseTags, canonicaliseTag, parseSeqId, kbPrefix, redactSecrets, buildFtsQuery } from '@trail/shared';
@@ -198,7 +198,14 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
           const tekst = String(row.matchContent ?? '').trim();
           // Samme længde som snippet()-vinduet på ordmatch-stien, så de to
           // slags træf ikke ser forskellige ud i en liste.
-          const uddrag = tekst.length > 300 ? `${tekst.slice(0, 300)}…` : tekst;
+          // F265.7 — ANDEN DØR. Ordmatch-vejens uddrag escapes inde i @trail/db,
+          // men DENNE tekst er rå indhold fra et stykke, og den lander i samme
+          // felt — som admin sætter ind med dangerouslySetInnerHTML. Rettedes
+          // kun den ene vej, var et vektor-træf stadig en åben vej for HTML
+          // fra en clippet side. Målt på prod: ordmatch-vejen var lukket og
+          // denne stod åben.
+          const rået = tekst.length > 300 ? `${tekst.slice(0, 300)}…` : tekst;
+          const uddrag = sikkertUddrag(rået);
           documents.push({
             id: row.id, filename: row.filename, path: row.path,
             title: row.title, seqId: row.seqId, highlight: uddrag,

@@ -41,6 +41,11 @@ export { runMigrationsByHash } from './migrate-runner.js';
 
 // ── F153 Backup primitive ──────────────────────────────────────────
 export { snapshotDb } from './backup.js';
+
+// F265.7 — escaping af et søgeuddrag. Eksporteret fordi der er TO steder der
+// bygger et uddrag: snippet()-vejen her i pakken, og vektor-vejen i motorens
+// routes/search.ts. Begge lander i samme felt, og feltet renderes som HTML.
+export { sikkertUddrag } from './search.js';
 export type { SnapshotResult, SnapshotOptions } from './backup.js';
 
 // ── Schema (re-exports — tables, enums, relations) ─────────────────

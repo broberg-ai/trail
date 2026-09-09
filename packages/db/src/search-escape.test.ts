@@ -128,3 +128,26 @@ test('F265.7 negativ kontrol: et harmløst uddrag ændres ikke ud over sin marke
   );
   expect(sikkertUddrag('\u0001match\u0002 midt i')).toBe('<mark>match</mark> midt i');
 });
+
+test('F265.7 ANDEN DØR: vektor-vejens uddrag klippes FØR det escapes', () => {
+  // Motorens routes/search.ts bygger sit eget uddrag af rå stykke-indhold og
+  // lander i SAMME felt som snippet()-vejen. Rækkefølgen er ikke ligegyldig:
+  // escapes der FØR klipningen, kan de 300 tegn skære en HTML-entitet midt
+  // over («&am») og efterlade noget der hverken er tekst eller tag.
+  //
+  // Prøven pinner rækkefølgen ved at lægge et & præcis i klippekanten.
+  const råt = `${'x'.repeat(299)}&<img src=q onerror=y>`;
+  const klippet = råt.length > 300 ? `${råt.slice(0, 300)}…` : råt;
+  const ud = sikkertUddrag(klippet);
+
+  expect(ud.endsWith('&amp;…')).toBe(true); // hel entitet, ikke en halv
+  expect(ud).not.toContain('<img'); // og resten nåede aldrig med
+});
+
+test('F265.7 en tekst UDEN sentinel får ingen markering — vektor-vejens normaltilfælde', () => {
+  // Vektor-uddraget har ingen match-markering (der er intet ord at markere,
+  // træffet er semantisk). Escaperen må derfor ikke opfinde et <mark>.
+  const ud = sikkertUddrag('helt almindeligt stykke med <b>tags</b> i.');
+  expect(ud).not.toContain('<mark>');
+  expect(ud).toBe('helt almindeligt stykke med &lt;b&gt;tags&lt;/b&gt; i.');
+});
