@@ -35,6 +35,65 @@ export interface EmbedResult {
  * lavet i USA er ikke «lidt forkert», den er et brud på det vi lover kunden,
  * og den ville ligge i basen uden at nogen kunne se hvor den kom fra.
  */
+/**
+ * F265.11 — residens-vagten som REN FUNKTION, så den kan prøves uden at kalde
+ * en model. En vagt der kun kan afprøves ved at bruge penge på et rigtigt kald,
+ * bliver afprøvet én gang og aldrig igen.
+ *
+ * Kaster ved alt andet end en bekræftet EU-region. Returnerer intet — den er en
+ * spærre, ikke et opslag.
+ */
+export function bekraeftResidens(usage: Record<string, unknown> | null | undefined): void {
+  const provider = String(usage?.provider ?? '');
+  const region = usage?.region === undefined ? null : String(usage.region);
+
+  // LÆS SVARET, IKKE ANMODNINGEN. En override der blev ignoreret ser identisk
+  // ud fra kaldestedet.
+  //
+  // TO SPØRGSMÅL, IKKE ÉT — og det er hele F265.11. Provider svarer på «blev
+  // min override ignoreret»; region svarer på «hvor endte data». Den gamle
+  // vagt tjekkede KUN det første og lovede det andet i sin fejltekst: en
+  // gateway foran Mistral hedder stadig «mistral», så vagten bestod mens data
+  // forlod EU. Fundet af ai-sdk som en skærpelse af vores brug (#27112).
+  if (provider !== EMBEDDING_PROVIDER) {
+    throw new Error(
+      `F254: embedding-kaldet gik til «${provider || 'ukendt'}», ikke til ${EMBEDDING_PROVIDER}. ` +
+        `Min override blev ignoreret. Ingen vektorer gemt.`,
+    );
+  }
+
+  // REGIONEN ER DEN ENESTE POSITIVE RESIDENS-PÅSTAND.
+  //
+  // SDK'ens egen .d.ts: «"unknown" is NOT a synonym for safe. region !== "us"
+  // is not an EU check — it passes every OpenRouter call. Only region === "eu"
+  // may be treated as EU-resident.» Feltet er UDLEDT af den vært kaldet ramte
+  // (regionOfHost), ikke af leverandørnavnet — derfor lukker det gateway-hullet
+  // ovenstående tjek lader stå åbent.
+  //
+  // MÅLT PÅ ET ÆGTE KALD af ai-sdk før denne vagt blev sat (#27115):
+  //   api.mistral.ai/v1           → "eu"
+  //   gateway.example.com/mistral → "unknown"   ← præcis vores hul
+  // Jeg nægtede at stramme på et tabelopslag alene: tabellen beviser at
+  // klassifikationen findes, ikke at feltet er udfyldt på DENNE sti — og er
+  // det tomt, stopper al indeksering for alle kunder.
+  if (region === null) {
+    // EGEN BESKED. «Vi kunne ikke afgøre hvor kaldet gik hen» er noget andet
+    // end «det gik til USA», og kun den første betyder at instrumentet er i
+    // stykker. Slås de sammen, leder et menneske det forkerte sted.
+    throw new Error(
+      `F265.11: svaret bar ingen region. Residensen kan ikke afgøres, og en ` +
+        `ubekræftet residens er ikke en godkendt residens. Ingen vektorer gemt.`,
+    );
+  }
+  if (region !== 'eu') {
+    throw new Error(
+      `F265.11: embedding-kaldet endte i regionen «${region}», ikke «eu». ` +
+        `Vektorer af persondata må ikke laves uden for EU. Ingen vektorer gemt.`,
+    );
+  }
+
+}
+
 export async function embed(input: string[]): Promise<EmbedResult> {
   if (input.length === 0) {
     return { vectors: [], model: EMBEDDING_MODEL, provider: EMBEDDING_PROVIDER, costCents: 0, inputTokens: 0 };
@@ -55,15 +114,7 @@ export async function embed(input: string[]): Promise<EmbedResult> {
   const provider = String(usage?.provider ?? '');
   const model = String(usage?.model ?? '');
 
-  // LÆS SVARET, IKKE ANMODNINGEN. En override der blev ignoreret ser identisk
-  // ud fra kaldestedet — det er kun `usage.provider` der siger hvor kaldet
-  // faktisk gik hen.
-  if (provider !== EMBEDDING_PROVIDER) {
-    throw new Error(
-      `F254: embedding-kaldet gik til «${provider || 'ukendt'}», ikke til ${EMBEDDING_PROVIDER}. ` +
-        `Vektorer af persondata må ikke laves uden for EU. Ingen vektorer gemt.`,
-    );
-  }
+  bekraeftResidens(usage);
 
   const vectors = res.vectors;
   if (!Array.isArray(vectors) || vectors.length !== input.length) {
