@@ -35,7 +35,24 @@ const DOCUMENTS_SQL = `
          d.path                                             AS path,
          d.kind                                             AS kind,
          d.seq                                              AS seq,
-         highlight(documents_fts, 0, '<mark>', '</mark>')   AS highlight,
+         -- F265.3 — snippet(), IKKE highlight().
+         --
+         -- SQLites highlight() returnerer HELE kolonnen med match-markering.
+         -- Målt 9/9 på prod: svarets tekstfelt var 5.685 tegn mod dokumentets
+         -- 5.659 — kun <mark>-tags til forskel. Feltet hedder «highlight» og
+         -- lignede derfor et uddrag i hver eneste læsning af koden.
+         --
+         -- Prisen betalte agenterne: et opslag med limit=5 kostede ~3.770
+         -- tokens (70 Neuroner målt, gennemsnit 3.016 tegn), og på en naturlig
+         -- forespørgsel var nul af de fem relevante. Værktøjet straffede sin
+         -- egen brug — 31 opslag på 3,5 måned forklares bedre af det end af
+         -- dovenskab.
+         --
+         -- 40 tokens er vinduet: bredt nok til at man kan se HVORFOR noget
+         -- matchede, smalt nok til at fem træf er en linje og ikke en side.
+         -- Er dokumentet kortere end vinduet, returnerer snippet() det helt,
+         -- så et kort svar ikke bliver afkortet.
+         snippet(documents_fts, 0, '<mark>', '</mark>', '…', 40)  AS highlight,
          rank                                               AS rank
     FROM documents_fts
     JOIN documents d ON d.rowid = documents_fts.rowid
@@ -62,7 +79,8 @@ const CHUNKS_SQL = `
          pd.path                                            AS docPath,
          pd.filename                                        AS docFilename,
          pd.title                                           AS docTitle,
-         highlight(chunks_fts, 0, '<mark>', '</mark>')      AS highlight,
+         -- F265.3 — samme grund som ovenfor; se DOCUMENTS_SQL.
+         snippet(chunks_fts, 0, '<mark>', '</mark>', '…', 40)     AS highlight,
          rank                                               AS rank
     FROM chunks_fts
     JOIN document_chunks dc ON dc.rowid = chunks_fts.rowid

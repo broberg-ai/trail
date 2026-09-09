@@ -172,15 +172,36 @@ export async function coverage(
 
   // Forældede tælles ved at sammenligne hash mod den NUVÆRENDE tekst — det kan
   // SQLite ikke gøre uden en hash-funktion, så det gøres her.
-  const rows = (await db.execute(
-    `SELECT c.content AS content, e.content_hash AS h
-       FROM document_chunks c JOIN chunk_embeddings e ON e.chunk_id = c.id
-      WHERE c.tenant_id = ? AND c.knowledge_base_id = ? AND e.model = ?`,
-    [tenantId, knowledgeBaseId, model],
-  )).rows as Array<{ content: string; h: string }>;
-
+  //
+  // F265.4 — HENT I SIDER, og den her er den mest ubehagelige af de tre.
+  //
+  // Forespørgslen henter `content` for HVERT vektoriseret stykke. Uden grænse
+  // voksede svaret med antallet af embeddings — så den fejlede med
+  // RESPONSE_TOO_LARGE præcis når indekseringen begyndte at lykkes. Målt 9/9
+  // kl. 11:40: dækningen var nået ~56 %, og `GET /knowledge-bases/<kb>/index`
+  // holdt op med at svare.
+  //
+  // MÅLEREN GIK ALTSÅ I STYKKER I TAKT MED AT DET DEN MÅLTE VIRKEDE. Det er
+  // værre end en tom måler: den var brugbar mens der intet var at se, og døde
+  // i det øjeblik der var. Ruten er den ENESTE vej til at vide om
+  // indekseringen virkede.
   let stale = 0;
-  for (const row of rows) if (contentHash(row.content) !== row.h) stale += 1;
+  let sidsteId = '';
+  for (;;) {
+    const side = (await db.execute(
+      `SELECT c.id AS id, c.content AS content, e.content_hash AS h
+         FROM document_chunks c JOIN chunk_embeddings e ON e.chunk_id = c.id
+        WHERE c.tenant_id = ? AND c.knowledge_base_id = ? AND e.model = ?
+          AND c.id > ?
+        ORDER BY c.id
+        LIMIT 500`,
+      [tenantId, knowledgeBaseId, model, sidsteId],
+    )).rows as Array<{ id: string; content: string; h: string }>;
+    if (side.length === 0) break;
+    for (const row of side) if (contentHash(row.content) !== row.h) stale += 1;
+    sidsteId = String(side[side.length - 1]!.id);
+    if (side.length < 500) break;
+  }
 
   const chunks = Number(r.chunks);
   const embedded = Number(r.with_any) - stale;
