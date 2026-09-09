@@ -50,12 +50,19 @@ test('F265.11 provider-tjekket er BEVARET ved siden af — to spørgsmål, ikke 
 test('F265.11 fejlteksterne navngiver det MÅLTE, ikke det håbede', () => {
   // Den gamle tekst lovede EU på et provider-tjek. En fejlbesked der beskriver
   // noget andet end det den målte, sender fejlsøgningen det forkerte sted hen.
-  try { bekraeftResidens({ ...OK, region: 'us' }); } catch (e) {
-    expect(String(e)).toContain('regionen');
-  }
-  try { bekraeftResidens({ provider: 'openai', model: 'x', region: 'eu' }); } catch (e) {
-    expect(String(e)).not.toContain('uden for EU'); // det var IKKE det der blev målt
-  }
+  //
+  // SKREVET OM: stod som `try { ... } catch (e) { expect(...) }`. Kastede
+  // funktionen IKKE, kørte assertionen aldrig, og prøven bestod tavst — den
+  // gik da heller ikke rød under nogen af de fire mutationer, altså den ene
+  // prøve i filen der ikke kunne fejle i den retning der betyder noget.
+  // toThrow kræver BÅDE at der kastes OG at teksten passer.
+  expect(() => bekraeftResidens({ ...OK, region: 'us' })).toThrow(/regionen/);
+  expect(() => bekraeftResidens({ provider: 'openai', model: 'x', region: 'eu' }))
+    .toThrow(/ikke til mistral/);
+  // Og den negative: provider-fejlen må IKKE påstå noget om residens, for det
+  // var ikke det der blev målt.
+  expect(() => bekraeftResidens({ provider: 'openai', model: 'x', region: 'eu' }))
+    .not.toThrow(/uden for EU/);
 });
 
 test('F265.11 override er ALTID med — den umålte OpenAI-vej kan ikke nås herfra', () => {
