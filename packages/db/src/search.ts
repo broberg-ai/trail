@@ -52,7 +52,7 @@ const DOCUMENTS_SQL = `
          -- matchede, smalt nok til at fem træf er en linje og ikke en side.
          -- Er dokumentet kortere end vinduet, returnerer snippet() det helt,
          -- så et kort svar ikke bliver afkortet.
-         snippet(documents_fts, 0, '<mark>', '</mark>', '…', 40)  AS highlight,
+         snippet(documents_fts, 0, char(1), char(2), '…', 40)  AS highlight,
          rank                                               AS rank
     FROM documents_fts
     JOIN documents d ON d.rowid = documents_fts.rowid
@@ -80,7 +80,7 @@ const CHUNKS_SQL = `
          pd.filename                                        AS docFilename,
          pd.title                                           AS docTitle,
          -- F265.3 — samme grund som ovenfor; se DOCUMENTS_SQL.
-         snippet(chunks_fts, 0, '<mark>', '</mark>', '…', 40)     AS highlight,
+         snippet(chunks_fts, 0, char(1), char(2), '…', 40)     AS highlight,
          rank                                               AS rank
     FROM chunks_fts
     JOIN document_chunks dc ON dc.rowid = chunks_fts.rowid
@@ -92,6 +92,48 @@ const CHUNKS_SQL = `
    ${rankOrderBy('pd.created_at')}
    LIMIT ?
 `;
+
+/**
+ * F265.7 — ET UDDRAG ER DOKUMENTETS EGET INDHOLD, OG DET RENDERES SOM HTML.
+ *
+ * `snippet()` escaper ikke noget. Den kopierer teksten ordret og sætter kun
+ * sine egne afgrænsere omkring matchet — så et dokument der indeholder
+ * `<img src=x onerror=…>` fik den tag ordret ud i svaret, og admin sætter
+ * feltet ind med dangerouslySetInnerHTML. Målt, ikke formodet: proben mod en
+ * rigtig database gav uddraget ORDRET med `<img` og `onerror` intakt.
+ *
+ * Koden vidste det. Kommentaren i søgepanelet sagde «we trust that because it
+ * comes from our own engine against content we control; if that changes,
+ * sanitise here». Betingelsen indtraf — Web Clipperen henter vilkårlige sider
+ * fra nettet, upload tager imod fremmede filer — men den indtraf et ANDET STED
+ * i produktet end der hvor forbeholdet stod, og derfor så ingen den.
+ *
+ * Rettelsen sidder på SERVEREN, ikke i admin, fordi feltet har fire
+ * forbrugere: admin, widget, SDK'en og de agenter der læser API'et direkte.
+ * Rettet ét sted er det rettet for dem alle.
+ *
+ * HVORFOR KONTROLTEGN OG IKKE EN TEKST-SENTINEL: sentinel'en byttes tilbage
+ * til rigtige tags EFTER escapingen, så alt hvad et dokument selv kan skrive,
+ * kan indsprøjte et tag. `\x01`/`\x02` kan ikke stå i et tekstdokument.
+ * (Og i SQL skrives de `char(1)`/`char(2)` — `'\x01'` er IKKE et escape i
+ * SQLite, det er fire almindelige tegn. Målt: length('\x01') = 4.)
+ */
+const MARK_START = '\u0001';
+const MARK_END = '\u0002';
+
+export function sikkertUddrag(rå: unknown): string {
+  const s = typeof rå === 'string' ? rå : '';
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .split(MARK_START)
+    .join('<mark>')
+    .split(MARK_END)
+    .join('</mark>');
+}
 
 export async function searchDocuments(
   client: LibSqlClient,
@@ -108,7 +150,7 @@ export async function searchDocuments(
     title: (row.title as string | null) ?? null,
     path: row.path as string,
     kind: row.kind as 'source' | 'wiki',
-    highlight: row.highlight as string,
+    highlight: sikkertUddrag(row.highlight),
     rank: row.rank as number,
     seq: (row.seq as number | null) ?? null,
   }));
@@ -129,7 +171,7 @@ export async function searchChunks(
     chunkIndex: row.chunkIndex as number,
     content: row.content as string,
     headerBreadcrumb: (row.headerBreadcrumb as string | null) ?? null,
-    highlight: row.highlight as string,
+    highlight: sikkertUddrag(row.highlight),
     rank: row.rank as number,
     kind: row.kind as 'source' | 'wiki',
     docCreatedAt: (row.docCreatedAt as string | null) ?? '',
