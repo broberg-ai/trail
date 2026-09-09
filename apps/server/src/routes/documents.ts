@@ -9,7 +9,7 @@ import {
   DocumentKindEnum,
   canonicaliseTagString,
 } from '@trail/shared';
-import { eq, and, inArray, asc, desc, sql, type SQL } from 'drizzle-orm';
+import { eq, and, or, lt, inArray, asc, desc, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { submitCuratorEdit, VersionConflictError, resolveKbId, createCandidateQueueAPI, type WriteArgs } from '@trail/core';
 import { requireAuth, getUser, getTenant, getTrail } from '../middleware/auth.js';
@@ -141,7 +141,7 @@ documentRoutes.get('/knowledge-bases/:kbId/documents', async (c) => {
   // sources parked for $0 in-session compile, so the /local-ingest skill (and
   // the Station) can list what's waiting to be picked up.
   if (c.req.query('awaitingLocalCompile') === 'true') {
-    conditions.push(eq(documents.awaitingLocalCompile, true));
+    conditions.push(kanTagesNu(new Date().toISOString()));
   }
 
   const rows = await trail.db
@@ -204,6 +204,38 @@ documentRoutes.get('/knowledge-bases/:kbId/documents', async (c) => {
  * the probe's pendingPath="documents" (array length = pending count) +
  * idsPath="ids" (stable dedup list).
  */
+/**
+ * F263.15 — «VENTER» BETYDER «KAN TAGES NU», IKKE «FLAGET ER SAT».
+ *
+ * F263.1 gav køen en lease, men KUN den leasede vej (compile-jobs/claim) læser
+ * den. Denne forespørgsel — den /local-ingest og buddys probe bruger — så
+ * udelukkende på flaget. En kilde som en anden arbejder holdt en LEVENDE lease
+ * på, blev derfor udleveret som ledigt arbejde.
+ *
+ * F263.14's egen constraint hviler på at det ikke kan ske: «to veje til samme
+ * kø er ufarligt, fordi F263.1's lease gør dobbelt-claim umuligt». Leasen gør
+ * dobbelt-CLAIM umuligt. Den gør ikke dobbelt-KOMPILERING umuligt, fordi den
+ * ene af de to veje aldrig claimer.
+ *
+ * Målt 9/9: buddy dispatchede /local-ingest mens Ambients egen `trail-ingest`
+ * -arbejder (F263.14) allerede kompilerede de samme to kilder. Det gik godt
+ * fordi den anden blev færdig først, og fordi nogen standsede op ved at
+ * antallet af begrebssider gik fra 55 til 56 midt i en kortlægning. Begge dele
+ * er timing, ikke design — og overview/log/glossary er DELTE sider som hvert
+ * ingest skriver i, så en ægte kollision rammer dér.
+ *
+ * En UDLØBET lease er ledig igen, uden at nogen rydder noget: det er hele
+ * grunden til at leasen er en frist og ikke en lås. Derfor stiger tallet af
+ * sig selv når en arbejder dør, og buddys eksisterende dedup gen-dispatcher
+ * uden at de skal bygge noget (deres måling, #27054).
+ */
+export function kanTagesNu(nu: string): SQL {
+  return and(
+    eq(documents.awaitingLocalCompile, true),
+    or(isNull(documents.compileLeaseUntil), lt(documents.compileLeaseUntil, nu)),
+  ) as SQL;
+}
+
 documentRoutes.get('/documents', async (c) => {
   const trail = getTrail(c);
   const tenant = getTenant(c);
@@ -221,7 +253,7 @@ documentRoutes.get('/documents', async (c) => {
     .where(
       and(
         eq(documents.tenantId, tenant.id),
-        eq(documents.awaitingLocalCompile, true),
+        kanTagesNu(new Date().toISOString()),
         eq(documents.kind, 'source'),
         eq(documents.archived, false),
       ),
