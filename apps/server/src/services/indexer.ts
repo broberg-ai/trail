@@ -260,10 +260,20 @@ export async function sweepKb(
            WHERE c.knowledge_base_id = ? AND d.kind <> 'wiki')`,
     [tenantId, knowledgeBaseId, knowledgeBaseId],
   );
-  // F265.9 — DØR 2 af 2. Fejeren SLETTER vektorer; havde kun skrivningen ryddet
-  // cachen, ville en slettet kilde-vektor blive ved med at optræde i søgningen
-  // indtil motoren blev genstartet. To døre, to prøver.
-  rydVektorCache(tenantId, knowledgeBaseId);
+  // F265.9 — DØR 2 af 2, MEN KUN NÅR DER FAKTISK BLEV SLETTET.
+  //
+  // Første udgave ryddede ubetinget, og det var forkert på en måde der
+  // ØDELAGDE HELE CACHEN: fejningen kører på hver tick for hver Trail, og de
+  // fleste kørsler sletter nul rækker. Så cachen blev tømt hvert par minutter
+  // og nåede aldrig at hjælpe. Målt på prod: traef=10, ryddet=2, trails=0 —
+  // den VIRKEDE, den blev bare tømt hurtigere end den blev brugt.
+  //
+  // Tallet lå to linjer længere nede hele tiden (ryddet.rowsAffected). At
+  // rydde på en sletning der ikke slettede noget er samme fejlform som resten
+  // af dagen: oplysningen var i hånden og blev kasseret.
+  if (Number(ryddet.rowsAffected ?? 0) > 0) {
+    rydVektorCache(tenantId, knowledgeBaseId);
+  }
 
   const cov = await coverage(db, tenantId, knowledgeBaseId);
   return {

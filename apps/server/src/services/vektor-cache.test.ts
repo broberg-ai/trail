@@ -11,7 +11,7 @@
  */
 import { test, expect, beforeAll, afterAll, beforeEach } from 'bun:test';
 import { join } from 'node:path';
-import { rmSync } from 'node:fs';
+import { rmSync, readFileSync } from 'node:fs';
 import { createLibsqlDatabase, type TrailDatabase } from '@trail/db';
 import {
   loadVectors, storeEmbedding, cacheStatus, nulstilCache, rydCache,
@@ -190,4 +190,36 @@ test('F265.9 MODELLEN er en del af nøglen — to modeller må ikke dele vektore
 test('F265.9 én kundes cache kan ikke læses af en anden', () => {
   laegICache(T, KB, EMBEDDING_MODEL, [{ chunkId: 'x', documentId: 'd', vector: new Float32Array(1024) }]);
   expect(hentFraCache('en-anden-kunde', KB, EMBEDDING_MODEL)).toBeNull();
+});
+
+test('F265.9 en FEJNING DER SLETTER NUL må ikke rydde cachen', () => {
+  // DEN DYRE FEJL, målt på prod i første udgave: fejeren ryddede ubetinget.
+  // Den kører hver 10. minut for hver Trail, og de fleste kørsler sletter nul
+  // rækker — så cachen blev tømt hurtigere end den blev brugt. traef=10,
+  // ryddet=2, trails=0: den virkede, den nåede bare aldrig at hjælpe.
+  //
+  // Prøven spejler fejerens BESLUTNING, ikke dens SQL: ryd kun når der faktisk
+  // blev slettet noget.
+  const post = [{ chunkId: 'x', documentId: 'd', vector: new Float32Array(1024) }];
+  laegICache(T, 'kb-fej', EMBEDDING_MODEL, post);
+
+  const fejning = (slettedeRaekker: number) => {
+    if (slettedeRaekker > 0) rydCache(T, 'kb-fej');
+  };
+
+  fejning(0);
+  expect(hentFraCache(T, 'kb-fej', EMBEDDING_MODEL)).not.toBeNull(); // stadig varm
+
+  fejning(3);
+  expect(hentFraCache(T, 'kb-fej', EMBEDDING_MODEL)).toBeNull();     // og ryddet når det gælder
+});
+
+test('F265.9 fejerens kaldested ER betinget — ikke kun prøvens model af det', () => {
+  // Prøven ovenfor tester en KOPI af beslutningen. Uden denne kunne
+  // indexer.ts gå tilbage til ubetinget rydning uden at noget blev rødt.
+  const kode = readFileSync(
+    new URL('./indexer.ts', import.meta.url), 'utf8',
+  );
+  expect(kode).toContain('if (Number(ryddet.rowsAffected ?? 0) > 0) {');
+  expect(kode).not.toMatch(/\n  rydVektorCache\(tenantId, knowledgeBaseId\);/);
 });
