@@ -58,6 +58,26 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
   if (!kbId) return c.json({ error: 'Not found' }, 404);
   const query = c.req.query('q') ?? '';
   const limit = Math.min(Number(c.req.query('limit') ?? 10), 50);
+  // F265.2 — KANDIDAT-PULJEN ER STØRRE END SVARET, og det er hele rettelsen.
+  //
+  // Alle fire kandidat-kilder blev hentet med brugerens `limit`, og FØRST
+  // derefter slået sammen. Så «giv mig 5» betød «hent 5 fra ordmatch og 5 fra
+  // vektorerne, og fusionér dem» — det rigtige dokument blev kasseret FØR de
+  // to halvdele kunne blive enige om det.
+  //
+  // MÅLT PÅ PROD, samme forespørgsel, kun `limit` varierer:
+  //   limit=5   det rigtige svar er SLET IKKE med
+  //   limit=10  det rigtige svar er NUMMER ET
+  //   limit=20  det rigtige svar er NUMMER ET
+  //
+  // Altså: at bede om færre resultater gav ikke de bedste fem, men et andet og
+  // dårligere sæt. Det er også forklaringen på at flere ord gjorde svaret
+  // værre — hvert ekstra ord fylder ordmatchens top-5 med almindelige ord, og
+  // det gode dokument skubbes ud af puljen inden fusionen ser det.
+  //
+  // Puljen skæres først ned til `limit` EFTER filtrene, så et tag- eller
+  // publikums-filter heller ikke længere kan efterlade et hul i svaret.
+  const kandidater = Math.min(Math.max(limit * 5, 50), 250);
   // F160 — audience-filter. External Bearer integrations default to
   // `tool` (heuristics + internal-tagged docs hidden). Admin session
   // gets `curator` (everything visible). Caller can override via
@@ -116,9 +136,9 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
   // Neuron whose body AND note both match shows once with the FTS
   // hit (richer highlight) rather than twice.
   const [documents, chunks, noteHits] = await Promise.all([
-    trail.searchDocuments(ftsQuery, kbId, tenant.id, limit),
-    trail.searchChunks(ftsQuery, kbId, tenant.id, limit),
-    trail.searchUserNotes(query, kbId, tenant.id, limit),
+    trail.searchDocuments(ftsQuery, kbId, tenant.id, kandidater),
+    trail.searchChunks(ftsQuery, kbId, tenant.id, kandidater),
+    trail.searchUserNotes(query, kbId, tenant.id, kandidater),
   ]);
 
   // Merge note-hits with FTS document-hits, dropping duplicates by id.
@@ -128,7 +148,7 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
     if (seenIds.has(note.id)) continue;
     documents.push(note);
     seenIds.add(note.id);
-    if (documents.length >= limit) break;
+    if (documents.length >= kandidater) break;
   }
 
   // ── F261 — ET NAVN ER ET OPSLAG ─────────────────────────────────────────
@@ -202,7 +222,7 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
   // kunne se dækningen, hvilket er samme to-døre-fejl som fejeren og cachen.
   let hybridInfo: { used: boolean; coverage: number; coverageSlags: string; unavailable?: string } | null = null;
   if (await hybridEnabled(trail, kbId)) {
-    const vec = await vectorSearch(trail, tenant.id, kbId, query, limit);
+    const vec = await vectorSearch(trail, tenant.id, kbId, query, kandidater);
     hybridInfo = { used: vec.hits.length > 0, coverage: vec.coverage, coverageSlags: vec.coverageSlags, ...(vec.unavailable ? { unavailable: vec.unavailable } : {}) };
 
     if (vec.hits.length > 0) {
@@ -285,7 +305,7 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
       });
       documents.length = 0;
       documents.push(...(rangeret as never[]));
-      documents.length = Math.min(documents.length, limit);
+      documents.length = Math.min(documents.length, kandidater);
     }
   }
 
@@ -317,6 +337,10 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
         isVisibleToAudience(audience, d.path, tagMap.get(d.id) ?? null),
       );
     }
+    // F265.2 — HER, og først her, bliver puljen til svaret. Efter filtrene,
+    // så et tag- eller publikums-filter ikke kan efterlade færre træf end der
+    // blev bedt om mens der stadig lå gode kandidater i puljen.
+    filtered = filtered.slice(0, limit);
     // F197 — egress guardrail: redact any leaked credential out of the hits
     // (title/highlight/userNote + chunk content) before they leave the API, so
     // a secret that slipped into a Neuron can't surface in search results.
@@ -339,7 +363,10 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
           ...(typeof un === 'string' ? { userNote: redactSecrets(un).redacted } : {}),
         };
       }),
-      chunks: chunks.map((ch) => ({
+      // F265.2 — også stykkerne skæres til `limit`. De hentes nu fra den
+      // STORE kandidat-pulje, så uden det her ville et svar på «giv mig 5»
+      // bære op mod 250 tekststykker — præcis den token-regning F265.3 fjernede.
+      chunks: chunks.slice(0, limit).map((ch) => ({
         ...ch,
         content: redactSecrets(ch.content).redacted,
         highlight: redactSecrets(ch.highlight).redacted,
@@ -350,7 +377,7 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
 
   return c.json({
     documents,
-    chunks: chunks.map((ch) => ({
+    chunks: chunks.slice(0, limit).map((ch) => ({
       ...ch,
       content: redactSecrets(ch.content).redacted,
       highlight: redactSecrets(ch.highlight).redacted,
