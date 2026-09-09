@@ -122,6 +122,12 @@ export {
   EMBEDDING_PROVIDER, EMBEDDING_MODEL,
 } from './retrieval/vectors.js';
 export type { EmbeddingRow } from './retrieval/vectors.js';
+// F265.9 — vektor-cachen. rydCache eksporteres fordi fejeren i apps/server
+// (dør 2 af 2) skal kunne rydde den; cacheStatus fordi /health viser den.
+export {
+  rydCache, cacheStatus, nulstilCache, hentFraCache, laegICache,
+  CACHE_LOFT_BYTES, type CachetVektor,
+} from './retrieval/vector-cache.js';
 export { reciprocalRankFusion, RRF_K } from './retrieval/fusion.js';
 export { rangerKandidater, ordnCitater, type RangerArgs } from './retrieval/rangering.js';
 export type { Ranked, FusedHit } from './retrieval/fusion.js';

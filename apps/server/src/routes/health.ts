@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { sql } from 'drizzle-orm';
 import type { AppBindings } from '../app.js';
 import { telemetriTab } from '../lib/ai.js';
+import { cacheStatus } from '@trail/core';
 
 /**
  * Health endpoint for Fly.io's HTTP checks + human-readable smoke test.
@@ -65,6 +66,10 @@ healthRoutes.get('/health', async (c) => {
         lastError: telemetriTab.sidsteFejl,
         lastErrorAt: telemetriTab.sidsteTidspunkt,
       },
+      // F265.9 — vektor-cachen. Uden tallene er «virker cachen?» et gæt, og
+      // en cache man ikke kan se er en cache man ikke kan fejlsøge: et fald i
+      // træf-raten er den tidligste advarsel om at noget rydder for meget.
+      vektorCache: cacheStatus(),
       version: VERSION,
     },
     kanBetjene ? 200 : 503,

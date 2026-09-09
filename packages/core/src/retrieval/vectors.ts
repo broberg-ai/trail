@@ -85,6 +85,8 @@ export function contentHash(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, 32);
 }
 
+import { hentFraCache, laegICache, rydCache } from './vector-cache.js';
+
 export interface EmbeddingRow {
   chunkId: string;
   documentId: string;
@@ -110,6 +112,10 @@ export async function storeEmbedding(
     [args.chunkId, args.tenantId, args.knowledgeBaseId, args.documentId,
      encodeVector(args.vector), args.vector.length, args.model, contentHash(args.content)],
   );
+  // F265.9 — DØR 1 af 2. Cachen holder hele Trailens vektorer; en ny eller
+  // ændret vektor gør den forældet. Ryddes den ikke HER, serverer søgningen et
+  // indeks uden den Neuron der lige blev skrevet — i tavshed.
+  rydCache(args.tenantId, args.knowledgeBaseId);
 }
 
 /**
@@ -245,6 +251,12 @@ export async function loadVectors(
   // på HVER forespørgsel minutter efter at indekset nåede 100 %. Den virkede
   // perfekt ved nul vektorer — den gik i stykker AF at blive fyldt. Fuld
   // baggrund i docs/features/F265.4-*.md.
+  // F265.9 — cachen først. Vektorerne ændrer sig kun når noget indekseres, og
+  // begge skrivesteder rydder posten, så et træf her er lige så korrekt som et
+  // opslag i basen — bare uden 7 til 56 rundture over netværket.
+  const cachet = hentFraCache(tenantId, knowledgeBaseId, model);
+  if (cachet) return cachet;
+
   const rows: Array<{ chunkId: string; documentId: string; vector: Uint8Array | ArrayBuffer }> = [];
   let efter = '';
   for (;;) {
@@ -271,7 +283,9 @@ export async function loadVectors(
     efter = String(side[side.length - 1]!.chunkId);
     if (side.length < 200) break;
   }
-  return rows.map((r) => ({
+  const ud = rows.map((r) => ({
     chunkId: r.chunkId, documentId: r.documentId, vector: decodeVector(r.vector),
   }));
+  laegICache(tenantId, knowledgeBaseId, model, ud);
+  return ud;
 }

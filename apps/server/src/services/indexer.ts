@@ -30,6 +30,7 @@
  * krog i en kodesti nogen glemte.
  */
 import { contentHash, storeEmbedding, coverage, EMBEDDING_MODEL } from '@trail/core';
+import { rydCache as rydVektorCache } from '@trail/core';
 import type { TrailDatabase } from '@trail/db';
 import { embed } from './embedder.js';
 import { chunkText, storeChunks } from './chunker.js';
@@ -259,6 +260,10 @@ export async function sweepKb(
            WHERE c.knowledge_base_id = ? AND d.kind <> 'wiki')`,
     [tenantId, knowledgeBaseId, knowledgeBaseId],
   );
+  // F265.9 — DØR 2 af 2. Fejeren SLETTER vektorer; havde kun skrivningen ryddet
+  // cachen, ville en slettet kilde-vektor blive ved med at optræde i søgningen
+  // indtil motoren blev genstartet. To døre, to prøver.
+  rydVektorCache(tenantId, knowledgeBaseId);
 
   const cov = await coverage(db, tenantId, knowledgeBaseId);
   return {
