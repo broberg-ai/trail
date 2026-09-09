@@ -122,3 +122,17 @@ test('F265.10 KONTROL: coverage() er urørt og bruges stadig hvor præcisionen t
   const idx = readFileSync(new URL('./indexer.ts', import.meta.url), 'utf8');
   expect(idx).toContain('await coverage(db, tenantId, knowledgeBaseId)');
 });
+
+test('F265.10 tallet når UD i svaret — begge return-grene, ikke kun den ene', () => {
+  // DEN HER FANDT EN ÆGTE FEJL. hybridInfo blev sat i F254.2 og aldrig læst:
+  // prod-svaret havde præcis to nøgler, `documents` og `chunks`. Så både
+  // `coverage` og `coverageSlags` var usynlige for enhver konsument, og
+  // navngivningen af de to dækningstal beskyttede kun os selv i koden.
+  //
+  // Prøven kræver BEGGE grene. Med kun én ville `includeContent=true` afgøre
+  // om man kan se dækningen — samme to-døre-fejl som fejeren og cachen, hvor
+  // den ene dør blev rettet og den anden serverede det gamle i tavshed.
+  const rt = readFileSync(new URL('../routes/search.ts', import.meta.url), 'utf8');
+  const grene = rt.split('...(hybridInfo ? { hybrid: hybridInfo } : {}),').length - 1;
+  expect(grene).toBe(2);
+});

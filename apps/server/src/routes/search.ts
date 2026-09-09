@@ -184,6 +184,22 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
   // Slukket som standard. `hybrid_search_enabled` sættes pr. videnbase, og
   // FTS5-vejen ovenfor er uændret når den er slukket — også hvis alt dette
   // fejler.
+  // F265.10 — DETTE TAL SKAL UD I SVARET, og det gjorde det ikke.
+  //
+  // hybridInfo blev sat i F254.2 og ALDRIG læst: variablen var død, så hverken
+  // `coverage` eller `coverageSlags` nåede en eneste konsument. Fundet ved at
+  // læse prod-svaret tilbage frem for at tro på koden — svaret havde præcis to
+  // nøgler, `documents` og `chunks`.
+  //
+  // Det gør navngivningen af de to dækningstal meningsløs udefra: hele pointen
+  // med `coverageSlags` er at en LÆSER ikke kan tage «andel med en frisk
+  // vektor» for «andel med en vektor overhovedet». Kan ingen se tallet, er
+  // navnet kun en kommentar til os selv.
+  //
+  // Feltet er additivt (`hybrid` udelades helt når hybrid er slukket), så en
+  // eksisterende konsument ser ingen ændring. Og det sættes i BEGGE
+  // return-grene — én gren ville betyde at `includeContent` afgjorde om man
+  // kunne se dækningen, hvilket er samme to-døre-fejl som fejeren og cachen.
   let hybridInfo: { used: boolean; coverage: number; coverageSlags: string; unavailable?: string } | null = null;
   if (await hybridEnabled(trail, kbId)) {
     const vec = await vectorSearch(trail, tenant.id, kbId, query, limit);
@@ -328,6 +344,7 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
         content: redactSecrets(ch.content).redacted,
         highlight: redactSecrets(ch.highlight).redacted,
       })),
+      ...(hybridInfo ? { hybrid: hybridInfo } : {}),
     });
   }
 
@@ -338,6 +355,7 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
       content: redactSecrets(ch.content).redacted,
       highlight: redactSecrets(ch.highlight).redacted,
     })),
+    ...(hybridInfo ? { hybrid: hybridInfo } : {}),
   });
 });
 
