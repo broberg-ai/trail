@@ -16,6 +16,7 @@ import { createLibsqlDatabase, type TrailDatabase } from '@trail/db';
 import {
   loadVectors, storeEmbedding, cacheStatus, nulstilCache, rydCache,
   laegICache, hentFraCache, CACHE_LOFT_BYTES, EMBEDDING_MODEL,
+  varmOpVektorer,
 } from '@trail/core';
 
 const T = 't-vc', U = 'u-vc', KB = 'kb-vc', KB2 = 'kb-vc-2';
@@ -222,4 +223,117 @@ test('F265.9 fejerens kaldested ER betinget — ikke kun prøvens model af det',
   );
   expect(kode).toContain('if (Number(ryddet.rowsAffected ?? 0) > 0) {');
   expect(kode).not.toMatch(/\n  rydVektorCache\(tenantId, knowledgeBaseId\);/);
+});
+
+// ── F265.12 — en skrivning må ikke koste hele Trail'en ────────────────────
+
+test('F265.12 DEN BÆRENDE: efter en inkrementel opdatering er cachen IDENTISK med databasen', async () => {
+  // Hurtigt-og-forkert er den farlige udgang her. En prøve på «antallet steg
+  // med 1» ville bestå på en vektor lagt det forkerte sted, med de forkerte
+  // tal, eller på det forkerte dokument. Derfor sammenlignes hver eneste
+  // Float32Array-værdi mod et FRISKT databaseopslag, i rækkefølge.
+  nulstilCache();
+  await kb('kb-ident');
+  await neuronMedVektor('i1', 'kb-ident', 11);
+  await neuronMedVektor('i2', 'kb-ident', 22);
+  await loadVectors(trail, T, 'kb-ident');            // varm cachen op
+
+  await neuronMedVektor('i3', 'kb-ident', 33);         // skrivning MENS den er varm
+  const fraCache = hentFraCache(T, 'kb-ident', EMBEDDING_MODEL)!;
+  expect(fraCache).not.toBeNull();
+
+  nulstilCache();                                      // tving et frisk opslag
+  const fraDb = await loadVectors(trail, T, 'kb-ident');
+
+  const nøgle = (v: { chunkId: string }) => v.chunkId;
+  expect(fraCache.map(nøgle).sort()).toEqual(fraDb.map(nøgle).sort());
+
+  const dbEfterId = new Map(fraDb.map((v) => [v.chunkId, v]));
+  for (const c of fraCache) {
+    const d = dbEfterId.get(c.chunkId)!;
+    expect(d).toBeDefined();
+    expect(c.documentId).toBe(d.documentId);
+    expect(c.vector.length).toBe(d.vector.length);
+    for (let i = 0; i < c.vector.length; i++) expect(c.vector[i]).toBe(d.vector[i]);
+  }
+});
+
+test('F265.12 en ÆNDRET Neuron erstatter sin plads — den bliver ikke lagt ved siden af', async () => {
+  // Uden erstatningen ville chunk'en optræde TO gange med hver sin vektor, og
+  // søgningen ville rangere det samme stykke to steder på et forældet tal.
+  nulstilCache();
+  await kb('kb-erstat');
+  await neuronMedVektor('e1', 'kb-erstat', 5);
+  await loadVectors(trail, T, 'kb-erstat');
+
+  await storeEmbedding(trail, {
+    chunkId: 'c-e1', tenantId: T, knowledgeBaseId: 'kb-erstat', documentId: 'e1',
+    vector: vektor(999), model: EMBEDDING_MODEL, content: 'ny krop',
+  });
+
+  const v = hentFraCache(T, 'kb-erstat', EMBEDDING_MODEL)!;
+  expect(v.filter((x) => x.chunkId === 'c-e1').length).toBe(1);
+  // Sammenlignet mod værdien efter SAMME float32-konvertering, ikke mod
+  // JS-tallet: vektorer gemmes som float32, så et krav om float64-præcision
+  // ville være en prøve på lagerformatet frem for på at den rigtige vektor
+  // landede. Streng lighed — ikke «tæt på».
+  expect(v[0]!.vector[0]).toBe(new Float32Array([vektor(999)[0]!])[0]!);
+});
+
+test('F265.12 KERNEN: en skrivning tømmer IKKE længere Trail\'en', async () => {
+  // Præcis den fejl kortet findes for. Før: ryddet steg, trails faldt til 0,
+  // og næste søgning betalte 16 sekunder på at hente 11.017 vektorer hjem.
+  nulstilCache();
+  await kb('kb-beholdt');
+  await neuronMedVektor('b1', 'kb-beholdt', 1);
+  await neuronMedVektor('b2', 'kb-beholdt', 2);
+  await loadVectors(trail, T, 'kb-beholdt');
+  const førT = cacheStatus().trails;
+
+  await neuronMedVektor('b3', 'kb-beholdt', 3);
+
+  expect(cacheStatus().trails).toBe(førT);                       // stadig i cachen
+  expect(hentFraCache(T, 'kb-beholdt', EMBEDDING_MODEL)).not.toBeNull();
+  expect(cacheStatus().opdateret).toBeGreaterThan(0);
+});
+
+test('F265.12 en Trail der IKKE er cachet får ikke bygget en halv liste', async () => {
+  // En delvis liste ville give et halvt søgeresultat der ligner et helt —
+  // værre end en kold cache, fordi ingen kan se forskel.
+  nulstilCache();
+  await kb('kb-uvarm');
+  await neuronMedVektor('u1', 'kb-uvarm', 7);   // skrevet UDEN at cachen er varm
+  expect(hentFraCache(T, 'kb-uvarm', EMBEDDING_MODEL)).toBeNull();
+
+  const fra = await loadVectors(trail, T, 'kb-uvarm');
+  expect(fra.length).toBe(1);                   // databasen har den, som altid
+});
+
+test('F265.12 en SLETNING rydder stadig helt — den kan ikke være en opdatering', async () => {
+  // Beholder cachen en slettet Neuron, svarer søgningen selvsikkert med noget
+  // der ikke findes mere. Det er værre end en langsom søgning.
+  nulstilCache();
+  await kb('kb-slet');
+  await neuronMedVektor('s1', 'kb-slet', 3);
+  await loadVectors(trail, T, 'kb-slet');
+  expect(hentFraCache(T, 'kb-slet', EMBEDDING_MODEL)).not.toBeNull();
+
+  rydCache(T, 'kb-slet');
+  expect(hentFraCache(T, 'kb-slet', EMBEDDING_MODEL)).toBeNull();
+});
+
+test('F265.12 OPVARMNING: største Trail først, og cachen er klar før nogen søger', async () => {
+  nulstilCache();
+  await kb('kb-lille');
+  await kb('kb-stor');
+  await neuronMedVektor('L1', 'kb-lille', 1);
+  for (let i = 0; i < 5; i++) await neuronMedVektor(`S${i}`, 'kb-stor', 100 + i);
+
+  const r = await varmOpVektorer(trail);
+
+  expect(r.videnbaser).toBeGreaterThanOrEqual(2);
+  expect(r.vektorer).toBeGreaterThanOrEqual(6);
+  // Begge er varme UDEN at nogen har søgt.
+  expect(hentFraCache(T, 'kb-stor', EMBEDDING_MODEL)).not.toBeNull();
+  expect(hentFraCache(T, 'kb-lille', EMBEDDING_MODEL)).not.toBeNull();
 });

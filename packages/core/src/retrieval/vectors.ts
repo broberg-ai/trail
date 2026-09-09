@@ -85,7 +85,7 @@ export function contentHash(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, 32);
 }
 
-import { hentFraCache, laegICache, rydCache } from './vector-cache.js';
+import { hentFraCache, laegICache, opdaterICache, cacheTal, CACHE_LOFT_BYTES, cacheStatus } from './vector-cache.js';
 
 export interface EmbeddingRow {
   chunkId: string;
@@ -113,9 +113,21 @@ export async function storeEmbedding(
      encodeVector(args.vector), args.vector.length, args.model, contentHash(args.content)],
   );
   // F265.9 — DØR 1 af 2. Cachen holder hele Trailens vektorer; en ny eller
-  // ændret vektor gør den forældet. Ryddes den ikke HER, serverer søgningen et
-  // indeks uden den Neuron der lige blev skrevet — i tavshed.
-  rydCache(args.tenantId, args.knowledgeBaseId);
+  // ændret vektor gør den forældet. Holdes den ikke frisk HER, serverer
+  // søgningen et indeks uden den Neuron der lige blev skrevet — i tavshed.
+  //
+  // F265.12 — MEN FRISK BETYDER IKKE TOM. Her stod rydCache, som smed HELE
+  // Trail'en væk fordi ét stykke ændrede sig: 11.016 uændrede vektorer
+  // kasseret, og næste søgning betalte 16 sekunder på at hente dem hjem fra
+  // databasemaskinen. Auto-ingest kører hvert 120. sekund, så den pris blev
+  // betalt midt i drift — ikke kun efter et deploy.
+  //
+  // Den ene plads opdateres i stedet. Samme friskhed, uden at glemme resten.
+  opdaterICache(args.tenantId, args.knowledgeBaseId, args.model, {
+    chunkId: args.chunkId,
+    documentId: args.documentId,
+    vector: new Float32Array(args.vector),
+  });
 }
 
 /**
@@ -343,4 +355,64 @@ export async function loadVectors(
   }));
   laegICache(tenantId, knowledgeBaseId, model, ud);
   return ud;
+}
+
+/**
+ * F265.12 — VARM CACHEN OP FØR DEN FØRSTE KUNDE RAMMER DEN.
+ *
+ * Uden den her betaler den FØRSTE søgning efter hver opstart hele
+ * indlæsningen: målt til 16 sekunder på buddy-sessions (11.017 vektorer,
+ * 44,2 MB, hentet over netværket fra databasemaskinen). Den der tilfældigvis
+ * søger først, betaler for alle de andre.
+ *
+ * STØRSTE TRAIL FØRST, og det er ikke en detalje: det er præcis de store der
+ * er dyre at indlæse, altså dem hvor ventetiden ellers ville være synlig. En
+ * lille Trail koster millisekunder og kan sagtens vente på sin første søgning.
+ *
+ * KØRER IKKE I SERVERINGS-VEJEN. Kaldes efter Bun.serve, som en baggrundsopgave
+ * ved siden af bootTenantDeferred — en søgning der ankommer undervejs svarer
+ * præcis som i dag (den henter selv fra databasen). Opvarmningen gør aldrig
+ * noget langsommere; den fjerner kun en ventetid.
+ *
+ * FEJLER BLØDT PR. VIDENBASE. En Trail der ikke kan indlæses må ikke stoppe de
+ * øvrige — og slet ikke vælte opstarten. Det værste udfald er en kold cache,
+ * altså nøjagtig tilstanden i dag.
+ */
+export async function varmOpVektorer(
+  db: TrailDatabase,
+  model = EMBEDDING_MODEL,
+): Promise<{ videnbaser: number; vektorer: number }> {
+  // Grupperet på (kunde, videnbase) fra basen SELV, frem for at få et
+  // kunde-id ind udefra: én base kan i princippet bære flere kunde-id'er, og
+  // et id sendt ind som argument ville stille og roligt varme den forkerte op.
+  const rows = (await db.execute(
+    `SELECT c.tenant_id AS lejer, c.knowledge_base_id AS kb, COUNT(*) AS antal
+       FROM document_chunks c
+       JOIN chunk_embeddings e ON e.chunk_id = c.id
+      WHERE e.model = ?
+      GROUP BY c.tenant_id, c.knowledge_base_id
+      ORDER BY antal DESC`,
+    [model],
+  )).rows as unknown as { lejer: string; kb: string; antal: number }[];
+
+  let videnbaser = 0;
+  let vektorer = 0;
+  for (const r of rows) {
+    // Er loftet allerede nået, stopper vi frem for at lade opvarmningen smide
+    // det den lige har lagt ind ud igen. LRU'en er til DRIFT, hvor rækkefølgen
+    // afspejler hvem der faktisk søger — ikke til en opstart hvor alle er lige
+    // kolde og udsmidningen derfor ville være vilkårlig.
+    if (cacheStatus().bytes >= CACHE_LOFT_BYTES) break;
+    try {
+      const v = await loadVectors(db, r.lejer, r.kb, model);
+      videnbaser += 1;
+      vektorer += v.length;
+      cacheTal.opvarmet += 1;
+    } catch (err) {
+      console.error(
+        `[opvarmning] ${r.lejer}/${r.kb}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+  return { videnbaser, vektorer };
 }

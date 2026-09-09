@@ -121,12 +121,18 @@ export {
   storeEmbedding, coverage, loadVectors,
   EMBEDDING_PROVIDER, EMBEDDING_MODEL,
   embeddingBeredskab,
+  // F265.12 — kaldes efter Bun.serve, så den første kunde ikke betaler
+  // indlæsningen af hele indekset.
+  varmOpVektorer,
 } from './retrieval/vectors.js';
 export type { EmbeddingRow } from './retrieval/vectors.js';
 // F265.9 — vektor-cachen. rydCache eksporteres fordi fejeren i apps/server
 // (dør 2 af 2) skal kunne rydde den; cacheStatus fordi /health viser den.
 export {
   rydCache, cacheStatus, nulstilCache, hentFraCache, laegICache,
+  // F265.12 — opdaterICache holder ÉN plads frisk i stedet for at tømme
+  // Trail'en; rydCache er stadig den rigtige ved en SLETNING.
+  opdaterICache,
   CACHE_LOFT_BYTES, type CachetVektor,
 } from './retrieval/vector-cache.js';
 export { reciprocalRankFusion, RRF_K } from './retrieval/fusion.js';

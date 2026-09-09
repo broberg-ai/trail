@@ -1,5 +1,7 @@
 import { createLibsqlDatabase, DEFAULT_DB_PATH, type TrailDatabase } from '@trail/db';
 import { createApp } from './app.js';
+// F265.12 — opvarmning af vektor-cachen, kaldt efter Bun.serve.
+import { varmOpVektorer } from '@trail/core';
 import {
   openTenantPool,
   inferPrimarySlug,
@@ -469,6 +471,37 @@ void (async () => {
       await bootTenantDeferred(slug, db);
     } catch (err) {
       console.error(`[boot-deferred] ${slug} failed:`, err instanceof Error ? err.message : err);
+    }
+  }
+})();
+
+// F265.12 — VARM VEKTOR-CACHEN OP, så den første kunde ikke betaler for alle.
+//
+// Målt: første søgning efter en opstart tog 16 sekunder på buddy-sessions
+// (11.017 vektorer / 44,2 MB over netværket fra databasemaskinen). Det er
+// arbejde vi VED skal gøres — der er ingen grund til at en kunde står og
+// venter på det.
+//
+// Ligger HER, efter Bun.serve, af samme grund som bootTenantDeferred ovenfor:
+// motoren svarer allerede. En søgning der ankommer midt i opvarmningen får
+// præcis dagens opførsel (den henter selv fra databasen), så det her kan gøre
+// noget hurtigere og aldrig noget langsommere.
+//
+// Sekventielt pr. kunde — samtidige indlæsninger af 44 MB ville presse
+// databasemaskinen netop mens den også skal betjene rigtige kald.
+void (async () => {
+  for (const [slug, db] of tenantPool) {
+    try {
+      const r = await varmOpVektorer(db);
+      if (r.videnbaser > 0) {
+        console.log(
+          `[opvarmning] ${slug}: ${r.vektorer} vektorer i ${r.videnbaser} videnbase(r) klar`,
+        );
+      }
+    } catch (err) {
+      // Fejler blødt: det værste udfald er en kold cache — altså tilstanden i
+      // dag. En opvarmning må aldrig kunne vælte en motor der ellers virker.
+      console.error(`[opvarmning] ${slug} fejlede:`, err instanceof Error ? err.message : err);
     }
   }
 })();

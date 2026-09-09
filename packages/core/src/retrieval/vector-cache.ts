@@ -73,6 +73,12 @@ export const cacheTal = {
   forbier: 0,
   udsmidt: 0,
   ryddet: 0,
+  // F265.12 — hvor mange skrivninger der blev holdt friske UDEN at koste en
+  // fuld genindlæsning. Står ved siden af `ryddet`, fordi forholdet mellem de
+  // to ER svaret på om rettelsen virker i drift: stiger `ryddet` igen, er en
+  // skrivevej gået tilbage til at smide hele Trail'en væk.
+  opdateret: 0,
+  opvarmet: 0,
 };
 
 /**
@@ -155,6 +161,88 @@ export function laegICache(
 }
 
 /**
+ * F265.12 — EN NEURON DER SKRIVES MÅ IKKE KOSTE HELE TRAIL'EN.
+ *
+ * rydCache er KORREKT for friskhed og FOR GROV som pris: én ændret Neuron
+ * smed 11.016 uændrede vektorer væk, og næste søgning betalte 16 sekunder på
+ * at hente dem hjem fra databasemaskinen igen. Målt i drift, hvor auto-ingest
+ * kører hvert 120. sekund — altså midt i brug, ikke kun efter et deploy.
+ *
+ * Her opdateres den ENE plads: erstat på chunkId hvis den findes, ellers
+ * tilføj. Bytetællingen justeres, så loftet stadig håndhæves.
+ *
+ * TO TING DER GØR DEN SIKKER:
+ *
+ * 1. ER TRAIL'EN IKKE I CACHEN, GØR VI INTET. Vi bygger ALDRIG en delvis
+ *    liste — en halv Trail i cachen ville give et halvt søgeresultat der
+ *    ligner et helt. Næste opslag henter hele listen fra databasen, som i dag,
+ *    og den indeholder så også den nye vektor.
+ * 2. ANDRE MODELLERS lister for samme Trail ryddes. Vi bruger kun én model i
+ *    dag, så det er i praksis en no-op — men det holder opførslen mindst lige
+ *    så konservativ som rydCache var, frem for at antage at der kun findes én.
+ *
+ * SLETNING hører IKKE til her og bruger stadig rydCache: en fjernet vektor kan
+ * ikke udtrykkes som en opdatering af én plads, og en cache der beholder en
+ * slettet Neuron svarer selvsikkert med noget der ikke findes mere.
+ */
+export function opdaterICache(
+  tenantId: string,
+  knowledgeBaseId: string,
+  model: string,
+  vektor: CachetVektor,
+): void {
+  const praefix = `${tenantId}\u0000${knowledgeBaseId}\u0000`;
+  const maal = noegle(tenantId, knowledgeBaseId, model);
+
+  // Andre modeller for samme Trail: ryd, som før.
+  for (const [k, p] of cache) {
+    if (k.startsWith(praefix) && k !== maal) {
+      cache.delete(k);
+      bytesIAlt -= p.bytes;
+      cacheTal.ryddet += 1;
+    }
+  }
+
+  const post = cache.get(maal);
+  if (!post) return; // ikke cachet — intet at holde frisk, og vi bygger ikke en halv liste
+
+  const i = post.vektorer.findIndex((v) => v.chunkId === vektor.chunkId);
+  if (i >= 0) post.vektorer[i] = vektor;
+  else post.vektorer.push(vektor);
+
+  const nyeBytes = maalBytes(post.vektorer);
+  bytesIAlt += nyeBytes - post.bytes;
+  post.bytes = nyeBytes;
+  post.sidstBrugt = ++ur;
+  cacheTal.opdateret += 1;
+
+  // Voksede Trail'en ud over loftet, ryger den helt ud frem for at stå som en
+  // delvis liste. Samme regel som laegICache: aldrig en halv Trail.
+  if (post.bytes > CACHE_LOFT_BYTES) {
+    cache.delete(maal);
+    bytesIAlt -= post.bytes;
+    cacheTal.udsmidt += 1;
+    return;
+  }
+
+  while (bytesIAlt > CACHE_LOFT_BYTES) {
+    let koldest: string | null = null;
+    let koldestTid = Infinity;
+    for (const [nk, np] of cache) {
+      if (np.sidstBrugt < koldestTid) {
+        koldestTid = np.sidstBrugt;
+        koldest = nk;
+      }
+    }
+    if (koldest === null) break;
+    const p = cache.get(koldest)!;
+    cache.delete(koldest);
+    bytesIAlt -= p.bytes;
+    cacheTal.udsmidt += 1;
+  }
+}
+
+/**
  * Ryd en Trail. Kaldes ved BEGGE skrivesteder.
  *
  * Modellen er ikke med: en skrivning skal ramme Trailen uanset hvilken model
@@ -181,6 +269,8 @@ export function cacheStatus(): {
   forbier: number;
   udsmidt: number;
   ryddet: number;
+  opdateret: number;
+  opvarmet: number;
 } {
   return {
     trails: cache.size,
