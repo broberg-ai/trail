@@ -5,11 +5,15 @@
  * Kernen kender kun tallene (packages/core/src/retrieval/vectors.ts), så
  * lighed og kodning kan prøves uden netværk og uden nøgle.
  *
- * EU-RUTEN ER IKKE EN INDSTILLING. SDK'ets `embedding`-tier peger på OpenAIs
- * text-embedding-3-small — USA. Sannes Neuroner er en zoneterapi-kliniks:
- * helbredsoplysninger, særlig kategori under GDPR art. 9. Overriden er derfor
- * hardkodet, og `assertEuRoute` læser SVARET tilbage frem for at stole på at
- * anmodningen så rigtig ud. Prisforskellen for hele vores korpus er 8 øre.
+ * EU-RUTEN ER IKKE EN INDSTILLING. Vi bruger Mistral fordi vores data skal
+ * blive i EU. Det er hele begrundelsen — den gælder alt hvad Trail rummer, og
+ * den afhænger ikke af hvilken kunde eller hvilken slags indhold der ligger i
+ * en given videnbase. En begrundelse der peger på ét datasæt bliver forkert
+ * den dag datasættet skifter, og så ser reglen ud som noget man kan forhandle.
+ *
+ * SDK'ets `embedding`-tier peger på OpenAIs text-embedding-3-small i USA, så
+ * overriden er hardkodet. `assertEuRoute` læser SVARET tilbage frem for at
+ * stole på at anmodningen så rigtig ud.
  */
 import { ai } from '../lib/ai.js';
 import { EMBEDDING_PROVIDER, EMBEDDING_MODEL } from '@trail/core';

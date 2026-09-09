@@ -61,6 +61,17 @@ export const CHARS_PER_TOKEN = 3.5;
 const MAX_PER_BATCH = 64; // loft oveni, så en base med meget korte stykker ikke sender tusinder
 
 /** Del i portioner der hver især holder sig under token-budgettet. */
+/**
+ * F265.4 — hvor mange rækker vi henter ad gangen når `content` er med.
+ *
+ * 200 × ~3 kB ≈ 600 kB pr. svar, altså godt under libsqls grænse med plads til
+ * en Neuron der er meget større end gennemsnittet. Tallet er bevidst
+ * konservativt: prisen for en ekstra rundtur er millisekunder på det private
+ * netværk (målt: median 5 ms), mens prisen for at ramme loftet er at HELE
+ * fejningen fejler og indekset bliver stående tomt.
+ */
+export const LÆSE_SIDE = 200;
+
 export function portioner<T extends { content: string }>(rows: T[]): T[][] {
   const ud: T[][] = [];
   let cur: T[] = [];
@@ -106,15 +117,31 @@ async function stale(
   if (where.knowledgeBaseId) { filter += ' AND c.knowledge_base_id = ?'; args.push(where.knowledgeBaseId); }
   if (where.documentId) { filter += ' AND c.document_id = ?'; args.push(where.documentId); }
 
-  const rows = (await db.execute(
-    `SELECT c.id AS id, c.content AS content, c.document_id AS documentId,
-            c.knowledge_base_id AS knowledgeBaseId, e.content_hash AS h
-       FROM document_chunks c
-       LEFT JOIN chunk_embeddings e ON e.chunk_id = c.id AND e.model = ?
-       JOIN documents d ON d.id = c.document_id
-      WHERE c.tenant_id = ? AND d.archived = 0 AND d.kind = 'wiki' ${filter}`,
-    args as string[],
-  )).rows as Array<{ id: string; content: string; documentId: string; knowledgeBaseId: string; h: string | null }>;
+  // F265.4 — HENT I SIDER. Uden `LIMIT` bad denne forespørgsel om `content`
+  // for hvert eneste stykke i videnbasen i ÉT svar, og libsql afviser et svar
+  // over sin grænse med RESPONSE_TOO_LARGE. Se backfillChunks nedenfor for den
+  // målte hændelse; denne havde samme defekt og ville have ramt den i næste
+  // trin af samme fejning.
+  const rows: Array<{ id: string; content: string; documentId: string; knowledgeBaseId: string; h: string | null }> = [];
+  let efter = '';
+  for (;;) {
+    const side = (await db.execute(
+      `SELECT c.id AS id, c.content AS content, c.document_id AS documentId,
+              c.knowledge_base_id AS knowledgeBaseId, e.content_hash AS h
+         FROM document_chunks c
+         LEFT JOIN chunk_embeddings e ON e.chunk_id = c.id AND e.model = ?
+         JOIN documents d ON d.id = c.document_id
+        WHERE c.tenant_id = ? AND d.archived = 0 AND d.kind = 'wiki' ${filter}
+          AND c.id > ?
+        ORDER BY c.id
+        LIMIT ?`,
+      [...args, efter, LÆSE_SIDE] as string[],
+    )).rows as Array<{ id: string; content: string; documentId: string; knowledgeBaseId: string; h: string | null }>;
+    if (side.length === 0) break;
+    rows.push(...side);
+    efter = side[side.length - 1]!.id;
+    if (side.length < LÆSE_SIDE) break;
+  }
 
   // Forældet afgøres HER og ikke i SQL, fordi SQLite ikke har en hash-funktion.
   return rows
@@ -290,24 +317,50 @@ export async function backfillChunks(
   knowledgeBaseId: string,
   storeChunksFn: (documentId: string, kbId: string, content: string) => Promise<number>,
 ): Promise<{ documents: number; chunks: number }> {
-  const rows = (await db.execute(
-    `SELECT d.id AS id, d.content AS content
-       FROM documents d
-      WHERE d.tenant_id = ? AND d.knowledge_base_id = ? AND d.archived = 0
-        AND NOT EXISTS (SELECT 1 FROM document_chunks c WHERE c.document_id = d.id)`,
-    [tenantId, knowledgeBaseId],
-  )).rows as Array<{ id: string; content: string | null }>;
-
+  // F265.4 — HENT I SIDER, og det er MÅLT at det er nødvendigt.
+  //
+  // 9/9 2026: `POST /knowledge-bases/buddy-sessions/index` svarede 500 efter
+  // 155 ms med `LibsqlError: RESPONSE_TOO_LARGE`. Årsagen var denne
+  // forespørgsel: den bad om `content` for alle 5.726 Neuroner i ét svar,
+  // ca. 17 MB, og libsql afviser det.
+  //
+  // FEJLEN VAR TAVS PÅ DEN DYRE MÅDE. Ruten er den ENESTE vej til at fylde
+  // vektor-indekset, så den videnbase flåden skriver til stod med 0
+  // embeddings — mens `hybrid_search_enabled` sagde TÆNDT. Søgningen kørte
+  // altså på ét ben uden at nogen kunne se det, og 500'eren stod kun i
+  // motorens logfil. 31 opslag på 3,5 måned var symptomet.
+  //
+  // NØGLE-PAGINERING, ikke OFFSET: rækker forsvinder fra resultatsættet
+  // efterhånden som de får stykker (NOT EXISTS), og et voksende OFFSET ville
+  // så springe over dem der rykkede ned. `id > ?` kan kun bevæge sig fremad
+  // og kan derfor ikke tabe en række.
+  let efter = '';
   let documents = 0;
   let chunks = 0;
-  for (const r of rows) {
-    // Et tomt dokument springes over UDEN at kalde storeChunks. Et kald med nul
-    // stykker ville rydde og genindsætte ingenting i en transaktion, og
-    // dokumentet ville stadig mangle stykker ved næste fejning — arbejde der
-    // gentages for evigt uden at flytte noget.
-    if (!r.content || r.content.trim().length === 0) continue;
-    const n = await storeChunksFn(r.id, knowledgeBaseId, r.content);
-    if (n > 0) { documents += 1; chunks += n; }
+  for (;;) {
+    const rows = (await db.execute(
+      `SELECT d.id AS id, d.content AS content
+         FROM documents d
+        WHERE d.tenant_id = ? AND d.knowledge_base_id = ? AND d.archived = 0
+          AND NOT EXISTS (SELECT 1 FROM document_chunks c WHERE c.document_id = d.id)
+          AND d.id > ?
+        ORDER BY d.id
+        LIMIT ?`,
+      [tenantId, knowledgeBaseId, efter, LÆSE_SIDE],
+    )).rows as Array<{ id: string; content: string | null }>;
+    if (rows.length === 0) break;
+    efter = String(rows[rows.length - 1]!.id);
+    const færdig = rows.length < LÆSE_SIDE;
+    for (const r of rows) {
+      // Et tomt dokument springes over UDEN at kalde storeChunks. Et kald med
+      // nul stykker ville rydde og genindsætte ingenting i en transaktion, og
+      // dokumentet ville stadig mangle stykker ved næste fejning — arbejde der
+      // gentages for evigt uden at flytte noget.
+      if (!r.content || r.content.trim().length === 0) continue;
+      const n = await storeChunksFn(r.id, knowledgeBaseId, r.content);
+      if (n > 0) { documents += 1; chunks += n; }
+    }
+    if (færdig) break;
   }
   return { documents, chunks };
 }
