@@ -119,6 +119,61 @@ export async function storeEmbedding(
 }
 
 /**
+ * F265.10 — DET BILLIGE SPØRGSMÅL, STILLET BILLIGT.
+ *
+ * `coverage()` er præcis, og prisen er en fuld gennemgang: den henter
+ * `content` for HVERT vektoriseret stykke, 200 ad gangen, og hasher det for at
+ * finde de forældede. På buddy-sessions er det 11.017 rækker i 56 rundture til
+ * DB-maskinen — ved HVER ENESTE SØGNING, fordi hybrid-search kaldte den for at
+ * afgøre om der overhovedet fandtes en vektor.
+ *
+ * MÅLT 9/9 efter at vektor-cachen (F265.9) fjernede det ANDET fulde opslag:
+ * søgningen faldt fra 8-98 s til 5,7 s og blev dér. De 5,7 s var den her.
+ *
+ * Søgningen har brug for to ting, og ingen af dem kræver hash-gennemgangen:
+ *   · «findes der mindst én brugbar vektor?»  — en vagt
+ *   · et dækningstal til svarets fejlsøgnings-felt
+ *
+ * FORSKELLEN PÅ DE TO TAL ER NAVNGIVET, IKKE SKJULT. `coverage().ratio` er
+ * andelen med en FRISK vektor (forældede trukket fra). Den her er andelen med
+ * en vektor OVERHOVEDET. På et korpus i drift er de næsten ens, og præcis
+ * derfor ville det være farligt at lade dem hedde det samme: en dag hvor
+ * halvdelen er forældet, ville tallet lyve stille. Kaldere får `slags` med, så
+ * ingen kan tage det ene for det andet.
+ *
+ * `coverage()` er UÆNDRET og bruges stadig hvor præcisionen betyder noget:
+ * /index-ruten, fejeren og gendannelses-tjekket.
+ */
+export async function embeddingBeredskab(
+  db: TrailDatabase,
+  tenantId: string,
+  knowledgeBaseId: string,
+  model = EMBEDDING_MODEL,
+): Promise<{ harVektorer: boolean; ratio: number; slags: 'enhver-vektor' }> {
+  const r = (await db.execute(
+    `SELECT
+       (SELECT COUNT(*) FROM document_chunks c
+          JOIN documents d ON d.id = c.document_id
+         WHERE c.tenant_id = ? AND c.knowledge_base_id = ? AND d.archived = 0
+           AND d.kind = 'wiki')                                          AS chunks,
+       (SELECT COUNT(*) FROM document_chunks c
+          JOIN chunk_embeddings e ON e.chunk_id = c.id
+         WHERE c.tenant_id = ? AND c.knowledge_base_id = ? AND e.model = ?) AS med`,
+    [tenantId, knowledgeBaseId, tenantId, knowledgeBaseId, model],
+  )).rows[0] as { chunks: number; med: number };
+
+  const chunks = Number(r.chunks);
+  const med = Number(r.med);
+  return {
+    harVektorer: med > 0,
+    // Nul stykker er 0, ikke NaN. En tom videnbase skal svare «ingen dækning»,
+    // ikke et tal der forsvinder ud af en JSON som null.
+    ratio: chunks > 0 ? med / chunks : 0,
+    slags: 'enhver-vektor',
+  };
+}
+
+/**
  * Hvor stor en del af videnbasen har en BRUGBAR vektor?
  *
  * NÆVNEREN UDELUKKER ARKIVEREDE SIDER, og det er en RETTELSE målt 6/9: første

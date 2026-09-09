@@ -184,10 +184,10 @@ searchRoutes.get('/knowledge-bases/:kbId/search', async (c) => {
   // Slukket som standard. `hybrid_search_enabled` sættes pr. videnbase, og
   // FTS5-vejen ovenfor er uændret når den er slukket — også hvis alt dette
   // fejler.
-  let hybridInfo: { used: boolean; coverage: number; unavailable?: string } | null = null;
+  let hybridInfo: { used: boolean; coverage: number; coverageSlags: string; unavailable?: string } | null = null;
   if (await hybridEnabled(trail, kbId)) {
     const vec = await vectorSearch(trail, tenant.id, kbId, query, limit);
-    hybridInfo = { used: vec.hits.length > 0, coverage: vec.coverage, ...(vec.unavailable ? { unavailable: vec.unavailable } : {}) };
+    hybridInfo = { used: vec.hits.length > 0, coverage: vec.coverage, coverageSlags: vec.coverageSlags, ...(vec.unavailable ? { unavailable: vec.unavailable } : {}) };
 
     if (vec.hits.length > 0) {
       // Hent de dokumenter vektor-halvdelen fandt, som ordmatchningen ikke

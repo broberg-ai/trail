@@ -120,6 +120,7 @@ export {
   encodeVector, decodeVector, cosine, contentHash,
   storeEmbedding, coverage, loadVectors,
   EMBEDDING_PROVIDER, EMBEDDING_MODEL,
+  embeddingBeredskab,
 } from './retrieval/vectors.js';
 export type { EmbeddingRow } from './retrieval/vectors.js';
 // F265.9 — vektor-cachen. rydCache eksporteres fordi fejeren i apps/server

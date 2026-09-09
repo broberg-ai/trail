@@ -15,7 +15,7 @@
  * Derfor føder denne funktion KANDIDATER ind ØVERST i den eksisterende tragt.
  * Alle filtre nedenfor gælder automatisk, fordi der kun er én tragt.
  */
-import { cosine, loadVectors, coverage } from '@trail/core';
+import { cosine, loadVectors, embeddingBeredskab } from '@trail/core';
 import type { TrailDatabase } from '@trail/db';
 import { embed } from './embedder.js';
 
@@ -30,8 +30,18 @@ export interface VectorHit {
 
 export interface VectorSearchResult {
   hits: VectorHit[];
-  /** Andel af videnbasens tekststykker med en brugbar vektor. */
+  /**
+   * Andel af videnbasens tekststykker med en vektor.
+   *
+   * F265.10 — DETTE ER «ENHVER VEKTOR», IKKE «FRISK VEKTOR». Tidligere kom
+   * tallet fra coverage(), som trækker de forældede fra — og som betaler en
+   * fuld gennemgang af hele korpusset for at kunne det. Søgningen bruger nu
+   * det billige tal, og `coverageSlags` siger hvilket det er, så de to aldrig
+   * kan forveksles. Det præcise tal lever stadig på /index-ruten.
+   */
   coverage: number;
+  /** Hvilket af de to dækningstal `coverage` er. Aldrig udeladt. */
+  coverageSlags: 'enhver-vektor';
   /** Hvorfor vektor-halvdelen ikke bidrog, hvis den ikke gjorde. */
   unavailable?: 'no-embeddings' | 'embedding-failed';
 }
@@ -51,8 +61,19 @@ export async function vectorSearch(
   query: string,
   limit: number,
 ): Promise<VectorSearchResult> {
-  const cov = await coverage(db, tenantId, knowledgeBaseId);
-  if (cov.embedded === 0) return { hits: [], coverage: 0, unavailable: 'no-embeddings' };
+  // F265.10 — VAGTEN ER ET JA/NEJ-SPØRGSMÅL OG SKAL KOSTE DERETTER.
+  //
+  // Her stod coverage(), som henter `content` for hvert vektoriseret stykke og
+  // hasher det for at finde de forældede: 11.017 rækker i 56 rundture, ved HVER
+  // søgning. Målt 9/9 efter at vektor-cachen (F265.9) havde fjernet det andet
+  // fulde opslag: søgningen stod stille på 5,7 s, og det her var resten.
+  //
+  // Vagten spørger «findes der mindst én vektor». Det svar kræver ikke at vide
+  // hvor mange der er forældede.
+  const bered = await embeddingBeredskab(db, tenantId, knowledgeBaseId);
+  if (!bered.harVektorer) {
+    return { hits: [], coverage: 0, coverageSlags: 'enhver-vektor', unavailable: 'no-embeddings' };
+  }
 
   let qv: number[];
   try {
@@ -60,7 +81,7 @@ export async function vectorSearch(
     qv = r.vectors[0]!;
   } catch (err) {
     console.error('[F254] kunne ikke lave vektor for forespørgslen', err);
-    return { hits: [], coverage: cov.ratio, unavailable: 'embedding-failed' };
+    return { hits: [], coverage: bered.ratio, coverageSlags: 'enhver-vektor', unavailable: 'embedding-failed' };
   }
 
   const q = Float32Array.from(qv);
@@ -81,7 +102,7 @@ export async function vectorSearch(
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
 
-  return { hits, coverage: cov.ratio };
+  return { hits, coverage: bered.ratio, coverageSlags: 'enhver-vektor' };
 }
 
 /**
