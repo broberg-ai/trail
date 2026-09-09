@@ -236,18 +236,33 @@ export async function loadVectors(
   knowledgeBaseId: string,
   model = EMBEDDING_MODEL,
 ): Promise<EmbeddingRow[]> {
-  const rows = (await db.execute(
-    `SELECT e.chunk_id AS chunkId, e.document_id AS documentId, e.vector AS vector
-       FROM chunk_embeddings e
-       JOIN documents d ON d.id = e.document_id
-      WHERE e.tenant_id = ? AND e.knowledge_base_id = ? AND e.model = ?
-        AND d.archived = 0
-        -- F254.7 — læsesiden skal være rigtig MED DET SAMME. Oprydningen af
-        -- gamle kilde-vektorer tager en fejning; uden dette filter ville
-        -- råmateriale blive ved med at dukke op i søgningen imens.
-        AND d.kind = 'wiki'`,
-    [tenantId, knowledgeBaseId, model],
-  )).rows as Array<{ chunkId: string; documentId: string; vector: Uint8Array | ArrayBuffer }>;
+  // F265.4 — hent i sider. Målt 9/9: søgningen svarede 500 RESPONSE_TOO_LARGE
+  // på HVER forespørgsel minutter efter at indekset nåede 100 %. Den virkede
+  // perfekt ved nul vektorer — den gik i stykker AF at blive fyldt. Fuld
+  // baggrund i docs/features/F265.4-*.md.
+  const rows: Array<{ chunkId: string; documentId: string; vector: Uint8Array | ArrayBuffer }> = [];
+  let efter = '';
+  for (;;) {
+    const side = (await db.execute(
+      `SELECT e.chunk_id AS chunkId, e.document_id AS documentId, e.vector AS vector
+         FROM chunk_embeddings e
+         JOIN documents d ON d.id = e.document_id
+        WHERE e.tenant_id = ? AND e.knowledge_base_id = ? AND e.model = ?
+          AND d.archived = 0
+          -- F254.7 — læsesiden skal være rigtig MED DET SAMME. Oprydningen af
+          -- gamle kilde-vektorer tager en fejning; uden dette filter ville
+          -- råmateriale blive ved med at dukke op i søgningen imens.
+          AND d.kind = 'wiki'
+          AND e.chunk_id > ?
+        ORDER BY e.chunk_id
+        LIMIT 1000`,
+      [tenantId, knowledgeBaseId, model, efter],
+    )).rows as Array<{ chunkId: string; documentId: string; vector: Uint8Array | ArrayBuffer }>;
+    if (side.length === 0) break;
+    rows.push(...side);
+    efter = String(side[side.length - 1]!.chunkId);
+    if (side.length < 1000) break;
+  }
   return rows.map((r) => ({
     chunkId: r.chunkId, documentId: r.documentId, vector: decodeVector(r.vector),
   }));

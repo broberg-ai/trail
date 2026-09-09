@@ -17,10 +17,24 @@ const indexer = readFileSync(
   'utf8',
 );
 
+/**
+ * Uddrag kilden fra `efter` og frem til NÆSTE top-niveau-erklæring.
+ *
+ * F265.4 — var før et fast vindue på 900 tegn. Det brød på KORREKT kode: da
+ * loadVectors fik sideinddeling, rykkede `d.kind = 'wiki'` til tegn 1.111, og
+ * prøven gik rød på en funktion der stadig havde sit filter.
+ *
+ * Et fast byte-vindue måler afstand, ikke tilstedeværelse — og det fejler i
+ * begge retninger: for kort, og korrekt kode dømmes; for langt, og filteret
+ * kan findes i den NÆSTE funktion og dømmes til stede hvor det mangler.
+ * Grænsen skal være funktionens egen, ikke et tal.
+ */
 function sql(kilde: string, efter: string): string {
   const i = kilde.indexOf(efter);
   expect(i).toBeGreaterThan(-1);
-  return kilde.slice(i, i + 900).replace(/\s+/g, ' ');
+  const rest = kilde.slice(i + efter.length);
+  const slut = rest.search(/\nexport (async )?(function|const) /);
+  return (efter + (slut === -1 ? rest : rest.slice(0, slut))).replace(/\s+/g, ' ');
 }
 
 test('LÆSESIDEN UDELADER KILDER — ellers dukker råmateriale op i søgningen', () => {
