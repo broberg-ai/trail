@@ -19,6 +19,15 @@ export const healthRoutes = new Hono<AppBindings>();
 const VERSION = process.env.FLY_MACHINE_VERSION ?? process.env.TRAIL_VERSION ?? 'dev';
 
 /**
+ * F265.9 — maskinens samlede hukommelse, så cachens loft kan læses MOD noget.
+ * Fly sætter FLY_VM_MEMORY_MB; uden den er tallet ukendt frem for gættet —
+ * et forkert nævner er værre end ingen, fordi det ser ud som en måling.
+ */
+const MASKINE_BYTES = process.env.FLY_VM_MEMORY_MB
+  ? Number(process.env.FLY_VM_MEMORY_MB) * 1024 * 1024
+  : null;
+
+/**
  * F259.5 — SUND = «JEG KAN BETJENE NOGEN», IKKE «DEN PRIMÆRE LEVER».
  *
  * Ruten spurgte den PRIMÆRE base. Da F259.4 gjorde en syg kunde ufarlig,
@@ -70,6 +79,19 @@ healthRoutes.get('/health', async (c) => {
       // en cache man ikke kan se er en cache man ikke kan fejlsøge: et fald i
       // træf-raten er den tidligste advarsel om at noget rydder for meget.
       vektorCache: cacheStatus(),
+      // F265.9 — PROCESSENS FAKTISKE FORBRUG, ved siden af cachens eget tal.
+      // Cachens `bytes` er dens egen bogføring; den beviser ikke at
+      // hukommelsen faktisk blev brugt. Står de to tal ikke side om side,
+      // kan et loft på 200 MB ikke afgøres mod en maskine på 1024 MB, og
+      // «cachen fylder 58 MB» bliver en påstand frem for en måling.
+      // rss = alt processen har i fysisk hukommelse; heapUsed = det JS'en
+      // faktisk holder på. Vektorerne er Float32Array uden for heap'en, så
+      // de to bevæger sig IKKE ens — og netop derfor står begge her.
+      processHukommelse: {
+        rssBytes: process.memoryUsage.rss(),
+        heapUsedBytes: process.memoryUsage().heapUsed,
+        maskineBytes: MASKINE_BYTES,
+      },
       version: VERSION,
     },
     kanBetjene ? 200 : 503,
