@@ -74,6 +74,10 @@ export function vaelgKb(input: { valgt: string | null; tilladte: string[]; env?:
   return valgt;
 }
 
+function skrivDefault(key: string, value: string): void {
+  spawnSync('defaults', ['write', 'com.broberg.trail-ambient', key, '-string', value]);
+}
+
 function laesDefault(key: string): string | null {
   const res = spawnSync('defaults', ['read', 'com.broberg.trail-ambient', key], { encoding: 'utf8' });
   if (res.status !== 0) return null;
@@ -88,6 +92,40 @@ function grantedKb(): string | null {
     tilladte: [...liste.matchAll(/"([^"]+)"/g)].map((m) => m[1]!),
     env: process.env.TRAIL_AMBIENT_KB,
   });
+}
+
+/**
+ * F268.2 — PORTEN MOD AT MÅLET SKIFTER AF SIG SELV.
+ *
+ * Ejerens regel, 10/9 2026: «Hele pointen med Trail Ambient er at den opsamler
+ * til kun 1 trail og ALTID den samme trail og ikke bare den der står først på
+ * listen.» Den regel havde ingen port. F268.1 fjernede gætteriet i VALGET; det
+ * her fanger skiftet også når valget bliver forkert på en måde vi ikke har
+ * forudset — en fejlklikket menu, en genparring, en fremtidig fejl i en nøgle.
+ *
+ * Relayet husker hvad det SIDST sendte til. Er målet et andet i dag, sender det
+ * INTET før skiftet er bekræftet med `--accept-kb-change`. Loggen på disken
+ * røres ikke, så intet går tabt — det venter.
+ *
+ * Den STOPPER ikke processen: LaunchAgenten har KeepAlive, så en exit ville
+ * blive til en genstartssløjfe der skriver den samme fejl hvert tiende sekund.
+ * Den bliver i live og lader være med at sende.
+ */
+export function kbSkift(input: { valgt: string; sidst: string | null; accepteret: boolean }):
+  { ok: true } | { ok: false; grund: string } {
+  if (!input.sidst) return { ok: true };            // første kørsel — intet at sammenligne med
+  if (input.sidst === input.valgt) return { ok: true };
+  if (input.accepteret) return { ok: true };
+  return {
+    ok: false,
+    grund:
+      `[relay] MÅLET ER SKIFTET — der sendes INTET.\n` +
+      `        sidst: ${input.sidst}\n` +
+      `        nu:    ${input.valgt}\n` +
+      `        Ambient skal altid samle til én og samme Trail. Er skiftet med vilje:\n` +
+      `          bun run src/relay.ts --accept-kb-change\n` +
+      `        Loggen på disken røres ikke — intet er tabt, det venter.`,
+  };
 }
 
 /**
@@ -196,6 +234,16 @@ async function main(): Promise<void> {
   }
   console.log(`[relay] watching ${LOG_PATH} → ${ENGINE} (kb=${kb}, gap=${GAP_MS / 1000}s)`);
 
+  // F268.2 — porten: samler ambient stadig til den SAMME Trail som sidst?
+  const skift = kbSkift({
+    valgt: kb,
+    sidst: laesDefault('trail.ambient.kbId.sidst'),
+    accepteret: process.argv.includes('--accept-kb-change'),
+  });
+  const spaerret = !skift.ok;
+  if (!skift.ok) console.error(skift.grund);
+  else skrivDefault('trail.ambient.kbId.sidst', kb);
+
   const backfill = process.argv.includes('--backfill');
   let offset = startOffset(logSize(LOG_PATH), backfill);
   if (backfill) console.log('[relay] --backfill: hele loggen genafsendes med vilje');
@@ -238,7 +286,13 @@ async function main(): Promise<void> {
       const closed = idleFor > GAP_MS ? windows : windows.slice(0, -1);
       if (closed.length > 0) {
         buffer = idleFor > GAP_MS ? [] : windows[windows.length - 1] ?? [];
-        for (const w of closed) await flushWindow(w, kb, token);
+        for (const w of closed) {
+          if (spaerret) {
+            console.error(`[relay] spærret (målet er skiftet) — vindue ${w[0]?.ts ?? '?'} IKKE sendt`);
+            continue;
+          }
+          await flushWindow(w, kb, token);
+        }
       }
     }
   };

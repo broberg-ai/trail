@@ -13,7 +13,7 @@
  * gamle kode. Uden den beviser grønt kun at prøvedata var venlige.
  */
 import { describe, expect, test } from 'bun:test';
-import { vaelgKb, startOffset } from './relay.js';
+import { vaelgKb, startOffset, kbSkift } from './relay.js';
 
 const A = 'kb-aaaa';
 const B = 'kb-bbbb';
@@ -63,5 +63,31 @@ describe('startOffset', () => {
 
   test('en tom log starter på 0 uanset hvad', () => {
     expect(startOffset(0, false)).toBe(0);
+  });
+});
+
+describe('kbSkift — ambient samler ALTID til den samme Trail', () => {
+  test('et skift ingen har bekræftet spærrer afsendelsen', () => {
+    // Ejerens regel: «kun 1 trail og ALTID den samme trail». Uden denne port
+    // kunne et forkert valg flytte opsamlingen igen, lige så tavst som 9/9.
+    const r = kbSkift({ valgt: B, sidst: A, accepteret: false });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.grund).toContain(A);
+      expect(r.grund).toContain(B);
+      expect(r.grund).toContain('--accept-kb-change');
+    }
+  });
+
+  test('samme mål som sidst → uændret', () => {
+    expect(kbSkift({ valgt: A, sidst: A, accepteret: false }).ok).toBe(true);
+  });
+
+  test('første kørsel har intet at sammenligne med', () => {
+    expect(kbSkift({ valgt: A, sidst: null, accepteret: false }).ok).toBe(true);
+  });
+
+  test('et bevidst skift slipper igennem', () => {
+    expect(kbSkift({ valgt: B, sidst: A, accepteret: true }).ok).toBe(true);
   });
 });
