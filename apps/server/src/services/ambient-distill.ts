@@ -39,6 +39,27 @@ export function isAmbientCandidate(metadata: string | null | undefined): boolean
   }
 }
 
+/**
+ * F268.3 — er denne optagelse allerede destilleret?
+ *
+ * `metadata.distill` sættes af stampDistill når en optagelse er kørt igennem
+ * én gang. En kandidat der postes IGEN — fordi den flyttes til en anden Trail
+ * — ville ellers blive destilleret oven på sin egen destillation: et LLM-kald
+ * mere, og en omskrivning af noget der allerede er ren viden. Målt 10/9 2026 da
+ * 24 arbejdsnoter skulle flyttes fra broberg.ai til CB-M1: titlen skiftede
+ * («Fejlmønstre…» → «Fejlanalyse…»), teksten blev 7 % kortere, og en nøgtern
+ * detalje faldt ud. En flytning skal flytte, ikke omskrive.
+ */
+export function erAlleredeDestilleret(metadata: string | null | undefined): boolean {
+  if (!metadata) return false;
+  try {
+    const v = (JSON.parse(metadata) as { distill?: unknown }).distill;
+    return v === 'knowledge' || v === 'noise';
+  } catch {
+    return false;
+  }
+}
+
 /** Record the distill verdict on the candidate metadata (audit + F201.8). */
 export function stampDistill(metadata: string | null | undefined, verdict: 'knowledge' | 'noise'): string {
   let obj: Record<string, unknown> = {};

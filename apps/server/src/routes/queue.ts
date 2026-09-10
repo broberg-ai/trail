@@ -30,6 +30,7 @@ import {
   distillAmbientCapture,
   isAmbientDistillEnabled,
   isAmbientCandidate,
+  erAlleredeDestilleret,
   stampDistill,
 } from '../services/ambient-distill.js';
 import { documents } from '@trail/db';
@@ -178,7 +179,13 @@ queueRoutes.post('/queue/candidates', async (c) => {
   // clean; a pure-noise window → verdict 'noise' (confidence 0, flagged) so it
   // never auto-approves. Ship-dark behind TRAIL_AMBIENT_DISTILL=1. LLM failure
   // → log-and-continue with the raw candidate (never lose a capture).
-  if (isAmbientDistillEnabled() && isAmbientCandidate(payload.metadata)) {
+  if (
+    isAmbientDistillEnabled() &&
+    isAmbientCandidate(payload.metadata) &&
+    // F268.3 — en allerede destilleret optagelse destilleres ikke igen. Sker
+    // når en kandidat flyttes til en anden Trail; uden dette omskrives noten.
+    !erAlleredeDestilleret(payload.metadata)
+  ) {
     try {
       const distilled = await distillAmbientCapture(
         { title: payload.title, content: payload.content },
