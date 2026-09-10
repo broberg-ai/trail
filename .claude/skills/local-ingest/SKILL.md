@@ -173,8 +173,14 @@ Print the count + filenames. Stop.
         curl -s -X POST -H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT" \
           -H "Content-Type: application/json" \
           "$TRAIL_CLOUD_API/api/v1/knowledge-bases/<kb>/wiki-write" \
-          -d '{"command":"create","path":"/neurons/sources/","title":"…","content":"…","tags":"…"}'
+          -d '{"command":"create","path":"/neurons/sources/","title":"…","content":"…","tags":"…","sourceDocumentId":"'"$SID"'"}'
         ```
+        **`sourceDocumentId` er ikke valgfri i praksis (F269).** Det er den ENESTE
+        måde en Neuron senere kan pege tilbage på den råkilde den kom fra. Uden
+        den kan en oprydning kun gætte på titler: målt 10/9 2026 kunne 33 af 71
+        engelske råkilder i broberg.ai ikke parres med en eneste Neuron, og deres
+        tekst ligger stadig i hjernen uden at kunne findes. Udelad feltet, og du
+        efterlader den samme blinde plet.
         (For str_replace/append pass `title` = full doc path + `old_text`/`new_text`
         or `content`, exactly as the prompt directs. This wraps the SAME
         `CandidateQueueAPI.write` the cloud compile uses → identical Neuron shape,

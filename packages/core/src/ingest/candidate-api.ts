@@ -41,6 +41,21 @@ export interface CandidateQueueContext {
   connector: string;
   ingestJobId: string | null;
   /**
+   * F269 — RÅKILDEN denne kompilering læser fra.
+   *
+   * Målt 10/9 2026: 33 af 71 engelske råkilder i broberg.ai kunne ikke parres
+   * med en eneste Neuron, fordi kæden brækker præcis her. Neuron → kandidat
+   * findes (wiki_events.sourceCandidateId); kandidat → råkilde gjorde ikke.
+   * Uden den kan en oprydning kun gætte på titler, og et gæt der ligner
+   * sporbarhed er værre end et åbent hul.
+   *
+   * `undefined` betyder «vi ved det ikke» og skrives derfor IKKE i metadata.
+   * En null-værdi ville se ud som «der er ingen kilde», og de to må ikke
+   * kunne forveksles — det var netop et `ingestJobId: null` der fik hullet
+   * til at ligne dækning i tre måneder.
+   */
+  sourceDocumentId?: string;
+  /**
    * Default KB for operations that don't pass a `knowledge_base`
    * argument. When this is set and the caller omits the arg, it wins.
    */
@@ -507,6 +522,8 @@ export async function write(
           tags: args.tags ?? null,
           connector: ctx.connector,
           ingestJobId: ctx.ingestJobId,
+          // F269 — kun når vi FAKTISK kender kilden. Se kommentaren på feltet.
+          ...(ctx.sourceDocumentId ? { sourceDocumentId: ctx.sourceDocumentId } : {}),
         }),
         confidence: 1,
       },
@@ -572,6 +589,8 @@ export async function write(
           targetDocumentId: doc.id,
           connector: ctx.connector,
           ingestJobId: ctx.ingestJobId,
+          // F269 — kun når vi FAKTISK kender kilden. Se kommentaren på feltet.
+          ...(ctx.sourceDocumentId ? { sourceDocumentId: ctx.sourceDocumentId } : {}),
         }),
         confidence: 1,
       },
@@ -620,6 +639,8 @@ export async function write(
           targetDocumentId: doc.id,
           connector: ctx.connector,
           ingestJobId: ctx.ingestJobId,
+          // F269 — kun når vi FAKTISK kender kilden. Se kommentaren på feltet.
+          ...(ctx.sourceDocumentId ? { sourceDocumentId: ctx.sourceDocumentId } : {}),
         }),
         confidence: 1,
       },

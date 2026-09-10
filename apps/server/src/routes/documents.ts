@@ -287,6 +287,134 @@ documentRoutes.get('/documents/:docId', async (c) => {
  * the tag row. Missing data (e.g. legacy Neurons without a source
  * candidate) degrades to `connector: null` rather than erroring.
  */
+/**
+ * F269 — pegepindene fra en kandidat tilbage til den råkilde den blev
+ * kompileret fra. To former, fordi de to ingest-veje bærer hver sin:
+ *
+ *   sourceDocumentId  den lokale vej (wiki-write) — kilden er kendt direkte
+ *   ingestJobId       sky-vejen — kilden findes via documents.ingest_job_id
+ *
+ * Et felt der mangler betyder «vi ved det ikke». Det er derfor de er
+ * valgfrie og ikke null: en null-værdi læses som «der er ingen kilde», og
+ * netop den forveksling er hele grunden til at kortet findes.
+ */
+interface KildePeger {
+  sourceDocumentId?: string;
+  ingestJobId?: string;
+}
+
+export function laesKildePeger(metadata: string | null | undefined): KildePeger {
+  if (!metadata) return {};
+  let parsed: { sourceDocumentId?: unknown; ingestJobId?: unknown };
+  try {
+    parsed = JSON.parse(metadata) as typeof parsed;
+  } catch {
+    return {};
+  }
+  const ud: KildePeger = {};
+  if (typeof parsed.sourceDocumentId === 'string' && parsed.sourceDocumentId.length > 0) {
+    ud.sourceDocumentId = parsed.sourceDocumentId;
+  }
+  if (typeof parsed.ingestJobId === 'string' && parsed.ingestJobId.length > 0) {
+    ud.ingestJobId = parsed.ingestJobId;
+  }
+  return ud;
+}
+
+async function hentKilde(
+  trail: ReturnType<typeof getTrail>,
+  tenantId: string,
+  hvor: ReturnType<typeof eq>,
+): Promise<{ id: string; filename: string; title: string | null; sourceUrl: string | null } | null> {
+  const row = await trail.db
+    .select({
+      id: documents.id,
+      filename: documents.filename,
+      title: documents.title,
+      metadata: documents.metadata,
+    })
+    .from(documents)
+    .where(and(hvor, eq(documents.tenantId, tenantId), eq(documents.kind, 'source')))
+    .get();
+  if (!row) return null;
+  let sourceUrl: string | null = null;
+  if (row.metadata) {
+    try {
+      const m = JSON.parse(row.metadata) as { sourceUrl?: unknown };
+      if (typeof m.sourceUrl === 'string') sourceUrl = m.sourceUrl;
+    } catch {
+      // sourceUrl forbliver null
+    }
+  }
+  return { id: row.id, filename: row.filename, title: row.title, sourceUrl };
+}
+
+/**
+ * F269 — den MODSATTE vej: hvilke Neuroner kom fra DENNE råkilde?
+ *
+ * Det er den vej en oprydning faktisk spørger. «Hvor kom denne Neuron fra»
+ * besvarer én ad gangen; «hvad producerede denne kilde» er spørgsmålet man
+ * stiller når en side skal ud af hjernen igen.
+ */
+documentRoutes.get('/documents/:docId/derived', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const docId = c.req.param('docId');
+
+  const kilde = await trail.db
+    .select({ id: documents.id, ingestJobId: documents.ingestJobId })
+    .from(documents)
+    .where(and(eq(documents.id, docId), eq(documents.tenantId, tenant.id)))
+    .get();
+  if (!kilde) return c.json({ error: 'Not found' }, 404);
+
+  const kandidater = await trail.db
+    .select({ id: queueCandidates.id, metadata: queueCandidates.metadata })
+    .from(queueCandidates)
+    .where(eq(queueCandidates.tenantId, tenant.id))
+    .all();
+
+  const traf = kandidater.filter((k) => {
+    const p = laesKildePeger(k.metadata);
+    if (p.sourceDocumentId) return p.sourceDocumentId === docId;
+    if (p.ingestJobId && kilde.ingestJobId) return p.ingestJobId === kilde.ingestJobId;
+    return false;
+  });
+
+  const neuroner: Array<{ id: string; filename: string; path: string; title: string | null; archived: boolean }> = [];
+  for (const k of traf) {
+    const ev = await trail.db
+      .select({ documentId: wikiEvents.documentId })
+      .from(wikiEvents)
+      .where(and(eq(wikiEvents.tenantId, tenant.id), eq(wikiEvents.sourceCandidateId, k.id)))
+      .all();
+    for (const e of ev) {
+      if (neuroner.some((n) => n.id === e.documentId)) continue;
+      const d = await trail.db
+        .select({
+          id: documents.id,
+          filename: documents.filename,
+          path: documents.path,
+          title: documents.title,
+          archived: documents.archived,
+        })
+        .from(documents)
+        .where(and(eq(documents.id, e.documentId), eq(documents.tenantId, tenant.id)))
+        .get();
+      if (d) neuroner.push({ ...d, archived: !!d.archived });
+    }
+  }
+
+  return c.json({
+    sourceId: docId,
+    // `traceable` siger om kilden overhovedet ER sporbar. 0 Neuroner fra en
+    // sporbar kilde er et svar; 0 fra en usporbar kilde er ingen måling.
+    traceable: traf.length > 0 || !!kilde.ingestJobId,
+    candidateCount: traf.length,
+    neurons: neuroner,
+  });
+});
+
 documentRoutes.get('/documents/:docId/provenance', async (c) => {
   const trail = getTrail(c);
   const tenant = getTenant(c);
@@ -332,6 +460,7 @@ documentRoutes.get('/documents/:docId/provenance', async (c) => {
   let connector: string | null = null;
   let candidateId: string | null = null;
   let confidence: number | null = null;
+  let kildePeger: KildePeger = {};
 
   if (firstEvent?.sourceCandidateId) {
     candidateId = firstEvent.sourceCandidateId;
@@ -355,8 +484,17 @@ documentRoutes.get('/documents/:docId/provenance', async (c) => {
       } catch {
         // fall through — connector stays null
       }
+      kildePeger = laesKildePeger(candidate.metadata);
     }
     confidence = candidate?.confidence ?? null;
+  }
+
+  // F269 — hvilken RÅKILDE blev denne Neuron kompileret fra?
+  let source: { id: string; filename: string; title: string | null; sourceUrl: string | null } | null = null;
+  if (kildePeger.sourceDocumentId) {
+    source = await hentKilde(trail, tenant.id, eq(documents.id, kildePeger.sourceDocumentId));
+  } else if (kildePeger.ingestJobId) {
+    source = await hentKilde(trail, tenant.id, eq(documents.ingestJobId, kildePeger.ingestJobId));
   }
 
   return c.json({
@@ -364,6 +502,11 @@ documentRoutes.get('/documents/:docId/provenance', async (c) => {
     connector,
     candidateId,
     confidence,
+    // F269 — `source` er kilden; `sourceKnown` skelner «vi har ikke sporet den»
+    // fra «der er ingen». Uden det felt ser de to ens ud, og det var netop den
+    // forveksling der lod 33 engelske sider ligge uspor­bart i broberg.ai.
+    source,
+    sourceKnown: source !== null,
     createdAt: firstEvent?.createdAt ?? doc.createdAt,
     actorKind: firstEvent?.actorKind ?? null,
     actorId: firstEvent?.actorId ?? doc.userId,
@@ -1276,7 +1419,9 @@ documentRoutes.post('/knowledge-bases/:kbId/wiki-write', async (c) => {
   const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
   if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
 
-  const body = (await c.req.json().catch(() => null)) as Partial<WriteArgs> | null;
+  const body = (await c.req.json().catch(() => null)) as
+    | (Partial<WriteArgs> & { sourceDocumentId?: string })
+    | null;
   if (!body || (body.command !== 'create' && body.command !== 'str_replace' && body.command !== 'append')) {
     return c.json({ error: 'command must be one of create | str_replace | append' }, 400);
   }
@@ -1288,6 +1433,12 @@ documentRoutes.post('/knowledge-bases/:kbId/wiki-write', async (c) => {
     userId: user.id,
     connector: 'mcp:claude-code',
     ingestJobId: null,
+    // F269 — den lokale kompilering VED hvilken råkilde den læser fra; den
+    // havde bare ingen måde at sige det på. Udelades feltet, står kilden som
+    // ukendt frem for som ikke-eksisterende.
+    ...(typeof body.sourceDocumentId === 'string' && body.sourceDocumentId.length > 0
+      ? { sourceDocumentId: body.sourceDocumentId }
+      : {}),
     defaultKbId: kbId,
   });
 
