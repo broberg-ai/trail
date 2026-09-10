@@ -4,8 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Trail · Admin</title>
-    <meta name="theme-color" content="#FAF9F5" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#17140F" media="(prefers-color-scheme: dark)" />
+    <!-- F270 — ÉN theme-color, sat af det tema der faktisk anvendes (se
+         theme.ts). De to media-scopede metas der stod her fulgte STYRESYSTEMET,
+         mens app'ens tema følger localStorage — så et mørkt valg på en lys Mac
+         gav en lys titellinje i den installerede app. Værdien nedenfor er kun
+         startværdien; scriptet under retter den før første maling. -->
+    <meta name="theme-color" content="#FAF9F5" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!-- F247.1 — PWA: installérbar fra hjemmeskærmen. Manifestet + PNG-ikonerne
          ligger i public/ (én kilde); apple-touch + standalone-meta er iOS' vej,
@@ -25,6 +29,11 @@
           var t = localStorage.getItem('trail.admin.theme');
           if (t === 'dark' || t === 'light') {
             document.documentElement.setAttribute('data-theme', t);
+            // F270 — titellinjen skal være rigtig ved FØRSTE maling. Sættes den
+            // først når main.tsx er indlæst, blinker vinduet lyst hver gang
+            // app'en åbnes.
+            var m = document.querySelector('meta[name="theme-color"]');
+            if (m) m.setAttribute('content', t === 'dark' ? '#17140F' : '#FAF9F5');
           }
         } catch (_) {}
       })();
