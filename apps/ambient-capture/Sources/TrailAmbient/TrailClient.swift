@@ -57,6 +57,25 @@ enum TrailClient {
         return name
     }
 
+    /// F268.4 — hent navnet på HVER videnbase parringen gav adgang til.
+    ///
+    /// Vælgeren i menulinjen viste ellers rå id'er: «da6f14fb», «c6f8d078» — målt
+    /// på den rigtige Mac var 4 af 5 punkter hex-strenge, fordi vi kun havde hentet
+    /// navnet på den aktive. En vælger man ikke kan læse er ikke et valg.
+    static func refreshAlleKbNavne() async {
+        guard let token else { return }
+        for kb in AmbientKbStore.tilladte where AmbientKbStore.navn(for: kb) == nil {
+            guard let url = URL(string: "\(engine)/api/v1/knowledge-bases/\(kb)/name") else { continue }
+            var req = URLRequest(url: url)
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            guard let (data, resp) = try? await URLSession.shared.data(for: req),
+                  (resp as? HTTPURLResponse)?.statusCode == 200,
+                  let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let name = (root["name"] as? String), !name.isEmpty else { continue }
+            AmbientKbStore.gemNavn(name, for: kb)
+        }
+    }
+
     /// The cached KB name (menubar + HUD footer), or a neutral fallback.
     static var cachedKbName: String { AmbientKbStore.valgtNavn ?? "Trail" }
 

@@ -70,9 +70,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // F201.13 — refresh the KB name from the engine so the menubar "writing to"
         // label reflects a rename in admin (cached name is only set at connect time).
         Task {
-            if await TrailClient.refreshKbName() != nil {
-                await MainActor.run { self.render() }
-            }
+            let nyt = await TrailClient.refreshKbName() != nil
+            // F268.4 — og navnene på de øvrige, så vælgeren viser Trails og ikke hex.
+            await TrailClient.refreshAlleKbNavne()
+            if nyt { await MainActor.run { self.render() } }
         }
     }
 
