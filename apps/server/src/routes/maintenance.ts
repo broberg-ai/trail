@@ -125,8 +125,26 @@ maintenanceRoutes.post('/maintenance/drain-lint-candidates', async (c) => {
     apply?: boolean;
     kbId?: string;
     olderThanDays?: number;
+    kinds?: string[];
   };
   const apply = body.apply === true;
+  // F266.2 — TYPE-FILTER, så støjen kan ryddes uden at tage fundene med.
+  //
+  // Målt hos Sanne 10/9: 330 ventende lint-kandidater, og de er IKKE ét
+  // slags. 237 «Stale Neuron» (denne side er ikke opdateret længe), 17
+  // forældreløse, 3 ubrugte kilder — og 73 CONTRADICTION, altså linteren der
+  // siger at to Neuroner i hendes hjerne er uenige. I en zoneterapi-videnbase
+  // kan dét betyde at hendes chat giver modstridende svar om en behandling.
+  //
+  // Drænet kunne kun filtrere på CONNECTOR, så «ryd Sannes lint» tog alle 330
+  // med de 73 indenunder. Uden dette filter var valget: behold støjen, eller
+  // smid en kundes ægte fund væk.
+  //
+  // Udelades feltet, er opførslen UÆNDRET — den gamle sikkerhedsregel (kun
+  // lint-SLUKKEDE videnbaser uden et eksplicit kbId) gælder præcis som før.
+  const kinds = Array.isArray(body.kinds)
+    ? body.kinds.filter((k): k is string => typeof k === 'string' && k.length > 0)
+    : null;
 
   // Scope rule (SAFETY): an explicit kbId drains that one KB's lint backlog
   // (operator chose it). WITHOUT a kbId (the daily-cron path), restrict to KBs
@@ -164,6 +182,21 @@ maintenanceRoutes.post('/maintenance/drain-lint-candidates', async (c) => {
   if (typeof body.olderThanDays === 'number' && body.olderThanDays > 0) {
     filters.push(lt(queueCandidates.createdAt, sql`datetime('now', ${`-${body.olderThanDays} days`})`));
   }
+
+  // F266.2 — TÆL FØR FILTERET, ikke kun efter.
+  //
+  // `scanned` var talt EFTER alle filtre, så «der er ingen lint-kandidater» og
+  // «der er masser, men ingen der matcher mit filter» gav samme nul. Jeg gik
+  // selv i den 10/9: to prod-kørslar svarede {scanned: 0, rejected: 0}, og jeg
+  // læste et blindt instrument ind i en tom kø. buddys greb, og filens egen
+  // kommentar advarer allerede mod en nabo-udgave af fejlen.
+  const iScope = await trail.db
+    .select({ id: queueCandidates.id })
+    .from(queueCandidates)
+    .where(and(...filters))
+    .all();
+
+  if (kinds) filters.push(inArray(queueCandidates.kind, kinds as never));
 
   const matching = await trail.db
     .select({ id: queueCandidates.id })
@@ -206,6 +239,12 @@ maintenanceRoutes.post('/maintenance/drain-lint-candidates', async (c) => {
     scope: kbId ? 'single-kb' : 'lint-disabled-kbs',
     disabledKbs: disabledKbScope ? disabledKbScope.length : undefined,
     olderThanDays: body.olderThanDays ?? null,
+    kinds,
+    // F266.2 — to tal, ikke ét. `iScope` er hvor mange lint-kandidater der
+    // OVERHOVEDET er i rækkevidde; `scanned` er hvor mange der overlevede
+    // type-filteret. Er iScope 0, er køen tom; er iScope > 0 og scanned 0,
+    // så du forbi det hele.
+    iScope: iScope.length,
     scanned: matching.length,
     rejected,
     applied: apply,
