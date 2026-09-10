@@ -381,10 +381,10 @@ function PreferencesSection() {
           <button aria-pressed={locale === 'da'} onClick={() => setLocale('da' as Locale)}>DA</button>
         </div>
       </Field>
-      <Field label={t('userMenu.ambient')} hint={locale === 'da' ? 'Afspil ambient-loops mens du arbejder. Kun mens fanen er aktiv.' : 'Play ambient loops while you work. Only while the tab is active.'}>
+      <Field label={t('userMenu.sound')} hint={locale === 'da' ? 'Afspil baggrundslyd mens du arbejder. Kun mens fanen er aktiv.' : 'Play background sound while you work. Only while the tab is active.'}>
         <div class="segmented">
-          <button aria-pressed={!ambientEnabled.value} onClick={() => { ambientEnabled.value = false; }}>{t('userMenu.ambientOff')}</button>
-          <button aria-pressed={ambientEnabled.value} onClick={() => { ambientEnabled.value = true; }}>{t('userMenu.ambientOn')}</button>
+          <button aria-pressed={!ambientEnabled.value} onClick={() => { ambientEnabled.value = false; }}>{t('userMenu.soundOff')}</button>
+          <button aria-pressed={ambientEnabled.value} onClick={() => { ambientEnabled.value = true; }}>{t('userMenu.soundOn')}</button>
         </div>
       </Field>
     </Section>

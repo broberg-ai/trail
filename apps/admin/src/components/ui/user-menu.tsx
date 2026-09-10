@@ -210,19 +210,19 @@ function Body({
           </div>
         </PrefRow>
 
-        <PrefRow label={t('userMenu.ambient')}>
+        <PrefRow label={t('userMenu.sound')}>
           <div class="segmented">
             <button
               aria-pressed={!ambientEnabled.value}
               onClick={() => { ambientEnabled.value = false; }}
             >
-              {t('userMenu.ambientOff')}
+              {t('userMenu.soundOff')}
             </button>
             <button
               aria-pressed={ambientEnabled.value}
               onClick={() => { ambientEnabled.value = true; }}
             >
-              {t('userMenu.ambientOn')}
+              {t('userMenu.soundOn')}
             </button>
           </div>
         </PrefRow>

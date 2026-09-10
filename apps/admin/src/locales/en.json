@@ -12,9 +12,9 @@
     "themeLight": "Light",
     "themeDark": "Dark",
     "language": "Language",
-    "ambient": "Ambient",
-    "ambientOff": "Off",
-    "ambientOn": "On",
+    "sound": "Sound",
+    "soundOff": "Off",
+    "soundOn": "On",
     "signOut": "Sign out"
   },
   "sidebar": {

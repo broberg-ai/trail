@@ -12,9 +12,9 @@
     "themeLight": "Lyst",
     "themeDark": "Mørkt",
     "language": "Sprog",
-    "ambient": "Ambient",
-    "ambientOff": "Fra",
-    "ambientOn": "Til",
+    "sound": "Lyd",
+    "soundOff": "Fra",
+    "soundOn": "Til",
     "signOut": "Log ud"
   },
   "sidebar": {
