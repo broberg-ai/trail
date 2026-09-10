@@ -24,6 +24,8 @@ export type {
   CandidatePushNotifier,
 } from './queue/candidates.js';
 export { shouldAutoApprove } from './queue/policy.js';
+// F266.1 — mærker ambient-kandidater `internal` server-side.
+export { maerkAmbientInternt } from './queue/candidates.js';
 
 // Lint pass (F32) — orphans, stale, contradictions, faded heuristics (F139).
 export {

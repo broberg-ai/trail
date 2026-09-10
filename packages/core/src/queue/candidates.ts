@@ -19,7 +19,9 @@ import type {
   CandidateAction,
   CandidateEffectKind,
 } from '@trail/shared';
-import { redactSecrets } from '@trail/shared';
+import { redactSecrets,
+  AMBIENT_CONNECTOR,
+} from '@trail/shared';
 import { slugify } from '../slug.js';
 import { neuronTitel } from './neuron-name.js';
 import { shouldAutoApprove, shouldAutoReject } from './policy.js';
@@ -1730,9 +1732,45 @@ function stampConnector(
   const parsed = rawMetadata ? safeParseJson(rawMetadata) : {};
   if (typeof parsed.connector === 'string' && parsed.connector.length > 0) {
     // Already set by caller — keep it (covers explicit chat/buddy/curator/MCP).
-    return rawMetadata ?? null;
+    return maerkAmbientInternt(parsed, rawMetadata ?? null);
   }
   parsed.connector = inferConnectorFromKind(kind, parsed);
+  return maerkAmbientInternt(parsed, JSON.stringify(parsed));
+}
+
+/**
+ * F266.1 — EN AMBIENT-OPTAGELSE MÅ ALDRIG KUNNE SVARE EN BESØGENDE.
+ *
+ * Ambient-kandidater er skærm- og lyd-optagelser fra ejerens egen Mac. De
+ * lander i `broberg-ai` — nøjagtig den videnbase hjemmesidens chat svarer ud
+ * fra. Læst i køen 10/9 før noget blev sat:
+ *
+ *   «Overvejer at lease hus i Blokhus på lang sigt»
+ *   «… CRM-system til Broberg.ai med arbejdstitlen "Orbit"»
+ *   «Sign in to Abion Core …»
+ *
+ * Private overvejelser, uannoncerede produktnavne og en login-skærm. Uden et
+ * mærke ville auto-godkendelse have gjort ~500 af dem synlige for enhver
+ * besøgende: publikums-filteret (F160) skjuler KUN HEURISTIC_PATH og ting
+ * mærket `internal`, og ambient-kandidater bar ingen tags overhovedet.
+ *
+ * MÆRKET SÆTTES HER, IKKE VED GODKENDELSEN OG IKKE I KLIENTEN. Klienten er en
+ * separat Swift-app; beder man DEN om at huske mærket, er en glemt opdatering
+ * nok til at lække. Her passerer hver eneste kandidat uanset hvilken vej den
+ * kom ind.
+ *
+ * Kun ambient. Et tag på alt ville skjule det halve af hjernen for kunderne —
+ * en rettelse der flytter fejlen frem for at fjerne den.
+ */
+export function maerkAmbientInternt(
+  parsed: Record<string, unknown>,
+  fallback: string | null,
+): string | null {
+  if (parsed.connector !== AMBIENT_CONNECTOR) return fallback;
+  const raa = typeof parsed.tags === 'string' ? parsed.tags : '';
+  const tags = raa.split(',').map((t) => t.trim()).filter(Boolean);
+  if (tags.some((t) => t.toLowerCase() === 'internal')) return fallback;
+  parsed.tags = [...tags, 'internal'].join(',');
   return JSON.stringify(parsed);
 }
 
