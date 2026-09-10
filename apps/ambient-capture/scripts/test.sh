@@ -35,6 +35,9 @@ echo "[ambient-capture] --selftest (pause gate + menubar icon visibility)"
 echo "[ambient-capture] --spawntest (Ambient åbner selv sessionen — og ALDRIG med -p)"
 "$BIN" --spawntest
 
+echo "[ambient-capture] --ambientkbtest (ambient gætter ALDRIG sin videnbase)"
+"$BIN" --ambientkbtest
+
 echo "[ambient-capture] --statustest (MÅLINGEN slår indstillingen i statuslinjen)"
 "$BIN" --statustest
 

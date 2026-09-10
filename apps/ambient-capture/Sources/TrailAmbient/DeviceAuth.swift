@@ -51,9 +51,11 @@ final class DeviceAuth {
         UserDefaults.standard.string(forKey: "trail.tenantSlug")
             ?? UserDefaults.standard.string(forKey: "trail.tenant")
     }
-    var kbLabel: String? {
-        (UserDefaults.standard.array(forKey: "trail.kbNames") as? [String])?.joined(separator: ", ")
-    }
+    /// F268.1 — den ENE videnbase ambient sender til, ikke listen over dem
+    /// enheden har adgang til. Den gamle form remsede alle parringens navne op,
+    /// så menulinjen sagde «Skriver til: A, B» mens der kun blev skrevet ét sted.
+    /// nil = intet valgt, og menuen siger det frem for at vise et navn.
+    var kbLabel: String? { AmbientKbStore.valgtNavn }
 
     var connectionLabel: String {
         UserDefaults.standard.string(forKey: "trail.deviceName") ?? "Trail"

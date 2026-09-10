@@ -41,4 +41,4 @@ export {
   type WindowSummary,
 } from './session-window.js';
 
-export { isDenyListed, DENY_LIST } from './relay.js';
+export { isDenyListed, DENY_LIST, vaelgKb, startOffset } from './relay.js';

@@ -141,11 +141,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 header.image = avatarImage
             }
             menu.addItem(header)
-            if let kb = deviceAuth.kbLabel {
-                let kbItem = NSMenuItem(title: "\(S.writingToPrefix) \(kb)", action: nil, keyEquivalent: "")
-                kbItem.isEnabled = false
-                menu.addItem(kbItem)
+            // F268.1 — VÆLGEREN LIGGER HER, hvor «Skriver til:» før bare stod
+            // som en oplysning man ikke kunne gøre noget ved. Indtil i dag var
+            // Ingest-vinduets vælger den eneste i appen — og den flyttede
+            // ambient med sig uden at sige det. Ambient vælger nu sit eget mål.
+            let kbItem = NSMenuItem(
+                title: deviceAuth.kbLabel.map { "\(S.writingToPrefix) \($0)" } ?? S.noKbChosen,
+                action: nil, keyEquivalent: ""
+            )
+            let kbMenu = NSMenu()
+            for id in AmbientKbStore.tilladte {
+                let valg = NSMenuItem(
+                    title: AmbientKbStore.navn(for: id) ?? String(id.prefix(8)),
+                    action: #selector(chooseAmbientKb(_:)), keyEquivalent: ""
+                )
+                valg.target = self
+                valg.representedObject = id
+                valg.state = (id == AmbientKbStore.valgt) ? .on : .off
+                kbMenu.addItem(valg)
             }
+            if !kbMenu.items.isEmpty { kbItem.submenu = kbMenu }
+            kbItem.isEnabled = !kbMenu.items.isEmpty
+            menu.addItem(kbItem)
             menu.addItem(.separator())
         }
 
@@ -334,6 +351,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func togglePromptMode() {
         PromptMode.shared.enabled.toggle()
         EventLog.shared.log(kind: PromptMode.shared.enabled ? "prompt_mode_on" : "prompt_mode_off")
+        render()
+    }
+
+    /// F268.1 — ejeren peger ambient et sted hen. Valget skrives i ambients
+    /// EGEN nøgle, så Ingest-vinduets vælger ikke kan flytte det bagefter.
+    @objc private func chooseAmbientKb(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        AmbientKbStore.valgt = id
+        EventLog.shared.log(kind: "ambient_kb_valgt")
+        Task { await TrailClient.refreshKbName() }
         render()
     }
 

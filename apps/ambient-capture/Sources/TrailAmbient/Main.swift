@@ -76,6 +76,9 @@ struct TrailAmbientMain {
         if CommandLine.arguments.contains("--tenanttest") {
             TenantTest.run(); exit(0)
         }
+        if CommandLine.arguments.contains("--ambientkbtest") {
+            AmbientKbTest.run(); exit(0)
+        }
         if CommandLine.arguments.contains("--enginetest") {
             EngineTest.run(); exit(0)
         }

@@ -59,6 +59,7 @@ struct UIStrings {
     let notConnected: String
     let lookUpInTrail: String
     let writingToPrefix: String
+    let noKbChosen: String
     let resumeCapture: String
     let pauseCapture: String
     let reopenApproval: String
@@ -191,6 +192,7 @@ extension UIStrings {
         notConnected: "Not connected to Trail",
         lookUpInTrail: "Look up",
         writingToPrefix: "Writing to:",
+        noKbChosen: "No Trail chosen — nothing is sent",
         resumeCapture: "Resume capture",
         pauseCapture: "Pause capture",
         reopenApproval: "Reopen the approval page",
@@ -317,6 +319,7 @@ extension UIStrings {
         notConnected: "Ikke forbundet til Trail",
         lookUpInTrail: "Slå op",
         writingToPrefix: "Skriver til:",
+        noKbChosen: "Ingen Trail valgt — der sendes ingenting",
         resumeCapture: "Genoptag capture",
         pauseCapture: "Pause capture",
         reopenApproval: "Åbn godkendelses-siden igen",

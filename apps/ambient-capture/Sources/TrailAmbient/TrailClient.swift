@@ -32,15 +32,17 @@ enum TrailClient {
     private static let app = "https://app.trailmem.com"
 
     private static var token: String? { DeviceAuth.loadToken() }
-    private static var kbId: String? {
-        UserDefaults.standard.string(forKey: "trail.kbId")
-            ?? (UserDefaults.standard.array(forKey: "trail.kbIds") as? [String])?.first
-    }
+    /// F268.1 — ambients EGEN videnbase, aldrig Ingest-vinduets valg og aldrig
+    /// «den første på listen». nil = intet valgt, og så sendes der ingenting.
+    private static var kbId: String? { AmbientKbStore.valgt }
 
-    /// F201.13 — fetch the KB's CURRENT name from the engine and cache it into
-    /// UserDefaults `trail.kbNames` (the store both the menubar label and the HUD
-    /// footer read). Lets a rename in admin appear without a device reconnect.
-    /// Silent no-op on any failure — the cached name stays. Returns the name.
+    /// F201.13 — fetch the KB's CURRENT name from the engine so a rename in
+    /// admin appears without a device reconnect. Silent no-op on any failure —
+    /// the cached name stays. Returns the name.
+    ///
+    /// F268.1 — navnet gemmes nu PR. ID i stedet for at overskrive hele
+    /// `trail.kbNames`. Den gamle form smed parringens øvrige navne væk (målt:
+    /// 5 id'er, 1 navn tilbage), så en vælger ikke kunne navngive de andre.
     @discardableResult
     static func refreshKbName() async -> String? {
         guard let token, let kb = kbId,
@@ -51,16 +53,12 @@ enum TrailClient {
               (resp as? HTTPURLResponse)?.statusCode == 200,
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let name = (root["name"] as? String), !name.isEmpty else { return nil }
-        UserDefaults.standard.set([name], forKey: "trail.kbNames")
+        AmbientKbStore.gemNavn(name, for: kb)
         return name
     }
 
     /// The cached KB name (menubar + HUD footer), or a neutral fallback.
-    static var cachedKbName: String {
-        let names = (UserDefaults.standard.array(forKey: "trail.kbNames") as? [String])?
-            .filter { !$0.isEmpty } ?? []
-        return names.isEmpty ? "Trail" : names.joined(separator: ", ")
-    }
+    static var cachedKbName: String { AmbientKbStore.valgtNavn ?? "Trail" }
 
     /// Admin deep-link for a search/chat hit, routed by kind (opens in the
     /// browser). A raw ambient Source (a dictation, kind="source") opens the

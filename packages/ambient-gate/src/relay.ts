@@ -32,6 +32,17 @@ const GAP_MS = Number(process.env.TRAIL_AMBIENT_GAP_MS ?? DEFAULT_WINDOW_OPTIONS
 /** Same defaults as the Swift agent's Settings.denyList — F201 privacy rule. */
 export const DENY_LIST = ['1Password', 'Banking', 'Messages', 'Signal'];
 
+function logSize(path: string): number {
+  try {
+    const fd = openSync(path, 'r');
+    const size = fstatSync(fd).size;
+    closeSync(fd);
+    return size;
+  } catch {
+    return 0;
+  }
+}
+
 function keychainToken(): string | null {
   const res = spawnSync('security', [
     'find-generic-password', '-s', 'com.broberg.trail-ambient', '-a', 'trail-api-token', '-w',
@@ -40,15 +51,58 @@ function keychainToken(): string | null {
   return token.startsWith('trail_') ? token : null;
 }
 
-/** Granted KBs stored by the Swift agent at claim-time (UserDefaults). */
-function grantedKb(): string | null {
-  if (process.env.TRAIL_AMBIENT_KB) return process.env.TRAIL_AMBIENT_KB;
-  const res = spawnSync('defaults', ['read', 'com.broberg.trail-ambient', 'trail.kbIds'], { encoding: 'utf8' });
+/**
+ * F268.1 — HVILKEN VIDENBASE AMBIENT SKRIVER TIL.
+ *
+ * Målt 10/9 2026: 535 arbejdsnoter fra ni dage landede i broberg.ai — den Trail
+ * hjemmesidens chat svarer fra. Grunden stod i den gamle udgave af netop denne
+ * funktion: den tog `trail.kbIds`' FØRSTE element. Den læste aldrig ejerens valg,
+ * for der fandtes ikke noget valg at læse. Rækkefølgen i parringens liste afgjorde
+ * hvor ni dages dikteringer røg hen, og listen blev skrevet om 9/9 kl. 22:14.
+ *
+ * Nu: ambients eget valg (`trail.ambient.kbId`, sat i menulinjen), verificeret mod
+ * de videnbaser parringen faktisk gav adgang til. Er der ikke valgt noget, er
+ * svaret `null` og relayet stopper med at sige hvorfor. Et gæt kan ikke skelne
+ * «ejeren valgte denne» fra «ingen har valgt noget» — og det er præcis den
+ * forskel der her kostede 535 noter i den forkerte Trail.
+ */
+export function vaelgKb(input: { valgt: string | null; tilladte: string[]; env?: string }): string | null {
+  if (input.env) return input.env;
+  const valgt = input.valgt?.trim();
+  if (!valgt) return null;
+  if (input.tilladte.length > 0 && !input.tilladte.includes(valgt)) return null;
+  return valgt;
+}
+
+function laesDefault(key: string): string | null {
+  const res = spawnSync('defaults', ['read', 'com.broberg.trail-ambient', key], { encoding: 'utf8' });
   if (res.status !== 0) return null;
-  // plist array text: ( "id1", "id2" ) — first grant is the v1 target;
-  // deal/personal routing over several grants is F201.7.
-  const match = res.stdout.match(/"([^"]+)"/);
-  return match?.[1] ?? null;
+  const v = res.stdout.trim();
+  return v.length > 0 ? v : null;
+}
+
+function grantedKb(): string | null {
+  const liste = laesDefault('trail.kbIds') ?? '';
+  return vaelgKb({
+    valgt: laesDefault('trail.ambient.kbId'),
+    tilladte: [...liste.matchAll(/"([^"]+)"/g)].map((m) => m[1]!),
+    env: process.env.TRAIL_AMBIENT_KB,
+  });
+}
+
+/**
+ * F268.1 — HVOR I LOGGEN VI STARTER.
+ *
+ * Den gamle udgave startede på byte 0 ved hver opstart og sendte hele historikken
+ * igen. Mod den SAMME videnbase blev genafsendelsen fanget af motorens 409 på
+ * `sourceUrl`, så ingen så det. Mod en NY videnbase findes den dubletspærre ikke —
+ * og så blev en enkelt forkert indstilling til 518 noter på 29 minutter.
+ *
+ * Derfor starter vi ved slutningen af loggen. Skal historikken med, er det en
+ * bevidst handling: `--backfill`.
+ */
+export function startOffset(size: number, backfill: boolean): number {
+  return backfill ? 0 : size;
 }
 
 export function isDenyListed(app: string, denyList: string[] = DENY_LIST): boolean {
@@ -132,12 +186,19 @@ async function main(): Promise<void> {
   }
   const kb = grantedKb();
   if (!kb) {
-    console.error('[relay] no granted KB found (defaults com.broberg.trail-ambient trail.kbIds / TRAIL_AMBIENT_KB)');
+    console.error(
+      '[relay] ingen videnbase valgt til ambient — der sendes INTET.\n' +
+      '        Vælg en i menulinjen (Trail Ambient → «Skriver til:»), eller sæt den direkte:\n' +
+      '          defaults write com.broberg.trail-ambient trail.ambient.kbId -string "<kb-id>"\n' +
+      '        Relayet gætter med vilje ikke: et gæt sendte 535 arbejdsnoter i den forkerte Trail (F268.1).',
+    );
     process.exit(1);
   }
   console.log(`[relay] watching ${LOG_PATH} → ${ENGINE} (kb=${kb}, gap=${GAP_MS / 1000}s)`);
 
-  let offset = 0;
+  const backfill = process.argv.includes('--backfill');
+  let offset = startOffset(logSize(LOG_PATH), backfill);
+  if (backfill) console.log('[relay] --backfill: hele loggen genafsendes med vilje');
   let buffer: RelayEvent[] = [];
   let partial = '';
 
