@@ -166,7 +166,11 @@ export function KnowledgeBasesPanel() {
           const pending = (kb as KnowledgeBase & { pendingCandidateCount?: number })
             .pendingCandidateCount ?? 0;
           const size = (kb as KnowledgeBase & { size?: KbSizeInfo }).size;
-          const missingBytes = size ? size.totalBytesClaimed - size.totalBytes : 0;
+          // F272.1 — imageMissingCount === null betyder «ikke målt», ikke «ingen
+          // mangler». Listen måler ikke disken længere; advarslen vises kun når
+          // nogen FAKTISK har kigget.
+          const missingBytes =
+            size && size.imageMissingCount !== null ? size.totalBytesClaimed - size.totalBytes : 0;
           const neuronCount = (kb as KnowledgeBase & { wikiPageCount?: number }).wikiPageCount;
           return (
             <a

@@ -39,8 +39,14 @@ export interface KbSize {
   /** Of those, the bytes whose file was found on disk. */
   imageBytesPresent: number;
   imageCount: number;
-  /** Image rows whose file is missing — the phantom megabytes. */
-  imageMissingCount: number;
+  /**
+   * Image rows whose file is missing — the phantom megabytes.
+   *
+   * F272.1 — `null` means NOBODY LOOKED, not «none missing». Listen springer
+   * disk-opslaget over (det kostede 70+ sekunder pr. skærmbillede), og et 0
+   * ville dér have set ud som et rent hus. De to skal kunne skelnes.
+   */
+  imageMissingCount: number | null;
   /** Characters of compiled Neuron text. Small per page, large in aggregate. */
   knowledgeBytes: number;
   knowledgeCount: number;
@@ -69,10 +75,23 @@ interface RawRow {
  * and Neuron text lives in the database itself. So the number of filesystem
  * calls is bounded by the image count, not by the size of the volume.
  */
+/**
+ * F272.1 — `probe: null` = mål IKKE disken.
+ *
+ * Disk-opslaget stat'er HVER billed-række. Målt på produktionen 11/9 2026 med
+ * 743 rækker på 1 delt vCPU: Brain-listen tog 154 s, 70 s, 22 s, mens hvert
+ * andet endepunkt lå under 500 ms. Ejerens skærm loadede i det uendelige og
+ * helbredstjekket gik kritisk.
+ *
+ * Et minuts cache var IKKE svaret, og det blev målt: samtidige kald rammer alle
+ * forbi cachen, starter hver sit opslag, og den første efter udløb blokerer
+ * stadig i 70 sekunder. Et kald der venter på disken hører ikke hjemme på den
+ * vej en skærm tegnes fra — uanset hvor sjældent det sker.
+ */
 export async function kbSizes(
   trail: TrailDatabase,
   tenantId: string,
-  probe: FileProbe,
+  probe: FileProbe | null,
 ): Promise<KbSize[]> {
   const agg = (await trail.execute(
     `SELECT kb.id AS kb,
@@ -101,6 +120,23 @@ export async function kbSizes(
   // and each row is probed once.
   const present = new Map<string, number>();
   const missing = new Map<string, number>();
+  if (probe === null) {
+    // Ingen disk-adgang: brug rækkernes egen påstand, og sig ÆRLIGT at vi ikke
+    // ved hvor mange filer der mangler.
+    return agg.rows.map((r) => ({
+      knowledgeBaseId: r.kb,
+      sourceBytes: Number(r.srcBytes),
+      sourceCount: Number(r.srcCount),
+      imageBytesClaimed: Number(r.imgBytes),
+      imageBytesPresent: Number(r.imgBytes),
+      imageCount: Number(r.imgCount),
+      imageMissingCount: null,
+      knowledgeBytes: Number(r.knowBytes),
+      knowledgeCount: Number(r.knowCount),
+      totalBytes: Number(r.srcBytes) + Number(r.imgBytes) + Number(r.knowBytes),
+      totalBytesClaimed: Number(r.srcBytes) + Number(r.imgBytes) + Number(r.knowBytes),
+    }));
+  }
   const imgs = (await trail.execute(
     `SELECT knowledge_base_id AS kb, storage_path AS p, size_bytes AS b
        FROM document_images

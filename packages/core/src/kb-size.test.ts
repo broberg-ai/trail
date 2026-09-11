@@ -118,3 +118,35 @@ test('toMB rounds to one decimal', () => {
   expect(toMB(1_572_864)).toBe(1.5);
   expect(toMB(0)).toBe(0);
 });
+
+// F272.1 — listen må ikke røre disken. Første prøve er en POSITIV KONTROL på
+// spionen selv: uden den ville «0 kald» også bestå hvis kbSizes holdt op med at
+// læse billed-rækker overhovedet.
+test('F272.1: probe=null rører ALDRIG disken', async () => {
+  const { trail, T } = await seed();
+  let kaldt = 0;
+  const spion: FileProbe = () => { kaldt += 1; return 1; };
+  await kbSizes(trail, T, spion);
+  expect(kaldt).toBeGreaterThan(0);
+  kaldt = 0;
+  await kbSizes(trail, T, null);
+  expect(kaldt).toBe(0);
+});
+
+test('F272.1: uden opslag er «hvor mange mangler» UKENDT, ikke nul', async () => {
+  const { trail, T } = await seed();
+  // kb-orphan har 3 billeder hvis filer er væk. Uden et opslag ved vi det ikke,
+  // og 0 ville læses som «alle filer er der».
+  const orphan = (await kbSizes(trail, T, null)).find((x) => x.knowledgeBaseId === 'kb-orphan');
+  expect(orphan!.imageMissingCount).toBeNull();
+  // Kontrol: MED opslag er svaret et tal, ikke null.
+  const medOpslag = (await kbSizes(trail, T, () => null)).find((x) => x.knowledgeBaseId === 'kb-orphan');
+  expect(medOpslag!.imageMissingCount).toBe(3);
+});
+
+test('F272.1: uden opslag påstås intet afvig mellem de to totaler', async () => {
+  const { trail, T } = await seed();
+  for (const s of await kbSizes(trail, T, null)) {
+    expect(s.totalBytes).toBe(s.totalBytesClaimed);
+  }
+});
