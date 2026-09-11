@@ -3,7 +3,7 @@ import { documents, knowledgeBases, wikiBacklinks, type TrailDatabase } from '@t
 import { CreateKBSchema, UpdateKBSchema } from '@trail/shared';
 import { eq, and } from 'drizzle-orm';
 import { requireAuth, getUser, getTenant, getTrail, getAmbientKbGrant } from '../middleware/auth.js';
-import { uniqueSlug, createCandidate, resolveKbId, logActivity, kbSizes } from '@trail/core';
+import { uniqueSlug, createCandidate, resolveKbId, logActivity, kbSizes, type KbSize } from '@trail/core';
 import { storage } from '../lib/storage.js';
 import { broadcaster } from '../services/broadcast.js';
 import { listKbTags } from '../services/tag-aggregate.js';
@@ -54,6 +54,49 @@ async function buildUploadProbe(tenantId: string): Promise<(p: string) => number
   return (storagePath: string) => sizes.get(storagePath) ?? null;
 }
 
+/**
+ * F272 — STØRRELSERNE MÅ IKKE MÅLES FORFRA VED HVERT KALD.
+ *
+ * kbSizes kalder stat() på HVER billed-række for at skelne «filen findes» fra
+ * «rækken lover en fil der er væk». Det er den rigtige skelnen — men den lå på
+ * den kritiske vej for hvert eneste kald til Brain-listen, og admin kalder den
+ * flere gange pr. skærmbillede.
+ *
+ * MÅLT 11/9 2026 på produktionen (1 delt vCPU, 743 billed-rækker, 741 uden fil):
+ *   GET /api/v1/knowledge-bases   154 s · 70 s · 22 s
+ *   alle andre endepunkter        under 500 ms
+ * Ejerens skærm stod og loadede i det uendelige, og helbredstjekket gik kritisk
+ * fordi listen spiste den ene kerne.
+ *
+ * Tallene ændrer sig i takt med at filer uploades — altså sjældent, og aldrig
+ * mens nogen kigger på listen. Et minuts levetid er derfor rigeligt, og det er
+ * forskellen mellem 743 stat-kald pr. skærmbillede og 743 pr. minut.
+ *
+ * Cachen er PR. TENANT. En fælles ville servere én kundes tal til en anden.
+ */
+const stoerrelsesCache = new Map<string, { tid: number; vaerdi: KbSize[] }>();
+const CACHE_MS = 60_000;
+
+async function stoerrelserMedCache(
+  trail: ReturnType<typeof getTrail>,
+  tenantId: string,
+): Promise<KbSize[]> {
+  const nu = Date.now();
+  const gemt = stoerrelsesCache.get(tenantId);
+  if (gemt && nu - gemt.tid < CACHE_MS) return gemt.vaerdi;
+  try {
+    const probe = await buildUploadProbe(tenantId);
+    const vaerdi = await kbSizes(trail, tenantId, probe);
+    stoerrelsesCache.set(tenantId, { tid: nu, vaerdi });
+    return vaerdi;
+  } catch (err) {
+    console.error('[kb-size] failed, listing without sizes:', err);
+    // Et fejlet opslag caches IKKE: ellers ville et enkelt uheld skjule
+    // størrelserne i et helt minut uden at nogen kunne se hvorfor.
+    return gemt?.vaerdi ?? [];
+  }
+}
+
 kbRoutes.get('/knowledge-bases', async (c) => {
   const trail = getTrail(c);
   const tenant = getTenant(c);
@@ -65,12 +108,7 @@ kbRoutes.get('/knowledge-bases', async (c) => {
     // files, which is the state production is in today (501 MB of orphans
     // measured 2026-09-02). Reporting only the sum would put phantom megabytes
     // in front of the owner as fact.
-    buildUploadProbe(tenant.id)
-      .then((probe) => kbSizes(trail, tenant.id, probe))
-      .catch((err) => {
-      console.error('[kb-size] failed, listing without sizes:', err);
-      return [];
-    }),
+    stoerrelserMedCache(trail, tenant.id),
   ]);
 
   // F263.8 — en ambient-enhed ser KUN de Trails den er godkendt til. Listen
