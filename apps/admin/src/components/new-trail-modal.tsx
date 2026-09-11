@@ -80,7 +80,7 @@ export function NewTrailModal({
   return (
     <Modal
       open={open}
-      title={t('kbs.newTrail.title')}
+      title={t('kbs.newBrain.title')}
       onClose={handleClose}
       maxWidth="md"
       footer={
@@ -89,7 +89,7 @@ export function NewTrailModal({
             {t('common.cancel')}
           </ModalButton>
           <ModalButton variant="primary" onClick={handleSubmit} disabled={!canSubmit}>
-            {busy ? t('kbs.newTrail.creating') : t('kbs.newTrail.submit')}
+            {busy ? t('kbs.newBrain.creating') : t('kbs.newBrain.submit')}
           </ModalButton>
         </>
       }
@@ -97,36 +97,36 @@ export function NewTrailModal({
       <div class="space-y-4">
         <label class="block">
           <span class="block text-[11px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-1">
-            {t('kbs.newTrail.nameLabel')}
+            {t('kbs.newBrain.nameLabel')}
             <span class="text-[color:var(--color-danger)]"> *</span>
           </span>
           <input
             type="text"
             value={name}
             onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)}
-            placeholder={t('kbs.newTrail.namePlaceholder')}
+            placeholder={t('kbs.newBrain.namePlaceholder')}
             maxLength={100}
             class="w-full px-3 py-2 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg)] focus:border-[color:var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[color:var(--color-accent)] transition"
           />
           {slugPreview ? (
             <div class="mt-1.5 text-[11px] font-mono text-[color:var(--color-fg-subtle)]">
-              {t('kbs.newTrail.slugPreview')}{' '}
+              {t('kbs.newBrain.slugPreview')}{' '}
               <span class="text-[color:var(--color-fg-muted)]">admin.trailmem.com/kb/</span>
               <span class="text-[color:var(--color-accent)]">{slugPreview}</span>
-              <span class="ml-2 opacity-70">{t('kbs.newTrail.slugHint')}</span>
+              <span class="ml-2 opacity-70">{t('kbs.newBrain.slugHint')}</span>
             </div>
           ) : null}
         </label>
 
         <label class="block">
           <span class="block text-[11px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)] mb-1">
-            {t('kbs.newTrail.descriptionLabel')}
+            {t('kbs.newBrain.descriptionLabel')}
             <span class="normal-case opacity-70"> · {t('common.optional')}</span>
           </span>
           <textarea
             value={description}
             onInput={(e) => setDescription((e.currentTarget as HTMLTextAreaElement).value)}
-            placeholder={t('kbs.newTrail.descriptionPlaceholder')}
+            placeholder={t('kbs.newBrain.descriptionPlaceholder')}
             maxLength={500}
             rows={3}
             class="w-full px-3 py-2 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg)] focus:border-[color:var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[color:var(--color-accent)] transition resize-none"

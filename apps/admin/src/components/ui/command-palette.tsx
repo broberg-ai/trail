@@ -88,7 +88,7 @@ export function CommandPalette({ open, onClose, me }: CommandPaletteProps) {
     const actions: Item[] = [
       {
         id: 'a-new-trail',
-        label: t('palette.actionNewTrail'),
+        label: t('palette.actionNewBrain'),
         icon: 'Plus',
         action: () => {
           route('/');
@@ -148,7 +148,7 @@ export function CommandPalette({ open, onClose, me }: CommandPaletteProps) {
     // Trails
     if (kbs.length) {
       g.push({
-        title: t('palette.groupTrails'),
+        title: t('palette.groupBrains'),
         items: filt(
           kbs.map<Item>((kb) => ({
             id: 't-' + kb.slug,

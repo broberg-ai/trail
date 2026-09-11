@@ -123,16 +123,16 @@ export function KnowledgeBasesPanel() {
         <PageHeader
           title={t('kbs.title')}
           subtitle={t('kbs.totalNeurons', { n: '0' })}
-          ctaLabel={t('kbs.newTrail.button')}
+          ctaLabel={t('kbs.newBrain.button')}
           onCta={() => setModalOpen(true)}
         />
         <EmptyState
           inline
           icon={<Icons.Network size={28} />}
-          title={t('empty.noTrailsTitle')}
-          body={t('empty.noTrailsBody')}
+          title={t('empty.noBrainsTitle')}
+          body={t('empty.noBrainsBody')}
           ctaIcon={<Icons.Plus size={14} />}
-          ctaLabel={t('empty.noTrailsCTA')}
+          ctaLabel={t('empty.noBrainsCTA')}
           onCta={() => setModalOpen(true)}
         />
         <NewTrailModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={onCreated} />
@@ -157,7 +157,7 @@ export function KnowledgeBasesPanel() {
       <PageHeader
         title={t('kbs.title')}
         subtitle={t('kbs.totalNeurons', { n: formattedTotal })}
-        ctaLabel={t('kbs.newTrail.button')}
+        ctaLabel={t('kbs.newBrain.button')}
         onCta={() => setModalOpen(true)}
       />
 

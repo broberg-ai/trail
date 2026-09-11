@@ -20,7 +20,7 @@
 /** Betød enheden. Må IKKE indeholde ordet «trail» længere. */
 export const ENHEDS_NOEGLER = [
   'ambient.connect.noKbs', 'ambient.connect.pickKbs', 'chat.emptyHint', 'chat.placeholder',
-  'empty.noNeuronsTitle', 'empty.noBrainsBody', 'empty.noBrainsCTA', 'empty.noBrainsTitle',
+  'empty.noNeuronsTitle', 'empty.noBrainsCTA', 'empty.noBrainsTitle',
   'graph.emptyBody', 'images.sortScope', 'kbs.create', 'kbs.empty', 'kbs.newBrain.button',
   'kbs.newBrain.descriptionPlaceholder', 'kbs.newBrain.submit', 'kbs.newBrain.title', 'kbs.title',
   'lifecycle.decayActive', 'lifecycle.decayPaused', 'lifecycle.mhSubtitle',
@@ -44,7 +44,7 @@ export const PRODUKT_NOEGLER = [
   'ambient.connect.title', 'connectors.hints.chat', 'connectors.hints.discord', 'connectors.hints.mcp',
   'connectors.hints.mcp:claude-code', 'connectors.hints.mcp:cursor', 'connectors.hints.notion',
   'connectors.hints.slack', 'cost.credits.explanation', 'empty.noNeuronsBody', 'glossary.subtitle',
-  'kbs.totalNeurons', 'lifecycle.introBody', 'lifecycle.mhDecayRatesHint', 'login.title',
+  'empty.noBrainsBody', 'kbs.totalNeurons', 'lifecycle.introBody', 'lifecycle.mhDecayRatesHint', 'login.title',
   'settings.account.apiKeys.subtitle', 'settings.account.backupHealth.notConfiguredHint',
   'settings.account.backupHealth.subtitle', 'settings.trail.ingestModel.hint',
   'settings.trail.personas.publicHint', 'settings.trail.personas.toolHint',

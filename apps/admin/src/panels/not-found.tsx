@@ -9,7 +9,7 @@ export function NotFound() {
         href="/"
         class="inline-block mt-6 px-4 py-2 rounded-md border border-[color:var(--color-border-strong)] hover:bg-[color:var(--color-bg-card)] transition text-sm"
       >
-        ← {t('notFound.backToTrails')}
+        ← {t('notFound.backToBrains')}
       </a>
     </div>
   );

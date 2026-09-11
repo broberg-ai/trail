@@ -43,9 +43,9 @@
     "brainVersions": "Versions"
   },
   "empty": {
-    "noTrailsTitle": "No brains yet",
-    "noTrailsBody": "A brain is one knowledge-base inside this tenant. Upload sources, and Brain compiles them into linked neurons you can chat with.",
-    "noTrailsCTA": "Create your first brain",
+    "noBrainsTitle": "No brains yet",
+    "noBrainsBody": "Upload sources, and Trail compiles them into linked Neurons you can chat with.",
+    "noBrainsCTA": "Create your first brain",
     "noTenantsTitle": "You don't have access to any tenants yet",
     "noTenantsBody": "Ask a teammate to invite you, or create your own tenant to get started.",
     "noTenantsCTA": "Create a tenant",
@@ -70,14 +70,14 @@
   "palette": {
     "placeholder": "Search or jump to…",
     "groupRecent": "Recent neurons",
-    "groupTrails": "Brains",
+    "groupBrains": "Brains",
     "groupActions": "Actions",
     "groupTenants": "Switch to tenant",
     "empty": "No matches",
     "navigate": "navigate",
     "select": "open",
     "close": "close",
-    "actionNewTrail": "New brain",
+    "actionNewBrain": "New brain",
     "actionNewNeuron": "Create neuron",
     "actionOpenChat": "Open chat",
     "actionUpload": "Upload source…",
@@ -215,7 +215,7 @@
   },
   "notFound": {
     "body": "Page not found.",
-    "backToTrails": "Back to Brains"
+    "backToBrains": "Back to Brains"
   },
   "wikiReader": {
     "notFoundTitle": "Neuron not found",
@@ -251,7 +251,7 @@
     "cost": "Cost",
     "settings": "Settings",
     "accountSettings": "Account settings",
-    "trails": "Brains",
+    "brains": "Brains",
     "glossary": "Glossary",
     "jobs": "Jobs",
     "jobsHint": "Background job history",
@@ -736,7 +736,7 @@
     "pendingBadge": "{n} pending",
     "totalNeurons": "Neurons on this trail server: {n}",
     "neuronCount": "{n} neurons",
-    "newTrail": {
+    "newBrain": {
       "button": "New Brain",
       "title": "Create a new Brain",
       "nameLabel": "Name",
@@ -837,7 +837,7 @@
     "memoryHealth": "Health",
     "mhSubtitle": "How this Brain's memory stays fresh over time.",
     "introTitle": "What is this page?",
-    "introBody": "Trail remembers like a brain. Knowledge stays reliable — it only becomes outdated when newer, better information replaces it. That way the chat answers from what's correct and up to date.",
+    "introBody": "Trail keeps knowledge reliable — it only becomes outdated when newer, better information replaces it. That way the chat answers from what’s correct and up to date.",
     "introAction": "You normally don't need to do anything: when something is replaced by a better version, the old one is down-weighted automatically (see 'Superseded' — it isn't deleted). To make sure a particular piece of knowledge always counts in full, you can pin it.",
     "introExample": "Example: a price or opening time changes — the old version is replaced automatically by the new one. A core definition that always holds, you pin, so it's never down-weighted.",
     "introHide": "Hide explanation",
@@ -1172,7 +1172,7 @@
   "ambient": {
     "connect": {
       "title": "Connect Trail Ambient",
-      "intro": "A Trail Ambient device is asking to save gated, redacted captures into your Trails. Approve only if you started this from your own Mac.",
+      "intro": "A Trail Ambient device is asking to save gated, redacted captures into your Brains. Approve only if you started this from your own Mac.",
       "invalidCode": "The connect link is missing a valid device code. Start the connection from the Trail Ambient app on your Mac.",
       "pickKbs": "Which Brains may this device write to?",
       "pickTenant": "Which account should this device belong to?",
