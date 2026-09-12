@@ -259,6 +259,12 @@ documentRoutes.get('/documents', async (c) => {
       ),
     )
     .all();
+  // F272.2 — KONTRAKT MED BUDDY. Navnene `documents` og `ids` pollles hvert 2.
+  // minut af buddys probe-job. Deres aflæser kan ikke skelne «stien fandtes
+  // ikke» fra «der er 0 der venter» (målt og meldt 12/9 2026), så et omdøbt
+  // felt her ville gøre deres dispatch tavs uden en eneste fejl noget sted.
+  // Omdøb dem ikke uden at aftale det med buddy. probe-kontrakt.test.ts vogter
+  // navnene.
   return c.json({ documents: rows, ids: rows.map((r) => r.id) });
 });
 
