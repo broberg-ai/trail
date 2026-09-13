@@ -19,6 +19,13 @@
  * sted — og ingen af os havde opdaget det.
  *
  * Vagten er derfor på NAVNENE, ikke på indholdet.
+ *
+ * HVAD DEN IKKE KAN, og det skal stå her frem for at blive opdaget senere:
+ * den læser KILDEKODEN. Den ville være grøn hvis ruten var flyttet, hvis en
+ * middleware svarede før den, eller hvis kaldet gav 500 — buddys probe læser
+ * SVARET, ikke vores fil. Den halvdel måles af
+ * `apps/server/scripts/verify-probe-kontrakt.ts`, som kalder den levende rute
+ * for begge de tenants deres to jobs faktisk poller.
  */
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
