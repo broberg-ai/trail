@@ -45,6 +45,25 @@ const POLL_INTERVAL_MS = 30_000;
 
 const PAGE_SIZE = 50;
 
+/**
+ * F273.4 — hvor mange hentninger i træk der må lande UDEN at give én eneste
+ * synlig række, før auto-hentningen stopper og knappen tager over.
+ *
+ * Gruppe-filteret sorterer fra i BROWSEREN, ikke i motoren. En side kan
+ * derfor lande med 50 rækker hvoraf 0 er synlige — og så bliver vagtposten
+ * ved med at stå i billedet og bede om den næste. Uden loftet henter den
+ * hele loggen i fuld fart uden at der kommer noget på skærmen.
+ */
+const MAX_GOLDE_RUNDER = 5;
+
+/** Passerer rækken det gruppe-filter der er valgt i browseren? */
+function passerGruppe(row: ActivityRow, groupFilter: string): boolean {
+  if (!groupFilter) return true;
+  const grp = KIND_GROUPS.find((g) => g.label === groupFilter);
+  if (!grp) return true;
+  return grp.kinds.includes(row.kind);
+}
+
 export function ActivityPanel() {
   useLocale();
   const [rows, setRows] = useState<ActivityRow[] | null>(null);
@@ -55,6 +74,12 @@ export function ActivityPanel() {
   const [kindFilter, setKindFilter] = useState<string>('');
   const [groupFilter, setGroupFilter] = useState<string>('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // F273.4 — vagtposten nederst på listen. Kommer den i billedet, hentes næste
+  // side af sig selv. Knappen bliver stående: den er tastatur-vejen, og den er
+  // det eneste der virker når auto-hentningen har slået fra.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const goldeRunder = useRef(0);
+  const [autoStoppet, setAutoStoppet] = useState(false);
 
   // Fresh fetch — used when filters change AND for the polling tick.
   // Replaces the entire list with the first page (any rows past page 1
@@ -91,6 +116,15 @@ export function ActivityPanel() {
       });
       setRows((prev) => (prev ? [...prev, ...r.items] : r.items));
       setNextCursor(r.nextCursor);
+      // F273.4 — gav siden noget at SE? Ikke «kom der rækker», men «kom der
+      // rækker der slipper gennem gruppe-filteret». De to er ikke det samme,
+      // og det er forskellen mellem at hente videre og at køre løbsk.
+      const synlige = r.items.filter((row) => passerGruppe(row, groupFilter)).length;
+      if (synlige > 0) {
+        goldeRunder.current = 0;
+      } else if (++goldeRunder.current >= MAX_GOLDE_RUNDER) {
+        setAutoStoppet(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -99,8 +133,35 @@ export function ActivityPanel() {
   };
 
   useEffect(() => {
+    goldeRunder.current = 0;
+    setAutoStoppet(false);
     void fetchFirstPage();
   }, [timeframe, kindFilter]);
+
+  // F273.4 — auto-hentning når man er scrollet i bund. Observatøren bygges om
+  // hver gang markøren eller hente-tilstanden skifter; en IntersectionObserver
+  // melder sin TILSTAND ved oprettelse, så står vagtposten stadig i billedet
+  // efter en side, henter den næste af sig selv. Forlader den billedet, stopper
+  // det — det er hele bremsen, og den er brugerens scroll.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !nextCursor || loadingMore || autoStoppet) return;
+    if (typeof IntersectionObserver === 'undefined') return; // ældre browser: knappen
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) void loadMore();
+      },
+      { rootMargin: '200px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [nextCursor, loadingMore, autoStoppet, timeframe, kindFilter, groupFilter]);
+
+  // Skifter man gruppe-filter, er «gold» en påstand om det GAMLE filter.
+  useEffect(() => {
+    goldeRunder.current = 0;
+    setAutoStoppet(false);
+  }, [groupFilter]);
 
   useEffect(() => {
     const id = setInterval(() => void fetchFirstPage(), POLL_INTERVAL_MS);
@@ -218,13 +279,27 @@ export function ActivityPanel() {
           actually exhausted. Without the end-marker, a user who
           scrolls down and finds no Load more button can mistake
           completion for a broken panel. */}
+      {/* F273.4 — vagtposten. Ligger FØR knappen med 200px forvarsel, så næste
+          side er hentet inden man når bunden. */}
+      <div ref={sentinelRef} aria-hidden="true" class="h-px" />
+
       {filtered.length > 0 && (
-        <div class="mt-4 flex justify-center">
+        <div class="mt-4 flex flex-col items-center gap-2">
+          {autoStoppet && nextCursor && (
+            <span class="text-[11px] font-mono uppercase tracking-wider text-[color:var(--color-fg-subtle)]">
+              · auto-hentning sat på pause — ingen synlige rækker i {MAX_GOLDE_RUNDER} sider ·
+            </span>
+          )}
           {nextCursor ? (
             <button
               type="button"
+              data-testid="activity-load-more"
               disabled={loadingMore}
-              onClick={() => void loadMore()}
+              onClick={() => {
+                goldeRunder.current = 0;
+                setAutoStoppet(false);
+                void loadMore();
+              }}
               class="px-3 py-1.5 text-[11px] font-mono uppercase tracking-wider rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)] hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--color-bg-elevated)] disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               {loadingMore ? 'Loading…' : `Load more (next ${PAGE_SIZE})`}
