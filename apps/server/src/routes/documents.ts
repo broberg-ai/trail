@@ -152,8 +152,17 @@ documentRoutes.get('/knowledge-bases/:kbId/documents', async (c) => {
   // ligne «der er ingenting i det tidsrum».
   const vindue = byggTidsvindue(c.req.query('from'), c.req.query('to'));
   if (!vindue.ok) return c.json({ error: vindue.fejl }, 400);
-  if (vindue.vindue.fraNoegle) conditions.push(gte(documents.createdAt, vindue.vindue.fraNoegle));
-  if (vindue.vindue.tilNoegle) conditions.push(lte(documents.createdAt, vindue.vindue.tilNoegle));
+  // F273.3 — spørg på det tidspunkt der FAKTISK betyder noget.
+  //
+  // COALESCE: en Neuron med et ægte optagetidspunkt matches på DET; en uden
+  // falder tilbage på skrivetidspunktet, som er det bedste vi har. De to
+  // formater er ens-sorterbare fordi begge gemmes som ISO/naiv-UTC tekst med
+  // fast bredde — men capturedAt bærer et 'T' og et 'Z', så den normaliseres
+  // til samme form som created_at inden sammenligningen. Uden det ville
+  // 'T' > ' ' gøre enhver Ambient-Neuron nyere end alt andet.
+  const tidsNoegle = sql`COALESCE(REPLACE(REPLACE(SUBSTR(${documents.capturedAt}, 1, 19), 'T', ' '), 'Z', ''), ${documents.createdAt})`;
+  if (vindue.vindue.fraNoegle) conditions.push(sql`${tidsNoegle} >= ${vindue.vindue.fraNoegle}`);
+  if (vindue.vindue.tilNoegle) conditions.push(sql`${tidsNoegle} <= ${vindue.vindue.tilNoegle}`);
 
   const rows = await trail.db
     .select({
@@ -182,6 +191,8 @@ documentRoutes.get('/knowledge-bases/:kbId/documents', async (c) => {
       // `<kbPrefix>_<seq:8>` display id. Included here so the list view can
       // render it without a second round-trip.
       seq: documents.seq,
+      // F273.3 — HVORNÅR DET SKETE. null = ikke målt, aldrig «= createdAt».
+      capturedAt: documents.capturedAt,
       createdAt: documents.createdAt,
       updatedAt: documents.updatedAt,
       // Count of DISTINCT Neurons that cite this Source via

@@ -386,6 +386,13 @@
       "when": 1788746400000,
       "tag": "0054_ambient_kb_grant",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "6",
+      "when": 1789506536052,
+      "tag": "0055_document_captured_at",
+      "breakpoints": true
     }
   ]
 }

@@ -90,6 +90,15 @@ type Db = BaseSQLiteDatabase<'async', unknown, typeof schema>;
  */
 export interface CandidateOp {
   op: 'create' | 'update' | 'archive';
+  /**
+   * F273.3 — HVORNÅR indholdet blev opsamlet, hvis nogen VED det.
+   *
+   * Ambient sender det (relay.ts: `capturedAt: summary.end`) og har gjort det
+   * hele tiden — det blev tabt HER, fordi documents-rækken blev indsat uden
+   * kandidatens metadata overhovedet. Alt andet lader feltet være, og så står
+   * Neuronens `captured_at` som NULL: «ikke målt», ikke «samtidig».
+   */
+  capturedAt?: string;
   targetDocumentId?: string;
   filename?: string;
   path?: string;
@@ -236,17 +245,49 @@ export function resolveActions(candidate: QueueCandidate): CandidateAction[] {
 
 // ── Helpers (pure) ─────────────────────────────────────────────────
 
-function parseOp(candidate: QueueCandidate): CandidateOp {
+/**
+ * F273.3 — et optagetidspunkt vi ikke kan læse, er IKKE et optagetidspunkt.
+ *
+ * Feltet kommer fra en ekstern afsender (Ambient-relayet, og på sigt andre
+ * opsamlere). En streng der ikke parser ville ellers blive gemt som var den
+ * en tid, og først svare forkert når nogen filtrerer på den. Tre udfald bliver
+ * til to med vilje: enten en gyldig ISO-tid, eller NULL som betyder «ikke målt».
+ */
+export function gyldigtTidsstempel(raa: string | undefined): string | null {
+  if (typeof raa !== 'string' || raa.trim() === '') return null;
+  const d = new Date(raa);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+/**
+ * Eksporteret UDELUKKENDE så F273.3's bærende prøve kan nå den. Fejlen den
+ * rettede — metadata uden `op` fik capturedAt til at forsvinde — er usynlig
+ * gennem enhver anden indgang, og en spærre man ikke kan bevise rød er ingen
+ * spærre. Kald den ikke fra produktionskode uden for denne fil.
+ */
+export function parseOp(candidate: QueueCandidate): CandidateOp {
   if (!candidate.metadata) return { op: 'create' };
+  let parsed: Partial<CandidateOp> | null = null;
   try {
-    const parsed = JSON.parse(candidate.metadata) as Partial<CandidateOp>;
-    if (parsed && typeof parsed === 'object' && parsed.op) {
-      return parsed as CandidateOp;
-    }
+    const p = JSON.parse(candidate.metadata) as unknown;
+    if (p && typeof p === 'object') parsed = p as Partial<CandidateOp>;
   } catch {
-    // fall through to default
+    // ugyldig JSON — behandles som ingen metadata
   }
-  return { op: 'create' };
+  if (!parsed) return { op: 'create' };
+  if (parsed.op) return parsed as CandidateOp;
+  // F273.3 — HER BLEV OPTAGETIDSPUNKTET TABT.
+  //
+  // Ambients metadata er `{connector, sourceUrl?, capturedAt?}` og har ALDRIG
+  // haft et `op`-felt — den skriver kun nye sider. Den gamle udgave krævede
+  // `parsed.op` og smed derefter hele objektet væk, så capturedAt forsvandt
+  // for hver eneste Ambient-Neuron uden at noget fejlede.
+  //
+  // Igen husets fejlform: en manglende værdi (op) fik en anden, fuldt gyldig
+  // værdi (capturedAt) til at forsvinde tavst. Standarden er stadig 'create';
+  // det der ændrer sig er at resten af objektet ikke længere kasseres med den.
+  return { ...parsed, op: 'create' } as CandidateOp;
 }
 
 async function lastEventIdFor(
@@ -917,6 +958,8 @@ async function approveCreate(
       // so this subquery sees the latest committed seq for the KB.
       seq: sql<number>`COALESCE((SELECT MAX(${documents.seq}) FROM ${documents} WHERE ${documents.knowledgeBaseId} = ${candidate.knowledgeBaseId}), 0) + 1`,
       ingestJobId: op.ingestJobId ?? null,
+      // F273.3 — bar ind, ikke udledt. Mangler den, er svaret NULL.
+      capturedAt: gyldigtTidsstempel(op.capturedAt),
       ...(docKind === 'work'
         ? {
             workStatus: op.workStatus ?? 'open',

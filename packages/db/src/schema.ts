@@ -263,6 +263,18 @@ export const documents = sqliteTable(
     confidencePinned: integer('confidence_pinned', { mode: 'boolean' }).notNull().default(false),
     confidencePinnedAt: integer('confidence_pinned_at'),
     confidencePinnedBy: text('confidence_pinned_by'),
+    /**
+     * F273.3 — HVORNÅR DET SKETE, ikke hvornår det blev gemt.
+     *
+     * NULL betyder «ikke målt», ALDRIG «samtidig med skrivningen». De to er
+     * ikke det samme, og forskellen er usynlig fra kaldestedet: målt i CB-M1
+     * blev 187 af 946 Neuroner skrevet i minutter med 5+ rækker — værst 32 på
+     * ét minut. Det er efter-indlæsninger, ikke minutter hvor der skete 32 ting.
+     *
+     * Kun Ambient sætter den i dag (relay.ts sender `capturedAt` i kandidatens
+     * metadata). Alt andet lader den stå tom frem for at gætte på createdAt.
+     */
+    capturedAt: text('captured_at'),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
     updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
   },
