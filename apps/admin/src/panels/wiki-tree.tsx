@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { useRoute } from 'preact-iso';
 import type { Document } from '@trail/shared';
 import { formatSeqId } from '@trail/shared';
-import { listWikiPages, listTags, runLint, createNeuron, ApiError, type WikiSortOrder, type TagCount } from '../api';
+import { listWikiPages, listTags, runLint, createNeuron, ApiError, type WikiSortOrder, type TagCount, type Tidsrum, type OplostVindue } from '../api';
+import { TidsrumVaelger } from '../components/ui/tidsrum-vaelger';
 import { formatPathDisplay } from '../lib/display-path';
 import { useKb } from '../lib/kb-cache';
 import { useKbEvents, onStreamOpen, onFocusRefresh, debounce } from '../lib/event-stream';
@@ -22,6 +23,12 @@ export function WikiTreePanel() {
   useLocale();
   const kb = useKb(kbId);
   const [pages, setPages] = useState<Document[] | null>(null);
+  // F273.2 — «hvad lærte jeg mellem X og Y». `vindue` er SERVERENS opløsning
+  // af det valgte tidsrum, ikke vores eget valg; `vinduefejl` er den tredje
+  // tilstand — en dato motoren ikke forstod, som aldrig må ligne et tomt svar.
+  const [tidsrum, setTidsrum] = useState<Tidsrum>({});
+  const [vindue, setVindue] = useState<OplostVindue | null>(null);
+  const [vinduefejl, setVinduefejl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lintBusy, setLintBusy] = useState(false);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
@@ -106,10 +113,25 @@ export function WikiTreePanel() {
 
   const reload = useCallback(() => {
     if (!kbId) return;
-    listWikiPages(kbId, sortOrder)
-      .then(setPages)
-      .catch((err: ApiError) => setError(err.message));
-  }, [kbId, sortOrder]);
+    listWikiPages(kbId, sortOrder, tidsrum)
+      .then((r) => {
+        setPages(r.pages);
+        setVindue(r.vindue);
+        setVinduefejl(null);
+      })
+      .catch((err: ApiError) => {
+        // En 400 er motorens «jeg forstod ikke datoen» og hører til ved
+        // kontrollen, ikke som en panel-dækkende fejlskærm: resten af siden
+        // virker fint, det er ét felt der er galt.
+        if (err.status === 400) {
+          setVinduefejl(err.message);
+          setPages([]);
+          setVindue(null);
+          return;
+        }
+        setError(err.message);
+      });
+  }, [kbId, sortOrder, tidsrum.fra, tidsrum.til]);
   const reloadDebounced = useCallback(debounce(reload, 100), [reload]);
 
   useEffect(() => {
@@ -258,6 +280,18 @@ export function WikiTreePanel() {
           </button>
         </div>
       </header>
+
+      {/* F273.2 — «Hvad lærte jeg mellem X og Y». Står under overskriften og
+          over listen, fordi det afgrænser netop den liste. */}
+      <div class="mb-5">
+        <TidsrumVaelger
+          værdi={tidsrum}
+          onVælg={setTidsrum}
+          opløst={vindue}
+          antal={pages?.length ?? null}
+          fejl={vinduefejl}
+        />
+      </div>
 
       {allTags.length > 0 ? (
         <div class="mb-4">

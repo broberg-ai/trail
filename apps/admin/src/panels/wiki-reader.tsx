@@ -120,7 +120,7 @@ function ReaderView() {
   useEffect(() => {
     if (!kbId) return;
     listWikiPages(kbId)
-      .then(setPages)
+      .then((r) => setPages(r.pages))
       .catch((err: ApiError) => setError(err.message));
   }, [kbId]);
 

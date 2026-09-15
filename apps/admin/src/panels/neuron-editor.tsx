@@ -54,7 +54,7 @@ export function NeuronEditorPanel() {
   useEffect(() => {
     if (!kbId) return;
     listWikiPages(kbId)
-      .then(setPages)
+      .then((r) => setPages(r.pages))
       .catch((err: ApiError) => setLoadError(err.message));
   }, [kbId]);
 

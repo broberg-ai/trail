@@ -33,7 +33,23 @@ function isSafeMethod(init?: RequestInit): boolean {
  * `ApiError` with status + server-provided message. Safe methods retry
  * transient 5xx / network blips with backoff (see TRANSIENT_STATUSES).
  */
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+/**
+ * Som `api()`, men giver også svaret selv tilbage — så en kalder kan læse en
+ * response-header.
+ *
+ * F273.1 sender det opløste tidsvindue tilbage i `X-Trail-Window`, og det er
+ * serverens udsagn om hvad der faktisk blev spurgt om. Skærmen kunne tegne sit
+ * EGET valg i stedet, men så ville den vise sin egen hensigt frem for det
+ * databasen svarede på — og det er præcis den slags «UI'ets mening» der ikke
+ * kan afsløre en fejltolkning.
+ *
+ * `api()` er en tynd indpakning om denne, så gentagelses- og fejllogikken kun
+ * findes ét sted.
+ */
+export async function apiMedSvar<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<{ data: T; response: Response | null }> {
   const safe = isSafeMethod(init);
   const attempts = safe ? MAX_ATTEMPTS : 1;
   let lastNetworkErr: unknown;
@@ -74,11 +90,15 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       }
       throw new ApiError(response.status, message, body);
     }
-    if (response.status === 204) return undefined as T;
-    return (await response.json()) as T;
+    if (response.status === 204) return { data: undefined as T, response };
+    return { data: (await response.json()) as T, response };
   }
   // Unreachable for non-safe methods; safe methods exhausted all network retries.
   throw lastNetworkErr instanceof Error ? lastNetworkErr : new Error('request failed');
+}
+
+export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  return (await apiMedSvar<T>(path, init)).data;
 }
 
 export class ApiError extends Error {
@@ -659,11 +679,50 @@ export function bulkAcceptRecommendations(ids: string[]): Promise<BulkQueueResul
 
 export type WikiSortOrder = 'newest' | 'oldest' | 'title';
 
-/** List wiki pages in a KB (kind='wiki', non-archived). */
-export function listWikiPages(kbId: string, sort: WikiSortOrder = 'newest'): Promise<Document[]> {
-  return api(
-    `/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/documents?kind=wiki&sort=${sort}`,
+/**
+ * F273.1 — det tidsrum der blev spurgt om, som SERVEREN opløste det.
+ * Dansk vægur-tid med zonen navngivet. `null` når der ikke blev filtreret.
+ */
+export interface OplostVindue {
+  fra: string | null;
+  til: string | null;
+  zone: string;
+}
+
+/** Dansk vægur: `YYYY-MM-DD` eller `YYYY-MM-DDTHH:MM`. Tomt felt = ingen grænse. */
+export interface Tidsrum {
+  fra?: string;
+  til?: string;
+}
+
+/**
+ * List wiki pages in a KB (kind='wiki', non-archived), evt. afgrænset til et
+ * tidsrum i DANSK tid.
+ *
+ * Returnerer også `vindue` — serverens kvittering, ikke vores eget valg. Uden
+ * den ville skærmen vise hvad den BAD om frem for hvad der blev svaret på, og
+ * en fejltolkning (fx sommertid) ville være usynlig.
+ */
+export async function listWikiPages(
+  kbId: string,
+  sort: WikiSortOrder = 'newest',
+  tidsrum?: Tidsrum,
+): Promise<{ pages: Document[]; vindue: OplostVindue | null }> {
+  const q = new URLSearchParams({ kind: 'wiki', sort });
+  if (tidsrum?.fra) q.set('from', tidsrum.fra);
+  if (tidsrum?.til) q.set('to', tidsrum.til);
+  const { data, response } = await apiMedSvar<Document[]>(
+    `/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/documents?${q.toString()}`,
   );
+  const raw = response?.headers.get('X-Trail-Window');
+  let vindue: OplostVindue | null = null;
+  if (raw) {
+    // En uforståelig header er IKKE «intet vindue» — men den må heller ikke
+    // vælte listen. Vi lader den være null og lader skærmen sige at vinduet
+    // ikke kunne aflæses, frem for at tegne noget vi har fundet på.
+    try { vindue = JSON.parse(raw) as OplostVindue; } catch { vindue = null; }
+  }
+  return { pages: data, vindue };
 }
 
 /** F99 — Neuron graph data for a KB. Nodes + edges + layout meta. */

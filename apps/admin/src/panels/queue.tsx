@@ -200,7 +200,7 @@ export function QueuePanel() {
   useEffect(() => {
     if (!kbId) return;
     listWikiPages(kbId)
-      .then((pages) => {
+      .then(({ pages }) => {
         const map = new Map<string, string>();
         for (const p of pages as Array<Document & { filename: string }>) {
           map.set(p.id, p.filename.replace(/\.md$/i, ''));
