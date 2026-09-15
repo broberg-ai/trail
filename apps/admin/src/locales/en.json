@@ -1209,5 +1209,9 @@
     "resolvedSome": "{n} Neurons between {fra} and {til} ({zone})",
     "boundStart": "the beginning",
     "boundNow": "now"
+  },
+  "neuronRow": {
+    "created": "Created",
+    "updated": "Updated"
   }
 }

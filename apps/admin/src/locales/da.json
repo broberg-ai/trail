@@ -1209,5 +1209,9 @@
     "resolvedSome": "{n} Neuroner mellem {fra} og {til} ({zone})",
     "boundStart": "begyndelsen",
     "boundNow": "nu"
+  },
+  "neuronRow": {
+    "created": "Oprettet",
+    "updated": "Opdateret"
   }
 }

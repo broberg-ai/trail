@@ -4,6 +4,7 @@ import type { Document } from '@trail/shared';
 import { formatSeqId } from '@trail/shared';
 import { listWikiPages, listTags, runLint, createNeuron, ApiError, type WikiSortOrder, type TagCount, type Tidsrum, type OplostVindue } from '../api';
 import { TidsrumVaelger } from '../components/ui/tidsrum-vaelger';
+import { danskFuld } from '../lib/dates';
 import { formatPathDisplay } from '../lib/display-path';
 import { useKb } from '../lib/kb-cache';
 import { useKbEvents, onStreamOpen, onFocusRefresh, debounce } from '../lib/event-stream';
@@ -383,6 +384,15 @@ export function WikiTreePanel() {
                 // recently-touched Neurons read as fresh. createdAt is
                 // the fallback for rows that have never been edited.
                 const ts = d.updatedAt ?? d.createdAt ?? null;
+                // F273.6 — den relative alder alene («3t») svarer ikke på
+                // HVORNÅR. Det absolutte tidspunkt står nu ved siden af, i
+                // dansk tid med zonen navngivet.
+                //
+                // OG DEN NAVNGIVER HVILKET tidsstempel det er. Rækken viser
+                // updatedAt; tidsfilteret ovenfor matcher på createdAt. Målt i
+                // CB-M1: de er ens for 937 af 946 Neuroner — men for de 9 kan
+                // man filtrere på ét klokkeslæt og se et andet, og uden en
+                // etiket ville det ligne en fejl i filteret.
                 const docTags = parseTags(d.tags ?? null);
                 return (
                   <li key={doc.id}>
@@ -410,7 +420,18 @@ export function WikiTreePanel() {
                           {ts ? (
                             <>
                               <span class="opacity-60">·</span>
-                              <span class="shrink-0" title={ts}>{formatRelative(ts)}</span>
+                              <span
+                                class="shrink-0"
+                                title={
+                                  (d.updatedAt && d.createdAt && d.updatedAt !== d.createdAt
+                                    ? `${t('neuronRow.updated')} ${danskFuld(d.updatedAt)} · ${t('neuronRow.created')} ${danskFuld(d.createdAt)}`
+                                    : `${t('neuronRow.created')} ${danskFuld(ts)}`) + ' (Europe/Copenhagen)'
+                                }
+                              >
+                                {formatRelative(ts)}
+                              </span>
+                              <span class="opacity-60">·</span>
+                              <span class="shrink-0 tabular-nums">{danskFuld(ts)}</span>
                             </>
                           ) : null}
                           {docTags.map((tag) => (
