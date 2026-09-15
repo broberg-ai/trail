@@ -33,7 +33,7 @@ function isoNDaysAgo(n: number): string {
 
 const KIND_GROUPS: ReadonlyArray<{ label: string; kinds: string[] }> = [
   { label: 'Auth', kinds: ['auth.login', 'auth.logout'] },
-  { label: 'Trail', kinds: ['kb.created', 'kb.updated', 'kb.archived'] },
+  { label: 'Brain', kinds: ['kb.created', 'kb.updated', 'kb.archived'] },
   { label: 'Source', kinds: ['source.uploaded', 'source.archived', 'source.restored'] },
   { label: 'Ingest', kinds: ['ingest.started', 'ingest.completed', 'ingest.failed', 'ingest.retried'] },
   { label: 'Queue', kinds: ['candidate.created', 'candidate.approved', 'candidate.rejected', 'candidate.reopened', 'candidate.acknowledged'] },

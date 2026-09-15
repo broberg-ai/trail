@@ -350,11 +350,21 @@ export function WikiTreePanel() {
 
       {!pages && !error ? <CenteredLoader variant="list" /> : null}
 
-      {grouped?.length === 0 ? (
+      {/* F273.2 — TRE GRUNDE TIL AT LISTEN ER TOM, og de betyder ikke det samme.
+          Den gamle udgave sagde «No Neurons yet … to grow this Trail» uanset
+          hvad, så et tidsrum uden træf hævdede at BRAINET var tomt — og en dato
+          motoren ikke forstod gjorde det samme, lige under en rød fejllinje der
+          sagde noget andet. Ved en fejl vises intet her: linjen ved kontrollen
+          er svaret, og to modstridende beskeder er værre end én.
+          (Strengen var desuden hardkodet på engelsk og skyggede for den
+          oversatte `wikiTree.empty`, som allerede fandtes.) */}
+      {grouped?.length === 0 && !vinduefejl ? (
         <div class="text-center py-16 text-[color:var(--color-fg-subtle)]">
           {tagFilter.size > 0
             ? t('wikiTree.emptyFiltered')
-            : 'No Neurons yet. Approve a candidate in the queue to grow this Trail.'}
+            : tidsrum.fra || tidsrum.til
+              ? t('wikiTree.emptyWindow')
+              : t('wikiTree.empty')}
         </div>
       ) : null}
 

@@ -644,6 +644,7 @@
     "lintClean": "Nothing to flag.",
     "lintFailed": "Lint failed",
     "emptyFiltered": "No Neurons match the selected tags. Clear filters to see everything.",
+    "emptyWindow": "No Neurons in the chosen period. Widen it, or clear it to see everything.",
     "newNeuron": "New",
     "newNeuronHint": "Create a new Neuron manually — lands in queue for review",
     "newNeuronModal": {

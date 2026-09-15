@@ -644,6 +644,7 @@
     "lintClean": "Intet at markere.",
     "lintFailed": "Lint fejlede",
     "emptyFiltered": "Ingen Neuroner matcher de valgte tags. Ryd filteret for at se alt.",
+    "emptyWindow": "Ingen Neuroner i det valgte tidsrum. Udvid det, eller ryd det for at se alt.",
     "newNeuron": "Ny",
     "newNeuronHint": "Opret et nyt Neuron manuelt — havner i køen til gennemgang",
     "newNeuronModal": {
