@@ -27,6 +27,7 @@ import {
   knowledgeBases,
   type TrailDatabase,
 } from '@trail/db';
+import { maskerCpr, redactSecrets } from '@trail/shared';
 import { formatSeqId, buildFtsQuery } from '@trail/shared';
 import { createCandidate } from '../queue/candidates.js';
 import { slugify } from '../slug.js';
@@ -498,7 +499,19 @@ export async function write(
     // candidates.ts er anden-vagten. Jeg rettede først kun den anden, og
     // opførslen var uændret i produktion — en rettelse på det forkerte af tre
     // skrivesteder ser præcis ud som en rettelse der ikke er udrullet.
-    const visningsTitel = neuronTitel(args.title, args.content ?? '');
+    // F274.1 — FILNAVNET SKAL DANNES AF DEN MASKEREDE TITEL.
+    //
+    // createCandidate scrubber titel og indhold, men filnavnet regnes HER, af
+    // den rå titel, og sendes med i metadata — så scrubben aldrig ser det.
+    // Målt på produktion: en Neuron fik titlen «F274 live-kontrol [CPR
+    // fjernet]» og filnavnet «f274-live-kontrol-010101-0000.md». Filnavnet ER
+    // slug'en; den står i URL'en, i listen og i hvert [[link]].
+    //
+    // Kun read-back'en fandt det. Enhedsprøverne kaldte scrubForLeaks, som
+    // returnerer titel + indhold — filnavnet dannes et helt andet sted, og en
+    // prøve på returværdien kunne per konstruktion ikke se det.
+    const sikkerTitel = maskerCpr(redactSecrets(args.title).redacted).maskeret;
+    const visningsTitel = neuronTitel(sikkerTitel, args.content ?? '');
     const filename = (slugify(visningsTitel) || 'untitled') + '.md';
     const path = dirPath.endsWith('/') ? dirPath : dirPath + '/';
     // F22 + F101 — inject stable claim-anchors and ensure `type:`

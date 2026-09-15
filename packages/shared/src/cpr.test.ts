@@ -74,3 +74,17 @@ test('erGyldigDato afviser det den skal, og kun det', () => {
   expect(erGyldigDato('00', '01', '85')).toBe(false);
   expect(erGyldigDato('01', '00', '85')).toBe(false);
 });
+
+// ── F274.1: filnavnet er også en lækage-flade ─────────────────────────────
+import { slugify } from './slug.js';
+
+test('DEN BÆRENDE FOR F274.1: slug\'en af en maskeret titel bærer intet CPR', () => {
+  // Fundet på PRODUKTION, ikke i en prøve: titlen blev maskeret, men
+  // filnavnet blev dannet af den RÅ titel og endte som
+  // «f274-live-kontrol-010101-0000.md». Filnavnet er slug'en — den står i
+  // URL'en, i listen og i hvert [[link]].
+  const raa = 'F274 live-kontrol 010101-0000';
+  expect(slugify(raa)).toContain('010101-0000');            // sådan så fejlen ud
+  expect(slugify(maskerCpr(raa).maskeret)).not.toContain('010101');
+  expect(slugify(maskerCpr(raa).maskeret)).not.toContain('0000');
+});
