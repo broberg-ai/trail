@@ -19,10 +19,7 @@ import type {
   CandidateAction,
   CandidateEffectKind,
 } from '@trail/shared';
-import { maskerCpr } from '@trail/shared';
-import { redactSecrets,
-  AMBIENT_CONNECTOR,
-} from '@trail/shared';
+import { skrubStreng, AMBIENT_CONNECTOR } from '@trail/shared';
 import { slugify } from '../slug.js';
 import { neuronTitel } from './neuron-name.js';
 import { shouldAutoApprove, shouldAutoReject } from './policy.js';
@@ -39,19 +36,21 @@ export function scrubForLeaks(
   fields: { title: string; content: string },
   where: string,
 ): { title: string; content: string } {
-  const t = redactSecrets(fields.title);
-  const c = redactSecrets(fields.content);
-  // F274 — CPR oven i. Detektoren kender 35+ nøgleformater men IKKE danske
-  // personnumre (målt 15/9 2026 med positiv kontrol: den maskerer en
+  // F274 — CPR oven i nøglerne. Detektoren kender 35+ nøgleformater men IKKE
+  // danske personnumre (målt 15/9 2026 med positiv kontrol: den maskerer en
   // API-nøgle i samme kald og lader «050268-0501» stå). Mønsteret hører
   // hjemme i @broberg/secret-scan hos components — indtil det lander dér,
   // køres det her, så Trails indtag ikke står ubeskyttet imens.
-  const tCpr = maskerCpr(t.redacted);
-  const cCpr = maskerCpr(c.redacted);
-  const cprAntal = tCpr.antal + cCpr.antal;
+  //
+  // F274.1 — REGLEN LIGGER I `skrubStreng`, ikke her. Filnavnet skrubbes af
+  // det SAMME kald i candidate-api.ts; da de var to udgaver af udtrykket,
+  // maskerede den ene titlen mens den anden lod nummeret stå i slug'en.
+  const tCpr = skrubStreng(fields.title);
+  const cCpr = skrubStreng(fields.content);
+  const cprAntal = tCpr.cprAntal + cCpr.cprAntal;
   const findings = [
-    ...t.findings,
-    ...c.findings,
+    ...tCpr.findings,
+    ...cCpr.findings,
     ...(cprAntal > 0 ? [{ label: 'dk-cpr', count: cprAntal, confidence: 'format' as const }] : []),
   ];
   if (findings.length > 0) {
@@ -62,7 +61,7 @@ export function scrubForLeaks(
         .join(', ')}`,
     );
   }
-  return { title: tCpr.maskeret, content: cCpr.maskeret };
+  return { title: tCpr.ren, content: cCpr.ren };
 }
 
 /**
@@ -854,14 +853,19 @@ async function approveCreate(
 ): Promise<ResolutionResult> {
   // F197 — re-scan at materialize so an approve-time editedContent edit can't
   // smuggle a secret past the enqueue gate (candidate.content is already clean).
-  const contentScan = redactSecrets(payload.editedContent ?? candidate.content);
-  if (contentScan.findings.length > 0) {
-    const total = contentScan.findings.reduce((n, f) => n + f.count, 0);
+  // F274.1 — SAMME skrub som porten. Den kørte kun `redactSecrets`, altså
+  // nøgler og ikke CPR: en curator der skrev et personnummer ind ved
+  // godkendelsen kom uden om maskeringen på præcis den vej denne kontrol
+  // findes for at lukke.
+  const contentScan = skrubStreng(payload.editedContent ?? candidate.content);
+  if (contentScan.findings.length > 0 || contentScan.cprAntal > 0) {
+    const total =
+      contentScan.findings.reduce((n, f) => n + f.count, 0) + contentScan.cprAntal;
     console.warn(
       `[secret-gate] redacted ${total} secret(s) at approve-materialize (candidate ${candidate.id})`,
     );
   }
-  const content = contentScan.redacted;
+  const content = contentScan.ren;
   // F256 — en STI må aldrig blive til et filnavn. Sendte kompileringen den
   // fulde sti som titel, gjorde slugify hele stien til ét navn, og hvert
   // [[link]] til Neuronen pegede derefter på ingenting. Se neuron-name.ts.
@@ -1048,14 +1052,16 @@ async function approveUpdate(
 
   // F197 — re-scan at update-materialize (same reason as approveCreate: an
   // approve-time editedContent edit must not bypass the enqueue gate).
-  const updateScan = redactSecrets(payload.editedContent ?? candidate.content);
-  if (updateScan.findings.length > 0) {
-    const total = updateScan.findings.reduce((n, f) => n + f.count, 0);
+  // F274.1 — CPR oven i nøglerne, se approveCreate.
+  const updateScan = skrubStreng(payload.editedContent ?? candidate.content);
+  if (updateScan.findings.length > 0 || updateScan.cprAntal > 0) {
+    const total =
+      updateScan.findings.reduce((n, f) => n + f.count, 0) + updateScan.cprAntal;
     console.warn(
       `[secret-gate] redacted ${total} secret(s) at update-materialize (candidate ${candidate.id})`,
     );
   }
-  const content = updateScan.redacted;
+  const content = updateScan.ren;
   const newVersion = doc.version + 1;
   const prevEventId = await lastEventIdFor(tx, candidate.tenantId, doc.id);
 

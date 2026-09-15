@@ -27,7 +27,7 @@ import {
   knowledgeBases,
   type TrailDatabase,
 } from '@trail/db';
-import { maskerCpr, redactSecrets } from '@trail/shared';
+import { skrubStreng } from '@trail/shared';
 import { formatSeqId, buildFtsQuery } from '@trail/shared';
 import { createCandidate } from '../queue/candidates.js';
 import { slugify } from '../slug.js';
@@ -510,7 +510,7 @@ export async function write(
     // Kun read-back'en fandt det. Enhedsprøverne kaldte scrubForLeaks, som
     // returnerer titel + indhold — filnavnet dannes et helt andet sted, og en
     // prøve på returværdien kunne per konstruktion ikke se det.
-    const sikkerTitel = maskerCpr(redactSecrets(args.title).redacted).maskeret;
+    const sikkerTitel = skrubStreng(args.title).ren;
     const visningsTitel = neuronTitel(sikkerTitel, args.content ?? '');
     const filename = (slugify(visningsTitel) || 'untitled') + '.md';
     const path = dirPath.endsWith('/') ? dirPath : dirPath + '/';
