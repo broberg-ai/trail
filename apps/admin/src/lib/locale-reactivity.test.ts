@@ -23,10 +23,6 @@ const SRC = new URL('../', import.meta.url).pathname;
 
 /** De eneste lovlige kald, med grunden. Ændres listen, ændres ALLOWED. */
 const ALLOWED: Record<string, { count: number; why: string }> = {
-  'panels/settings-account.tsx': {
-    count: 1,
-    why: 'formatDate er en ren funktion uden for en komponent — en hook ville være ulovlig. Den kaldes fra en render der selv abonnerer, så den læser den aktuelle værdi.',
-  },
   'panels/cost.tsx': {
     count: 1,
     why: 'useState-initializer: kører kun ved mount og sætter en STARTVALUTA som brugeren derefter selv vælger og som gemmes i localStorage. En hook her ville overskrive hendes valg ved hvert sprogskift.',

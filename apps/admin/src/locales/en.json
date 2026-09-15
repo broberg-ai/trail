@@ -1192,5 +1192,22 @@
     "updateBody": "Reload to get the latest version.",
     "updateNow": "Update",
     "updateLater": "Later"
+  },
+  "timeRange": {
+    "title": "What did I learn between",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "last7": "Last 7 days",
+    "last30": "Last 30 days",
+    "from": "From",
+    "to": "To",
+    "apply": "Show",
+    "clear": "Clear",
+    "fromLabel": "From date (Danish time)",
+    "toLabel": "To date (Danish time)",
+    "resolvedNone": "No Neurons between {fra} and {til} ({zone})",
+    "resolvedSome": "{n} Neurons between {fra} and {til} ({zone})",
+    "boundStart": "the beginning",
+    "boundNow": "now"
   }
 }

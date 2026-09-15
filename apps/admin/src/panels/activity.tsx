@@ -14,6 +14,7 @@ import { naesteAutoTilstand, MAX_GOLDE_RUNDER } from './activity-autoload.js';
 import { listActivity, type ActivityRow } from '../api';
 import { useLocale, t } from '../lib/i18n';
 import { CenteredLoader } from '../components/centered-loader';
+import { dansk } from '../lib/dates';
 
 type TimeframeId = 'all' | 'today' | '7d' | '30d';
 
@@ -433,10 +434,8 @@ function KindBadge({ kind }: { kind: string }) {
 function formatTime(iso: string): string {
   const d = new Date(iso.includes('T') || iso.includes(' ') ? iso.replace(' ', 'T') + (iso.endsWith('Z') ? '' : 'Z') : iso);
   if (!Number.isFinite(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  // ALTID dansk, gennem den ENE hjælper. `undefined` var beskuerens sprog,
+  // og et 'da-DK' skrevet her ville være en kopi af reglen — den slags dublet
+  // er ikke gal den dag den skrives, men den dag den ene bliver rettet.
+  return dansk(iso);
 }

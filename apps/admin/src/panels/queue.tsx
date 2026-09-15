@@ -33,6 +33,7 @@ import {
 import { useKbEvents, onStreamOpen, onFocusRefresh, debounce } from '../lib/event-stream';
 import { t, useLocale, bilingual } from '../lib/i18n';
 import { useCandidateBundle } from '../lib/translate-candidate';
+import { danskFuld } from '../lib/dates';
 
 type FilterStatus = QueueCandidateStatus | 'all';
 
@@ -1501,12 +1502,9 @@ function StatusBadge({ status, auto }: { status: QueueCandidateStatus; auto: boo
   );
 }
 
+/** Dansk tid og dansk format — se lib/dates.ts. Var browserens sprog. */
 function formatTs(iso: string): string {
-  try {
-    return new Date(iso.replace(' ', 'T') + 'Z').toLocaleString();
-  } catch {
-    return iso;
-  }
+  return danskFuld(iso);
 }
 
 /**

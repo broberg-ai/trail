@@ -4,35 +4,42 @@
  * Ejerens ord: «jeg kan ikke finde en given aktivitet der er sket i Trail i et
  * bestemt interval.» Det er kontrollen der stiller spørgsmålet.
  *
- * INGEN NATIVE KONTROLLER. Ingen `<input type="date">`, ingen `<select>`.
- * Husreglen er ikke kosmetik: macOS' egen kalender-popover matcher intet brand,
- * ignorerer temaet og ser billig ud ved siden af resten. Felterne er derfor
- * almindelige tekstfelter med et fast format, og hurtigvalgene dækker det man
- * i praksis spørger om.
+ * TO RETTELSER EFTER FØRSTE UDGAVE, begge rapporteret af ejeren med et
+ * skærmbillede — og begge fordi jeg skrev komponenten uden at se på koden
+ * omkring den:
  *
- * Datoerne er DANSK vægur-tid hele vejen — det er den tid ejeren tænker i, og
- * motoren omregner (se packages/shared/src/tidsvindue.ts).
+ *  1. TEKSTERNE VAR HARDKODET PÅ DANSK. Panelet omkring dem kalder `t()` for
+ *     hver eneste streng, så på en engelsk flade stod mine knapper alene
+ *     tilbage på dansk. Alt går nu gennem `timeRange.*` i begge locales.
+ *  2. FELTERNE VAR TEKSTFELTER med «ÅÅÅÅ-MM-DD» som pladsholder. Det er ikke
+ *     en datovælger, det er en formular der beder brugeren om at kende et
+ *     format. Nu en rigtig kalender — se date-picker.tsx.
+ *
+ * DATOERNE VISES ALTID PÅ DANSK, også når sproget er engelsk. Det er ejerens
+ * regel og den er ikke en oversættelses-forglemmelse: `04/09/2026` betyder to
+ * forskellige dage i de to sprog, og tallet afslører ikke hvilken der var ment.
+ * Se lib/dates.ts.
  */
 import { useState } from 'preact/hooks';
 import type { Tidsrum } from '../../api';
+import { t, useLocale } from '../../lib/i18n';
+import { danskISODato, danskVaegurVisning } from '../../lib/dates';
+import { DatePicker } from './date-picker';
 
-/** Et hurtigvalg. `byg` kaldes når man trykker — aldrig på forhånd, så
- *  «i dag» ikke bliver hængende på gårsdagens dato i en åben fane. */
-type Hurtigvalg = { id: string; mærkat: string; byg: () => Tidsrum };
-
-/** `YYYY-MM-DD` for en dag N dage siden, i BESKUERENS zone (= dansk hos ejeren). */
+/** `YYYY-MM-DD` for en dag N dage fra i dag, i DANSK tid. */
 function dagsdato(forskyd = 0): string {
   const d = new Date();
   d.setDate(d.getDate() + forskyd);
-  // sv-SE giver ISO-formen uden at vi selv regner på måneder.
-  return new Intl.DateTimeFormat('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  return danskISODato(d);
 }
 
-const HURTIGVALG: readonly Hurtigvalg[] = [
-  { id: 'i-dag', mærkat: 'I dag', byg: () => ({ fra: dagsdato(), til: dagsdato() }) },
-  { id: 'i-gaar', mærkat: 'I går', byg: () => ({ fra: dagsdato(-1), til: dagsdato(-1) }) },
-  { id: 'syv-dage', mærkat: 'Sidste 7 dage', byg: () => ({ fra: dagsdato(-6), til: dagsdato() }) },
-  { id: 'tredive-dage', mærkat: 'Sidste 30 dage', byg: () => ({ fra: dagsdato(-29), til: dagsdato() }) },
+/** Et hurtigvalg. `byg` kaldes ved klik — aldrig på forhånd, så «i dag» ikke
+ *  bliver hængende på gårsdagens dato i en fane der har stået åben. */
+const HURTIGVALG: ReadonlyArray<{ id: string; noegle: string; byg: () => Tidsrum }> = [
+  { id: 'i-dag', noegle: 'timeRange.today', byg: () => ({ fra: dagsdato(), til: dagsdato() }) },
+  { id: 'i-gaar', noegle: 'timeRange.yesterday', byg: () => ({ fra: dagsdato(-1), til: dagsdato(-1) }) },
+  { id: 'syv-dage', noegle: 'timeRange.last7', byg: () => ({ fra: dagsdato(-6), til: dagsdato() }) },
+  { id: 'tredive-dage', noegle: 'timeRange.last30', byg: () => ({ fra: dagsdato(-29), til: dagsdato() }) },
 ];
 
 export interface TidsrumVaelgerProps {
@@ -45,25 +52,21 @@ export interface TidsrumVaelgerProps {
   fejl?: string | null;
 }
 
-const felt =
-  'px-2 py-1 text-[12px] font-mono rounded-md border border-[color:var(--color-border)] ' +
-  'bg-[color:var(--color-bg-card)] focus:border-[color:var(--color-accent)] focus:outline-none ' +
-  'transition w-[150px]';
-
-const chip =
+const CHIP =
   'px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider rounded-md border transition ' +
   'hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--color-bg-elevated)] ' +
   'active:scale-[0.97]';
 
 export function TidsrumVaelger({ værdi, onVælg, opløst, antal, fejl }: TidsrumVaelgerProps) {
+  useLocale();
   const [fra, setFra] = useState(værdi.fra ?? '');
   const [til, setTil] = useState(værdi.til ?? '');
   const aktiv = Boolean(værdi.fra || værdi.til);
 
-  const anvend = (f: string, t: string) => {
+  const anvend = (f: string, t2: string) => {
     setFra(f);
-    setTil(t);
-    onVælg({ fra: f || undefined, til: t || undefined });
+    setTil(t2);
+    onVælg({ fra: f || undefined, til: t2 || undefined });
   };
 
   return (
@@ -74,63 +77,48 @@ export function TidsrumVaelger({ værdi, onVælg, opløst, antal, fejl }: Tidsru
             key={h.id}
             type="button"
             data-testid={`neurons-timerange-${h.id}`}
-            class={`${chip} border-[color:var(--color-border)] bg-[color:var(--color-bg-card)]`}
+            class={`${CHIP} border-[color:var(--color-border)] bg-[color:var(--color-bg-card)]`}
             onClick={() => {
               const v = h.byg();
               anvend(v.fra ?? '', v.til ?? '');
             }}
           >
-            {h.mærkat}
+            {t(h.noegle)}
           </button>
         ))}
 
-        <span class="text-[11px] font-mono text-[color:var(--color-fg-subtle)] px-1">fra</span>
-        <input
-          type="text"
-          inputMode="numeric"
-          data-testid="neurons-timerange-from"
-          class={felt}
-          placeholder="ÅÅÅÅ-MM-DD"
-          aria-label="Fra-dato (dansk tid)"
+        <DatePicker
+          testid="neurons-timerange-from"
           value={fra}
-          onInput={(e) => setFra((e.target as HTMLInputElement).value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') anvend(fra, til); }}
+          onChange={(v) => anvend(v, til)}
+          placeholder={t('timeRange.from')}
+          label={t('timeRange.fromLabel')}
         />
-        <span class="text-[11px] font-mono text-[color:var(--color-fg-subtle)] px-1">til</span>
-        <input
-          type="text"
-          inputMode="numeric"
-          data-testid="neurons-timerange-to"
-          class={felt}
-          placeholder="ÅÅÅÅ-MM-DD"
-          aria-label="Til-dato (dansk tid)"
+        <DatePicker
+          testid="neurons-timerange-to"
           value={til}
-          onInput={(e) => setTil((e.target as HTMLInputElement).value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') anvend(fra, til); }}
+          onChange={(v) => anvend(fra, v)}
+          placeholder={t('timeRange.to')}
+          label={t('timeRange.toLabel')}
+          min={fra}
         />
-        <button
-          type="button"
-          data-testid="neurons-timerange-apply"
-          class={`${chip} border-[color:var(--color-accent)] bg-[color:var(--color-bg-card)]`}
-          onClick={() => anvend(fra, til)}
-        >
-          Vis
-        </button>
+
         {aktiv && (
           <button
             type="button"
             data-testid="neurons-timerange-clear"
-            class={`${chip} border-[color:var(--color-border)] bg-transparent text-[color:var(--color-fg-subtle)]`}
+            class={`${CHIP} border-[color:var(--color-border)] bg-transparent text-[color:var(--color-fg-subtle)]`}
             onClick={() => anvend('', '')}
           >
-            Ryd
+            {t('timeRange.clear')}
           </button>
         )}
       </div>
 
       {/* Kvitteringen. Den er SERVERENS opløsning af vinduet, ikke vores eget
           valg — ellers ville skærmen bekræfte sin egen hensigt. Antallet står
-          sammen med vinduet, så «0» aldrig kan læses som «noget gik galt». */}
+          i SAMME sætning som vinduet, så «0» aldrig kan læses alene som
+          «noget gik galt». */}
       {fejl ? (
         <span
           data-testid="neurons-timerange-error"
@@ -143,8 +131,12 @@ export function TidsrumVaelger({ værdi, onVælg, opløst, antal, fejl }: Tidsru
           data-testid="neurons-timerange-resolved"
           class="text-[11px] font-mono text-[color:var(--color-fg-subtle)]"
         >
-          {antal === 0 ? 'Ingen Neuroner' : `${antal ?? '—'} Neuroner`} mellem{' '}
-          {opløst.fra ?? 'begyndelsen'} og {opløst.til ?? 'nu'} ({opløst.zone})
+          {t(antal === 0 ? 'timeRange.resolvedNone' : 'timeRange.resolvedSome', {
+            n: antal ?? '—',
+            fra: opløst.fra ? danskVaegurVisning(opløst.fra) : t('timeRange.boundStart'),
+            til: opløst.til ? danskVaegurVisning(opløst.til) : t('timeRange.boundNow'),
+            zone: opløst.zone,
+          })}
         </span>
       ) : null}
     </div>

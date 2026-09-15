@@ -11,6 +11,7 @@ import { Dropdown } from '../components/dropdown';
 import { Icons } from '../components/ui/icons';
 import { PanelHeader } from '../components/ui/panel-header';
 import { useLocale } from '../lib/i18n';
+import { formatLocaleDate } from '../lib/dates';
 
 /**
  * F210.3 — Members of a tenant.
@@ -320,10 +321,9 @@ function initials(m: TenantMember): string {
   return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?';
 }
 
-function formatJoined(iso: string, isDa: boolean): string {
+/** Datoen er dansk uanset sprog. `isDa` bevaret så kaldestedet ikke skal røres. */
+function formatJoined(iso: string, _isDa: boolean): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString(isDa ? 'da-DK' : 'en-GB', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  });
+  return formatLocaleDate(iso);
 }

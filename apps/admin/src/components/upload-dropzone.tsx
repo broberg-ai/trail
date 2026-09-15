@@ -4,6 +4,7 @@ import type { Document } from '@trail/shared';
 import { Modal, ModalButton } from './modal';
 import { t } from '../lib/i18n';
 import { uploadChunked } from '../lib/upload-client';
+import { danskFuld } from '../lib/dates';
 
 /**
  * F162 — when upload-route returns 409 + code='duplicate_source', this
@@ -341,7 +342,7 @@ export function UploadDropzone({
               {conflict.existingCreatedAt ? (
                 <div>
                   <span class="text-[color:var(--color-fg-subtle)]">uploaded:</span>{' '}
-                  {new Date(conflict.existingCreatedAt).toLocaleString()}
+                  {danskFuld(conflict.existingCreatedAt)}
                 </div>
               ) : null}
             </div>

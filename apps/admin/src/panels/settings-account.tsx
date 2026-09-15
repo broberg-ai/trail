@@ -30,6 +30,7 @@ import { ambientEnabled } from '../lib/ambient-store';
 import { Icons } from '../components/ui/icons';
 import { CenteredLoader } from '../components/centered-loader';
 import { Modal, ModalButton } from '../components/modal';
+import { formatLocaleDate } from '../lib/dates';
 
 /**
  * F186 — Account Preferences. Ported from
@@ -761,15 +762,13 @@ function DeveloperSection() {
   );
 }
 
-// F250 — getLocale() er KORREKT her: formatDate er en ren funktion uden for en
-// komponent, så en hook ville være ulovlig. Den kaldes fra en render der selv
-// abonnerer via useLocale(), og læser derfor den aktuelle værdi hver gang.
+// Datoen er dansk uanset sprog, så der er intet sprog at læse her længere.
+// (Var F250: getLocale() + en engelsk dato-variant.)
 function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString(getLocale() === 'da' ? 'da-DK' : 'en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  });
+  // ALTID dansk, gennem den ENE hjælper — se lib/dates.ts.
+  return formatLocaleDate(iso);
 }
 
 function GenerateKeyModal({ open, onClose }: { open: boolean; onClose: () => void }) {

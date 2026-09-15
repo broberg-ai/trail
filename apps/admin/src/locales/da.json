@@ -1192,5 +1192,22 @@
     "updateBody": "Opdatér for at hente den seneste version.",
     "updateNow": "Opdatér",
     "updateLater": "Senere"
+  },
+  "timeRange": {
+    "title": "Hvad lærte jeg mellem",
+    "today": "I dag",
+    "yesterday": "I går",
+    "last7": "Sidste 7 dage",
+    "last30": "Sidste 30 dage",
+    "from": "Fra",
+    "to": "Til",
+    "apply": "Vis",
+    "clear": "Ryd",
+    "fromLabel": "Fra-dato (dansk tid)",
+    "toLabel": "Til-dato (dansk tid)",
+    "resolvedNone": "Ingen Neuroner mellem {fra} og {til} ({zone})",
+    "resolvedSome": "{n} Neuroner mellem {fra} og {til} ({zone})",
+    "boundStart": "begyndelsen",
+    "boundNow": "nu"
   }
 }
