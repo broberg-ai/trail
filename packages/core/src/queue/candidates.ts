@@ -19,6 +19,7 @@ import type {
   CandidateAction,
   CandidateEffectKind,
 } from '@trail/shared';
+import { maskerCpr } from '@trail/shared';
 import { redactSecrets,
   AMBIENT_CONNECTOR,
 } from '@trail/shared';
@@ -32,13 +33,27 @@ import { shouldAutoApprove, shouldAutoReject } from './policy.js';
  * `redactSecrets` is the single-source detector in @trail/shared; this logs
  * (never silent) whenever it strips something.
  */
-function scrubForLeaks(
+/** Eksporteret så F274's bærende prøve kan kalde DET ÆGTE kaldested — en
+ *  prøve på mønsteret alene ville være grøn selv hvis det aldrig blev kaldt. */
+export function scrubForLeaks(
   fields: { title: string; content: string },
   where: string,
 ): { title: string; content: string } {
   const t = redactSecrets(fields.title);
   const c = redactSecrets(fields.content);
-  const findings = [...t.findings, ...c.findings];
+  // F274 — CPR oven i. Detektoren kender 35+ nøgleformater men IKKE danske
+  // personnumre (målt 15/9 2026 med positiv kontrol: den maskerer en
+  // API-nøgle i samme kald og lader «050268-0501» stå). Mønsteret hører
+  // hjemme i @broberg/secret-scan hos components — indtil det lander dér,
+  // køres det her, så Trails indtag ikke står ubeskyttet imens.
+  const tCpr = maskerCpr(t.redacted);
+  const cCpr = maskerCpr(c.redacted);
+  const cprAntal = tCpr.antal + cCpr.antal;
+  const findings = [
+    ...t.findings,
+    ...c.findings,
+    ...(cprAntal > 0 ? [{ label: 'dk-cpr', count: cprAntal, confidence: 'format' as const }] : []),
+  ];
   if (findings.length > 0) {
     const total = findings.reduce((n, f) => n + f.count, 0);
     console.warn(
@@ -47,7 +62,7 @@ function scrubForLeaks(
         .join(', ')}`,
     );
   }
-  return { title: t.redacted, content: c.redacted };
+  return { title: tCpr.maskeret, content: cCpr.maskeret };
 }
 
 /**
