@@ -8,8 +8,9 @@ import {
   BulkDeleteSchema,
   DocumentKindEnum,
   canonicaliseTagString,
+  byggTidsvindue,
 } from '@trail/shared';
-import { eq, and, or, lt, inArray, asc, desc, sql, type SQL } from 'drizzle-orm';
+import { eq, and, or, lt, lte, gte, inArray, asc, desc, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import { submitCuratorEdit, VersionConflictError, resolveKbId, createCandidateQueueAPI, type WriteArgs } from '@trail/core';
 import { requireAuth, getUser, getTenant, getTrail } from '../middleware/auth.js';
@@ -144,6 +145,16 @@ documentRoutes.get('/knowledge-bases/:kbId/documents', async (c) => {
     conditions.push(kanTagesNu(new Date().toISOString()));
   }
 
+  // F273.1 — «hvad lærte jeg mellem X og Y». `from`/`to` er DANSK vægur-tid
+  // (Europe/Copenhagen), fordi det er den tid ejeren tænker i; se tidsvindue.ts
+  // for hvorfor der ikke lægges «to timer» til og hvorfor der sammenlignes som
+  // tekst. Et ugyldigt input er en FEJL — «jeg forstod ikke datoen» må aldrig
+  // ligne «der er ingenting i det tidsrum».
+  const vindue = byggTidsvindue(c.req.query('from'), c.req.query('to'));
+  if (!vindue.ok) return c.json({ error: vindue.fejl }, 400);
+  if (vindue.vindue.fraNoegle) conditions.push(gte(documents.createdAt, vindue.vindue.fraNoegle));
+  if (vindue.vindue.tilNoegle) conditions.push(lte(documents.createdAt, vindue.vindue.tilNoegle));
+
   const rows = await trail.db
     .select({
       id: documents.id,
@@ -193,6 +204,14 @@ documentRoutes.get('/knowledge-bases/:kbId/documents', async (c) => {
     .orderBy(...orderClauseFor(sortParam))
     .all();
 
+  // F273.1 — KVITTERINGEN PÅ HVAD DER FAKTISK BLEV SPURGT OM, i dansk tid.
+  // Den ligger i en header og ikke i kroppen med vilje: svaret er et bart
+  // array, og to skærme plus et par scripts læser det sådan. At pakke det ind
+  // ville rette ét problem og lave et større. Headeren er additiv — en kalder
+  // der ikke kender den, mærker ingenting.
+  if (vindue.vindue.fraNoegle || vindue.vindue.tilNoegle) {
+    c.header('X-Trail-Window', JSON.stringify(vindue.vindue.opløst));
+  }
   return c.json(rows);
 });
 
