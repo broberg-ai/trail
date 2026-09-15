@@ -13,7 +13,7 @@ self-contained ESM bundle hosted at
 can embed in two lines. No framework required, no build step,
 no CSS conflicts (the widget renders in shadow DOM).
 
-If you want grounded chat over a Trail KB and you don't need the
+If you want grounded chat over a Brain and you don't need the
 multi-tool composition of [Pattern C](/site-llm-with-trail-as-tool/),
 this is the path.
 

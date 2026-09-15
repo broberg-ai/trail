@@ -32,8 +32,8 @@ embeddings, chunks, or vector stores.
 
 2. **Curator-in-the-loop by default.** Every candidate Neuron lands in
    a queue. The curator (human or auto-policy) reviews before it
-   becomes part of the trail. Auto-approval is a per-KB confidence
-   policy, not a default — your trail stays clean.
+   becomes part of the Brain. Auto-approval is a per-KB confidence
+   policy, not a default — your Brain stays clean.
 
 3. **Bidirectional, typed relationships.** Neurons are wiki-shaped:
    `[[Other Neuron]]` references resolve, backlinks render, edges have
@@ -47,7 +47,7 @@ Three integration paths, smallest to largest:
 
 | Path | Use when |
 |---|---|
-| **MCP server** | Your AI agent (Claude Code, Cursor, Claude Desktop) needs read/write/search of a trail KB. One `.mcp.json` block, one bearer token. Dedicated MCP integration guide coming soon. |
+| **MCP server** | Your AI agent (Claude Code, Cursor, Claude Desktop) needs read/write/search of a Brain. One `.mcp.json` block, one bearer token. Dedicated MCP integration guide coming soon. |
 | **REST queue** | Your app produces candidate knowledge programmatically — a Slack listener, a webhook receiver, a CI step that captures decisions. `POST /api/v1/queue/candidates` with a bearer token. See [Quick start](/quick-start/). |
 | **REST chat + search** | Your app needs to *consume* knowledge. `POST /api/v1/chat` for synthesised answers with citations, `GET /api/v1/search` for FTS5 hits. See [API reference](/api-reference/) (Phase 3). |
 

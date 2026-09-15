@@ -7,7 +7,7 @@ audience: both
 category: Concepts
 ---
 
-A **Neuron** is the atomic unit of curated knowledge inside a Trail
+A **Neuron** is the atomic unit of curated knowledge inside a Brain
 knowledge base. Every retrieval, every chat citation, every wiki-link
 resolves to one Neuron. If RAG returns raw chunks, Trail returns
 Neurons — fact-shaped, citable, deduplicated, cross-linked.

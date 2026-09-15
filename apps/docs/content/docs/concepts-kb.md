@@ -1,18 +1,26 @@
 ---
-title: Knowledge bases
+title: Brains (knowledge bases)
 slug: concepts-kb
-summary: Each KB is one trail.db on the engine — isolated content, settings, persona, language, ingest model. Bearer tokens scope to a tenant + KB.
+summary: A Brain is one trail.db on the engine — isolated content, settings, persona, language, ingest model. Bearer tokens scope to a tenant + KB.
 order: 12
 audience: both
 category: Concepts
 ---
 
-A **Knowledge base** (KB) is the unit of isolation in Trail. One KB
-is one `trail.db` SQLite file on the engine machine — its own
+A **Brain** is the unit of isolation in Trail. One Brain is one
+`trail.db` SQLite file on the engine machine — its own
 Neurons, its own queue, its own settings, its own persona, its own
 auto-approval policy. Cross-KB queries are a deliberate exception
 (via wiki-link `[[kb:other/page]]` syntax); the default is that one
-KB sees only itself.
+Brain sees only itself.
+
+> **Brain, KB, knowledge base — the same thing.** «Brain» is what the
+> product calls it and what you see in the admin. `knowledge-base` /
+> `kb` is what the **API paths, slugs and bearer-token scopes** are
+> called, and those have NOT changed: `/api/v1/knowledge-bases/...`
+> still works exactly as before. Where this page talks about a route
+> or a token scope it uses the API spelling on purpose — renaming it
+> in prose would describe an endpoint that does not exist.
 
 ## Tenancy
 
@@ -21,7 +29,7 @@ The hierarchy:
 ```
 Organization (your account)
   └─ Tenant (a billable unit, usually = customer)
-      └─ Knowledge base
+      └─ Brain  (`knowledge-base` in the API)
           └─ Neurons
 ```
 
@@ -58,7 +66,7 @@ UUID-only routes.
 ## KB-level settings
 
 Each KB has its own per-KB settings, configured in the admin UI under
-**Settings → Trail**:
+**Settings → Brain settings**:
 
 ### Language
 
@@ -89,7 +97,7 @@ prompt) — Pattern A deployments lean on it heavily.
   runner skips to the next entry mid-job, keeping already-written
   Neurons.
 
-The admin's per-KB **Settings → Trail** panel includes a model-
+The admin's per-KB **Settings → Brain settings** panel includes a model-
 switcher dropdown that flips these live without a redeploy, plus a
 preview line that renders the effective fallback-chain as it would
 run today (e.g. `Flash → GLM → Qwen → Sonnet API`). The cost +

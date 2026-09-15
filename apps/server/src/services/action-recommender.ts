@@ -216,7 +216,7 @@ Given the candidate below and its available actions, pick the ONE action id that
 Hard rules:
 - The \`recommendedActionId\` MUST match one of the action ids verbatim. Never invent a new id.
 - The \`reasoning\` MUST be written in ${languageName}. Natural prose, no jargon, addressed to the curator, max 300 characters.
-- Product terms stay as English loan-words in ${languageName}: "Neuron", "Trail", "Source", "frontmatter", "lint" — don't translate these.
+- Product terms stay as English loan-words in ${languageName}: "Neuron", "Brain", "Trail", "Source", "frontmatter", "lint" — don't translate these.
 - The \`confidence\` must be a number between 0 and 1.
 - Return ONLY a JSON object. No prose around it. No markdown fence.
 

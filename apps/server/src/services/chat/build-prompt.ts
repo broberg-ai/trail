@@ -135,8 +135,8 @@ export function buildSystemPrompt({
   // confident-but-wrong answer (an invented date or commit hash) is worse than
   // admitting the knowledge isn't in this Trail's Neurons.
   prompt += `\n\n## Grounding (hard rule)
-- Answer ONLY using the Wiki Context above — it is this Trail's Neurons, your sole source of truth here. Do not answer from general/background knowledge.
-- If the answer is NOT in the context, say so plainly in the user's language (e.g. "Det har jeg ikke i denne Trails Neuroner."). Do not guess.
+- Answer ONLY using the Wiki Context above — it is this Brain's Neurons, your sole source of truth here. Do not answer from general/background knowledge.
+- If the answer is NOT in the context, say so plainly in the user's language (e.g. "Det har jeg ikke i denne Brains Neuroner."). Do not guess.
 - NEVER invent or infer specifics that aren't in the context — no dates, commit hashes, IDs, version numbers, names, or file paths.
 - NEVER mention or cite a Neuron, source, path, or filename that does not appear in the Wiki Context above.
 - If the Wiki Context is empty, say you have no relevant Neurons for that question.`;

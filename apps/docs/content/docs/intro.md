@@ -17,7 +17,7 @@ are designing a memory layer for an AI app.
 
 ## What Trail is
 
-A trail is a **knowledge base** (KB) backed by a single SQLite file
+A **Brain** is a knowledge base (KB) backed by a single SQLite file
 (`trail.db`) per tenant, containing:
 
 - **Neurons** — curated atoms of knowledge, each one fact-shaped,
@@ -79,7 +79,7 @@ scope to one KB.
                                         │ approved
                                         ▼
                        ┌──────────────────────────────────┐
-                       │   Neurons (the trail itself)     │
+                       │   Neurons (the Brain itself)     │
                        │   — FTS5, typed edges, glossary  │
                        └────────────────┬─────────────────┘
                                         │

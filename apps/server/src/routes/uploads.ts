@@ -286,7 +286,7 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
     if (existing) {
       return c.json(
         {
-          error: 'A source with identical content already exists in this Trail.',
+          error: 'A source with identical content already exists in this Brain.',
           code: 'duplicate_source',
           existingDocumentId: existing.id,
           existingFilename: existing.filename,
@@ -561,7 +561,7 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload/init', async (c) => {
     if (existing) {
       return c.json(
         {
-          error: 'A source with identical content already exists in this Trail.',
+          error: 'A source with identical content already exists in this Brain.',
           code: 'duplicate_source',
           existingDocumentId: existing.id,
           existingFilename: existing.filename,

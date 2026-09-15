@@ -1,13 +1,13 @@
 ---
 title: The curation queue
 slug: concepts-queue
-summary: Every write to a Trail KB goes through the candidates queue. Candidates → curator review → Neurons. Auto-approval policy decides when curator review is bypassed.
+summary: Every write to a Brain goes through the candidates queue. Candidates → curator review → Neurons. Auto-approval policy decides when curator review is bypassed.
 order: 11
 audience: both
 category: Concepts
 ---
 
-The **curation queue** is the single write path into a Trail KB.
+The **curation queue** is the single write path into a Brain.
 Every Neuron that exists started life as a candidate in the queue:
 from a Claude-Code session that wrote via MCP, from a webhook
 forwarding Slack messages, from a PDF that the ingest pipeline

@@ -1,14 +1,14 @@
 ---
 title: The Web Clipper extension
 slug: web-clipper
-summary: Install the browser extension, point it at your Trail, and clip any web page into a knowledge base with one click. Covers setup, the API token, what the extension can and cannot see, and what each error message means.
+summary: Install the browser extension, point it at your Brain, and clip any web page into it with one click. Covers setup, the API token, what the extension can and cannot see, and what each error message means.
 order: 33
 audience: both
 category: Patterns
 ---
 
 The Web Clipper is a browser extension that saves the page you are reading
-straight into a Trail knowledge base. One click, no copy-paste, and the page
+straight into a Brain. One click, no copy-paste, and the page
 arrives as a Source that Trail compiles into Neurons like any other upload.
 
 It is idle until you click it. It does not follow your browsing.
@@ -61,7 +61,7 @@ the panel opens empty with no error to click on. The source folder deliberately
 contains no `manifest.json`, so Chrome refuses it outright with *"Manifest file
 is missing or unreadable"* rather than half-loading it into a silent failure.
 
-## Point it at your Trail
+## Point it at your Brain
 
 Open the extension and click **Settings**. Two buttons pick the server for you:
 
@@ -78,7 +78,7 @@ the cloud is the default.
 The token is what proves a clip is yours. **The extension ships without one**,
 deliberately — a token baked into an extension would be a published credential.
 
-1. Open the Trail you chose above.
+1. Open the Brain you chose above.
 2. Go to **Settings → Developer**.
 3. Click **Generate new key**.
 4. **Copy it immediately** — it is shown once and never again.

@@ -49,7 +49,7 @@ export TRAIL_KB="my-product-docs"
 
 A **candidate** is a proposed Neuron. It enters the curation queue
 and is reviewed (by a curator or by the auto-approval policy) before
-becoming part of the trail.
+becoming part of the Brain.
 
 ```bash
 curl -sS -X POST "${TRAIL_API_BASE}/api/v1/queue/candidates" \

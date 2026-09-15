@@ -198,7 +198,7 @@ const APPROVE_ACTION: CandidateAction = {
   effect: 'approve',
   label: { en: 'Approve' },
   explanation: {
-    en: 'Accept this candidate and apply its change to the Trail.',
+    en: 'Accept this candidate and apply its change to the Brain.',
   },
 };
 
@@ -207,7 +207,7 @@ const REJECT_ACTION: CandidateAction = {
   effect: 'reject',
   label: { en: 'Reject' },
   explanation: {
-    en: "Discard this candidate. Nothing in the Trail changes.",
+    en: "Discard this candidate. Nothing in the Brain changes.",
   },
 };
 

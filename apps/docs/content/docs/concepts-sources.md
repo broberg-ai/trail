@@ -185,7 +185,7 @@ the upload returns **HTTP 409** with `code: "duplicate_source"`:
 
 ```json
 {
-  "error": "A source with identical content already exists in this Trail.",
+  "error": "A source with identical content already exists in this Brain.",
   "code": "duplicate_source",
   "existingDocumentId": "doc_existing-uuid",
   "existingFilename": "older-name.pdf",
