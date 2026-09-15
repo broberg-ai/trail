@@ -10,6 +10,7 @@
  * ship the first useful surface fast.
  */
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { naesteAutoTilstand, MAX_GOLDE_RUNDER } from './activity-autoload.js';
 import { listActivity, type ActivityRow } from '../api';
 import { useLocale, t } from '../lib/i18n';
 import { CenteredLoader } from '../components/centered-loader';
@@ -45,23 +46,10 @@ const POLL_INTERVAL_MS = 30_000;
 
 const PAGE_SIZE = 50;
 
-/**
- * F273.4 — hvor mange hentninger i træk der må lande UDEN at give én eneste
- * synlig række, før auto-hentningen stopper og knappen tager over.
- *
- * Gruppe-filteret sorterer fra i BROWSEREN, ikke i motoren. En side kan
- * derfor lande med 50 rækker hvoraf 0 er synlige — og så bliver vagtposten
- * ved med at stå i billedet og bede om den næste. Uden loftet henter den
- * hele loggen i fuld fart uden at der kommer noget på skærmen.
- */
-const MAX_GOLDE_RUNDER = 5;
-
-/** Passerer rækken det gruppe-filter der er valgt i browseren? */
-function passerGruppe(row: ActivityRow, groupFilter: string): boolean {
-  if (!groupFilter) return true;
-  const grp = KIND_GROUPS.find((g) => g.label === groupFilter);
-  if (!grp) return true;
-  return grp.kinds.includes(row.kind);
+/** De hændelsestyper det valgte gruppe-filter slipper igennem. null = intet filter. */
+function gruppensKinds(groupFilter: string): readonly string[] | null {
+  if (!groupFilter) return null;
+  return KIND_GROUPS.find((g) => g.label === groupFilter)?.kinds ?? null;
 }
 
 export function ActivityPanel() {
@@ -116,15 +104,16 @@ export function ActivityPanel() {
       });
       setRows((prev) => (prev ? [...prev, ...r.items] : r.items));
       setNextCursor(r.nextCursor);
-      // F273.4 — gav siden noget at SE? Ikke «kom der rækker», men «kom der
-      // rækker der slipper gennem gruppe-filteret». De to er ikke det samme,
-      // og det er forskellen mellem at hente videre og at køre løbsk.
-      const synlige = r.items.filter((row) => passerGruppe(row, groupFilter)).length;
-      if (synlige > 0) {
-        goldeRunder.current = 0;
-      } else if (++goldeRunder.current >= MAX_GOLDE_RUNDER) {
-        setAutoStoppet(true);
-      }
+      // F273.4 — gav siden noget at SE? Beslutningen ligger i
+      // activity-autoload.ts, hvor den kan bevises rød. Se prøverne dér.
+      // NB: må ikke hedde `t` — det er i18n-oversætteren i denne fil.
+      const auto = naesteAutoTilstand({
+        items: r.items,
+        groupKinds: gruppensKinds(groupFilter),
+        goldeFoer: goldeRunder.current,
+      });
+      goldeRunder.current = auto.golde;
+      if (auto.stop) setAutoStoppet(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
