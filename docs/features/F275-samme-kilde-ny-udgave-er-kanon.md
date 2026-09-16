@@ -1,7 +1,7 @@
 # F275 — Samme kilde, ny udgave: den seneste er kanon
 
 **Kort:** trail-F275 · epic · **høj**
-**Status:** foreslået 16. september 2026 — ejerens beslutning, afventer GO før kode
+**Status:** foreslået 16. september 2026 — ejeren har afgjort UDFORMNINGEN; GO på selve bygningen mangler stadig
 
 ---
 
@@ -19,10 +19,13 @@ Christian, 16. september 2026, ordret:
 > udgave af den samme kilde. Hvis kilden — altså en URL på en hjemmeside — forbliver
 > den samme, ja så skal den seneste udgave være kanon.»*
 
-Og umiddelbart efter:
-
 > *«Det må være en feature vi skal bygge i Trail, og så kan du lave en indstilling som
 > hedder om en ny udgave af den samme kilde automatisk skal blive kanon.»*
+
+Og på de to spørgsmål planen stillede:
+
+> *«Det lyder virkelig klogt at der både er en på en brain og en på en connector. Vi
+> sætter dem begge to default on så samme kilde med ny indmad bliver ny kanon.»*
 
 ## Hvorfor det haster
 
@@ -34,24 +37,34 @@ hvert 45. sekund. Hver gemning i CMS'et sender en ny udgave til Trail via konnek
 Det er ikke en kantsag. Det er den normale arbejdsform på et site hvor indholdet bliver
 skrevet om løbende. Uden denne feature producerer hver eneste rettelse en modsigelse
 kuratoren skal tage stilling til — og modsigelsen er falsk, for der er kun ÉN kilde og
-den har skiftet mening om sig selv. Det er ejeren der har ret, ikke basen.
+den har skiftet mening om sig selv.
 
-**Konsekvensen af at lade være:** kuratorkøen fyldes med støj i takt med at ejeren
-retter dårlig tekst på sit eget site. Jo mere han forbedrer indholdet, jo mere arbejde
-giver Trail ham. Det er et incitament der vender forkert.
+**Konsekvensen af at lade være:** jo mere ejeren forbedrer den dårlige tekst på sit eget
+site, jo mere arbejde giver Trail ham. Det er et incitament der vender forkert.
 
 ## Målt, før noget bygges
 
 ```
 Råkilder i broberg.ai:                    70
   med en sourceUrl i metadata:            66   (94 %)
-  uden:                                    4
+  uden (uploads):                          4
 Konnektorer:  broberg-ai-site-sync  66  ·  (ingen)  4
 ```
 
-**Identiteten findes altså allerede** — `metadata.sourceUrl` er stemplet på hver
+**Identiteten findes allerede** — `metadata.sourceUrl` er stemplet på hver
 site-sync-kilde. Den er bare ikke et felt noget i systemet regner med. Det er en
 backfill, ikke en udgravning.
+
+**Men Neuronen bærer INGEN proviens** (målt af peer-sessionen samme nat):
+
+```
+kilden     1e94ca9c-…        metadata: {connector, sourceUrl}
+Neuronen   doc_ba74c740-115  metadata: None   ingestJobId: None
+```
+
+Eneste spor fra en Neuron tilbage til dens kilde er `sources: ["flagskibe_bid.md"]` i
+frontmatter — altså prosa, og et filnavn er ikke en identitet. Kilden kender sig selv;
+Neuronen kender ikke sin kilde. Begge ender skal lukkes.
 
 Modsigelses-linten (`packages/core/src/lint/contradictions.ts`, 232 linjer) springer
 allerede over når to Neuroner har samme `documentId` (linje 66). Den kender ikke
@@ -61,22 +74,43 @@ hver sin dag har hver sit documentId og bliver sammenlignet som uafhængige pås
 
 ## Beslutningen
 
-1. **En kilde har en IDENTITET.** For en hjemmeside-kilde er det URL'en. Forbliver
-   URL'en den samme, er det den samme kilde — uanset hvor meget teksten ændrer sig.
+1. **En kilde har en IDENTITET.**
+   - Hjemmeside-kilde: **URL'en**. Forbliver URL'en den samme, er det den samme kilde —
+     uanset hvor meget teksten ændrer sig.
+   - Uploadet fil: **filnavn + Brain** (ejerens afgørelse). Ellers genskaber vi præcis
+     det problem featuren fjerner, bare for filer i stedet for sider.
 2. **Den seneste udgave af en identitet er KANON.** De tidligere udgaver er ikke
    konkurrerende fakta. De er afløst.
-3. **En ny udgave rejser derfor ingen modsigelse mod sin egen forgænger.** Den erstatter
-   den.
-4. **Det er en INDSTILLING, ikke en antagelse.** Ejeren slår den til/fra pr. Brain.
+3. **En ny udgave rejser derfor ingen modsigelse mod sin egen forgænger.**
+4. **TO kontakter, begge default ON** — pr. Brain (hovedafbryderen) og pr. konnektor
+   (den præcise). En Brain som CB-M1 har både hjemmeside-sync og manuelle uploads, så
+   ét valg for hele hjernen ville nødvendigvis være forkert for den ene af dem.
+5. **Afgør på INDHOLDS-HASH, aldrig på `updatedAt`.** Målt: `updatedAt` flyttede sig
+   mens version, filstørrelse og hash stod stille. «Nogen skrev» og «indholdet er nyt»
+   er to spørgsmål.
+
+### Forbeholdet ejeren overtog bevidst
+
+Peer-sessionens råd var **upload default OFF** — en upload er en bevidst handling hvor
+mennesket måske TILFØJER frem for at erstatte. Ejeren valgte ON. Det er hans kald, og
+konsekvensen står her frem for at blive glattet ud: **to forskellige `rapport.pdf` i
+samme Brain betyder at den anden lydløst overskriver den førstes viden.**
+
+Derfor er besked-linjen ved upload — *«dette erstatter rapport.pdf fra 3. september,
+tryk her hvis det er en ny kilde»* — ikke en pæn detalje. **Den er det eneste
+sikkerhedsnet mod navnesammenfald, og den skal leveres SAMMEN med kontakten, ikke
+efter.** Uden den er default ON en lydløs overskrivning, og et lydløst indgreb kan ikke
+skelnes fra at intet skete.
 
 ## Afgrænsning
 
 **I epic'en:**
 
-- Kilde-identitet som førsteklasses felt + backfill af de 66.
-- Indstillingen «En ny udgave af samme kilde bliver automatisk kanon» pr. Brain.
-- Linten respekterer den: samme identitet ⇒ erstatning, aldrig modsigelse.
-- Genkompilering ERSTATTER en kildes Neuron-indhold frem for at lægge lag på.
+- Kilde-identitet som førsteklasses felt på BÅDE kilden og Neuronen + backfill.
+- De to kontakter, begge default ON, med et entydigt og synligt hierarki.
+- Linten respekterer identiteten: samme identitet ⇒ erstatning, aldrig modsigelse.
+- Afløsningen FORPLANTER sig til de Neuroner der citerer kilden (F275.5).
+- Genkompilering ERSTATTER en kildes viden frem for at lægge lag på.
 
 **Non-goals:**
 
@@ -85,55 +119,75 @@ hver sin dag har hver sit documentId og bliver sammenlignet som uafhængige pås
 - **At slette de gamle udgaver.** Dokumenter er versionerede i forvejen; historikken
   bevares i databasen. Det der ændres er hvad der regnes for KANON — ikke hvad der
   gemmes.
-- **At rydde op i eksisterende modsigelser i køen.** Ændringen er fremadrettet. En
-  separat oprydning kan komme senere hvis køen viser sig fuld af netop denne type.
+- **At rydde op i eksisterende modsigelser i køen.** Ændringen er fremadrettet.
 - **En automatisk «ingen forældede citater»-port.** Se F263.16's non-goal: den kan ikke
-  bygges. Det der kan håndhæves mekanisk er proveniens (hvilken version en påstand
-  dækker), ikke overensstemmelse.
+  bygges, fordi en side der dokumenterer historik SKAL indeholde de gamle citater. Det
+  der kan håndhæves mekanisk er proveniens, ikke overensstemmelse.
 
 ## Arkitektur-skitse
 
 ```
-  kilde-række          + sourceIdentity   (URL for site-sync; eksplicit for øvrige)
-  knowledge_base       + newVersionIsCanon (bool, default TRUE)
+  kilde-række      + sourceIdentity     URL (site-sync) | filnavn+Brain (upload)
+                   + contentHash        afgør «ny udgave», ikke updatedAt
+  NEURON-række     + sourceIdentity     Neuronen skal kende sin kilde
+  knowledge_base   + newVersionIsCanon  bool, default TRUE   ← hovedafbryder
+  connector        + newVersionIsCanon  bool, default TRUE   ← den præcise
 
   ingest/recompile  →  slår op på sourceIdentity, ikke på documentId
-                    →  er der en tidligere udgave OG indstillingen er TIL:
-                         markér den forrige som AFLØST, ikke som modpart
+                    →  tidligere udgave + begge kontakter TIL:
+                         markér forrige som AFLØST, ikke som modpart
+                       upload m. navnesammenfald: SIG DET FØRST
 
   contradictions.ts →  skip når sourceIdentity(a) === sourceIdentity(b)
-                       (i dag: kun skip når documentId(a) === documentId(b))
+                       INGEN identitet ⇒ MODSIGELSE (den sikre standard)
 ```
 
-Identiteten skal være EKSPLICIT, ikke udledt af filnavn eller titel. Et filnavn er ikke
-stabilt, og to sider kan hedde det samme. URL'en er den eneste stabile nøgle vi har på
-en hjemmeside-kilde — og den ligger der allerede.
+**Den sikre standard er ikke en detalje.** Alle eksisterende Neuroner mangler feltet
+indtil backfill'en er kørt. Falder tvivlen ud til «afløsning», bliver hele den nuværende
+base usynlig for modsigelses-detektion i det sekund kontakten slås til — og *en
+modsigelse der ikke rejses ser præcis ud som en der ikke findes.*
+
+## Stories
+
+| # | | |
+|---|---|---|
+| F275.1 | Kilden — og Neuronen — får en identitet | høj · 3 SP |
+| F275.2 | De to kontakter + besked ved navnesammenfald | høj · 3 SP |
+| F275.3 | Linten rejser aldrig modsigelse mellem to udgaver af samme kilde | **kritisk** · 3 SP |
+| F275.4 | Genkompilering erstatter — den lægger ikke lag på | høj · 3 SP |
+| F275.5 | Afløsningen skal forplante sig | **kritisk** · 5 SP |
+
+**F275.5 er den der redder featuren fra at gøre skade.** Det var ikke kilde-Neuronen der
+stod forkert i nat — det var `overview.md`, `glossary.md` og `flagskib.md`, hvis egen
+identitet ikke er kildens URL. Fem sider sagde «bygges nu» efter kilden sagde
+«lanceret». Rammer afløsningen kun kilde-Neuronen, bliver køen ren mens hjernen stadig
+svarer på gårsdagens tekst — **og det er værre end i dag, fordi det ikke længere ligner
+et problem.**
 
 ## Afhængigheder
 
 - **F263.16** (foreslået) — version + indholds-hash på «færdig». De to hænger sammen:
   F263.16 besvarer *hvilken udgave er kompileret*, F275 besvarer *hvad betyder det at
-  der er kommet en ny*. F275 kan bygges uden, men bliver bedre med.
+  der er kommet en ny*.
 - Modsigelses-linten, `packages/core/src/lint/contradictions.ts`.
 - Konnektoren `broberg-ai-site-sync`, som allerede stempler `sourceUrl`.
 
 ## Rollout
 
-1. Identitet + backfill (ingen adfærdsændring — feltet fyldes bare).
-2. Indstillingen, default TIL. Ejerens ord er at det er den ønskede adfærd; en
-   indstilling der som standard gør det forkerte er en indstilling ingen finder.
+1. Identitet på kilde + Neuron, plus backfill. Ingen adfærdsændring — feltet fyldes bare.
+2. De to kontakter, begge default ON, MED besked ved navnesammenfald.
 3. Linten respekterer identiteten.
 4. Genkompilering erstatter frem for at lægge lag på.
+5. Afløsningen forplanter sig.
 
-Hvert trin er additivt. Slås indstillingen fra, opfører systemet sig præcis som i dag.
+Hvert trin er additivt. Slås kontakterne fra, opfører systemet sig præcis som i dag.
 
-## Åbne spørgsmål
+## En note der hører til i filen
 
-- **Hvad er identiteten for en UPLOADET fil?** De fire kilder uden `sourceUrl` er
-  uploads. Filnavn + Brain er nærliggende men skrøbeligt: to versioner af samme rapport
-  hedder sjældent det samme. Forslag: uploads får en eksplicit identitet ejeren kan
-  sætte, og uden en identitet opfører de sig som i dag (hver upload er sin egen kilde).
-  Det bør ikke blokere hjemmeside-kilderne, som er dem det gør ondt på nu.
-- **Skal indstillingen være pr. Brain eller pr. konnektor?** Pr. Brain er enklest og
-  matcher ejerens formulering. Pr. konnektor ville tillade «site-sync er kanon,
-  uploads er ikke» — men det er en finere skelnen end nogen har bedt om endnu.
+Featuren handler om at **én kilde ikke må give to konkurrerende sandheder** — og den
+blev født som to konkurrerende planer, F275 og F276, skrevet samtidig i hver sin
+cc-session fordi ejeren gav beslutningen til begge inden for få minutter. F276 er
+omskrevet til en ren henvisning hertil.
+
+Det er ikke et sjovt sammentræf. Det er et bevis på at problemet er reelt og at det
+rammer OS, ikke kun CMS-indhold.
