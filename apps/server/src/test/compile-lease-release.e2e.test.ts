@@ -240,3 +240,182 @@ test('en UDLØBET lease spærrer ikke — den døde arbejder holder ikke kilden'
 
   expect((await meldFaerdig('mac-B')).status).toBe(200);
 });
+
+// ── F263.16 AC#4 — wiki-write skal SIGE at en anden arbejder i Brainen ─────
+
+// `resolveKbId` slår et ikke-UUID op på SLUG, ikke på id. Prøve-Brainen har
+// id «kb-lease» og slug «kb» — første udgave sendte id'et og fik 404. Det er en
+// fikstur-fejl, ikke en kode-fejl, og den står her så den næste ikke gentager den.
+const KB_SLUG = 'kb';
+
+const skriv = (worker?: string) =>
+  kald(`/knowledge-bases/${KB_SLUG}/wiki-write`, {
+    command: 'create',
+    path: '/neurons/proever/',
+    title: `F263.16 samtidig skrivning ${Date.now()}`,
+    content: 'En Neuron skrevet mens en anden arbejder holder en kilde.',
+    ...(worker ? { worker } : {}),
+  });
+
+test('AC#4 DEN BÆRENDE: B skriver mens A holder en kilde → svaret NAVNGIVER A', async () => {
+  // Målt 15./16. september: to sessioner kompilerede samme kilde. Svaret på hver
+  // af mine skrivninger var `{ok:true}` — identisk med en skrivning ingen rørte.
+  await friskKilde();
+  expect(await claim('mac-A')).toEqual([DOC]);
+
+  const res = await skriv('mac-B');
+  expect(res.status).toBe(200);
+  const b = (await res.json()) as {
+    ok: boolean;
+    warning?: string;
+    heldBy?: Array<{ worker: string; filename: string }>;
+  };
+  expect(b.ok).toBe(true);                       // skrivningen lykkes STADIG
+  expect(b.warning).toContain('mac-A');
+  expect(b.warning).toContain('kilde.md');
+  expect(b.heldBy?.[0]?.worker).toBe('mac-A');
+});
+
+test('AC#4 ingen sourceDocumentId kræves — den kigger på HELE Brainen', async () => {
+  // Netop dét felt manglede i alle mine kald den nat. En kontrol der krævede
+  // det ville have været tavs i præcis den sag den findes for.
+  expect((await lease()).by).toBe('mac-A');
+  const b = (await (await skriv('mac-B')).json()) as { warning?: string };
+  expect(b.warning).toBeDefined();               // uden sourceDocumentId i kaldet
+});
+
+test('NEGATIV KONTROL: INGEN advarsel når ingen holder noget', async () => {
+  // Uden den ville «advar altid» bestå lige så grønt, og advarslen blive til
+  // støj man holder op med at læse.
+  await friskKilde();
+  const b = (await (await skriv('mac-B')).json()) as { ok: boolean; warning?: string };
+  expect(b.ok).toBe(true);
+  expect(b.warning).toBeUndefined();
+});
+
+test('INDEHAVEREN selv advares ikke om sit eget arbejde', async () => {
+  await friskKilde();
+  await claim('mac-A');
+  const b = (await (await skriv('mac-A')).json()) as { warning?: string };
+  expect(b.warning).toBeUndefined();
+});
+
+// ── F263.16 AC#5 — vagten mod en port der kun findes i et modul ────────────
+
+import { readFileSync } from 'node:fs';
+
+test('AC#5 INTEGRATION: lease-tjekket er MONTERET, ikke kun skrevet', async () => {
+  // En port kan være perfekt og have nul kaldesteder. Denne prøve læser
+  // KILDEN til den rute `/local-ingest` faktisk rammer, og kræver at
+  // betingelsen står dér — ikke i en hjælpefunktion ingen kalder.
+  const kilde = readFileSync(
+    new URL('../routes/documents.ts', import.meta.url), 'utf8',
+  );
+
+  // POSITIV KONTROL FØRST: kan vi overhovedet læse filen og finde ruten?
+  // Uden den ville en flyttet fil give en tom streng, og hver fraværs-påstand
+  // nedenfor ville bestå grønt på ingenting.
+  expect(kilde.length).toBeGreaterThan(1000);
+  expect(kilde).toContain("documentRoutes.post('/documents/:docId/local-compiled'");
+  expect(kilde).toContain("documentRoutes.post('/knowledge-bases/:kbId/wiki-write'");
+
+  // Selve påstanden: begge ruter læser lease-felterne.
+  expect(kilde).toContain('compile-lease-held');
+  expect(kilde).toContain('documents.compileClaimedBy');
+  expect(kilde).toContain('documents.compileLeaseUntil');
+});
+
+test('AC#5 NEGATIV KONTROL: prøven kan faktisk sige NEJ', async () => {
+  // En fraværs-påstand beviser intet før instrumentet er vist at kunne fejle.
+  const kilde = readFileSync(
+    new URL('../routes/documents.ts', import.meta.url), 'utf8',
+  );
+  expect(kilde).not.toContain('en-streng-der-med-sikkerhed-ikke-staar-i-filen');
+});
+
+// ── F263.16 AC#8/#9 — «færdig» skal binde til et INDHOLD ───────────────────
+
+/** Sæt kildens indhold + hash, som en site-sync eller en ny upload ville. */
+async function skrivKilde(indhold: string, hash: string): Promise<void> {
+  await trail.db.update(documents)
+    .set({ content: indhold, contentHash: hash })
+    .where(eq(documents.id, DOC)).run();
+}
+
+/** Er kilden i kø? Læst gennem den RIGTIGE rute, ikke fra kolonnen. */
+async function iKoe(): Promise<boolean> {
+  const res = await app.request(
+    `http://engine.local/api/v1/documents?awaitingLocalCompile=true`,
+    { headers: { Cookie: 'session=sess-lease' } },
+  );
+  const b = (await res.json()) as { documents?: Array<{ id: string }> };
+  return (b.documents ?? []).some((d) => d.id === DOC);
+}
+
+test('AC#8 DEN BÆRENDE: en kilde der REDIGERES efter kompilering venter igen', async () => {
+  await friskKilde();
+  await skrivKilde('version 1', 'hash-v1');
+  expect(await iKoe()).toBe(true);
+
+  await claim('mac-A');
+  expect((await meldFaerdig('mac-A')).status).toBe(200);
+  expect(await iKoe()).toBe(false);              // kompileret, ude af køen
+
+  // Kilden skrives om — præcis som broberg.ai-siden gjorde v5→v14 i nat.
+  await skrivKilde('version 2', 'hash-v2');
+  expect(await iKoe()).toBe(true);               // ← den genåbner sig selv
+});
+
+test('AC#8 NEGATIV KONTROL: en UÆNDRET kilde genåbnes IKKE', async () => {
+  // Uden den ville «genåbn altid» bestå lige så grønt, og køen aldrig tømmes.
+  await friskKilde();
+  await skrivKilde('uændret', 'hash-samme');
+  await claim('mac-A');
+  await meldFaerdig('mac-A');
+  expect(await iKoe()).toBe(false);
+  expect(await iKoe()).toBe(false);              // og bliver ved med at være det
+});
+
+test('DEN TREDJE TILSTAND: localCompiledHash = NULL genåbner ingenting', async () => {
+  // Hver eksisterende række i basen har NULL efter migreringen. Blev NULL læst
+  // som «afviger», ville HELE basen genåbne sig selv i det sekund den kørte.
+  await friskKilde();
+  await skrivKilde('aldrig kompileret', 'hash-x');
+  await trail.db.update(documents)
+    .set({ awaitingLocalCompile: false, localCompiledHash: null })
+    .where(eq(documents.id, DOC)).run();
+  expect(await iKoe()).toBe(false);
+});
+
+test('AC#9: en færdigmelding på en FORÆLDET version afvises', async () => {
+  await friskKilde();
+  await skrivKilde('den nye tekst', 'hash-ny');
+  await claim('mac-A');
+
+  const res = await kald(`/documents/${DOC}/local-compiled`, {
+    worker: 'mac-A', contentHash: 'hash-gammel',
+  });
+  expect(res.status).toBe(409);
+  const b = (await res.json()) as { error: string; currentHash: string };
+  expect(b.error).toBe('source-changed-under-you');
+  expect(b.currentHash).toBe('hash-ny');
+
+  // FRISK LÆSNING FRA BASEN: flaget står stadig — arbejdet er ikke meldt færdigt.
+  //
+  // Bemærk at der IKKE asserteres på «er den i køen». `kanTagesNu` spørger om
+  // kilden er LEDIG, og mac-A holder stadig sin lease — så den er ventende og
+  // ikke-ledig på én gang. To forskellige spørgsmål, og AC#9 stiller det første.
+  const r = await trail.db
+    .select({ venter: documents.awaitingLocalCompile, kompileret: documents.localCompiledHash })
+    .from(documents).where(eq(documents.id, DOC)).get();
+  expect(r?.venter).toBe(true);
+  expect(r?.kompileret).toBeNull();      // intet blev bogført som kompileret
+});
+
+test('AC#9 NEGATIV KONTROL: den RIGTIGE hash slipper igennem', async () => {
+  const res = await kald(`/documents/${DOC}/local-compiled`, {
+    worker: 'mac-A', contentHash: 'hash-ny',
+  });
+  expect(res.status).toBe(200);
+  expect(await iKoe()).toBe(false);
+});

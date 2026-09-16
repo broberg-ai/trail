@@ -1,0 +1,17 @@
+-- F263.16 AC#8/#9 — «FÆRDIG» SKAL BINDE TIL ET INDHOLD, ikke bare til at der
+-- blev skrevet noget.
+--
+-- Målt 15/9 kl. 21:12: spørgsmålet «er denne kilde kompileret?» kunne kun
+-- besvares med «blev der skrevet Neuroner?», og det svar var JA for en kilde
+-- hvis nuværende tekst ingen havde læst. Kilden var skrevet om efter
+-- kompileringen; Neuronerne beskrev en version der ikke fandtes længere.
+--
+-- HASH, IKKE VERSION. Målt samme nat på `flagskibe_bid.md`: `updated_at`
+-- flyttede sig mens `version`, filstørrelse OG indholds-hash stod stille —
+-- altså en skrivning uden en indholdsændring. «Nogen skrev» og «indholdet er
+-- nyt» er to forskellige spørgsmål. Kun hash'en svarer på det andet.
+--
+-- ADDITIV. Kolonnen er NULL for hver eksisterende række, og en NULL betyder
+-- «vi ved ikke hvad der blev kompileret» — ikke «intet blev kompileret». De
+-- to må ikke forveksles, og derfor fyres genåbningen kun når feltet ER sat.
+ALTER TABLE documents ADD COLUMN local_compiled_hash TEXT;

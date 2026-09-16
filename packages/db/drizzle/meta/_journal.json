@@ -393,6 +393,13 @@
       "when": 1789506536052,
       "tag": "0055_document_captured_at",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "6",
+      "when": 1789557066312,
+      "tag": "0056_local_compiled_hash",
+      "breakpoints": true
     }
   ]
 }

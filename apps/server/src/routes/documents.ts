@@ -31,7 +31,7 @@ import { notifyPush } from '../services/push.js';
 import { backfillReferencesForSource } from '../services/reference-extractor.js';
 import { recordAccess } from '../services/access-tracker.js';
 import { recordReinforcement } from '../services/reinforcement.js';
-import { isNull } from 'drizzle-orm';
+import { isNull, isNotNull, gt, ne } from 'drizzle-orm';
 import { createVisionBackend, getActiveVisionModel } from '../services/vision.js';
 import { getJobRunner } from '../services/jobs/runner.js';
 import type {
@@ -98,7 +98,7 @@ documentRoutes.get('/knowledge-bases/:kbId/source-activity', async (c) => {
   const awaitingRow = await trail.db
     .select({ n: sql<number>`count(*)` })
     .from(documents)
-    .where(and(...base, eq(documents.awaitingLocalCompile, true)))
+    .where(and(...base, awaitendeKilde()))
     .get();
 
   return c.json({ active: Number(activeRow?.n ?? 0), awaiting: Number(awaitingRow?.n ?? 0) });
@@ -259,9 +259,40 @@ documentRoutes.get('/knowledge-bases/:kbId/documents', async (c) => {
  * sig selv når en arbejder dør, og buddys eksisterende dedup gen-dispatcher
  * uden at de skal bygge noget (deres måling, #27054).
  */
+/**
+ * F263.16 AC#8 — EN KILDE VENTER OGSÅ HVIS DEN ER SKREVET OM SIDEN.
+ *
+ * ÉT STED, to kaldere (køtallet i Stationen og claim-forespørgslen). Var det to
+ * udtryk, ville Stationen og arbejderen kunne sige hver sit om samme kilde —
+ * husets dublet-fælde, og her ville den vise en tom kø mens der lå arbejde.
+ *
+ * Målt 15/9 kl. 21:12: «er denne kilde kompileret?» kunne kun besvares med
+ * «blev der skrevet Neuroner?», og svaret var JA for en kilde hvis nuværende
+ * tekst ingen havde læst. Den var skrevet om EFTER kompileringen.
+ *
+ * TO LED, og det andet er det nye:
+ *   flaget er sat                       → venter (uændret adfærd)
+ *   hash'en afviger fra den kompilerede → venter IGEN
+ *
+ * `localCompiledHash IS NULL` fyrer IKKE. NULL betyder «vi ved ikke hvad der
+ * blev kompileret» — ikke «intet blev kompileret». Blandes de to, ville hver
+ * eneste eksisterende kilde i basen genåbne sig selv i det sekund migreringen
+ * kørte. Det er den tredje tilstand, og den skal være tavs.
+ */
+export function awaitendeKilde(): SQL {
+  return or(
+    eq(documents.awaitingLocalCompile, true),
+    and(
+      isNotNull(documents.localCompiledHash),
+      isNotNull(documents.contentHash),
+      ne(documents.localCompiledHash, documents.contentHash),
+    ),
+  ) as SQL;
+}
+
 export function kanTagesNu(nu: string): SQL {
   return and(
-    eq(documents.awaitingLocalCompile, true),
+    awaitendeKilde(),
     or(isNull(documents.compileLeaseUntil), lt(documents.compileLeaseUntil, nu)),
   ) as SQL;
 }
@@ -1131,7 +1162,8 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
   const trail = getTrail(c);
   const tenant = getTenant(c);
   const docId = c.req.param('docId');
-  const body = (await c.req.json().catch(() => ({}))) as { failed?: boolean; worker?: string };
+  const body = (await c.req.json().catch(() => ({}))) as
+    { failed?: boolean; worker?: string; contentHash?: string };
 
   const doc = await trail.db
     .select({
@@ -1139,6 +1171,7 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
       filename: documents.filename,
       compileClaimedBy: documents.compileClaimedBy,
       compileLeaseUntil: documents.compileLeaseUntil,
+      contentHash: documents.contentHash,
     })
     .from(documents)
     .where(and(eq(documents.id, docId), eq(documents.tenantId, tenant.id)))
@@ -1184,6 +1217,27 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
   // blive glattet ud: en arbejder der UDELADER navnet kommer forbi. Men den
   // fejl kortet findes for — to arbejdere der begge tror de ejer kilden — er
   // vores egne sessioner, og de sender navnet fra i dag.
+  // F263.16 AC#9 — «FÆRDIG» PÅ HVILKET INDHOLD?
+  //
+  // Sender kalderen den hash den FAKTISK læste, og kilden er skrevet om siden,
+  // afvises meldingen. Uden det kan spørgsmålet «er denne kilde kompileret?»
+  // kun besvares med «blev der skrevet Neuroner?» — og det svar var JA 15/9
+  // kl. 21:12 for en kilde hvis nuværende tekst ingen havde læst.
+  //
+  // Feltet er VALGFRIT, af samme grund som `worker`: ingen eksisterende kalder
+  // sender det endnu. Udelades det, gemmes kildens NUVÆRENDE hash — hvilket er
+  // det bedste vi kan vide, og stadig nok til at fange en senere omskrivning.
+  if (body.contentHash && doc.contentHash && body.contentHash !== doc.contentHash) {
+    return c.json({
+      error: 'source-changed-under-you',
+      message: 'Kilden er skrevet om siden du læste den. Dit arbejde dækker en '
+        + 'version der ikke findes længere — kompilér den nye tekst i stedet. '
+        + 'Flaget er IKKE ryddet.',
+      compiledHash: body.contentHash,
+      currentHash: doc.contentHash,
+    }, 409);
+  }
+
   const indehaver = doc.compileClaimedBy;
   const frist = doc.compileLeaseUntil;
   const levende = !!indehaver && !!frist && new Date(frist).getTime() > Date.now();
@@ -1205,6 +1259,8 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
     .update(documents)
     .set({
       awaitingLocalCompile: false,
+      // F263.16 — HVAD der blev kompileret, ikke bare AT noget blev det.
+      localCompiledHash: doc.contentHash ?? null,
       // F263.1 — RESERVATIONEN SLIPPES HER, i samme skrivning som flaget ryddes.
       // Ellers bliver lease-felterne stående med et tidspunkt i fremtiden, og en
       // kilde der bagefter parkeres igen (Stationens «Prøv igen», eller en ny
@@ -1524,7 +1580,7 @@ documentRoutes.post('/knowledge-bases/:kbId/wiki-write', async (c) => {
   if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
 
   const body = (await c.req.json().catch(() => null)) as
-    | (Partial<WriteArgs> & { sourceDocumentId?: string })
+    | (Partial<WriteArgs> & { sourceDocumentId?: string; worker?: string })
     | null;
   if (!body || (body.command !== 'create' && body.command !== 'str_replace' && body.command !== 'append')) {
     return c.json({ error: 'command must be one of create | str_replace | append' }, 400);
@@ -1556,7 +1612,53 @@ documentRoutes.post('/knowledge-bases/:kbId/wiki-write', async (c) => {
     old_text: body.old_text,
     new_text: body.new_text,
   });
-  return c.json(result, result.ok ? 200 : 400);
+
+  // F263.16 AC#4 — ET RENT `{ok:true}` MENS EN ANDEN HOLDER PAPIRERNE.
+  //
+  // Målt 15./16. september: to sessioner kompilerede `flagskibe_bid.md` samtidig.
+  // trail-ingest havde claimet kilden; denne session skrev ind i SAMME Brain uden
+  // at vide det, og opdagede det først da de selv sagde stop og spurgte. Svaret på
+  // hver af mine skrivninger var `{ok:true}` — fuldstændig identisk med en
+  // skrivning ingen andre rørte ved.
+  //
+  // DEN KIGGER PÅ HELE BRAINEN, ikke kun på `sourceDocumentId`. Netop dét felt
+  // manglede i alle mine kald den nat, så en kontrol der krævede det ville have
+  // været tavs i præcis den sag den findes for. Kollisionen er «nogen arbejder i
+  // denne Brain lige nu», ikke «nogen arbejder på den kilde jeg husker at nævne».
+  //
+  // ADVARSLEN BLOKERER IKKE. Skrivningen er allerede sket og bliver stående:
+  // to sessioner der skriver i samme Brain er normalt og lovligt. Det der ikke er
+  // lovligt er at den ene ikke kan SE den anden.
+  const nu = new Date().toISOString();
+  const optagede = await trail.db
+    .select({ id: documents.id, filename: documents.filename, by: documents.compileClaimedBy })
+    .from(documents)
+    .where(and(
+      eq(documents.tenantId, tenant.id),
+      eq(documents.knowledgeBaseId, kbId),
+      isNotNull(documents.compileClaimedBy),
+      gt(documents.compileLeaseUntil, nu),
+    ))
+    .all()
+    .catch(() => []);
+
+  const andre = optagede.filter((d) => d.by !== body.worker);
+  const advarsel = andre.length > 0
+    ? {
+        warning: andre.length === 1
+          ? `«${andre[0]!.by}» kompilerer «${andre[0]!.filename}» i denne Brain lige nu. `
+            + 'Din skrivning er gennemført — men I kan skrive oven i hinanden.'
+          : `${andre.length} kilder i denne Brain er reserveret af andre arbejdere lige nu `
+            + `(${[...new Set(andre.map((d) => d.by))].join(', ')}). `
+            + 'Din skrivning er gennemført — men I kan skrive oven i hinanden.',
+        heldBy: andre.map((d) => ({ worker: d.by, sourceId: d.id, filename: d.filename })),
+      }
+    : {};
+
+  return c.json(
+    result.ok ? { ...result, ...advarsel } : result,
+    result.ok ? 200 : 400,
+  );
 });
 
 /**

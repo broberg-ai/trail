@@ -233,6 +233,13 @@ export const documents = sqliteTable(
     // (migration 0024) is for lookup speed only — no DB-level UNIQUE
     // so force=true uploads can intentionally bypass.
     contentHash: text('content_hash'),
+    /**
+     * F263.16 — indholds-hash'en på det tidspunkt kilden sidst blev meldt
+     * lokalt kompileret. NULL = vi ved det ikke (ikke: intet er kompileret).
+     * Afviger den fra `contentHash`, er kilden skrevet om siden, og den
+     * genåbnes i køen — se `awaitendeKilde()` i routes/documents.ts.
+     */
+    localCompiledHash: text('local_compiled_hash'),
     // F112 — Luhmann-friction "Your Take" field. Curator's own
     // reflection on the Neuron, separate from the LLM-compiled body.
     // Survives re-ingest because the compile pipeline only rewrites
