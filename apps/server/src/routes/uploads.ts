@@ -4,7 +4,7 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { requireAuth, getUser, getTenant, getTrail } from '../middleware/auth.js';
+import { requireAuth, getUser, getTenant, getTrail, getAmbientKbGrant } from '../middleware/auth.js';
 import { processPdf, processDocx, processPptx, processXlsx, dispatch, pickPipeline } from '@trail/pipelines';
 import { storage, sourcePath, stagingFsPath } from '../lib/storage.js';
 import { chunkText, storeChunks } from '../services/chunker.js';
@@ -98,6 +98,37 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
   const tenant = getTenant(c);
   const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
   if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
+
+  // F263.17.3 — EN AFGRÆNSET NØGLE MÅ KUN UPLOADE TIL EN PRØVE-BRAIN.
+  //
+  // Christians ordre 17/9: «åbn upload for prøve-Brains». Den smalle udgave er
+  // ikke en bredere nøgle — det er en egenskab ved MÅLET.
+  //
+  // `ambient` udelukker kilder med vilje (F201.2: «never keys, settings,
+  // sources»). Havde vi bare sat upload på allowlisten, ville en Ambient
+  // capture-enhed pludselig kunne lægge filer i den Brain den er parret med.
+  // Det er en anden beslutning end den der blev truffet, og den ville være
+  // sket i forbifarten.
+  //
+  // Derfor hænger udvidelsen på `isSandbox`. En uafgrænset nøgle (scopeKbIds
+  // NULL — en curator, admin-fladen, en integration fra før F263.8) er URØRT
+  // og kan uploade hvor som helst, præcis som hidtil.
+  const grant = getAmbientKbGrant(c);
+  if (grant) {
+    const kb = await trail.db
+      .select({ sandkasse: knowledgeBases.isSandbox, navn: knowledgeBases.name })
+      .from(knowledgeBases)
+      .where(eq(knowledgeBases.id, kbId))
+      .get();
+    if (!kb?.sandkasse) {
+      return c.json({
+        error: 'upload-requires-sandbox-kb',
+        message: `«${kb?.navn ?? kbId}» er ikke en prøve-Brain. En afgrænset `
+          + 'nøgle kan kun uploade til en Brain der er markeret som sandkasse.',
+        knowledgeBaseId: kbId,
+      }, 403);
+    }
+  }
 
   console.log(`[upload] handler-entry kb=${kbId} ${lap()}`);
   const formData = await c.req.formData();

@@ -1,0 +1,16 @@
+-- F263.17.3 — en Brain kan markeres som SANDKASSE.
+--
+-- Christians ordre 17/9: «åbn upload for prøve-Brains». Den smalle udgave er
+-- ikke en bredere nøgle — det er en egenskab ved MÅLET.
+--
+-- `ambient`-scopet udelukker kilder med vilje (F201.2: «never keys, settings,
+-- sources»). Havde vi bare tilføjet upload til den liste, ville en Ambient
+-- capture-enhed pludselig kunne lægge filer i den Brain den er parret med.
+-- Det er en anden beslutning end den der blev truffet.
+--
+-- Med flaget på Brainen gælder udvidelsen KUN dér hvor nogen bevidst har sagt
+-- «det her er en prøve-Brain». En enhed peget på en rigtig Brain er uændret.
+--
+-- ADDITIV. 0 = ikke sandkasse, altså den nuværende adfærd for hver eneste
+-- eksisterende Brain.
+ALTER TABLE knowledge_bases ADD COLUMN is_sandbox INTEGER NOT NULL DEFAULT 0;

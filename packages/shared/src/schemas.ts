@@ -71,6 +71,11 @@ export const UpdateKBSchema = z.object({
   description: z.string().max(KB_DESCRIPTION_MAX).nullable().optional(),
   language: z.string().optional(),
   lintPolicy: LintPolicyEnum.optional(),
+  // F263.17.3 — er dette en PRØVE-Brain? En sandkasse accepterer upload fra en
+  // afgrænset (`ambient`) nøgle; ingen andre Brains gør. Udvidelsen hænger på
+  // MÅLET frem for på nøglen, så en Ambient capture-enhed peget på en rigtig
+  // Brain fortsat ikke kan lægge filer i den.
+  isSandbox: z.boolean().optional(),
   // F160 Phase 2 — per-KB persona overrides. Send null to clear, omit
   // to leave unchanged. Each capped at 4000 chars to keep system-prompt
   // size sane (a 4KB persona will already crowd the context budget).

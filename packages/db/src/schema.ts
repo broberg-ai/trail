@@ -73,6 +73,20 @@ export const knowledgeBases = sqliteTable(
     contradictionLintEnabled: integer('contradiction_lint_enabled', { mode: 'boolean' })
       .notNull()
       .default(true),
+    /**
+     * F263.17.3 — er dette en PRØVE-Brain?
+     *
+     * En sandkasse accepterer upload fra en `ambient`-afgrænset nøgle. Alle
+     * andre Brains gør ikke, og det er med vilje: `ambient` udelukker kilder
+     * (F201.2 «never keys, settings, sources»), så en Ambient capture-enhed
+     * peget på en rigtig Brain kan fortsat ikke lægge filer i den.
+     *
+     * Udvidelsen hænger altså på MÅLET, ikke på nøglen. `false` for hver
+     * eksisterende Brain = uændret adfærd.
+     */
+    isSandbox: integer('is_sandbox', { mode: 'boolean' })
+      .notNull()
+      .default(false),
     // F201.8 — per-KB auto-approval threshold. NULL (default) = OFF: current
     // behaviour, ambient captures stay pending. When set to a number in [0,1],
     // AMBIENT candidates with confidence >= threshold auto-approve unattended

@@ -103,6 +103,13 @@ const AMBIENT_ALLOWED: ReadonlyArray<{ method: string; pattern: RegExp }> = [
   { method: 'POST', pattern: /^\/api\/v1\/knowledge-bases\/[^/]+\/ambient-source$/ },
   { method: 'GET', pattern: /^\/api\/v1\/knowledge-bases\/[^/]+\/search$/ },
   { method: 'POST', pattern: /^\/api\/v1\/chat$/ },
+  // F263.17.3 — upload til en PRØVE-Brain. Stien slipper igennem her, men
+  // ruten selv afviser med 403 hvis mål-Brainen ikke er markeret som sandkasse.
+  // Todelt med vilje: denne liste kender kun stier, ikke hvilken Brain der
+  // ligger bag, og «er det en sandkasse» er et databaseopslag. En allowlist
+  // der lod som om den kunne svare på det, ville være en spærre man ikke kan
+  // læse rigtigheden af.
+  { method: 'POST', pattern: /^\/api\/v1\/knowledge-bases\/[^/]+\/documents\/upload$/ },
   // F201.13 — read the KB's own name/slug so the menubar app can refresh its
   // "writing to" label after a rename (name + slug only — NOT the full-row
   // GET /knowledge-bases/:id, which would expose settings the device shouldn't read).
