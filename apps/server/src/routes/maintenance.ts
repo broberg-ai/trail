@@ -16,6 +16,7 @@ import { Hono } from 'hono';
 import { documents, queueCandidates, knowledgeBases } from '@trail/db';
 import { and, eq, isNotNull, inArray, like, lt, sql } from 'drizzle-orm';
 import { resolveKbId } from '@trail/core';
+import { identitetFraMetadata } from '@trail/shared';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
 import type { AppBindings } from '../app.js';
 
@@ -247,6 +248,67 @@ maintenanceRoutes.post('/maintenance/drain-lint-candidates', async (c) => {
     iScope: iScope.length,
     scanned: matching.length,
     rejected,
+    applied: apply,
+  });
+});
+
+/**
+ * F275.1 AC#2 — BACKFILL AF KILDE-IDENTITET, som et TAL.
+ *
+ * AC'et er ikke «kør scriptet», det er «går tallet fra 0 til 66». Derfor svarer
+ * ruten med FØR og EFTER, og den skelner TRE udfald frem for to:
+ *
+ *   fik en identitet     kilden bar en sourceUrl i sin metadata
+ *   havde allerede en    idempotent — kørslen kan gentages uden skade
+ *   har ingen at få      en upload; dens identitet hører til F275.6
+ *
+ * Blandes de to sidste, tæller en upload som «behandlet» og rapporten ser
+ * bedre ud end virkeligheden.
+ *
+ * TØRLØB ER STANDARD. `{"apply":true}` skriver. Et backfill der kun kan køres
+ * for alvor er et backfill man ikke tør køre.
+ */
+maintenanceRoutes.post('/maintenance/backfill-source-identity', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const body = (await c.req.json().catch(() => ({}))) as { apply?: boolean };
+  const apply = body.apply === true;
+
+  const alle = await trail.db
+    .select({ id: documents.id, metadata: documents.metadata, nu: documents.sourceIdentity })
+    .from(documents)
+    .where(and(eq(documents.tenantId, tenant.id), eq(documents.kind, 'source')))
+    .all();
+
+  const foer = alle.filter((k) => !!k.nu).length;
+  let fik = 0, ingenAtFaa = 0;
+
+  for (const k of alle) {
+    if (k.nu) continue;
+    const id = identitetFraMetadata(k.metadata);
+    if (!id) { ingenAtFaa++; continue; }
+    if (apply) {
+      await trail.db.update(documents).set({ sourceIdentity: id }).where(eq(documents.id, k.id)).run();
+    }
+    fik++;
+  }
+
+  // LÆST TILBAGE, ikke regnet ud. `foer + fik` ville være mit gæt på hvad der
+  // skete; et nyt opslag er hvad basen FAKTISK holder.
+  const efterRows = await trail.db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(and(eq(documents.tenantId, tenant.id), eq(documents.kind, 'source'), isNotNull(documents.sourceIdentity)))
+    .all();
+
+  return c.json({
+    tenant: tenant.slug,
+    kilder: alle.length,
+    foer,
+    fik,
+    havdeAllerede: foer,
+    ingenAtFaa,
+    efter: efterRows.length,
     applied: apply,
   });
 });
