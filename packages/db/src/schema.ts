@@ -254,6 +254,20 @@ export const documents = sqliteTable(
      * genåbnes i køen — se `awaitendeKilde()` i routes/documents.ts.
      */
     localCompiledHash: text('local_compiled_hash'),
+    /**
+     * F275.1 — HVILKEN kilde er dette, eller hvilken kilde stammer det fra?
+     *
+     * På en KILDE: dens egen stabile identitet. På en NEURON: identiteten på
+     * den kilde den blev kompileret fra. Samme kolonne, fordi spørgsmålet
+     * «hvilken kilde?» er det samme — og fordi afløsnings-reglen skal kunne
+     * finde begge dele med ét opslag.
+     *
+     * Formen er PRÆFIKSET så to identitets-rum ikke kan kollidere:
+     *   url:…   hjemmeside   ·   path:…   fil med stabil sti   ·   fp:…  fingeraftryk
+     *
+     * NULL = «vi ved det ikke», ALDRIG «der er ingen kilde».
+     */
+    sourceIdentity: text('source_identity'),
     // F112 — Luhmann-friction "Your Take" field. Curator's own
     // reflection on the Neuron, separate from the LLM-compiled body.
     // Survives re-ingest because the compile pipeline only rewrites

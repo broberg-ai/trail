@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { requireAuth, getUser, getTenant, getTrail, getAmbientKbGrant } from '../middleware/auth.js';
+import { kildeIdentitet } from '@trail/shared';
 import { processPdf, processDocx, processPptx, processXlsx, dispatch, pickPipeline } from '@trail/pipelines';
 import { storage, sourcePath, stagingFsPath } from '../lib/storage.js';
 import { chunkText, storeChunks } from '../services/chunker.js';
@@ -242,6 +243,9 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
           fileSize: file.size,
           contentHash,
           metadata: JSON.stringify({ connector, sourceUrl }),
+          // F275.1 — identiteten sættes SAMME sted som metadata. Står de to
+          // hver sit sted, bliver de uenige den dag det ene bliver rettet.
+          sourceIdentity: kildeIdentitet('url', sourceUrl),
           tags: uploadTags?.join(', ') ?? null,
           awaitingLocalCompile: localCompile,
           status: !hasExtractorU ? 'failed' : 'processing',
@@ -361,6 +365,9 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
       awaitingLocalCompile: localCompile,
       tags: uploadTags?.join(', ') ?? null,
       metadata: connector ? JSON.stringify({ connector, sourceUrl }) : null,
+      // F275.1 — se ovenfor. `null` når der ingen URL er (en upload); den
+      // identitet hører til F275.6's fingeraftryk, og null er sandt frem for gættet.
+      sourceIdentity: kildeIdentitet('url', sourceUrl),
       // F162 — dedup hash. Set even on force-uploaded duplicates so the
       // audit trail is complete; subsequent dedup-tjeks just bypass on
       // ?force=true rather than hide the fact that the hash collided.
@@ -631,6 +638,8 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload/init', async (c) => {
       metadata: body.metadata?.connector
         ? JSON.stringify({ connector: body.metadata.connector, sourceUrl: body.metadata.sourceUrl })
         : null,
+      // F275.1 — se ovenfor.
+      sourceIdentity: kildeIdentitet('url', body.metadata?.sourceUrl),
       contentHash,
       seq: sql<number>`COALESCE((SELECT MAX(${documents.seq}) FROM ${documents} WHERE ${documents.knowledgeBaseId} = ${kbId}), 0) + 1`,
     })
