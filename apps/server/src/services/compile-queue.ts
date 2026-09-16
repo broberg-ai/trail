@@ -22,13 +22,40 @@
 import type { TrailDatabase } from '@trail/db';
 
 /**
- * Hvor længe en reservation holder uden hjerteslag.
+ * Hvor længe en reservation holder UDEN hjerteslag.
  *
- * ÉN KILDE TIL TALLET — ruterne og prøverne læser denne konstant. Fem minutter
- * er valgt så den er længere end en typisk kompilering (målt 10–90 sekunder)
- * og kort nok til at en død arbejder ikke spærrer en kilde en hel aften.
+ * ÉN KILDE TIL TALLET — ruterne og prøverne læser denne konstant.
+ *
+ * F263.16 — TALLET VAR SAT EFTER DEN FORKERTE SLAGS ARBEJDER. Den gamle
+ * kommentar her sagde «længere end en typisk kompilering (målt 10–90 sekunder)».
+ * Det er en SKY-kompilering: ét API-kald. Den lokale arbejder er en cc-session
+ * der selv ræsonnerer over mange ture — den læser kilden, søger i basen, læser
+ * nabo-Neuronerne og skriver. Fristen var altså sat efter en maskine, mens
+ * arbejderen er agent-formet.
+ *
+ * MÅLT PÅ DEN HÆNDELSE KORTET BLEV SKREVET OM (15./16. september 2026):
+ *
+ *   trail-ingest claimede    ≈ 22:01:31Z   lease til 22:06:31Z   (5 min)
+ *   de meldte færdig            22:07:37Z
+ *   → leasen udløb MENS de arbejdede, på fire sider i en Brain med 317 Neuroner
+ *
+ *   den anden sessions halvdel af samme kilde tog ~20 minutter
+ *   største Brain i drift: «Buddy sessions» med 5.637 Neuroner — 18× den ovenfor
+ *
+ * 30 minutter er derfor ~5× den målte 6-minutters-sag og ~1,5× den målte
+ * 20-minutters-sag, på den NÆSTMINDSTE relevante Brain.
+ *
+ * PRISEN, sagt højt: en død arbejder spærrer nu en kilde i op til 30 minutter i
+ * stedet for 5. Det er bevidst. En spærret kilde er synlig og går over af sig
+ * selv; en kilde der fejlagtigt står som kompileret, er usynlig og går ikke over
+ * — og dét er den fejl kortet findes for.
+ *
+ * HJERTESLAG ER IKKE SVARET HER, og det er derfor tallet måtte op. `heartbeat`
+ * findes og virker, men den afhænger af at agenten HUSKER at kalde den midt i et
+ * langt stykke ræsonnement. Harness-kontrakten siger det selv: en spærre der
+ * afhænger af at nogen husker noget, er ikke en spærre. Leasen skal holde uden.
  */
-export const COMPILE_LEASE_MS = 5 * 60_000;
+export const COMPILE_LEASE_MS = 30 * 60_000;
 
 export interface CompileJob {
   id: string;

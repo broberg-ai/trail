@@ -1131,10 +1131,15 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
   const trail = getTrail(c);
   const tenant = getTenant(c);
   const docId = c.req.param('docId');
-  const body = (await c.req.json().catch(() => ({}))) as { failed?: boolean };
+  const body = (await c.req.json().catch(() => ({}))) as { failed?: boolean; worker?: string };
 
   const doc = await trail.db
-    .select({ id: documents.id, kind: documents.kind, knowledgeBaseId: documents.knowledgeBaseId, filename: documents.filename })
+    .select({
+      id: documents.id, kind: documents.kind, knowledgeBaseId: documents.knowledgeBaseId,
+      filename: documents.filename,
+      compileClaimedBy: documents.compileClaimedBy,
+      compileLeaseUntil: documents.compileLeaseUntil,
+    })
     .from(documents)
     .where(and(eq(documents.id, docId), eq(documents.tenantId, tenant.id)))
     .get();
@@ -1142,6 +1147,58 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
   if (!doc) return c.json({ error: 'Document not found' }, 404);
   if (doc.kind !== 'source') {
     return c.json({ error: 'Only source documents can be local-compiled' }, 400);
+  }
+
+  // F263.16 AC#2 — «FÆRDIG» MÅ KUN MELDES AF DEN DER HOLDER PAPIRERNE.
+  //
+  // Målt 15/9: to sessioner kompilerede samme kilde samtidig. Den ene meldte
+  // færdig, flaget blev ryddet, og den andens arbejde forsvandt ud af køen
+  // midtvejs. Ingenting fejlede — kilden stod bare som kompileret.
+  //
+  // PORTEN AFVISER KUN «EN ANDEN HOLDER DEN LIGE NU». Den afviser IKKE en
+  // kalder uden lease: den håndkørte vej har aldrig claimet, og en port der
+  // kræver en lease ville brække hver eneste eksisterende kalder der opfører
+  // sig korrekt (kortets egen betingelse). De fire udfald:
+  //
+  //   ingen holder kilden           → luk igennem (ingen at kollidere med)
+  //   leasen er udløbet             → luk igennem (ingen holder den længere)
+  //   kalderen ER indehaveren       → luk igennem
+  //   en ANDEN holder en LEVENDE    → AFVIS, og lad flaget stå
+  //
+  // Den sidste er hele porten. Bemærk at et kald UDEN `worker` også afvises
+  // når en anden holder leasen — vi kan ikke bevise at det er indehaveren, og
+  // «kan ikke afgøres» må ikke degradere til «luk igennem».
+  //
+  // INGEN NØGEN OMLÆGNING (kortets egen betingelse + harness-kontraktens punkt 3).
+  // MÅLT før porten blev skrevet: HVERKEN `/local-ingest`-skillet (SKILL.md:191,
+  // `-d '{}'`) ELLER den eksisterende e2e-prøve sender et worker-navn ved
+  // færdigmelding. En port der KRÆVER navnet ville altså afvise den eneste vej
+  // der findes i drift i dag — altså brække produktionen for at beskytte den.
+  //
+  // Derfor to trin. NU: et kald UDEN navn slipper igennem, men svaret bærer en
+  // `warning` der siger at det ikke kunne afgøres. Skillet sender navnet fra
+  // samme commit. NÅR det er målt at alle kaldere sender det, strammes den til
+  // at afvise — og dét er en separat beslutning med sin egen måling bag.
+  //
+  // Det er svagere end den port kortet beder om, og det står her frem for at
+  // blive glattet ud: en arbejder der UDELADER navnet kommer forbi. Men den
+  // fejl kortet findes for — to arbejdere der begge tror de ejer kilden — er
+  // vores egne sessioner, og de sender navnet fra i dag.
+  const indehaver = doc.compileClaimedBy;
+  const frist = doc.compileLeaseUntil;
+  const levende = !!indehaver && !!frist && new Date(frist).getTime() > Date.now();
+  const uidentificeret = levende && !body.worker;
+  if (levende && !!body.worker && body.worker !== indehaver) {
+    return c.json({
+      error: 'compile-lease-held',
+      message: `Kilden er reserveret af «${indehaver}» indtil ${frist}. `
+        + 'Kun den arbejder kan melde den færdig. '
+        + (body.worker
+            ? `Du kaldte som «${body.worker}».`
+            : 'Dit kald bar ikke et worker-navn, så det kan ikke afgøres om du er indehaveren.'),
+      heldBy: indehaver,
+      leaseUntil: frist,
+    }, 409);
   }
 
   await trail.db
@@ -1301,6 +1358,17 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
     awaitingLocalCompile: efter.awaitingLocalCompile,
     failed: efter.status === 'failed',
     updatedAt: efter.updatedAt,
+    // F263.16 — «kunne ikke afgøres» er en TREDJE tilstand, ikke en tavs succes.
+    // Feltet findes kun når en anden holdt kilden og kalderen ikke navngav sig.
+    ...(uidentificeret
+      ? {
+          warning: `Kilden var reserveret af «${indehaver}», og dit kald bar intet `
+            + 'worker-navn — det kunne derfor ikke afgøres om du er indehaveren. '
+            + 'Færdigmeldingen blev accepteret. Send `worker` med, så porten kan '
+            + 'skelne dig fra en anden arbejder.',
+          heldBy: indehaver,
+        }
+      : {}),
   }, 200);
 });
 

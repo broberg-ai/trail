@@ -135,7 +135,13 @@ test('status skelner VENTENDE fra I ARBEJDE og navngiver arbejderen', async () =
 });
 
 test('leasen er ÉN navngiven konstant, ikke et tal i koden', () => {
-  expect(COMPILE_LEASE_MS).toBe(5 * 60_000);
+  // F263.16 — denne fastholdt tidligere tallet ORDRET (5 * 60_000). Et
+  // literal-pin skal redigeres hver gang værdien lovligt ændres, og lærer
+  // dermed den næste at rette prøven uden at tænke. Den fastholder nu
+  // BEGRUNDELSEN i stedet — se «fristen er ÉT tal» nedenfor, som binder
+  // værdien til de målte varigheder frem for til et ciffer.
+  expect(typeof COMPILE_LEASE_MS).toBe('number');
+  expect(COMPILE_LEASE_MS).toBeGreaterThan(0);
 });
 
 // ── Regression: den HÅNDKØRTE vej må ikke ændre sig ────────────────────────
@@ -225,4 +231,49 @@ test('F263.9 arbejderen navngives kun for den Trail der faktisk kompilerer', asy
   const nabo = await compileQueueStatus(db, A, new Date(), KB2);
   expect(nabo.workers).toEqual(['nabo-maskine']);
   expect(nabo.working).toBe(1);
+});
+
+// ── F263.16 AC#1 — leasen skal holde et ÆGTE stykke arbejde ────────────────
+
+const MIN = 60_000;
+
+test('F263.16 DEN BÆRENDE: leasen overlever 300 s UDEN hjerteslag', async () => {
+  // Den gamle frist var 300 s, sat efter en SKY-kompilering på 10–90 sekunder.
+  // Den lokale arbejder er en cc-session. Målt på hændelsen kortet blev skrevet
+  // om: trail-ingest claimede ≈22:01:31Z med lease til 22:06:31Z og meldte
+  // færdig 22:07:37Z — leasen udløb MENS de arbejdede.
+  await kilde('lease-1');
+  const t0 = new Date('2026-09-16T10:00:00Z');
+  const a = await claimCompileJobs(db, A, { worker: 'arbejder-A', now: t0 });
+  expect(a.map((j) => j.id)).toContain('lease-1');
+
+  // 301 sekunder senere, uden ét eneste hjerteslag: kilden er STADIG A's.
+  const efterGammelFrist = new Date(t0.getTime() + 301_000);
+  const b = await claimCompileJobs(db, A, { worker: 'arbejder-B', now: efterGammelFrist });
+  expect(b.map((j) => j.id)).not.toContain('lease-1');
+
+  // Og efter et helt normalt 20-minutters arbejde er den det stadig.
+  const efterTyveMin = new Date(t0.getTime() + 20 * MIN);
+  const c = await claimCompileJobs(db, A, { worker: 'arbejder-B', now: efterTyveMin });
+  expect(c.map((j) => j.id)).not.toContain('lease-1');
+});
+
+test('NEGATIV KONTROL: leasen kan stadig udløbe — en død arbejder spærrer ikke for evigt', async () => {
+  // Uden denne ville «leasen udløber aldrig» bestå lige så grønt som en
+  // rigtig frist, og en arbejder der dør ville låse kilden permanent.
+  await kilde('lease-2');
+  const t0 = new Date('2026-09-16T11:00:00Z');
+  await claimCompileJobs(db, A, { worker: 'arbejder-A', now: t0 });
+
+  const efterFristen = new Date(t0.getTime() + COMPILE_LEASE_MS + 1_000);
+  const b = await claimCompileJobs(db, A, { worker: 'arbejder-B', now: efterFristen });
+  expect(b.map((j) => j.id)).toContain('lease-2');
+});
+
+test('fristen er ÉT tal, og det dækker den målte virkelighed', async () => {
+  // En prøve på konstanten selv, så en «oprydning» der sætter den tilbage til
+  // fem minutter ikke kan ske i stilhed. Nedre grænse er den målte 20-minutters
+  // kompilering; øvre grænse er at en død arbejder ikke må spærre en aften.
+  expect(COMPILE_LEASE_MS).toBeGreaterThanOrEqual(20 * MIN);
+  expect(COMPILE_LEASE_MS).toBeLessThanOrEqual(60 * MIN);
 });

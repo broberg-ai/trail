@@ -150,3 +150,93 @@ test('«Prøv igen» giver også en ledig kilde, uanset hvad der stod før', asy
   expect(await lease()).toEqual({ by: null, until: null });
   expect(await claim('mac-4')).toEqual([DOC]);
 });
+
+// ── F263.16 AC#2 + AC#3 — kun indehaveren må melde færdig ──────────────────
+
+/** Færdigmelding MED et worker-navn. */
+const meldFaerdig = (worker?: string) =>
+  kald(`/documents/${DOC}/local-compiled`, worker ? { worker } : {});
+
+/**
+ * Frisk udgangspunkt: parkeret OG uden reservation.
+ *
+ * `parker()` ovenfor rydder kun flaget. Prøverne under her blev først skrevet
+ * med den alene og var røde af en grund der intet havde med koden at gøre — en
+ * tidligere prøve i filen havde efterladt «mac-4» på leasen. En prøve der
+ * arver en tilstand måler ikke det den siger den måler.
+ */
+async function friskKilde(): Promise<void> {
+  await trail.db.update(documents)
+    .set({
+      awaitingLocalCompile: true, status: 'ready',
+      compileClaimedBy: null, compileLeaseUntil: null,
+    })
+    .where(eq(documents.id, DOC)).run();
+}
+
+test('AC#2 DEN BÆRENDE: arbejder B kan ikke melde A\'s kilde færdig', async () => {
+  await friskKilde();
+  expect(await claim('mac-A')).toEqual([DOC]);
+
+  const res = await meldFaerdig('mac-B');
+  expect(res.status).toBe(409);
+  const b = (await res.json()) as { error: string; heldBy: string };
+  expect(b.error).toBe('compile-lease-held');
+  expect(b.heldBy).toBe('mac-A');
+
+  // LÆST TILBAGE FRA BASEN: flaget står stadig, arbejdet er ikke tabt.
+  const r = await trail.db
+    .select({ venter: documents.awaitingLocalCompile })
+    .from(documents).where(eq(documents.id, DOC)).get();
+  expect(r?.venter).toBe(true);
+  expect((await lease()).by).toBe('mac-A');   // A holder den stadig
+});
+
+test('AC#3 NEGATIV KONTROL: A\'s EGET kald lykkes — porten rammer ikke ægte arbejde', async () => {
+  // Uden denne ville «afvis alle» bestå lige så grønt som en port der virker.
+  expect((await lease()).by).toBe('mac-A');
+  const res = await meldFaerdig('mac-A');
+  expect(res.status).toBe(200);
+  const efter = await lease();
+  expect(efter.by).toBeNull();
+});
+
+test('AC#3 en kilde INGEN holder kan meldes færdig af hvem som helst', async () => {
+  // Den håndkørte vej har aldrig claimet. En port der krævede en lease ville
+  // brække hver eksisterende kalder — kortets egen betingelse.
+  await friskKilde();
+  expect((await lease()).by).toBeNull();
+  expect((await meldFaerdig('en-tilfaeldig')).status).toBe(200);
+});
+
+test('UDEN worker-navn: accepteret, men svaret SIGER at det ikke kunne afgøres', async () => {
+  // To-trins udrulningen. Målt før porten blev skrevet: hverken skillet eller
+  // den eksisterende prøve sendte et navn. En hård port ville have afvist den
+  // eneste vej der findes i drift.
+  await friskKilde();
+  expect(await claim('mac-A')).toEqual([DOC]);
+
+  const res = await meldFaerdig();               // intet navn
+  expect(res.status).toBe(200);
+  const b = (await res.json()) as { warning?: string; heldBy?: string };
+  expect(b.warning).toContain('kunne derfor ikke afgøres');
+  expect(b.heldBy).toBe('mac-A');
+});
+
+test('NEGATIV KONTROL på advarslen: den udebliver når ingen holder kilden', async () => {
+  // Uden den ville «advar altid» bestå, og advarslen blive til støj man overser.
+  await friskKilde();
+  const res = await meldFaerdig();
+  expect(res.status).toBe(200);
+  expect((await res.json() as { warning?: string }).warning).toBeUndefined();
+});
+
+test('en UDLØBET lease spærrer ikke — den døde arbejder holder ikke kilden', async () => {
+  await friskKilde();
+  await claim('mac-A');
+  await trail.db.update(documents)
+    .set({ compileLeaseUntil: new Date(Date.now() - 1000).toISOString() })
+    .where(eq(documents.id, DOC)).run();
+
+  expect((await meldFaerdig('mac-B')).status).toBe(200);
+});

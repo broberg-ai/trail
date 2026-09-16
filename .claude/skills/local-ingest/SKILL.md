@@ -188,9 +188,16 @@ Print the count + filenames. Stop.
    b. **Clear the flag** when the source's Neurons are written:
       ```bash
       curl -s -X POST -H "Authorization: Bearer $TRAIL_API_KEY" -H "X-Trail-Tenant: $TENANT" \
-        "$TRAIL_CLOUD_API/api/v1/documents/$SID/local-compiled" -d '{}'
+        "$TRAIL_CLOUD_API/api/v1/documents/$SID/local-compiled" \
+        -d "{\"worker\":\"$WORKER\"}"
       ```
-      (Pass `-d '{"failed":true}'` if the source yielded nothing usable.)
+      (Add `"failed":true` to the body if the source yielded nothing usable.)
+
+      **F263.16 — send `worker`.** It is the SAME name you claimed with. The
+      engine uses it to tell you apart from another worker holding the source:
+      a mismatch is rejected (409), and a MISSING name is accepted with a
+      `warning` in the response rather than silently. Omit it and the gate
+      cannot protect your work.
    c. The engine stamps a **free-run** to upmetrics on `/local-compiled` (F191.5,
       cost 0, connector mcp:claude-code) — nothing for you to do.
 
