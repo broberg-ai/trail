@@ -79,3 +79,17 @@ test('NEGATIV KONTROL: en full-nøgle er stadig UBEGRÆNSET — den gamle vej er
   expect(b.scope).toBe('full');
   expect(b.scopeKbIds).toBeNull();
 });
+
+test('F263.17.1: svaret SIGER om nøgle-indekset blev bekræftet', async () => {
+  // TRE UDFALD, ikke to. Her i prøven findes der intet indeks på værten, så
+  // svaret skal sige `absent-on-host` — ikke `verified`, og ikke tie.
+  //
+  // Den TREDJE tilstand (`null` = indekset findes og rækken landede IKKE) kan
+  // ikke fremstilles her uden at bygge et indeks ved siden af; den er bevist
+  // LIVE ved at gen-minte helpdesks nøgle mod produktionen. Det står her frem
+  // for at lade prøven se mere dækkende ud end den er.
+  const res = await mint({ name: 'indeks-svar', scope: 'ambient', kbIds: [KB_A] });
+  expect(res.status).toBe(201);
+  const b = (await res.json()) as { keyIndex?: string };
+  expect(b.keyIndex).toBe('absent-on-host');
+});

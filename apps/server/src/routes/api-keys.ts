@@ -3,7 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { and, eq, isNull, inArray } from 'drizzle-orm';
 import { apiKeys, knowledgeBases } from '@trail/db';
 import { requireAuth, getUser, getTenant, getTrail } from '../middleware/auth.js';
-import { addBearer, revokeBearer } from '../lib/key-index.js';
+import { addBearer, revokeBearer, lookupBearer } from '../lib/key-index.js';
 import { PARTNER_SCOPE } from '../middleware/partner-scope.js';
 import type { AppBindings } from '../app.js';
 
@@ -132,7 +132,41 @@ apiKeyRoutes.post('/api-keys', requireAuth, async (c) => {
   // opening every tenant DB. No-op when the index file doesn't exist
   // (e.g. local dev).
   addBearer({ keyHash, tenantSlug: tenant.slug, userId: user.id, createdAt });
-  return c.json({ id, name, scope, kbId, scopeKbIds, key: raw }, 201);
+
+  // F263.17.1 — SKRIV, OG SPØRG DEREFTER.
+  //
+  // `addBearer` er et TAVST no-op når nøgle-indekset ikke findes på værten, og
+  // indeks-rækken er det ENESTE der fortæller auth hvilken database den skal
+  // åbne. Uden den svarer nøglen 401 på ALT — også det den er bevilget til.
+  //
+  // MÅLT 16/9: en nyminted ambient-nøgle gav 401 på hvert eneste kald, inklusive
+  // den Brain den var bundet til. Ruten havde meldt 201 med nøglen i svaret. En
+  // udleveret nøgle der ikke virker er værre end en fejl: modtageren bygger
+  // videre på den og fejlsøger sin egen ende.
+  //
+  // Nabofunktionen `lookupBearer` blev skrevet til NETOP dette (F210.5, dens
+  // egen kommentar: «provisioning-vejen skriver og spørger derefter, frem for
+  // at stole på et kald der ikke kan fejle») — den blev bare aldrig kaldt her.
+  //
+  // TRE UDFALD, ikke to. `undefined` = intet indeks på værten (lovligt i lokal
+  // enkelt-tenant-dev); `null` = indekset findes og rækken landede IKKE.
+  // Blandes de to, ville lokal udvikling gå i stå eller produktion tie.
+  const iIndeks = lookupBearer(keyHash);
+  if (iIndeks === null) {
+    await trail.db.delete(apiKeys).where(eq(apiKeys.id, id)).run();
+    return c.json({
+      error: 'key-index-write-failed',
+      message: 'Nøglen blev oprettet i kontoen men kunne ikke skrives i '
+        + 'nøgle-indekset, og ville derfor svare 401 på alt. Den er rullet '
+        + 'tilbage frem for at blive udleveret som virkende.',
+    }, 500);
+  }
+
+  return c.json({
+    id, name, scope, kbId, scopeKbIds, key: raw,
+    // Siger hvad vi FAKTISK ved, frem for at lade tavshed betyde ja.
+    keyIndex: iIndeks === undefined ? 'absent-on-host' : 'verified',
+  }, 201);
 });
 
 // Revoke a key (soft delete — sets revoked_at)
