@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { createHash, randomBytes } from 'node:crypto';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, inArray } from 'drizzle-orm';
 import { apiKeys, knowledgeBases } from '@trail/db';
 import { requireAuth, getUser, getTenant, getTrail } from '../middleware/auth.js';
 import { addBearer, revokeBearer } from '../lib/key-index.js';
@@ -40,7 +40,7 @@ apiKeyRoutes.post('/api-keys', requireAuth, async (c) => {
   const trail = getTrail(c);
   const user = getUser(c);
   const tenant = getTenant(c);
-  let body: { name?: string; scope?: string; kbId?: string } = {};
+  let body: { name?: string; scope?: string; kbId?: string; kbIds?: string[] } = {};
   try { body = await c.req.json(); } catch { /* ignore */ }
   const name = body?.name?.trim();
   if (!name) {
@@ -52,8 +52,10 @@ apiKeyRoutes.post('/api-keys', requireAuth, async (c) => {
   // whole tenant) every single time. Omitting it still means 'full' so nothing
   // that exists today changes — but a partner key can now be asked for.
   const scope = body?.scope?.trim() || 'full';
-  if (scope !== 'full' && scope !== PARTNER_SCOPE) {
-    return c.json({ error: `Unknown scope "${scope}" — expected "full" or "${PARTNER_SCOPE}"` }, 400);
+  if (scope !== 'full' && scope !== PARTNER_SCOPE && scope !== 'ambient') {
+    return c.json({
+      error: `Unknown scope "${scope}" — expected "full", "${PARTNER_SCOPE}" or "ambient"`,
+    }, 400);
   }
 
   // A partner key is meaningless without the one KB it is confined to, and a
@@ -78,6 +80,39 @@ apiKeyRoutes.post('/api-keys', requireAuth, async (c) => {
     kbId = kb.id;
   }
 
+  // F263.17 — EN LÆSE-NØGLE TIL ÉN BRAIN, mintbar over API'et.
+  //
+  // `ambient`-scopet fandtes allerede og håndhæves i requireAuth (AMBIENT_ALLOWED:
+  // søgning + chat + kandidat-skrivning, intet andet), og `scopeKbIds` afgrænser
+  // hvilke Trails nøglen må røre. Det var bare ikke muligt at MINTE en over API'et
+  // — kun enheds-godkendelsen kunne det. En ekstern kunde som HelpDesk ville
+  // derfor have fået en `full`-nøgle, der handler SOM BRUGEREN på tværs af hele
+  // kontoen; altså adgang til hver eneste Brain frem for den ene de skal bruge.
+  //
+  // KRÆVER SIN AFGRÆNSNING, aldrig en standard. En ambient-nøgle uden kbIds ville
+  // være tenant-bred, og en tenant-bred nøgle udleveret som «den er begrænset» er
+  // værre end en åben: modtageren bygger på en beskyttelse der ikke findes.
+  let scopeKbIds: string | null = null;
+  if (scope === 'ambient') {
+    const bedt = Array.isArray(body?.kbIds) ? body.kbIds.map((x) => String(x).trim()).filter(Boolean) : [];
+    if (bedt.length === 0) {
+      return c.json({ error: 'kbIds is required for an ambient key — a key without it would span the whole tenant' }, 400);
+    }
+    const fundne = await trail.db
+      .select({ id: knowledgeBases.id })
+      .from(knowledgeBases)
+      .where(inArray(knowledgeBases.id, bedt))
+      .all();
+    // Hver enkelt skal findes. Accepterede vi delmængden, ville en tastefejl i ét
+    // id give en nøgle med færre Trails end bestilt — og det opdages først den dag
+    // et opslag svarer tomt uden at fejle.
+    if (fundne.length !== bedt.length) {
+      const mangler = bedt.filter((b) => !fundne.some((f) => f.id === b));
+      return c.json({ error: `Knowledge base(s) not found: ${mangler.join(', ')}` }, 404);
+    }
+    scopeKbIds = JSON.stringify(fundne.map((f) => f.id));
+  }
+
   const raw = generateKey();
   const id = crypto.randomUUID();
   const keyHash = hashKey(raw);
@@ -90,13 +125,14 @@ apiKeyRoutes.post('/api-keys', requireAuth, async (c) => {
     keyHash,
     scope,
     kbId,
+    scopeKbIds,
   });
   // F40.2a-B — dual-write: keep the global /data/key-index.db in sync
   // so the auth-middleware can resolve this bearer → tenant without
   // opening every tenant DB. No-op when the index file doesn't exist
   // (e.g. local dev).
   addBearer({ keyHash, tenantSlug: tenant.slug, userId: user.id, createdAt });
-  return c.json({ id, name, scope, kbId, key: raw }, 201);
+  return c.json({ id, name, scope, kbId, scopeKbIds, key: raw }, 201);
 });
 
 // Revoke a key (soft delete — sets revoked_at)
