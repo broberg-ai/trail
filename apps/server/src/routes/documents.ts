@@ -188,6 +188,10 @@ documentRoutes.get('/knowledge-bases/:kbId/documents', async (c) => {
       //
       // `awaitendeKilde()` er det ene sted der afgør det; her læses det bare.
       awaitingLocalCompile: sql<boolean>`CASE WHEN ${awaitendeKilde()} THEN 1 ELSE 0 END`,
+      // F275.1 — listen skjulte feltet, så en måling PÅ listen svarede «0 med
+      // identitet» mens basen havde 229. Fjerde gang i samme døgn at et for
+      // snævert instrument var problemet frem for dataene.
+      sourceIdentity: documents.sourceIdentity,
       pageCount: documents.pageCount,
       tags: documents.tags,
       date: documents.date,
