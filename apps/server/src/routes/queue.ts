@@ -5,7 +5,7 @@ import {
   ListQueueQuerySchema,
   canonicaliseTagString,
 } from '@trail/shared';
-import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
+import { requireAuth, getTenant, getUser, getTrail, getAmbientKbGrant } from '../middleware/auth.js';
 import {
   createCandidate,
   resolveCandidate,
@@ -172,6 +172,34 @@ queueRoutes.post('/queue/candidates', async (c) => {
   const kbId = await resolveKbId(getTrail(c), tenant.id, payload.knowledgeBaseId);
   if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
   payload = { ...payload, knowledgeBaseId: kbId };
+
+  // F263.17.2 — AFGRÆNSNINGEN SKAL OGSÅ GÆLDE HER.
+  //
+  // `kbGrantRefusal` i requireAuth læser Trailen ud af STIEN. Denne rute har
+  // ingen kb i stien — den bærer den i KROPPEN. Så en nøgle afgrænset til én
+  // Brain kunne skrive en kandidat i en HVILKEN SOM HELST Brain i kontoen, og
+  // det ville have set fuldstændig lovligt ud: 201, ingen fejl, ingen log.
+  //
+  // MÅLT 16/9 med en nøgle bundet til «HelpDesk-Dev»:
+  //   søg i broberg.ai            403   ← stien bærer kb'en, grænsen holdt
+  //   KANDIDAT i broberg.ai       201   ← kroppen bærer den, grænsen fandtes ikke
+  //
+  // Den rejste kandidat landede i ejerens godkendelseskø. HelpDesks
+  // fuldskala-suite kører med fem fiktive brugere igen og igen; uden denne
+  // spærre ville hver kørsel fylde hans kø med testdata — og han fik 100
+  // notifikationer fra samme kø natten før.
+  //
+  // Partner-scopets egen kommentar advarer mod nabo-fælden: «upload-endpointet
+  // tager ingen kbId, så der er intet sti-segment at pille ved». Her ER der en
+  // kbId at pille ved, og ingen kiggede på den.
+  const tilladteKbIds = getAmbientKbGrant(c);
+  if (tilladteKbIds && !tilladteKbIds.includes(kbId)) {
+    return c.json({
+      error: 'kb-not-granted',
+      message: 'Din nøgle er ikke bevilget til den Trail du skriver til.',
+      knowledgeBaseId: kbId,
+    }, 403);
+  }
 
   // F201.11 — ambient distill-compile. An ambient candidate arrives as a RAW
   // per-window screen dump (mostly noise). Distill it to extracted knowledge
