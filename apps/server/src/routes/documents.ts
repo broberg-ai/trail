@@ -178,7 +178,16 @@ documentRoutes.get('/knowledge-bases/:kbId/documents', async (c) => {
       fileType: documents.fileType,
       fileSize: documents.fileSize,
       status: documents.status,
-      awaitingLocalCompile: documents.awaitingLocalCompile,
+      // F263.16 — DEN UDLEDTE tilstand, ikke den rå kolonne.
+      //
+      // Ingest Station filtrerer på netop dette felt (`sources.filter(s =>
+      // s.awaitingLocalCompile)`). Returnerede vi kolonnen, ville en kilde der
+      // er skrevet om efter sin kompilering stå som FÆRDIG i Stationen mens
+      // motorens kø har den som ventende — to flader med hver sit svar på det
+      // samme spørgsmål, og den ene ville vise en tom kø mens der lå arbejde.
+      //
+      // `awaitendeKilde()` er det ene sted der afgør det; her læses det bare.
+      awaitingLocalCompile: sql<boolean>`CASE WHEN ${awaitendeKilde()} THEN 1 ELSE 0 END`,
       pageCount: documents.pageCount,
       tags: documents.tags,
       date: documents.date,
