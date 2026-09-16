@@ -32,6 +32,7 @@ import { backfillReferencesForSource } from '../services/reference-extractor.js'
 import { recordAccess } from '../services/access-tracker.js';
 import { recordReinforcement } from '../services/reinforcement.js';
 import { isNull, isNotNull, gt, ne } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
 import { createVisionBackend, getActiveVisionModel } from '../services/vision.js';
 import { getJobRunner } from '../services/jobs/runner.js';
 import type {
@@ -1508,9 +1509,26 @@ documentRoutes.post('/documents/:docId/local-vision', async (c) => {
     return c.json({ error: 'Only source documents accept local-vision content' }, 400);
   }
 
+  // F263.16 — EN OMSKRIVNING SKAL OGSÅ FLYTTE FINGERAFTRYKKET.
+  //
+  // Fundet af en LIVE-kontrol efter udrulning, ikke af en prøve: jeg skrev
+  // kilden om her, og genåbningen fyrede ikke — fordi `contentHash` stod
+  // uændret. Mekanismen var rigtig og blind for netop dette skrivested.
+  //
+  // MÅLT: `contentHash` sættes ÉT sted i hele motoren (uploads.ts:144) plus
+  // en boot-backfill. Hvert andet skrivested lod den stå forældet, og en
+  // forældet hash er værre end ingen: den siger «uændret» med selvtillid.
+  //
+  // DE TO HASH'ER DÆKKER IKKE DET SAMME, og det skal stå her frem for at
+  // blive opdaget: upload hasher filens RÅ BYTES, dette sted hasher TEKSTEN.
+  // Det er sundt, fordi sammenligningen ALTID er samme dokument over tid —
+  // aldrig ét dokument mod et andet. Den ene synlige følge er at den FØRSTE
+  // local-vision efter en upload altid tæller som en ændring. Det er korrekt:
+  // indholdet BLEV udskiftet (en billedbeskrivelse erstatter en pladsholder).
+  const nyHash = createHash('sha256').update(content, 'utf8').digest('hex');
   await trail.db
     .update(documents)
-    .set({ content, updatedAt: new Date().toISOString() })
+    .set({ content, contentHash: nyHash, updatedAt: new Date().toISOString() })
     .where(eq(documents.id, doc.id))
     .run();
 

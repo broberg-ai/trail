@@ -419,3 +419,34 @@ test('AC#9 NEGATIV KONTROL: den RIGTIGE hash slipper igennem', async () => {
   expect(res.status).toBe(200);
   expect(await iKoe()).toBe(false);
 });
+
+test('VAGT: hvert skrivested der ændrer en KILDES indhold flytter også hash\'en', () => {
+  // Fundet af en live-kontrol EFTER udrulning: genåbningen var inert på
+  // local-vision, fordi `contentHash` stod uændret. En forældet hash er værre
+  // end ingen — den siger «uændret» med selvtillid.
+  //
+  // Vagten læser kilden og kræver at hvert `.set({ content` på documents i
+  // denne fil også bærer `contentHash`. Et tredje skrivested kan så ikke
+  // glemme den i stilhed.
+  const kilde = readFileSync(
+    new URL('../routes/documents.ts', import.meta.url), 'utf8',
+  );
+
+  // POSITIV KONTROL: kan vagten overhovedet finde et skrivested?
+  const skrivninger = [...kilde.matchAll(/\.set\(\{\s*content[,\s]/g)];
+  expect(skrivninger.length).toBeGreaterThan(0);
+
+  for (const m of skrivninger) {
+    const uddrag = kilde.slice(m.index!, m.index! + 220);
+    expect(uddrag, `skrivested uden contentHash:\n${uddrag.slice(0, 160)}`)
+      .toContain('contentHash');
+  }
+});
+
+test('VAGT NEGATIV KONTROL: mønsteret matcher faktisk noget', () => {
+  // En fraværs-påstand beviser intet før instrumentet er vist at kunne finde.
+  const kilde = readFileSync(
+    new URL('../routes/documents.ts', import.meta.url), 'utf8',
+  );
+  expect([...kilde.matchAll(/\.set\(\{\s*content[,\s]/g)].length).toBe(1);
+});
