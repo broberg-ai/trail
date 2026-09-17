@@ -1,7 +1,7 @@
 /**
  * F275.1 — backfill af NEURON-siden.
  *
- * Målt 17/9 i broberg.ai: 66 af 66 kilder bar en identitet, og 0 af 247
+ * Målt 17/9 i broberg.ai: 66 af 66 sources bar en identitet, og 0 af 247
  * Neuroner gjorde. Featuren var altså inert for hele den eksisterende base —
  * og det så præcis ud som om den virkede, fordi den sikre standard gjorde det
  * harmløst.
@@ -23,16 +23,16 @@ const URL_B = 'url:https://broberg.ai/b';
 let app: ReturnType<typeof createApp>;
 let trail: Awaited<ReturnType<typeof createLibsqlDatabase>>;
 
-type Svar = { neuroner: number; foer: number; fik: number; havdeAllerede: number; normaliseret: number; ingenKilde: number; flereKilder: number; efter: number; applied: boolean };
+type Response = { neurons: number; before: number; gained: number; alreadyHad: number; normalised: number; noSource: number; multipleSources: number; after: number; applied: boolean };
 
-async function backfill(apply: boolean): Promise<Svar> {
+async function backfill(apply: boolean): Promise<Response> {
   const res = await app.request('http://engine.local/api/v1/maintenance/backfill-neuron-identity', {
     method: 'POST',
     headers: { Authorization: `Bearer ${NØGLE}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ apply }),
   });
   expect(res.status).toBe(200);
-  return (await res.json()) as Svar;
+  return (await res.json()) as Response;
 }
 
 async function kilde(id: string, identitet: string | null) {
@@ -47,7 +47,7 @@ async function neuron(id: string) {
     path: '/neurons/', filename: `${id}.md`, title: id, content: 'x', fileType: 'md',
   }).run();
 }
-async function citerer(n: string, k: string, anker = 'a1') {
+async function cites(n: string, k: string, anker = 'a1') {
   await trail.db.insert(documentReferences).values({
     id: `r-${n}-${k}-${anker}`, tenantId: T, knowledgeBaseId: KB,
     wikiDocumentId: n, sourceDocumentId: k, claimAnchor: anker,
@@ -76,38 +76,38 @@ beforeEach(async () => {
 test('TØRLØB ER STANDARD — den tæller, men skriver ikke', async () => {
   // Et backfill der kun kan køres for alvor er et backfill man ikke tør køre.
   await kilde('k1', URL_A);
-  await neuron('n1'); await citerer('n1', 'k1');
+  await neuron('n1'); await cites('n1', 'k1');
   const t = await backfill(false);
-  expect([t.fik, t.efter, t.applied]).toEqual([1, 0, false]);
+  expect([t.gained, t.after, t.applied]).toEqual([1, 0, false]);
   expect(await identitetenPaa('n1')).toBeNull();
 });
 
 test('DEN BÆRENDE: en Neuron med ÉN kilde arver kildens identitet — og tallet læses tilbage', async () => {
   await kilde('k1', URL_A);
-  await neuron('n1'); await citerer('n1', 'k1');
+  await neuron('n1'); await cites('n1', 'k1');
   const r = await backfill(true);
-  expect([r.foer, r.fik, r.efter]).toEqual([0, 1, 1]);
+  expect([r.before, r.gained, r.after]).toEqual([0, 1, 1]);
   expect(await identitetenPaa('n1')).toBe(URL_A);
 });
 
 test('samme kilde citeret TRE gange er ÉN kilde, ikke tre', async () => {
   // Uden DISTINCT ville hver Neuron med flere citater til samme side lande i
-  // «flere kilder» og blive sprunget over — altså netop de grundigste sider.
+  // «flere sources» og blive sprunget over — altså netop de grundigste sider.
   await kilde('k1', URL_A);
   await neuron('n1');
-  for (const a of ['a1', 'a2', 'a3']) await citerer('n1', 'k1', a);
-  expect((await backfill(true)).fik).toBe(1);
+  for (const a of ['a1', 'a2', 'a3']) await cites('n1', 'k1', a);
+  expect((await backfill(true)).gained).toBe(1);
   expect(await identitetenPaa('n1')).toBe(URL_A);
 });
 
-test('DEN BEVIDSTE UNDLADELSE: en Neuron med TO kilder får INGEN identitet', async () => {
+test('DEN BEVIDSTE UNDLADELSE: en Neuron med TO sources får INGEN identitet', async () => {
   // «Hvilken kilde er denne side en udgave AF» har intet entydigt svar når den
   // hviler på to. Gættede vi på den første, ville en ny udgave af DEN afløse en
   // side der også hvilede på den anden — altså tage gyldig viden væk, tavst.
   await kilde('k1', URL_A); await kilde('k2', URL_B);
-  await neuron('n1'); await citerer('n1', 'k1'); await citerer('n1', 'k2');
+  await neuron('n1'); await cites('n1', 'k1'); await cites('n1', 'k2');
   const r = await backfill(true);
-  expect([r.fik, r.flereKilder]).toEqual([0, 1]);
+  expect([r.gained, r.multipleSources]).toEqual([0, 1]);
   expect(await identitetenPaa('n1')).toBeNull();
 });
 
@@ -115,30 +115,30 @@ test('en Neuron UDEN citat-kanter tælles som «ingen kilde», ikke som behandle
   // Blandes de to, ser rapporten bedre ud end virkeligheden.
   await neuron('n1');
   const r = await backfill(true);
-  expect([r.fik, r.ingenKilde]).toEqual([0, 1]);
+  expect([r.gained, r.noSource]).toEqual([0, 1]);
 });
 
 test('en kilde UDEN identitet giver ingen arv — ikke en tom identitet', async () => {
   await kilde('k1', null);
-  await neuron('n1'); await citerer('n1', 'k1');
+  await neuron('n1'); await cites('n1', 'k1');
   const r = await backfill(true);
-  expect([r.fik, r.ingenKilde]).toEqual([0, 1]);
+  expect([r.gained, r.noSource]).toEqual([0, 1]);
   expect(await identitetenPaa('n1')).toBeNull();
 });
 
 test('IDEMPOTENT: anden kørsel ændrer intet og påstår intet', async () => {
   await kilde('k1', URL_A);
-  await neuron('n1'); await citerer('n1', 'k1');
+  await neuron('n1'); await cites('n1', 'k1');
   await backfill(true);
-  const igen = await backfill(true);
-  expect([igen.fik, igen.havdeAllerede, igen.efter]).toEqual([0, 1, 1]);
+  const again = await backfill(true);
+  expect([again.gained, again.alreadyHad, again.after]).toEqual([0, 1, 1]);
 });
 
 test('arkiverede Neuroner røres ikke — de svarer ikke på noget', async () => {
   await kilde('k1', URL_A);
-  await neuron('n1'); await citerer('n1', 'k1');
+  await neuron('n1'); await cites('n1', 'k1');
   await trail.db.update(documents).set({ archived: true }).where(eq(documents.id, 'n1')).run();
-  expect((await backfill(true)).neuroner).toBe(0);
+  expect((await backfill(true)).neurons).toBe(0);
 });
 
 test('SYNKRONISERING: en Neuron med en FORÆLDET form af kildens identitet rettes', async () => {
@@ -147,20 +147,20 @@ test('SYNKRONISERING: en Neuron med en FORÆLDET form af kildens identitet rette
   // side. Fyldte backfill'en kun tomme felter, ville den forkerte form stå for
   // evigt — og afløsningen ville aldrig ramme netop den side.
   await kilde('k1', URL_A);
-  await neuron('n1'); await citerer('n1', 'k1');
+  await neuron('n1'); await cites('n1', 'k1');
   await trail.db.update(documents).set({ sourceIdentity: 'url:https://broberg.ai/GAMMEL-FORM' })
     .where(eq(documents.id, 'n1')).run();
 
   const r = await backfill(true);
-  expect([r.fik, r.normaliseret]).toEqual([0, 1]);
+  expect([r.gained, r.normalised]).toEqual([0, 1]);
   expect(await identitetenPaa('n1')).toBe(URL_A);
 });
 
-test('en Neuron der ALLEREDE står korrekt tælles hverken som fik eller normaliseret', async () => {
+test('en Neuron der ALLEREDE står korrekt tælles hverken som gained eller normalised', async () => {
   // Ellers ville rapporten påstå at der skete noget hver eneste kørsel.
   await kilde('k1', URL_A);
-  await neuron('n1'); await citerer('n1', 'k1');
+  await neuron('n1'); await cites('n1', 'k1');
   await backfill(true);
-  const igen = await backfill(true);
-  expect([igen.fik, igen.normaliseret]).toEqual([0, 0]);
+  const again = await backfill(true);
+  expect([again.gained, again.normalised]).toEqual([0, 0]);
 });

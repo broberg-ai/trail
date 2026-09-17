@@ -11,8 +11,8 @@ import {
 } from '@trail/db';
 import { ensureRecentBrainVersion } from '../history/versions.js';
 // F275.5 — forplantningen bor i lint/, fordi den producerer et FUND og ikke en
-// mutation af indholdet. Se kilde-forplantning.ts for hvorfor vi ikke skriver om.
-import { afhaengigeAf, maerkAfhaengige } from '../lint/kilde-forplantning.js';
+// mutation af indholdet. Se source-propagation.ts for hvorfor vi ikke skriver om.
+import { dependentsOf, markDependents } from '../lint/source-propagation.js';
 import { logActivity } from '../activity.js';
 import type {
   CreateQueueCandidate,
@@ -119,7 +119,7 @@ export interface CandidateOp {
   /**
    * F269/F275.3 — hvilken KILDE denne Neuron blev kompileret af, når vi ved det.
    * Kompileringen sender den allerede (candidate-api.ts); den blev bare aldrig
-   * skrevet videre til Neuron-rækken, så Neuronen ikke kendte sin egen kilde.
+   * skrevet videre til Neuron-rækken, så Neuronen ikke kendte sin egen source.
    */
   sourceDocumentId?: string;
   targetDocumentId?: string;
@@ -316,7 +316,7 @@ export function parseOp(candidate: QueueCandidate): CandidateOp {
 /**
  * F275.3 — kildens identitet, arvet ned på Neuronen.
  *
- * Neuronen kendte ikke sin kilde. Målt 16/9: kilden bar `{connector, sourceUrl}`,
+ * Neuronen kendte ikke sin source. Målt 16/9: kilden bar `{connector, sourceUrl}`,
  * Neuronen bar `metadata: None` — det eneste spor tilbage var `sources: [...]` i
  * frontmatter, altså prosa, og et filnavn er ikke en identitet.
  *
@@ -325,21 +325,21 @@ export function parseOp(candidate: QueueCandidate): CandidateOp {
  * modsigelse i kuratorkøen.
  *
  * `null` er den TREDJE tilstand og betyder «vi ved det ikke» — aldrig «ingen
- * kilde». Linten skal kunne skelne, for en afløsnings-regel der læser «ved ikke»
- * som «samme kilde» ville tie om præcis de sager den findes for.
+ * source». Linten skal kunne skelne, for en afløsnings-regel der læser «ved ikke»
+ * som «samme source» ville tie om præcis de sager den findes for.
  */
-async function kildensIdentitet(
+async function identityOfSource(
   tx: Db,
   tenantId: string,
   sourceDocumentId: string | undefined,
 ): Promise<string | null> {
   if (!sourceDocumentId) return null;
-  const kilde = await tx
+  const source = await tx
     .select({ identitet: documents.sourceIdentity })
     .from(documents)
     .where(and(eq(documents.id, sourceDocumentId), eq(documents.tenantId, tenantId)))
     .get();
-  return kilde?.identitet ?? null;
+  return source?.identitet ?? null;
 }
 
 async function lastEventIdFor(
@@ -878,24 +878,24 @@ async function executeApprove(
   // forbindelse end den der holder låsen.
   const overskrevet: KuratorOverskrivning[] = [];
   // F275.5 — samme seam: en GENKOMPILERING betyder at kilden har en ny udgave,
-  // og så er alt der HÆNGER på den kilde bagefter. Opsamles inde, handles ude.
+  // og så er alt der HÆNGER på den source bagefter. Opsamles inde, handles ude.
   const forplantning: { documentId: string; identitet: string; kbId: string }[] = [];
   const resultat = await trail.db.transaction(async (tx) => {
     if (op.op === 'update') return approveUpdate(tx, candidate, op, payload, action, actor, ctx);
     if (op.op === 'archive') return approveArchive(tx, candidate, op, action, actor, ctx);
     return approveCreate(tx, candidate, op, payload, action, actor, ctx, overskrevet, forplantning);
   });
-  for (const o of overskrevet) await meldKuratorOverskrivning(trail, candidate, o);
-  for (const f of forplantning) await forplantAfloesning(trail, candidate, f);
+  for (const o of overskrevet) await reportCuratorOverwrite(trail, candidate, o);
+  for (const f of forplantning) await propagateSupersession(trail, candidate, f);
   return resultat;
 }
 
 /**
  * F275.5 — FORPLANT AFLØSNINGEN.
  *
- * Det var ikke kilde-Neuronen der stod forkert i nat. Det var `overview.md`,
+ * Det var ikke source-Neuronen der stod forkert i nat. Det var `overview.md`,
  * `glossary.md` og `flagskib.md`, hvis egen identitet ikke er kildens URL — fem
- * sider sagde «bygges nu» efter kilden sagde «lanceret». Rammer afløsningen kun
+ * sider sagde «bygges nu» after kilden sagde «lanceret». Rammer afløsningen kun
  * den ene side, bliver køen ren mens hjernen svarer på gårsdagens tekst, og det
  * ligner ikke længere et problem.
  *
@@ -906,17 +906,17 @@ async function executeApprove(
  * Nul afhængige er en helt normal tilstand og melder intet — men så er der
  * heller intet at tie om.
  */
-async function forplantAfloesning(
+async function propagateSupersession(
   trail: TrailDatabase,
   candidate: QueueCandidate,
   f: { documentId: string; identitet: string; kbId: string },
 ): Promise<void> {
   try {
-    const afhaengige = await afhaengigeAf(trail, candidate.tenantId, f.kbId, f.identitet, f.documentId);
+    const afhaengige = await dependentsOf(trail, candidate.tenantId, f.kbId, f.identitet, f.documentId);
     if (afhaengige.length === 0) return;
 
     const nu = Date.now();
-    const maerket = await maerkAfhaengige(trail, afhaengige, nu);
+    const maerket = await markDependents(trail, afhaengige, nu);
     if (maerket !== afhaengige.length) {
       // Et stempel der ikke landede ser ud som ingen afhængige. Sig det højt
       // frem for at melde et tal vi ikke har dækning for.
@@ -937,18 +937,18 @@ async function forplantAfloesning(
       {
         knowledgeBaseId: f.kbId,
         kind: 'gap-detection',
-        title: `${afhaengige.length} side${afhaengige.length === 1 ? '' : 'r'} hænger på en kilde der har fået en ny udgave`,
+        title: `${afhaengige.length} side${afhaengige.length === 1 ? '' : 'r'} hænger på en source der har fået en ny udgave`,
         content:
           `Kilden \`${f.identitet}\` er kompileret om, og den side der bæres direkte af den er ajour.\n\n` +
           `Disse sider hænger også på den, og de er IKKE skrevet om:\n\n${liste}\n\n` +
           `De er markeret i produktet, så de ikke svarer som om intet var sket — men de er ikke rettet. ` +
           `Læs dem igennem mod den nye udgave af kilden, eller kompilér dem om.\n\n` +
-          `Listen er slået op på kilde-identitet og citat-kanter, ikke på tekstlighed: en side der ` +
+          `Listen er slået op på source-identity og citat-kanter, ikke på tekstlighed: en side der ` +
           `tilfældigvis nævner de samme ord uden at stamme fra kilden står IKKE her.`,
         confidence: 0.5,
         metadata: JSON.stringify({
           connector: 'lint',
-          kilde: 'F275.5',
+          source: 'F275.5',
           sourceIdentity: f.identitet,
           afhaengige: afhaengige.map((a) => ({ id: a.documentId, kobling: a.kobling })),
         }),
@@ -977,7 +977,7 @@ interface KuratorOverskrivning {
 /**
  * F275.3 AC#5 — SIG DET HØJT.
  *
- * Har en kurator skrevet i en Neuron, er den ikke længere ren kilde-viden. En
+ * Har en kurator skrevet i en Neuron, er den ikke længere ren source-viden. En
  * ny udgave af kilden må gerne afløse den — det er hele F275 — men den må ikke
  * gøre det i stilhed, for et lydløst indgreb kan ikke skelnes fra at intet
  * skete, og mennesket opdager først sin forsvundne rettelse ved et tilfælde.
@@ -987,7 +987,7 @@ interface KuratorOverskrivning {
  * tekst i køen som en `version-conflict`, ordret, så den kan sættes tilbage med
  * ét klik — og indtil nogen svarer, STÅR den der.
  */
-async function meldKuratorOverskrivning(
+async function reportCuratorOverwrite(
   trail: TrailDatabase,
   candidate: QueueCandidate,
   o: KuratorOverskrivning,
@@ -1004,14 +1004,14 @@ async function meldKuratorOverskrivning(
         content:
           `En ny udgave af kilden bag **${titel}** er kompileret, og den har erstattet ` +
           `teksten på siden — inklusive den rettelse du selv skrev i version ${o.kuratorVersion}.\n\n` +
-          `Det er sådan «samme kilde, ny udgave er kanon» skal virke, men din tekst skal ikke ` +
+          `Det er sådan «samme source, ny udgave er kanon» skal virke, men din tekst skal ikke ` +
           `forsvinde uden at du ser det. Her er præcis hvad der stod, så du kan sætte det ` +
           `tilbage eller skrive det ind i den nye udgave:\n\n---\n\n${o.kuratorIndhold}`,
         // Under F19's auto-godkendelses-tærskel: et menneske skal svare.
         confidence: 0.5,
         metadata: JSON.stringify({
           connector: 'lint',
-          kilde: 'F275.3',
+          source: 'F275.3',
           documentId: o.documentId,
           kuratorVersion: o.kuratorVersion,
         }),
@@ -1070,9 +1070,9 @@ async function approveCreate(
 
   const docKind = op.docKind ?? 'wiki';
 
-  // F275.3 — Neuronen skal kende sin kilde. `null` når kompileringen ikke
-  // sendte en kilde, eller kilden selv ingen identitet har.
-  const kildeIdent = await kildensIdentitet(tx, candidate.tenantId, op.sourceDocumentId);
+  // F275.3 — Neuronen skal kende sin source. `null` når kompileringen ikke
+  // sendte en source, eller kilden selv ingen identitet har.
+  const kildeIdent = await identityOfSource(tx, candidate.tenantId, op.sourceDocumentId);
 
   // F252 — EN KILDE-FIL HAR ÉN SIDE. Findes path+filename allerede, opdateres
   // den frem for at der indsættes endnu en række.
@@ -1081,7 +1081,7 @@ async function approveCreate(
   // gen-uploader en artikel (uploads.ts:357 sætter status='processing' og
   // localCompile), kilden lander i køen igen, og hver kompilering skrev en
   // frisk side ved siden af den forrige. Målt 5/9 2026 i broberg-ai:
-  // 39 kilde-filer som 90 sider — aidan-historien 5×, tre andre 4×.
+  // 39 source-filer som 90 sider — aidan-historien 5×, tre andre 4×.
   //
   // Og dubletterne er IKKE ens: de er skrevet af forskellige kørsler, af en
   // model, på forskellige tidspunkter. En søgning kunne derfor give tre
@@ -1162,7 +1162,7 @@ async function approveCreate(
         // skrevet før feltet fandtes aldrig få det, og den ville blive ved med
         // at modsige sin egen næste udgave.
         ...(kildeIdent !== null ? { sourceIdentity: kildeIdent } : {}),
-        // F275.5 — denne side ER netop set efter kilden. Ryd mærket, ellers
+        // F275.5 — denne side ER netop set after kilden. Ryd mærket, ellers
         // bliver den ved med at melde sig bagefter i det uendelige.
         sourceChangedAt: null,
         updatedAt: new Date().toISOString(),
@@ -1170,7 +1170,7 @@ async function approveCreate(
       .where(eq(documents.id, existing.id))
       .run();
 
-    // F275.5 — en GENKOMPILERING af en side med kendt kilde betyder at kilden
+    // F275.5 — en GENKOMPILERING af en side med kendt source betyder at kilden
     // har en ny udgave. Alt andet der hænger på den identitet er nu bagefter.
     // Kun her, ikke i insert-grenen: første kompilering afløser ingenting.
     if (forplantning && kildeIdent !== null) {
@@ -1231,7 +1231,7 @@ async function approveCreate(
       // so this subquery sees the latest committed seq for the KB.
       seq: sql<number>`COALESCE((SELECT MAX(${documents.seq}) FROM ${documents} WHERE ${documents.knowledgeBaseId} = ${candidate.knowledgeBaseId}), 0) + 1`,
       ingestJobId: op.ingestJobId ?? null,
-      // F275.3 — se kildensIdentitet(). NULL = «vi ved det ikke», og linten
+      // F275.3 — se identityOfSource(). NULL = «vi ved det ikke», og linten
       // behandler det som en MODSIGELSE, aldrig som en afløsning.
       sourceIdentity: kildeIdent,
       // F273.3 — bar ind, ikke udledt. Mangler den, er svaret NULL.
@@ -1322,7 +1322,7 @@ async function approveUpdate(
   const newVersion = doc.version + 1;
   const prevEventId = await lastEventIdFor(tx, candidate.tenantId, doc.id);
   // F275.3 — se approveCreate.
-  const kildeIdent = await kildensIdentitet(tx, candidate.tenantId, op.sourceDocumentId);
+  const kildeIdent = await identityOfSource(tx, candidate.tenantId, op.sourceDocumentId);
 
   await tx
     .update(documents)
@@ -1335,7 +1335,7 @@ async function approveUpdate(
       ...(op.tags !== undefined ? { tags: op.tags } : {}),
       ...(op.ingestJobId !== undefined ? { ingestJobId: op.ingestJobId } : {}),
       // F275.3 — samme arv på update-vejen. Rørte vi kun create-vejen, ville
-      // halvdelen af Neuronerne mangle deres kilde uden at noget fejlede.
+      // halvdelen af Neuronerne mangle deres source uden at noget fejlede.
       ...(kildeIdent !== null ? { sourceIdentity: kildeIdent } : {}),
     })
     .where(eq(documents.id, doc.id))

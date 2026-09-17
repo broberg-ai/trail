@@ -64,7 +64,7 @@ test('en upload får en identitet på filnavn + Brain — ikke null', async () =
 test('AC#4 — samme filnavn igen: brugeren får at vide at det ERSTATTER, MED DATO', async () => {
   const { body } = await upload('rapport.md', '# udgave 2, helt andet indhold');
   const a = body.advarsel;
-  expect(a?.kind).toBe('samme-kilde');
+  expect(a?.kind).toBe('samme-source');
   expect(a?.erstatter.filename).toBe('rapport.md');
   // Datoen er selve pointen: «dette erstatter rapport.md fra 3. september».
   expect(typeof a?.erstatter.uploadet).toBe('string');
@@ -79,11 +79,11 @@ test('beskeden siger hvad der SKER, ikke hvad der er sat op — Brain FRA ⇒ er
   await trail.db.update(knowledgeBases).set({ newVersionIsCanon: false }).where(eq(knowledgeBases.id, KB)).run();
   const { body } = await upload('rapport.md', '# udgave 3');
   expect(body.advarsel?.erstatterNu).toBe(false);
-  expect(body.advarsel?.grund).toBe('brain-fra');
+  expect(body.advarsel?.grund).toBe('brain-off');
   await trail.db.update(knowledgeBases).set({ newVersionIsCanon: true }).where(eq(knowledgeBases.id, KB)).run();
 });
 
-test('AC#4 fortrydelsen — «det er en ny kilde» giver filen sin EGEN identitet', async () => {
+test('AC#4 fortrydelsen — «det er en ny source» giver filen sin EGEN identitet', async () => {
   const { body } = await upload('rapport.md', '# helt andet værk, samme navn');
   expect(body.advarsel).toBeDefined();
 
@@ -98,7 +98,7 @@ test('AC#4 fortrydelsen — «det er en ny kilde» giver filen sin EGEN identite
   expect(raekke?.id).toBe(`path:${KB}/${body.id}/rapport.md`);
 });
 
-test('en fil der er markeret «ny kilde» udløser ALDRIG beskeden igen', async () => {
+test('en fil der er markeret «ny source» udløser ALDRIG beskeden igen', async () => {
   // Den bærende halvdel af fortrydelsen: holdt valget kun til næste upload,
   // ville brugerens beslutning forsvinde uden at nogen fik det at vide.
   const { body } = await upload('rapport.md', '# endnu en udgave', '?nyKilde=true');
@@ -158,13 +158,13 @@ test('den CHUNK-DELTE vej giver samme identitet som enkelt-POST\'en', async () =
 
 test('AC#4 på den vej ADMIN bruger: samme navn igen ⇒ besked med dato', async () => {
   const { body } = await uploadChunket('chunket.md', '# chunket udgave 2, andet indhold');
-  expect(body.advarsel?.kind).toBe('samme-kilde');
+  expect(body.advarsel?.kind).toBe('samme-source');
   expect(body.advarsel?.erstatter.filename).toBe('chunket.md');
   expect(Number.isNaN(Date.parse(body.advarsel!.erstatter.uploadet))).toBe(false);
   expect(body.advarsel?.erstatterNu).toBe(true);
 });
 
-test('de to veje er enige om identiteten — ellers afhang «samme kilde» af klienten', async () => {
+test('de to veje er enige om identiteten — ellers afhang «samme source» af klienten', async () => {
   // En fil uploadet med den ene vej skal kunne genkendes af den anden.
   const { body } = await upload('chunket.md', '# nu via enkelt-POST');
   expect(body.sourceIdentity).toBe(`path:${KB}/chunket.md`);
@@ -175,8 +175,8 @@ test('de to veje er enige om identiteten — ellers afhang «samme kilde» af kl
  * F263.8 — afgrænsningen gælder OGSÅ fortrydelses-ruten.
  *
  * Fundet i sikkerhedsgennemgangen af mit eget endepunkt: en `ambient`-afgrænset
- * nøgle kunne ændre kilde-identiteten på ETHVERT dokument i lejemålet, også i en
- * Brain den aldrig har fået adgang til. Konsekvensen er stille — en kilde hvis
+ * nøgle kunne ændre source-identityen på ETHVERT dokument i lejemålet, også i en
+ * Brain den aldrig har fået adgang til. Konsekvensen er stille — en source hvis
  * identitet er skiftet, genkendes ikke længere som en tidligere udgave, så
  * afløsningen springer den over uden at noget fejler.
  */
@@ -197,7 +197,7 @@ test('SIKKERHED: en AFGRÆNSET nøgle kan IKKE flytte identiteten — og afvisni
   }).run();
 
   const { body } = await upload('afgraenset.md', '# en fil i KB');
-  const res = await app.request(`http://engine.local/api/v1/documents/${body.id}/ny-kilde`, {
+  const res = await app.request(`http://engine.local/api/v1/documents/${body.id}/new-source`, {
     method: 'POST', headers: { Authorization: `Bearer ${AFGRÆNSET}` },
   });
   expect(res.status).toBe(403);
@@ -210,16 +210,16 @@ test('SIKKERHED: en AFGRÆNSET nøgle kan IKKE flytte identiteten — og afvisni
   expect((await res.json() as { error: string }).error).toContain('ambient key scope');
 
   // Og identiteten står URØRT — afvisningen må ikke være halvt gennemført.
-  const efter = await trail.db
+  const after = await trail.db
     .select({ i: documents.sourceIdentity }).from(documents).where(eq(documents.id, body.id)).get();
-  expect(efter!.i).toBe(`path:${KB}/afgraenset.md`);
+  expect(after!.i).toBe(`path:${KB}/afgraenset.md`);
 });
 
 test('NEGATIV KONTROL: en UAFGRÆNSET nøgle kan stadig fortryde', async () => {
   // Uden den ville «afvis alle» bestå lige så grønt — og kuratoren ville have
   // mistet det ene valg der er hele sikkerhedsnettet bag default ON.
   const { body } = await upload('uafgraenset.md', '# en anden fil');
-  const res = await app.request(`http://engine.local/api/v1/documents/${body.id}/ny-kilde`, {
+  const res = await app.request(`http://engine.local/api/v1/documents/${body.id}/new-source`, {
     method: 'POST', headers: { Authorization: `Bearer ${NØGLE}` },
   });
   expect(res.status).toBe(200);

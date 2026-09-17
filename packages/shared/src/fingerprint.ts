@@ -1,5 +1,5 @@
 /**
- * F275.6 — et fingeraftryk der kan sige «97 % samme dokument».
+ * F275.6 — et fingerprint der kan sige «97 % samme dokument».
  *
  * ## Hvorfor en checksum ikke kan det her
  *
@@ -40,7 +40,7 @@ const SHINGLE = 5;
  * intet — og et estimat man ikke kan stole på er værre end ingen, fordi det ser
  * lige så meget ud som et man kan.
  */
-const MIN_ORD = 20;
+const MIN_WORDS = 20;
 
 /** 32-bit FNV-1a, seedet pr. familie. Ingen afhængigheder, samme svar overalt. */
 function fnv1a(s: string, seed: number): number {
@@ -69,11 +69,11 @@ function ord(tekst: string): string[] {
 
 /**
  * Byg fingeraftrykket. `null` når teksten er for kort til at måle på — «kunne
- * ikke måles» er en TREDJE tilstand og må aldrig degradere til «ny kilde».
+ * ikke måles» er en TREDJE tilstand og må aldrig degradere til «ny source».
  */
-export function fingeraftryk(tekst: string | null | undefined): string | null {
+export function fingerprint(tekst: string | null | undefined): string | null {
   const o = ord(tekst ?? '');
-  if (o.length < MIN_ORD) return null;
+  if (o.length < MIN_WORDS) return null;
 
   const stumper = new Set<string>();
   for (let i = 0; i + SHINGLE <= o.length; i++) {
@@ -94,13 +94,13 @@ export function fingeraftryk(tekst: string | null | undefined): string | null {
 }
 
 /**
- * Hvor ens er to fingeraftryk? `null` når mindst ét mangler.
+ * Hvor ens er to fingerprint? `null` når mindst ét mangler.
  *
  * `null` betyder «vi kunne ikke måle», ALDRIG «de er forskellige». En scannet PDF
- * uden tekstlag har intet aftryk, og at læse det som «ny kilde» ville gøre netop
+ * uden tekstlag har intet aftryk, og at læse det som «ny source» ville gøre netop
  * de filer vi ved mindst om til dem vi er mest sikre på.
  */
-export function lighed(a: string | null | undefined, b: string | null | undefined): number | null {
+export function similarity(a: string | null | undefined, b: string | null | undefined): number | null {
   if (!a || !b) return null;
   if (a.length !== MINHASH_K * 8 || b.length !== MINHASH_K * 8) return null;
   let ens = 0;
@@ -111,43 +111,43 @@ export function lighed(a: string | null | undefined, b: string | null | undefine
 }
 
 /**
- * Over denne lighed SPØRGER vi. Den afgør ikke hvad der sker — se filens hoved.
+ * Over denne similarity SPØRGER vi. Den afgør ikke hvad der sker — se filens hoved.
  *
  * 0,85 er valgt så en rettet tastefejl, et nyt årstal eller en omskrevet
  * overskrift lander over, mens to selvstændige dokumenter om samme emne lander
  * under. Tallet må gerne justeres; det ændrer kun HVOR OFTE vi spørger, aldrig
  * hvad svaret bliver.
  */
-export const SPØRG_OVER = 0.85;
+export const ASK_ABOVE = 0.85;
 
 /** De fire tilfælde, holdt fra hinanden fordi de kræver hver sin besked. */
-export type Navnesag =
-  /** Høj lighed, samme navn — den almindelige «ny udgave». Spørg. */
-  | 'ny-udgave'
-  /** Høj lighed, ANDET navn — samme værk under nyt navn. Spørg. */
-  | 'samme-vaerk-nyt-navn'
-  /** LAV lighed, SAMME navn — to værker slås om ét navn. Højeste alarm. */
-  | 'navnekollision'
-  /** Lav lighed, andet navn — en ny kilde. Sig intet. */
-  | 'ny-kilde'
-  /** Vi kunne ikke måle. Ikke det samme som «ny kilde». */
-  | 'kan-ikke-afgoeres';
+export type NameVerdict =
+  /** Høj similarity, samme navn — den almindelige «ny udgave». Spørg. */
+  | 'new-edition'
+  /** Høj similarity, ANDET navn — samme værk under nyt navn. Spørg. */
+  | 'same-work-new-name'
+  /** LAV similarity, SAMME navn — to værker slås om ét navn. Højeste alarm. */
+  | 'name-collision'
+  /** Lav similarity, andet navn — en ny source. Sig intet. */
+  | 'new-source'
+  /** Vi kunne ikke måle. Ikke det samme som «ny source». */
+  | 'undecidable';
 
 /**
  * Afgør hvilken af de fire sager vi står i.
  *
  * `sammeNavn` er en ADVARSELSLAMPE, ikke identiteten. Den vigtigste af de fire
- * er `navnekollision`: to dokumenter der IKKE ligner hinanden men deler navn.
+ * er `name-collision`: to dokumenter der IKKE ligner hinanden men deler navn.
  * Med ejerens valg om at filnavn+Brain er identiteten, er det netop dér en
  * lydløs overskrivning ville ske — og den er usynlig bagefter.
  */
-export function navnesag(
+export function nameVerdict(
   lighedsgrad: number | null,
   sammeNavn: boolean,
-  taerskel: number = SPØRG_OVER,
-): Navnesag {
-  if (lighedsgrad === null) return 'kan-ikke-afgoeres';
+  taerskel: number = ASK_ABOVE,
+): NameVerdict {
+  if (lighedsgrad === null) return 'undecidable';
   const ligner = lighedsgrad >= taerskel;
-  if (ligner) return sammeNavn ? 'ny-udgave' : 'samme-vaerk-nyt-navn';
-  return sammeNavn ? 'navnekollision' : 'ny-kilde';
+  if (ligner) return sammeNavn ? 'new-edition' : 'same-work-new-name';
+  return sammeNavn ? 'name-collision' : 'new-source';
 }

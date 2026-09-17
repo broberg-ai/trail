@@ -34,10 +34,10 @@ export {
   detectStale,
   detectContradictions,
   detectFadedHeuristics,
-  sammeKilde,
-  afhaengigeAf,
-  maerkAfhaengige,
-  rydKildeMaerke,
+  sameSource,
+  dependentsOf,
+  markDependents,
+  clearSourceMark,
 } from './lint/index.js';
 export { DEFAULT_HUB_PAGES } from './lint/orphans.js';
 export type {
@@ -49,8 +49,8 @@ export type {
   ContradictionChecker,
   LlmContradictionResult,
   NewNeuron,
-  AfhaengigNeuron,
-  Kobling,
+  DependentNeuron,
+  LinkKind,
 } from './lint/index.js';
 
 // F140 — hierarchical schema inheritance (compile-prompt per wiki-path).
@@ -129,7 +129,7 @@ export {
   storeEmbedding, coverage, loadVectors,
   EMBEDDING_PROVIDER, EMBEDDING_MODEL,
   embeddingBeredskab,
-  // F265.12 — kaldes efter Bun.serve, så den første kunde ikke betaler
+  // F265.12 — kaldes after Bun.serve, så den første kunde ikke betaler
   // indlæsningen af hele indekset.
   varmOpVektorer,
 } from './retrieval/vectors.js';

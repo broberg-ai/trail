@@ -3,7 +3,7 @@
  *
  * Enkelt-POST'en spærrer med `if (isText && !localCompile)`. Den chunk-delte
  * finalize kaldte triggerIngest UBETINGET, og /init læste slet ikke flaget — så
- * en kilde der var bedt parkeret fik en betalt sky-kompilering alligevel.
+ * en source der var bedt parkeret fik en betalt sky-kompilering alligevel.
  *
  * Bider ikke i dag: Ingest Station bruger enkelt-POST'en. Den bider den dag
  * nogen flytter den til den chunk-delte vej, hvilket er den naturlige vej for
@@ -81,11 +81,11 @@ async function parkeret(id: string) {
  * men «og derfor ingen sky-kompilering» var det ikke. To halvdele af én
  * påstand, og kun den ene var målt.
  *
- * `triggerIngest` er fire-and-forget, så rækken skrives et øjeblik efter
- * svaret. Vi venter kort og ser efter — en tom tabel målt for tidligt ville
+ * `triggerIngest` er fire-and-forget, så rækken skrives et øjeblik after
+ * svaret. Vi venter kort og ser after — en tom tabel målt for tidligt ville
  * ligne den adfærd vi ønsker.
  */
-async function bestilteKompilering(docId: string): Promise<boolean> {
+async function compileWasQueued(docId: string): Promise<boolean> {
   for (let i = 0; i < 20; i++) {
     const r = await trail.db
       .select({ id: ingestJobs.id }).from(ingestJobs).where(eq(ingestJobs.documentId, docId)).all();
@@ -119,7 +119,7 @@ test('AC#0 DEN BÆRENDE: chunk-delt med ?localCompile=true PARKERER kilden — o
   const r = await chunket('parkeret.md', '?localCompile=true');
   expect(await parkeret(r.doc.id)).toBe(true);
   // Den anden halvdel af påstanden, og den der koster penge hvis den svigter.
-  expect(await bestilteKompilering(r.doc.id)).toBe(false);
+  expect(await compileWasQueued(r.doc.id)).toBe(false);
 });
 
 test('AC#1 POSITIV KONTROL: chunk-delt UDEN flaget parkerer IKKE — og bestiller en kompilering', async () => {
@@ -127,7 +127,7 @@ test('AC#1 POSITIV KONTROL: chunk-delt UDEN flaget parkerer IKKE — og bestille
   // chunk-delte vej — en stille funktionsfjernelse forklædt som ensretning.
   const r = await chunket('normal.md', '');
   expect(await parkeret(r.doc.id)).toBe(false);
-  expect(await bestilteKompilering(r.doc.id)).toBe(true);
+  expect(await compileWasQueued(r.doc.id)).toBe(true);
 });
 
 test('AC#2 ENKELT-POST\'EN ER URØRT — begge retninger', async () => {

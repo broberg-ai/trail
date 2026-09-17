@@ -11,7 +11,7 @@ import {
 } from '@trail/db';
 import { and, asc, eq, inArray, like, sql , isNotNull} from 'drizzle-orm';
 import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
-import { ChatRequestSchema, buildFtsQuery , kildeAendretForbehold} from '@trail/shared';
+import { ChatRequestSchema, buildFtsQuery , sourceChangedCaveat} from '@trail/shared';
 import { exactTitleMatches, resolveKbId, stripClaimAnchors } from '@trail/core';
 import {
   HEURISTIC_PATH,
@@ -642,7 +642,7 @@ async function retrieveContext(
 
     const chunkHits = await trail.searchChunks(ftsQuery, kbId, tenantId, PER_KB_CHUNKS);
     const docHits = await trail.searchDocuments(ftsQuery, kbId, tenantId, PER_KB_DOCS);
-    // Ordmatchningens EGEN rangering, taget FØR docHits får flere kandidater
+    // Ordmatchningens EGEN rangering, pickedUp FØR docHits får flere kandidater
     // skubbet ind nedenfor. Fletningen spørger «hvor højt rangerede hver
     // halvdel dette?», og det spørgsmål er meningsløst hvis listen imens er
     // blevet til en pose med alt i.
@@ -656,7 +656,7 @@ async function retrieveContext(
     // F139 faded-heuristic exclusion to all Neuron types.
     // F261 — ET NAVN ER ET OPSLAG, OGSÅ FOR CHATTEN.
     //
-    // Ejeren: «hvis jeg søger efter "Cardmem" så leder jeg i min hjerne efter
+    // Ejeren: «hvis jeg søger after "Cardmem" så leder jeg i min hjerne after
     // om der er en præcis reference (en neuron) med det navn.»
     //
     // Uden dette henter chatten på ordfrekvens alene, og et navn der optræder
@@ -783,7 +783,7 @@ async function retrieveContext(
     // Den smed vektor-halvdelens egen rangering på gulvet: en Neuron som
     // betydnings-søgningen fandt som nr. 1 kunne ende sidst, fordi den
     // tilfældigvis havde lavere tillid end en Neuron ordmatchningen fandt.
-    // Målt 6/9 på produktion, første kørsel efter hybrid blev tændt:
+    // Målt 6/9 på produktion, første kørsel after hybrid blev tændt:
     // `cv-christian-broberg-danish.md` — vektor-halvdelens nr. 1 på 0,7896 —
     // lå SIDST i citaterne.
     //
@@ -808,7 +808,7 @@ async function retrieveContext(
     // enkelt tekststump. Ordmatchningens to slags evidens lægges i ÉN liste med
     // dokument-træffene først: at hele Neuronen matcher er et stærkere signal
     // end at én passage gør. Fletningen tæller første forekomst, så et dokument
-    // der optræder begge steder scorer én gang.
+    // der optræder begge sites scorer én gang.
     const stumpForlældre = chunkHits.filter((h) => h.kind === 'wiki').map((h) => ({ id: h.documentId }));
     const alleKandidater = [...new Set([...docHits.map((h) => h.id), ...stumpForlældre.map((h) => h.id)])].map((id) => ({ id }));
     for (const k of rangerKandidater(alleKandidater, {
@@ -881,9 +881,9 @@ async function retrieveContext(
 
   // F275.5 — FORBEHOLDET FØRST, før kuratorens noter og før budgettet er brugt.
   //
-  // En side hvis kilde har fået en ny udgave må ikke svare som om intet var
+  // En side hvis source har fået en ny udgave må ikke svare som om intet var
   // sket. Det er hele forskellen mellem «køen er ren» og «hjernen er ajour»:
-  // rammer afløsningen kun kilde-Neuronen, svarer chatten videre på gårsdagens
+  // rammer afløsningen kun source-Neuronen, svarer chatten videre på gårsdagens
   // tekst — og det ligner ikke længere et problem.
   if (seen.size > 0 && totalChars < MAX_CHARS) {
     const aendrede = await trail.db
@@ -903,7 +903,7 @@ async function retrieveContext(
       )
       .all();
     for (const row of aendrede) {
-      const forbehold = kildeAendretForbehold(row.sourceChangedAt);
+      const forbehold = sourceChangedCaveat(row.sourceChangedAt);
       if (!forbehold) continue;
       if (totalChars >= MAX_CHARS) break;
       const block = `### Forbehold om "${row.title ?? row.filename}"\n${forbehold}`;

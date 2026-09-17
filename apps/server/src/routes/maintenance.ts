@@ -16,7 +16,7 @@ import { Hono } from 'hono';
 import { documents, queueCandidates, knowledgeBases , documentReferences} from '@trail/db';
 import { and, eq, isNotNull, inArray, like, lt, sql , ne} from 'drizzle-orm';
 import { resolveKbId } from '@trail/core';
-import { identitetFraMetadata } from '@trail/shared';
+import { identityFromMetadata } from '@trail/shared';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
 import type { AppBindings } from '../app.js';
 
@@ -133,11 +133,11 @@ maintenanceRoutes.post('/maintenance/drain-lint-candidates', async (c) => {
   //
   // Målt hos Sanne 10/9: 330 ventende lint-kandidater, og de er IKKE ét
   // slags. 237 «Stale Neuron» (denne side er ikke opdateret længe), 17
-  // forældreløse, 3 ubrugte kilder — og 73 CONTRADICTION, altså linteren der
+  // forældreløse, 3 ubrugte sources — og 73 CONTRADICTION, altså linteren der
   // siger at to Neuroner i hendes hjerne er uenige. I en zoneterapi-videnbase
   // kan dét betyde at hendes chat giver modstridende svar om en behandling.
   //
-  // Drænet kunne kun filtrere på CONNECTOR, så «ryd Sannes lint» tog alle 330
+  // Drænet kunne kun filtrere på CONNECTOR, så «ryd Sannes lint» tog all 330
   // med de 73 indenunder. Uden dette filter var valget: behold støjen, eller
   // smid en kundes ægte fund væk.
   //
@@ -184,9 +184,9 @@ maintenanceRoutes.post('/maintenance/drain-lint-candidates', async (c) => {
     filters.push(lt(queueCandidates.createdAt, sql`datetime('now', ${`-${body.olderThanDays} days`})`));
   }
 
-  // F266.2 — TÆL FØR FILTERET, ikke kun efter.
+  // F266.2 — TÆL FØR FILTERET, ikke kun after.
   //
-  // `scanned` var talt EFTER alle filtre, så «der er ingen lint-kandidater» og
+  // `scanned` var talt EFTER all filtre, så «der er ingen lint-kandidater» og
   // «der er masser, men ingen der matcher mit filter» gav samme nul. Jeg gik
   // selv i den 10/9: to prod-kørslar svarede {scanned: 0, rejected: 0}, og jeg
   // læste et blindt instrument ind i en tom kø. buddys greb, og filens egen
@@ -258,7 +258,7 @@ maintenanceRoutes.post('/maintenance/drain-lint-candidates', async (c) => {
  * AC'et er ikke «kør scriptet», det er «går tallet fra 0 til 66». Derfor svarer
  * ruten med FØR og EFTER, og den skelner TRE udfald frem for to:
  *
- *   fik en identitet     kilden bar en sourceUrl i sin metadata
+ *   gained en identitet     kilden bar en sourceUrl i sin metadata
  *   havde allerede en    idempotent — kørslen kan gentages uden skade
  *   har ingen at få      en upload; dens identitet hører til F275.6
  *
@@ -274,43 +274,43 @@ maintenanceRoutes.post('/maintenance/backfill-source-identity', async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { apply?: boolean };
   const apply = body.apply === true;
 
-  const alle = await trail.db
+  const all = await trail.db
     .select({ id: documents.id, metadata: documents.metadata, nu: documents.sourceIdentity })
     .from(documents)
     .where(and(eq(documents.tenantId, tenant.id), eq(documents.kind, 'source')))
     .all();
 
-  const foer = alle.filter((k) => !!k.nu).length;
-  let fik = 0, ingenAtFaa = 0, normaliseret = 0;
+  const before = all.filter((k) => !!k.nu).length;
+  let gained = 0, nothingToGain = 0, normalised = 0;
 
-  for (const k of alle) {
-    const id = identitetFraMetadata(k.metadata);
+  for (const k of all) {
+    const id = identityFromMetadata(k.metadata);
     // F275.1 — RE-NORMALISÉR de identiteter der allerede står der.
     //
     // Målt i produktionen 17/9: den samme side stod med TO identiteter, én med
-    // «ø» og én med «%C3%B8». Fyldte backfill'en kun tomme felter, ville den
+    // «ø» og én med «%C3%B8». Fyldte backfill'en kun tomme fields, ville den
     // forkerte skrivemåde blive stående for evigt — og afløsningen ville læse
-    // en rettelse af netop den side som en fremmed kilde. Det er hele featurens
+    // en rettelse af netop den side som en fremmed source. Det er hele featurens
     // fejl, i featurens eget felt.
     if (k.nu) {
       if (id && id !== k.nu) {
         if (apply) {
           await trail.db.update(documents).set({ sourceIdentity: id }).where(eq(documents.id, k.id)).run();
         }
-        normaliseret++;
+        normalised++;
       }
       continue;
     }
-    if (!id) { ingenAtFaa++; continue; }
+    if (!id) { nothingToGain++; continue; }
     if (apply) {
       await trail.db.update(documents).set({ sourceIdentity: id }).where(eq(documents.id, k.id)).run();
     }
-    fik++;
+    gained++;
   }
 
-  // LÆST TILBAGE, ikke regnet ud. `foer + fik` ville være mit gæt på hvad der
+  // LÆST TILBAGE, ikke regnet ud. `before + gained` ville være mit gæt på hvad der
   // skete; et nyt opslag er hvad basen FAKTISK holder.
-  const efterRows = await trail.db
+  const afterRows = await trail.db
     .select({ id: documents.id })
     .from(documents)
     .where(and(eq(documents.tenantId, tenant.id), eq(documents.kind, 'source'), isNotNull(documents.sourceIdentity)))
@@ -318,13 +318,13 @@ maintenanceRoutes.post('/maintenance/backfill-source-identity', async (c) => {
 
   return c.json({
     tenant: tenant.slug,
-    kilder: alle.length,
-    foer,
-    fik,
-    havdeAllerede: foer,
-    normaliseret,
-    ingenAtFaa,
-    efter: efterRows.length,
+    sources: all.length,
+    before,
+    gained,
+    alreadyHad: before,
+    normalised,
+    nothingToGain,
+    after: afterRows.length,
     applied: apply,
   });
 });
@@ -332,7 +332,7 @@ maintenanceRoutes.post('/maintenance/backfill-source-identity', async (c) => {
 /**
  * F275.1 AC — BACKFILL AF NEURON-SIDEN.
  *
- * MÅLT 17/9 i broberg.ai, efter at kilde-siden var kørt: **66 af 66 kilder bar
+ * MÅLT 17/9 i broberg.ai, after at source-siden var kørt: **66 af 66 sources bar
  * en identitet — og 0 af 247 Neuroner gjorde.** Neuronen får kun sin kildes
  * identitet ved kompilering (F275.3), så hele den eksisterende base stod uden.
  *
@@ -343,11 +343,11 @@ maintenanceRoutes.post('/maintenance/backfill-source-identity', async (c) => {
  * virkede.
  *
  * KOBLINGEN ER CITAT-KANTEN, ikke et gæt: `document_references` peger fra
- * Neuronen til den kilde den citerer, og kilden bærer identiteten.
+ * Neuronen til den source den cites, og kilden bærer identiteten.
  *
  * EN NEURON MED FLERE KILDER FÅR INGEN. Det er ikke en mangel, det er svaret:
- * «hvilken kilde er denne side en udgave AF» har intet entydigt svar når den
- * hviler på to. Gættede vi på den første, ville en ny udgave af den ene kilde
+ * «hvilken source er denne side en udgave AF» har intet entydigt svar når den
+ * hviler på to. Gættede vi på den første, ville en ny udgave af den ene source
  * afløse en side der også hvilede på den anden — altså tage viden væk der
  * stadig var gyldig. `null` er sandt; et gæt ville være tavst forkert.
  *
@@ -359,7 +359,7 @@ maintenanceRoutes.post('/maintenance/backfill-neuron-identity', async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { apply?: boolean };
   const apply = body.apply === true;
 
-  const neuroner = await trail.db
+  const neurons = await trail.db
     .select({ id: documents.id, nu: documents.sourceIdentity })
     .from(documents)
     .where(
@@ -371,14 +371,14 @@ maintenanceRoutes.post('/maintenance/backfill-neuron-identity', async (c) => {
     )
     .all();
 
-  const foer = neuroner.filter((n) => !!n.nu).length;
-  let fik = 0, ingenKilde = 0, flereKilder = 0, normaliseret = 0;
+  const before = neurons.filter((n) => !!n.nu).length;
+  let gained = 0, noSource = 0, multipleSources = 0, normalised = 0;
 
-  for (const n of neuroner) {
-    // DISTINCT: den samme kilde citeret i tre afsnit er ÉN kilde, ikke tre.
+  for (const n of neurons) {
+    // DISTINCT: den samme source citeret i tre afsnit er ÉN source, ikke tre.
     // Uden det ville hver Neuron med flere citater til samme side tælle som
-    // «flere kilder» og blive sprunget over.
-    const kilder = await trail.db
+    // «flere sources» og blive sprunget over.
+    const sources = await trail.db
       .selectDistinct({ identitet: documents.sourceIdentity })
       .from(documentReferences)
       .innerJoin(documents, eq(documents.id, documentReferences.sourceDocumentId))
@@ -391,24 +391,24 @@ maintenanceRoutes.post('/maintenance/backfill-neuron-identity', async (c) => {
       )
       .all();
 
-    if (kilder.length === 0) { if (!n.nu) ingenKilde++; continue; }
-    if (kilder.length > 1) { if (!n.nu) flereKilder++; continue; }
-    const id = kilder[0]!.identitet;
-    if (!id) { if (!n.nu) ingenKilde++; continue; }
+    if (sources.length === 0) { if (!n.nu) noSource++; continue; }
+    if (sources.length > 1) { if (!n.nu) multipleSources++; continue; }
+    const id = sources[0]!.identitet;
+    if (!id) { if (!n.nu) noSource++; continue; }
     // Allerede korrekt? Intet at gøre, og intet at påstå.
     if (n.nu === id) continue;
     if (apply) {
       await trail.db.update(documents).set({ sourceIdentity: id }).where(eq(documents.id, n.id)).run();
     }
     // SYNKRONISERING, ikke kun udfyldning: står Neuronen med en ANDEN form end
-    // sin kilde — fx den gamle, ikke-normaliserede — skal den rettes. Ellers
-    // ville de to ender af den samme kobling være uenige, og `sammeKilde()`
+    // sin source — fx den gamle, ikke-normaliserede — skal den rettes. Ellers
+    // ville de to ender af den samme kobling være uenige, og `sameSource()`
     // ville svare nej på to sider der er den samme side.
-    if (n.nu) normaliseret++; else fik++;
+    if (n.nu) normalised++; else gained++;
   }
 
   // LÆST TILBAGE fra basen, ikke regnet ud af mine egne tællere.
-  const efterRows = await trail.db
+  const afterRows = await trail.db
     .select({ id: documents.id })
     .from(documents)
     .where(
@@ -423,14 +423,14 @@ maintenanceRoutes.post('/maintenance/backfill-neuron-identity', async (c) => {
 
   return c.json({
     tenant: tenant.slug,
-    neuroner: neuroner.length,
-    foer,
-    fik,
-    havdeAllerede: foer,
-    normaliseret,
-    ingenKilde,
-    flereKilder,
-    efter: efterRows.length,
+    neurons: neurons.length,
+    before,
+    gained,
+    alreadyHad: before,
+    normalised,
+    noSource,
+    multipleSources,
+    after: afterRows.length,
     applied: apply,
   });
 });

@@ -21,7 +21,7 @@ const T = 't-fa', U = 'u-fa';
  * serverens suite: en chunk-delt upload udløser en kompilering (finalize ærer
  * ikke `localCompile`, se uploads.ts:1203), og jobbet blev efterladt mod en
  * database der var skiftet ud under det. Kørslen holdt så global-concurrency
- * for evigt og skrev 2.576.392 linjer «[backpressure] holding job_…» uden at
+ * for evigt og skrev 2.576.392 lines «[backpressure] holding job_…» uden at
  * en eneste prøve blev færdig.
  *
  * Målt: uden denne fil 402 grønne på 10,5 s; med den, uendeligt.
@@ -45,12 +45,12 @@ const RAPPORT_NYT_AAR = RAPPORT.replace('2025', '2026');
 const HELT_ANDET = `# Databehandleraftale
 
 Aftalen regulerer behandling af personoplysninger i forbindelse med levering af
-hosting. Databehandleren må alene behandle oplysninger efter dokumenteret instruks
+hosting. Databehandleren må alene behandle oplysninger after dokumenteret instruks
 fra den dataansvarlige. Oplysningerne opbevares inden for EU og slettes ved
 aftalens ophør. Parterne er enige om at tekniske og organisatoriske
 sikkerhedsforanstaltninger skal afspejle risikoen ved behandlingen.`;
 
-type Advarsel = { kind: string; sag?: string; lighed?: number | null; ligner?: { filename: string } };
+type Advarsel = { kind: string; sag?: string; similarity?: number | null; ligner?: { filename: string } };
 
 async function upload(navn: string, indhold: string) {
   const fd = new FormData();
@@ -77,7 +77,7 @@ beforeAll(async () => {
 
 let n = 0;
 beforeEach(async () => {
-  // En frisk BRAIN pr. prøve giver den isolation hver sag kræver — lighed slås
+  // En frisk BRAIN pr. prøve giver den isolation hver sag kræver — similarity slås
   // kun op inden for én Brain — uden at rive databasen væk under et kørende job.
   // slug == id: resolveKbId slår et ikke-UUID op på SLUG, ikke på id.
   KB = `kb-fa-${n++}`;
@@ -94,38 +94,38 @@ test('aftrykket sættes ved upload — og NULL når teksten er for kort til at m
   const kort = await upload('kort.md', '# Side 1 af 4');
   const rk = await trail.db
     .select({ a: documents.contentFingerprint }).from(documents).where(eq(documents.id, kort.body.id)).get();
-  // «Kunne ikke måles» — ikke «ny kilde», og ikke et falsk aftryk over tre ord.
+  // «Kunne ikke måles» — ikke «ny source», og ikke et falsk aftryk over tre ord.
   expect(rk!.a).toBeNull();
 });
 
-test('AC#3 SAG 1 — høj lighed + SAMME navn = ny udgave, med lighedsgraden i beskeden', async () => {
+test('AC#3 SAG 1 — høj similarity + SAMME navn = ny udgave, med lighedsgraden i beskeden', async () => {
   await upload('rapport.md', RAPPORT);
   const { body } = await upload('rapport.md', RAPPORT_NYT_AAR);
-  expect(body.advarsel?.kind).toBe('samme-kilde');
-  expect(body.advarsel?.sag).toBe('ny-udgave');
-  expect(body.advarsel!.lighed!).toBeGreaterThan(0.85);
+  expect(body.advarsel?.kind).toBe('samme-source');
+  expect(body.advarsel?.sag).toBe('new-edition');
+  expect(body.advarsel!.similarity!).toBeGreaterThan(0.85);
 });
 
-test('AC#3 SAG 2 — høj lighed + ANDET navn = samme værk under nyt navn', async () => {
+test('AC#3 SAG 2 — høj similarity + ANDET navn = samme værk under nyt navn', async () => {
   // Den sag filnavn-identiteten IKKE kan se: navnene er jo forskellige.
   await upload('rapport.md', RAPPORT);
   const { body } = await upload('rapport-endelig.md', RAPPORT_NYT_AAR);
-  expect(body.advarsel?.kind).toBe('samme-vaerk-nyt-navn');
+  expect(body.advarsel?.kind).toBe('same-work-new-name');
   expect(body.advarsel?.ligner?.filename).toBe('rapport.md');
-  expect(body.advarsel!.lighed!).toBeGreaterThan(0.85);
+  expect(body.advarsel!.similarity!).toBeGreaterThan(0.85);
 });
 
-test('AC#3 SAG 3 — LAV lighed + SAMME navn = NAVNEKOLLISION, den højeste alarm', async () => {
+test('AC#3 SAG 3 — LAV similarity + SAMME navn = NAVNEKOLLISION, den højeste alarm', async () => {
   // To værker slås om ét navn. Med filnavn+Brain som identitet er det NETOP her
   // en lydløs overskrivning ville ske, og den er usynlig bagefter.
   await upload('bilag.md', RAPPORT);
   const { body } = await upload('bilag.md', HELT_ANDET);
-  expect(body.advarsel?.kind).toBe('samme-kilde');
-  expect(body.advarsel?.sag).toBe('navnekollision');
-  expect(body.advarsel!.lighed!).toBeLessThan(0.85);
+  expect(body.advarsel?.kind).toBe('samme-source');
+  expect(body.advarsel?.sag).toBe('name-collision');
+  expect(body.advarsel!.similarity!).toBeLessThan(0.85);
 });
 
-test('AC#3 SAG 4 — lav lighed + andet navn = ny kilde, og vi siger INTET', async () => {
+test('AC#3 SAG 4 — lav similarity + andet navn = ny source, og vi siger INTET', async () => {
   // Uden denne ville «advar altid» bestå lige så grønt — og en besked ved hver
   // eneste upload er ingen besked.
   await upload('rapport.md', RAPPORT);
@@ -135,7 +135,7 @@ test('AC#3 SAG 4 — lav lighed + andet navn = ny kilde, og vi siger INTET', asy
 
 test('AC#5 — en fil vi IKKE kan måle udløser ikke «samme værk»', async () => {
   // En scannet PDF uden tekstlag har intet aftryk. «Kunne ikke måle» må aldrig
-  // blive til en påstand om lighed — hverken for eller imod.
+  // blive til en påstand om similarity — hverken for eller imod.
   await upload('rapport.md', RAPPORT);
   const { body } = await upload('scannet.md', '# 1');
   expect(body.advarsel).toBeUndefined();
@@ -143,12 +143,12 @@ test('AC#5 — en fil vi IKKE kan måle udløser ikke «samme værk»', async ()
 
 test('AC#5 — navnesammenfald UDEN aftryk melder stadig, men siger «kan ikke afgøres»', async () => {
   // Beskeden må ikke udeblive bare fordi vi ikke kunne måle ligheden: identiteten
-  // siger allerede at det er samme kilde. Det er GRADEN vi ikke kender.
+  // siger allerede at det er samme source. Det er GRADEN vi ikke kender.
   await upload('scannet.md', '# 1');
   const { body } = await upload('scannet.md', '# 2');
-  expect(body.advarsel?.kind).toBe('samme-kilde');
-  expect(body.advarsel?.sag).toBe('kan-ikke-afgoeres');
-  expect(body.advarsel?.lighed).toBeNull();
+  expect(body.advarsel?.kind).toBe('samme-source');
+  expect(body.advarsel?.sag).toBe('undecidable');
+  expect(body.advarsel?.similarity).toBeNull();
 });
 
 /**
@@ -198,10 +198,10 @@ test('DEN CHUNK-DELTE VEJ sætter aftrykket — ellers er featuren usynlig i pan
   expect(row!.a!.length).toBe(64 * 8);
 });
 
-test('… og de fire sager virker DÉR OGSÅ: samme værk under nyt navn', async () => {
+test('… og de fire sager effective DÉR OGSÅ: samme værk under nyt navn', async () => {
   await uploadChunket('rapport.md', RAPPORT);
   const r = await uploadChunket('rapport-endelig.md', RAPPORT_NYT_AAR);
-  expect(r.advarsel?.kind).toBe('samme-vaerk-nyt-navn');
+  expect(r.advarsel?.kind).toBe('same-work-new-name');
   expect(r.advarsel?.ligner?.filename).toBe('rapport.md');
 });
 
@@ -210,6 +210,6 @@ test('… og de to veje er ENIGE: en fil uploadet chunk-delt genkendes af enkelt
   // der uploadede — altså af noget der intet har med indholdet at gøre.
   await uploadChunket('rapport.md', RAPPORT);
   const { body } = await upload('rapport-kopi.md', RAPPORT_NYT_AAR);
-  expect(body.advarsel?.kind).toBe('samme-vaerk-nyt-navn');
+  expect(body.advarsel?.kind).toBe('same-work-new-name');
   expect(body.advarsel?.ligner?.filename).toBe('rapport.md');
 });

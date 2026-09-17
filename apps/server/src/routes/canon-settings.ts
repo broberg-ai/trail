@@ -5,12 +5,12 @@
  * PATCH /api/v1/knowledge-bases/:kbId/canon-settings
  *
  * Svaret bærer IKKE bare de to gemte værdier. Det bærer også den UDREGNEDE
- * tilstand pr. konnektor — `satUdAfKraft` — fordi AC#3 kræver at brugeren kan SE
+ * tilstand pr. konnektor — `overriddenByBrain` — fordi AC#3 kræver at brugeren kan SE
  * at en konnektor-kontakt der står på TIL er sat ud af kraft af hovedafbryderen.
- * Regnede panelet det ud selv, ville to steder kunne blive uenige, og uenigheden
+ * Regnede panelet det ud selv, ville to sites kunne blive uenige, og uenigheden
  * ville vise sig som en kontakt der lyver om sin egen virkning.
  *
- * Konnektor-listen er MÅLT på Brain'ens egne kilder, ikke taget fra det statiske
+ * Konnektor-listen er MÅLT på Brain'ens egne kilder, ikke pickedUp fra det statiske
  * register i @trail/shared. `broberg-ai-site-sync` — den konnektor hele featuren
  * blev født af — står ikke i registret, så en liste derfra ville mangle netop den
  * kontakt ejeren har brug for.
@@ -22,10 +22,10 @@ import { and, eq, sql } from 'drizzle-orm';
 import { resolveKbId } from '@trail/core';
 import {
   CONNECTORS,
-  konnektorTilstand,
-  laesSlukkedeKonnektorer,
-  skrivSlukkedeKonnektorer,
-  type KanonKontakter,
+  connectorState,
+  readDisabledConnectors,
+  writeDisabledConnectors,
+  type CanonSwitches,
 } from '@trail/shared';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
 import type { AppBindings } from '../app.js';
@@ -66,24 +66,24 @@ async function maaltKonnektorer(
     .map((r) => ({ id: r.id as string, antalKilder: Number(r.n) || 0 }));
 }
 
-function byg(kontakter: KanonKontakter, maalte: { id: string; antalKilder: number }[]) {
-  // De gemte FRA-id'er tages med selv om ingen kilde bærer dem lige nu — ellers
+function byg(kontakter: CanonSwitches, maalte: { id: string; antalKilder: number }[]) {
+  // De gemte FRA-id'er tages med selv om ingen source bærer dem lige nu — ellers
   // ville en kontakt brugeren selv har slået fra forsvinde fra skærmen, og han
   // ville ikke kunne slå den til igen.
-  const ids = Array.from(new Set([...maalte.map((m) => m.id), ...kontakter.slukkedeKonnektorer]));
+  const ids = Array.from(new Set([...maalte.map((m) => m.id), ...kontakter.disabledConnectors]));
   const antal = new Map(maalte.map((m) => [m.id, m.antalKilder]));
   return {
     brain: kontakter.brain,
-    slukkedeKonnektorer: kontakter.slukkedeKonnektorer,
+    disabledConnectors: kontakter.disabledConnectors,
     konnektorer: ids.map((id) => {
-      const t = konnektorTilstand(kontakter, id);
+      const t = connectorState(kontakter, id);
       return {
         id,
         label: (CONNECTORS as Record<string, { label?: string } | undefined>)[id]?.label ?? id,
         antalKilder: antal.get(id) ?? 0,
-        egenKontakt: t.egenKontakt,
-        satUdAfKraft: t.satUdAfKraft,
-        virker: t.virker,
+        ownSwitch: t.ownSwitch,
+        overriddenByBrain: t.overriddenByBrain,
+        effective: t.effective,
       };
     }),
   };
@@ -99,7 +99,7 @@ async function laes(trail: ReturnType<typeof getTrail>, kbId: string, tenantId: 
     .where(and(eq(knowledgeBases.id, kbId), eq(knowledgeBases.tenantId, tenantId)))
     .get();
   if (!kb) return null;
-  return { brain: kb.brain, slukkedeKonnektorer: laesSlukkedeKonnektorer(kb.off) } as KanonKontakter;
+  return { brain: kb.brain, disabledConnectors: readDisabledConnectors(kb.off) } as CanonSwitches;
 }
 
 canonSettingsRoutes.get('/knowledge-bases/:kbId/canon-settings', async (c) => {
@@ -129,7 +129,7 @@ canonSettingsRoutes.patch('/knowledge-bases/:kbId/canon-settings', async (c) => 
   if (!nu) return c.json({ error: 'Knowledge base not found' }, 404);
 
   const brain = parsed.data.brain ?? nu.brain;
-  let slukkede = [...nu.slukkedeKonnektorer];
+  let slukkede = [...nu.disabledConnectors];
   if (parsed.data.konnektor) {
     const { id, kanon } = parsed.data.konnektor;
     slukkede = kanon ? slukkede.filter((x) => x !== id) : [...slukkede, id];
@@ -139,7 +139,7 @@ canonSettingsRoutes.patch('/knowledge-bases/:kbId/canon-settings', async (c) => 
     .update(knowledgeBases)
     .set({
       newVersionIsCanon: brain,
-      canonOffConnectors: skrivSlukkedeKonnektorer(slukkede),
+      canonOffConnectors: writeDisabledConnectors(slukkede),
       updatedAt: new Date().toISOString(),
     })
     .where(and(eq(knowledgeBases.id, kbId), eq(knowledgeBases.tenantId, tenant.id)))
@@ -148,8 +148,8 @@ canonSettingsRoutes.patch('/knowledge-bases/:kbId/canon-settings', async (c) => 
   // LÆS TILBAGE fra databasen frem for at ekko'e det vi lige sendte. En
   // kolonne ORM'en taber lydløst ser ellers ud som en gemning der lykkedes —
   // og det er nøjagtig den fejlform husreglen om gem-bevis findes for.
-  const efter = await laes(trail, kbId, tenant.id);
-  if (!efter) return c.json({ error: 'Knowledge base not found' }, 404);
+  const after = await laes(trail, kbId, tenant.id);
+  if (!after) return c.json({ error: 'Knowledge base not found' }, 404);
 
-  return c.json(byg(efter, await maaltKonnektorer(trail as never, kbId)));
+  return c.json(byg(after, await maaltKonnektorer(trail as never, kbId)));
 });

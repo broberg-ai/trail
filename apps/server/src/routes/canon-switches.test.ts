@@ -19,8 +19,8 @@ let trail: Awaited<ReturnType<typeof createLibsqlDatabase>>;
 
 type Svar = {
   brain: boolean;
-  slukkedeKonnektorer: string[];
-  konnektorer: { id: string; label: string; antalKilder: number; egenKontakt: boolean; satUdAfKraft: boolean; virker: boolean }[];
+  disabledConnectors: string[];
+  konnektorer: { id: string; label: string; antalKilder: number; ownSwitch: boolean; overriddenByBrain: boolean; effective: boolean }[];
 };
 
 /** FRISK hentning — aldrig PATCH-svarets eget ekko. Det er hele pointen i AC#5. */
@@ -58,7 +58,7 @@ beforeAll(async () => {
     id: 'k1', tenantId: T, userId: U, name: 'k1',
     keyHash: createHash('sha256').update(NØGLE).digest('hex'), scope: 'all',
   }).run();
-  // To konnektorer på A's kilder, så listen er MÅLT og ikke taget fra registret.
+  // To konnektorer på A's kilder, så listen er MÅLT og ikke pickedUp fra registret.
   // `broberg-ai-site-sync` står IKKE i @trail/shared's register — den er netop
   // derfor med her: en liste fra registret ville mangle den kontakt ejeren skal bruge.
   let n = 0;
@@ -74,12 +74,12 @@ beforeAll(async () => {
 test('AC#2 — en frisk Brain: BEGGE kontakter står TIL uden at nogen har rørt dem', async () => {
   const s = await hent(A);
   expect(s.brain).toBe(true);
-  expect(s.slukkedeKonnektorer).toEqual([]);
+  expect(s.disabledConnectors).toEqual([]);
   expect(s.konnektorer.length).toBe(2);
-  for (const k of s.konnektorer) expect([k.egenKontakt, k.virker, k.satUdAfKraft]).toEqual([true, true, false]);
+  for (const k of s.konnektorer) expect([k.ownSwitch, k.effective, k.overriddenByBrain]).toEqual([true, true, false]);
 });
 
-test('konnektor-listen er MÅLT på Brainens egne kilder — ikke taget fra registret', async () => {
+test('konnektor-listen er MÅLT på Brainens egne kilder — ikke pickedUp fra registret', async () => {
   const s = await hent(A);
   const site = konnektor(s, 'broberg-ai-site-sync');
   expect(site?.antalKilder).toBe(3);
@@ -91,20 +91,20 @@ test('konnektor-listen er MÅLT på Brainens egne kilder — ikke taget fra regi
 test('AC#5 GEM-BEVIS — slå konnektoren fra, hent PÅ NY, den står stadig fra', async () => {
   expect((await saet(A, { konnektor: { id: 'upload', kanon: false } })).status).toBe(200);
   const frisk = await hent(A);
-  expect(frisk.slukkedeKonnektorer).toEqual(['upload']);
-  expect(konnektor(frisk, 'upload')?.virker).toBe(false);
+  expect(frisk.disabledConnectors).toEqual(['upload']);
+  expect(konnektor(frisk, 'upload')?.effective).toBe(false);
   // Den anden konnektor i SAMME Brain er urørt — ellers gemte vi på Brainen
   // i stedet for på konnektoren, og det ville bestå AC#5 ved et tilfælde.
-  expect(konnektor(frisk, 'broberg-ai-site-sync')?.virker).toBe(true);
+  expect(konnektor(frisk, 'broberg-ai-site-sync')?.effective).toBe(true);
 });
 
 test('AC#5 negativ vej — slå til igen, hent PÅ NY, den står til', async () => {
-  // En kontakt der kun kan SÆTTES ser identisk ud med en der virker, indtil
+  // En kontakt der kun kan SÆTTES ser identisk ud med en der effective, indtil
   // nogen prøver at rydde den. Derfor har vejen tilbage sin egen prøve.
   expect((await saet(A, { konnektor: { id: 'upload', kanon: true } })).status).toBe(200);
   const frisk = await hent(A);
-  expect(frisk.slukkedeKonnektorer).toEqual([]);
-  expect(konnektor(frisk, 'upload')?.virker).toBe(true);
+  expect(frisk.disabledConnectors).toEqual([]);
+  expect(konnektor(frisk, 'upload')?.effective).toBe(true);
 });
 
 test('AC#3 — Brain FRA slår ALT fra, og konnektoren vises som SAT UD AF KRAFT', async () => {
@@ -112,9 +112,9 @@ test('AC#3 — Brain FRA slår ALT fra, og konnektoren vises som SAT UD AF KRAFT
   const frisk = await hent(A);
   expect(frisk.brain).toBe(false);
   for (const k of frisk.konnektorer) {
-    expect(k.egenKontakt).toBe(true);   // kontakten står stadig på TIL …
-    expect(k.satUdAfKraft).toBe(true);  // … men den er sat ud af kraft, og det kan SES
-    expect(k.virker).toBe(false);
+    expect(k.ownSwitch).toBe(true);   // kontakten står stadig på TIL …
+    expect(k.overriddenByBrain).toBe(true);  // … men den er sat ud af kraft, og det kan SES
+    expect(k.effective).toBe(false);
   }
 });
 
@@ -122,10 +122,10 @@ test('AC#3 — en konnektor der SELV er fra er ikke «sat ud af kraft», den er 
   await saet(A, { konnektor: { id: 'upload', kanon: false } });
   const frisk = await hent(A);
   const k = konnektor(frisk, 'upload');
-  expect([k?.egenKontakt, k?.satUdAfKraft, k?.virker]).toEqual([false, false, false]);
+  expect([k?.ownSwitch, k?.overriddenByBrain, k?.effective]).toEqual([false, false, false]);
 });
 
-test('en kontakt brugeren har slået FRA forsvinder ikke selv om ingen kilde bærer konnektoren', async () => {
+test('en kontakt brugeren har slået FRA forsvinder ikke selv om ingen source bærer konnektoren', async () => {
   // Ellers kan han ikke slå den til igen — kontakten ville være væk fra skærmen
   // mens den stadig virkede i databasen.
   await saet(A, { konnektor: { id: 'en-konnektor-uden-kilder', kanon: false } });
@@ -135,7 +135,7 @@ test('en kontakt brugeren har slået FRA forsvinder ikke selv om ingen kilde bæ
 test('AC#6 NEGATIV KONTROL — Brain B er fuldstændig urørt af alt ovenstående', async () => {
   const b = await hent(B);
   expect(b.brain).toBe(true);
-  expect(b.slukkedeKonnektorer).toEqual([]);
+  expect(b.disabledConnectors).toEqual([]);
   // Beviser at værdien gemmes på den rigtige RÆKKE og ikke globalt.
 });
 
@@ -143,8 +143,8 @@ test('AC#3 tilbage — slå Brainen til igen: konnektorernes egne kontakter husk
   expect((await saet(A, { brain: true })).status).toBe(200);
   const frisk = await hent(A);
   expect(frisk.brain).toBe(true);
-  expect(konnektor(frisk, 'upload')?.virker).toBe(false);                 // var slået fra før
-  expect(konnektor(frisk, 'broberg-ai-site-sync')?.virker).toBe(true);    // var ikke
+  expect(konnektor(frisk, 'upload')?.effective).toBe(false);                 // var slået fra før
+  expect(konnektor(frisk, 'broberg-ai-site-sync')?.effective).toBe(true);    // var ikke
 });
 
 test('en tom krop afvises frem for at gemme ingenting og melde succes', async () => {

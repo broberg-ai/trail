@@ -323,7 +323,7 @@ async function claimAndRun(
   // finally-blokken må IKKE gen-kalde da: det «mere i kø» den finder er
   // netop det job vi lige lagde fra os, så et øjeblikkeligt gen-kald er en
   // ring. Den periodiske planlægger ejer det forsøg.
-  let holdtPaaKapacitet = false;
+  let heldOnCapacity = false;
   try {
     const next = await trail.db
       .select()
@@ -367,7 +367,7 @@ async function claimAndRun(
     // tick can claim a job for this KB once capacity exists.
     const decision = await checkBackpressure(trail, tenantId);
     if (!decision.allowed) {
-      holdtPaaKapacitet = true;
+      heldOnCapacity = true;
       console.log(
         `[backpressure] holding ${next.id} (kb=${kbId}, tenant=${tenantId}) — ${decision.reason}`,
       );
@@ -405,10 +405,10 @@ async function claimAndRun(
     // F281 — men KUN hvis vi rent faktisk fik lov at arbejde. Blev jobbet
     // holdt tilbage af kapacitetstjekket, ligger det stadig i køen, og
     // «er der mere?» finder det selv igen. Målt 17/9 2026: 686.041
-    // «holding»-linjer og 62 MB log på få sekunder, fordi hver runde
+    // «holding»-lines og 62 MB log på få sekunder, fordi hver runde
     // udløste den næste. Den periodiske planlægger (hvert 30. sekund)
     // prøver igen når der er plads — det er præcis det den findes til.
-    if (!holdtPaaKapacitet) {
+    if (!heldOnCapacity) {
       const more = await trail.db
         .select({ id: ingestJobs.id })
         .from(ingestJobs)
@@ -830,7 +830,7 @@ async function runJob(
 
     // F247.3 — push: kilden er inde.
     void notifyPush(trail, job.tenantId, 'ingest', {
-      title: 'Trail — kilde klar',
+      title: 'Trail — source klar',
       body: `"${doc.filename}" er kompileret og søgbar`,
       navigate: `/kb/${job.kbId}/sources`,
       icon: '/icon-192.png',
@@ -872,7 +872,7 @@ async function runJob(
 
     // F247.3 — push: kilden fejlede (det man IKKE opdager før næste besøg).
     void notifyPush(trail, job.tenantId, 'ingest', {
-      title: 'Trail — kilde fejlede',
+      title: 'Trail — source fejlede',
       body: `"${doc.filename}": ${errorMsg}`.slice(0, 160),
       navigate: `/kb/${job.kbId}/sources`,
       icon: '/icon-192.png',

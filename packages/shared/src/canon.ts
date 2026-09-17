@@ -1,9 +1,9 @@
 /**
- * F275.2 — de TO kontakter: «en ny udgave af samme kilde bliver automatisk kanon».
+ * F275.2 — de TO kontakter: «en ny udgave af samme source bliver automatisk kanon».
  *
  * Christian, 16. september 2026, ordret: *«Det lyder virkelig klogt at der både er
  * en på en brain og en på en connector. Vi sætter dem begge to default on så samme
- * kilde med ny indmad bliver ny kanon.»*
+ * source med ny indmad bliver ny kanon.»*
  *
  * ## Hvorfor to og ikke én
  *
@@ -29,24 +29,24 @@
  * at nogen skal huske at oprette en række for den. Gemte vi de tændte, ville en frisk
  * konnektor være FRA indtil nogen rørte den, og ingen ville kunne se hvorfor.
  *
- * Bemærk at dette er en ANDEN tredje-tilstand end `kilde-identitet.ts`'s: dér betyder
- * `null` «vi ved ikke hvilken kilde det er», og tvivlen falder ud til MODSIGELSE.
+ * Bemærk at dette er en ANDEN tredje-tilstand end `source-identity.ts`'s: dér betyder
+ * `null` «vi ved ikke hvilken source det er», og tvivlen falder ud til MODSIGELSE.
  * Her er der ingen tvivl — ejeren har afgjort standarden, og fraværet ER standarden.
  */
 
 /** Hvorfor en ny udgave afløser — eller ikke. */
-export type KanonGrund = 'til' | 'brain-fra' | 'konnektor-fra';
+export type CanonReason = 'til' | 'brain-off' | 'connector-off';
 
-export interface KanonKontakter {
+export interface CanonSwitches {
   /** Hovedafbryderen på Brain'en. Default `true`. */
   brain: boolean;
   /** Konnektor-id'er der er slået FRA i netop denne Brain. Alle andre er TIL. */
-  slukkedeKonnektorer: string[];
+  disabledConnectors: string[];
 }
 
-export interface KanonSvar {
+export interface CanonVerdict {
   kanon: boolean;
-  grund: KanonGrund;
+  grund: CanonReason;
 }
 
 /**
@@ -57,7 +57,7 @@ export interface KanonSvar {
  * en ødelagt værdi må ikke kunne SLUKKE noget lydløst. Den forkerte retning at fejle
  * i ville være at behandle vrøvl som «alt er slukket».
  */
-export function laesSlukkedeKonnektorer(json: string | null | undefined): string[] {
+export function readDisabledConnectors(json: string | null | undefined): string[] {
   if (!json) return [];
   try {
     const v = JSON.parse(json) as unknown;
@@ -69,7 +69,7 @@ export function laesSlukkedeKonnektorer(json: string | null | undefined): string
 }
 
 /** Skriv listen tilbage. Tom liste gemmes som `null` så en urørt Brain står ren. */
-export function skrivSlukkedeKonnektorer(ids: string[]): string | null {
+export function writeDisabledConnectors(ids: string[]): string | null {
   const rene = Array.from(new Set(ids.filter((x) => typeof x === 'string' && x.trim().length > 0))).sort();
   return rene.length === 0 ? null : JSON.stringify(rene);
 }
@@ -81,14 +81,14 @@ export function skrivSlukkedeKonnektorer(ids: string[]): string | null {
  * Brain-kontakten alene. Det er det sikre valg: en ukendt konnektor får aldrig sin
  * egen skjulte undtagelse, den følger hovedafbryderen.
  */
-export function nyUdgaveErKanon(
-  kontakter: KanonKontakter,
+export function newEditionIsCanon(
+  kontakter: CanonSwitches,
   konnektor: string | null | undefined,
-): KanonSvar {
-  if (!kontakter.brain) return { kanon: false, grund: 'brain-fra' };
+): CanonVerdict {
+  if (!kontakter.brain) return { kanon: false, grund: 'brain-off' };
   const id = (konnektor ?? '').trim();
-  if (id && kontakter.slukkedeKonnektorer.includes(id)) {
-    return { kanon: false, grund: 'konnektor-fra' };
+  if (id && kontakter.disabledConnectors.includes(id)) {
+    return { kanon: false, grund: 'connector-off' };
   }
   return { kanon: true, grund: 'til' };
 }
@@ -96,25 +96,25 @@ export function nyUdgaveErKanon(
 /**
  * Hvad UI'et skal vise for ÉN konnektor-række.
  *
- * `satUdAfKraft` er hele grunden til at denne funktion findes frem for at UI'et
- * regner det ud selv: kontakten står på TIL, og virker alligevel ikke. Regnede
- * panelet det ud på egen hånd, ville de to steder kunne komme til at være uenige —
+ * `overriddenByBrain` er hele grunden til at denne funktion findes frem for at UI'et
+ * regner det ud selv: kontakten står på TIL, og effective alligevel ikke. Regnede
+ * panelet det ud på egen hånd, ville de to sites kunne komme til at være uenige —
  * og uenigheden ville vise sig som en kontakt der lyver.
  */
-export function konnektorTilstand(
-  kontakter: KanonKontakter,
+export function connectorState(
+  kontakter: CanonSwitches,
   konnektor: string,
-): { egenKontakt: boolean; satUdAfKraft: boolean; virker: boolean } {
-  const egenKontakt = !kontakter.slukkedeKonnektorer.includes(konnektor);
+): { ownSwitch: boolean; overriddenByBrain: boolean; effective: boolean } {
+  const ownSwitch = !kontakter.disabledConnectors.includes(konnektor);
   return {
-    egenKontakt,
-    satUdAfKraft: egenKontakt && !kontakter.brain,
-    virker: nyUdgaveErKanon(kontakter, konnektor).kanon,
+    ownSwitch,
+    overriddenByBrain: ownSwitch && !kontakter.brain,
+    effective: newEditionIsCanon(kontakter, konnektor).kanon,
   };
 }
 
 /**
- * F275.5 — forbeholdet der følger en side hvis kilde har fået en ny udgave.
+ * F275.5 — forbeholdet der følger en side hvis source har fået en ny udgave.
  *
  * Teksten står ÉT sted fordi den skal ind i to sammenhænge — svar-konteksten
  * til chatten og hentnings-API'et til tredjepart — og fordi den er en PÅSTAND
@@ -122,10 +122,10 @@ export function konnektorTilstand(
  * blive uenige om hvor stærkt forbeholdet var.
  *
  * Den siger hvad der er sket og hvad det betyder, ikke at siden er forkert:
- * en side hvis kilde er rettet ER som regel stadig mest rigtig. Den er bare
- * ikke set efter.
+ * en side hvis source er rettet ER som regel stadig mest real. Den er bare
+ * ikke set after.
  */
-export function kildeAendretForbehold(naar: number | null | undefined): string | null {
+export function sourceChangedCaveat(naar: number | null | undefined): string | null {
   if (!naar) return null;
   const dato = new Date(naar).toLocaleDateString('da-DK', {
     day: 'numeric',
@@ -136,6 +136,6 @@ export function kildeAendretForbehold(naar: number | null | undefined): string |
   });
   return (
     `⚠️ Kilden bag denne side fik en ny udgave den ${dato}, og siden er ikke skrevet om siden. ` +
-    `Behandl indholdet som muligvis forældet og sig det videre — svar aldrig som om det er bekræftet mod den nyeste kilde.`
+    `Behandl indholdet som muligvis forældet og sig det videre — svar aldrig som om det er bekræftet mod den nyeste source.`
   );
 }

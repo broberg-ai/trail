@@ -39,15 +39,15 @@ export { detectOrphans } from './orphans.js';
 export { detectStale } from './stale.js';
 export { detectFadedHeuristics } from './faded-heuristics.js';
 export {
-  afhaengigeAf,
-  maerkAfhaengige,
-  rydKildeMaerke,
-  type AfhaengigNeuron,
-  type Kobling,
-} from './kilde-forplantning.js';
+  dependentsOf,
+  markDependents,
+  clearSourceMark,
+  type DependentNeuron,
+  type LinkKind,
+} from './source-propagation.js';
 export {
   detectContradictions,
-  sammeKilde,
+  sameSource,
   type ContradictionCandidate,
   type ContradictionChecker,
   type LlmContradictionResult,

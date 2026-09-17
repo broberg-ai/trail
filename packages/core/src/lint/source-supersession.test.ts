@@ -1,5 +1,5 @@
 /**
- * F275.3 — linten må aldrig rejse en modsigelse mellem to udgaver af SAMME kilde.
+ * F275.3 — linten må aldrig rejse en modsigelse mellem to udgaver af SAMME source.
  *
  * Kontrollanten herunder siger ALTID «de modsiger hinanden». Det er med vilje:
  * en prøve hvor modellen selv kunne svare nej ville bestå uden at bevise noget.
@@ -9,7 +9,7 @@
 import { describe, it, expect, mock } from 'bun:test';
 import {
   detectContradictions,
-  sammeKilde,
+  sameSource,
   type ContradictionCandidate,
   type NewNeuron,
 } from './contradictions.js';
@@ -31,7 +31,7 @@ function modpart(id: string, identitet: string | null): ContradictionCandidate {
 const URL_A = 'url:https://broberg.ai/flagskibe/bid';
 const URL_B = 'url:https://broberg.ai/indsigter/design';
 
-describe('F275.3 AC#0 — to udgaver af samme kilde rejser INGEN modsigelse', () => {
+describe('F275.3 AC#0 — to udgaver af samme source rejser INGEN modsigelse', () => {
   it('samme URL ⇒ nul fund, og kontrollanten blev slet ikke spurgt', async () => {
     ALTID_MODSIGELSE.mockClear();
     const fund = await detectContradictions(
@@ -52,20 +52,20 @@ describe('F275.3 AC#1 — NEGATIV KONTROL: forskellige kilder modsiger stadig hi
     expect(fund[0]!.kind).toBe('contradiction-alert');
   });
 
-  it('blandet flok: kun modparten med SAMME kilde springes over', async () => {
+  it('blandet flok: kun modparten med SAMME source springes over', async () => {
     // Uden denne ville «spring altid over» bestå lige så grønt som reglen.
     const fund = await detectContradictions(
       neuron('ny', URL_A),
-      [modpart('samme-kilde', URL_A), modpart('anden-kilde', URL_B), modpart('ukendt', null)],
+      [modpart('samme-source', URL_A), modpart('anden-source', URL_B), modpart('ukendt', null)],
       ALTID_MODSIGELSE, undefined, true,
     );
     expect(fund.map((f) => (f.details as { existingDocumentId: string }).existingDocumentId).sort())
-      .toEqual(['anden-kilde', 'ukendt']);
+      .toEqual(['anden-source', 'ukendt']);
   });
 });
 
 describe('F275.3 AC#4 — DEN SIKRE STANDARD: ingen identitet ⇒ MODSIGELSE', () => {
-  it('to Neuroner UDEN identitet er ikke «samme ukendte kilde»', async () => {
+  it('to Neuroner UDEN identitet er ikke «samme ukendte source»', async () => {
     // Faldt tvivlen den anden vej, ville hele den nuværende base — hvor feltet
     // er tomt indtil backfill'en er kørt — blive usynlig for detektion i det
     // sekund kontakten blev slået til. Og en modsigelse der ikke rejses ser
@@ -81,18 +81,18 @@ describe('F275.3 AC#4 — DEN SIKRE STANDARD: ingen identitet ⇒ MODSIGELSE', (
     expect((await detectContradictions(neuron('n', null), [modpart('g', URL_A)], ALTID_MODSIGELSE, undefined, true)).length).toBe(1);
   });
 
-  it('sammeKilde() siger det selv: null matcher aldrig null', () => {
-    expect(sammeKilde({ sourceIdentity: null }, { sourceIdentity: null })).toBe(false);
-    expect(sammeKilde({ sourceIdentity: URL_A }, { sourceIdentity: null })).toBe(false);
-    expect(sammeKilde({ sourceIdentity: URL_A }, { sourceIdentity: URL_A })).toBe(true);
-    expect(sammeKilde({ sourceIdentity: URL_A }, { sourceIdentity: URL_B })).toBe(false);
+  it('sameSource() siger det selv: null matcher aldrig null', () => {
+    expect(sameSource({ sourceIdentity: null }, { sourceIdentity: null })).toBe(false);
+    expect(sameSource({ sourceIdentity: URL_A }, { sourceIdentity: null })).toBe(false);
+    expect(sameSource({ sourceIdentity: URL_A }, { sourceIdentity: URL_A })).toBe(true);
+    expect(sameSource({ sourceIdentity: URL_A }, { sourceIdentity: URL_B })).toBe(false);
   });
 
   it('en tom streng er heller ikke en identitet der matcher en anden tom', () => {
-    // kildeIdentitet() returnerer aldrig '', men en rå DB-værdi kunne være det.
-    expect(sammeKilde({ sourceIdentity: '' }, { sourceIdentity: '' })).toBe(true);
-    // ^ dokumenteret ærligt: '' === '' er sandt. Derfor er det kildeIdentitet()
-    //   der skal blive ved med at afvise tomme værdier — se kilde-identitet.ts.
+    // sourceIdentity() returnerer aldrig '', men en rå DB-værdi kunne være det.
+    expect(sameSource({ sourceIdentity: '' }, { sourceIdentity: '' })).toBe(true);
+    // ^ dokumenteret ærligt: '' === '' er sandt. Derfor er det sourceIdentity()
+    //   der skal blive ved med at afvise tomme værdier — se source-identity.ts.
   });
 });
 

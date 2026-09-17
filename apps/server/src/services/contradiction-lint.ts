@@ -30,10 +30,10 @@ import {
   type NewNeuron,
 } from '@trail/core';
 import {
-  laesSlukkedeKonnektorer,
-  nyUdgaveErKanon,
+  readDisabledConnectors,
+  newEditionIsCanon,
   type CandidateApprovedEvent,
-  type KanonKontakter,
+  type CanonSwitches,
 } from '@trail/shared';
 import { broadcaster } from './broadcast.js';
 import { ai } from '../lib/ai.js';
@@ -229,8 +229,8 @@ async function runForEvent(
       knowledgeBaseId: documents.knowledgeBaseId,
       userId: documents.userId,
       version: documents.version,
-      // F275.3 — Neuronens egen kilde-identitet. Den afgør om en «modsigelse»
-      // i virkeligheden er den samme kilde der har skiftet mening om sig selv.
+      // F275.3 — Neuronens egen source-identitet. Den afgør om en «modsigelse»
+      // i virkeligheden er den samme source der har skiftet mening om sig selv.
       sourceIdentity: documents.sourceIdentity,
       lastContradictionScanSignature: documents.lastContradictionScanSignature,
     })
@@ -298,15 +298,15 @@ async function runForEvent(
   // F190.6 — tag the per-pair LLM cost with this Neuron's tenant + KB. The
   // scheduled full-pass (scanDocForContradictions) fabricates an event with
   // empty tenantId/kbId, but `doc` is the real row here, so labels are accurate.
-  // F275.2 + F275.3 — afgør ÉT sted om samme kilde afløser i denne Brain.
-  // Konnektoren læses af den kilde Neuronen stammer fra: begge sider af parret
+  // F275.2 + F275.3 — afgør ÉT sted om samme source afløser i denne Brain.
+  // Konnektoren læses af den source Neuronen stammer fra: begge sider af parret
   // deler identitet, så de deler også konnektor.
-  const sammeKildeAfloeser = await sammeKildeAfloeserHer(
+  const sameSourceSupersedes = await sammeKildeAfloeserHer(
     trail,
     doc.knowledgeBaseId,
     doc.tenantId,
     neuron.sourceIdentity,
-    { brain: kbRow?.kanonBrain ?? true, slukkedeKonnektorer: laesSlukkedeKonnektorer(kbRow?.kanonOff) },
+    { brain: kbRow?.kanonBrain ?? true, disabledConnectors: readDisabledConnectors(kbRow?.kanonOff) },
   );
 
   const findings = await detectContradictions(
@@ -314,7 +314,7 @@ async function runForEvent(
     similars,
     check,
     { tenantId: doc.tenantId, kbId: doc.knowledgeBaseId },
-    sammeKildeAfloeser,
+    sameSourceSupersedes,
   );
 
   // F158 — stamp signature on every successful completion (zero or more
@@ -479,10 +479,10 @@ async function runForEvent(
 }
 
 /**
- * F275.2/F275.3 — afløser en ny udgave af DENNE kilde i DENNE Brain?
+ * F275.2/F275.3 — afløser en ny udgave af DENNE source i DENNE Brain?
  *
  * To kontakter afgør det, og hierarkiet går kun én vej (se @trail/shared's
- * `nyUdgaveErKanon`). Konnektoren slås op på kilde-rækken der bærer identiteten:
+ * `newEditionIsCanon`). Konnektoren slås op på source-rækken der bærer identiteten:
  * Neuronen arver identiteten, ikke konnektoren, og at stemple konnektoren ét
  * sted til ville være endnu en værdi der kunne komme til at være uenig med sig
  * selv.
@@ -495,13 +495,13 @@ async function sammeKildeAfloeserHer(
   kbId: string,
   tenantId: string,
   sourceIdentity: string | null,
-  kontakter: KanonKontakter,
+  kontakter: CanonSwitches,
 ): Promise<boolean> {
   // Ingen identitet ⇒ intet at afløse. Springet i detectContradictions kræver
   // to KENDTE identiteter, men vi sparer opslaget her.
   if (!sourceIdentity) return false;
 
-  const kilde = await trail.db
+  const source = await trail.db
     .select({ metadata: documents.metadata })
     .from(documents)
     .where(
@@ -515,16 +515,16 @@ async function sammeKildeAfloeserHer(
     .get();
 
   let konnektor: string | null = null;
-  if (kilde?.metadata) {
+  if (source?.metadata) {
     try {
-      const p = JSON.parse(kilde.metadata) as { connector?: unknown };
+      const p = JSON.parse(source.metadata) as { connector?: unknown };
       if (typeof p?.connector === 'string') konnektor = p.connector;
     } catch {
       // ikke JSON — så bærer kilden ingen konnektor
     }
   }
 
-  return nyUdgaveErKanon(kontakter, konnektor).kanon;
+  return newEditionIsCanon(kontakter, konnektor).kanon;
 }
 
 async function findSimilarNeurons(

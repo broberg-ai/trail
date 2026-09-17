@@ -3,12 +3,12 @@
  *
  * ## Den målte sag
  *
- * Natten mellem 15. og 16. september sagde FEM sider «bygges nu» efter kilden
- * sagde «lanceret»: `overview.md`, `glossary.md`, `flagskib.md`, kilde-Neuronen
+ * Natten mellem 15. og 16. september sagde FEM sider «bygges nu» after kilden
+ * sagde «lanceret»: `overview.md`, `glossary.md`, `flagskib.md`, source-Neuronen
  * og entitets-Neuronen. **Kun ÉN af dem bærer kildens URL som sin egen
  * identitet.** De fire andre citerer kilden uden at være kompileret AF den.
  *
- * Rammer afløsningen kun kilde-Neuronen, bliver køen ren mens hjernen stadig
+ * Rammer afløsningen kun source-Neuronen, bliver køen ren mens hjernen stadig
  * svarer på gårsdagens tekst — **og det er værre end i dag, fordi det ikke
  * længere ligner et problem.**
  *
@@ -17,7 +17,7 @@
  * To veje ind, begge id-baserede:
  *
  *   kompileret-fra   `documents.source_identity` på Neuronen (F275.1/F275.3)
- *   citerer          `document_references.source_document_id` → kilde-rækken
+ *   citerer          `document_references.source_document_id` → source-rækken
  *
  * Ingen tekstsammenligning. En Neuron der tilfældigvis nævner de samme ord uden
  * at stamme fra kilden skal IKKE røres — ellers rydder en rettelse på én side op
@@ -35,33 +35,33 @@ import { documents, documentReferences, type TrailDatabase } from '@trail/db';
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 
 /** Hvordan en Neuron hænger på kilden. */
-export type Kobling = 'kompileret-fra' | 'citerer';
+export type LinkKind = 'kompileret-fra' | 'citerer';
 
-export interface AfhaengigNeuron {
+export interface DependentNeuron {
   documentId: string;
   filename: string;
   title: string | null;
   path: string;
-  kobling: Kobling;
+  kobling: LinkKind;
 }
 
 /**
- * Hvilke Neuroner hænger på kilde-identiteten `identitet` i denne Brain?
+ * Hvilke Neuroner hænger på source-identityen `identitet` i denne Brain?
  *
  * `undtagen` er den Neuron der netop ER blevet kompileret om — den er per
  * definition ajour og skal ikke meldes som bagefter.
  *
- * Tom identitet ⇒ tom liste. `null` betyder «vi ved ikke hvilken kilde det er»
- * (se kilde-identitet.ts), og en ukendt identitet må ALDRIG kunne matche en
+ * Tom identitet ⇒ tom liste. `null` betyder «vi ved ikke hvilken source det er»
+ * (se source-identity.ts), og en ukendt identitet må ALDRIG kunne matche en
  * anden ukendt og trække tilfældige sider med.
  */
-export async function afhaengigeAf(
+export async function dependentsOf(
   trail: TrailDatabase,
   tenantId: string,
   kbId: string,
   identitet: string | null,
   undtagen: string | null = null,
-): Promise<AfhaengigNeuron[]> {
+): Promise<DependentNeuron[]> {
   if (!identitet) return [];
 
   // 1. KILDE-rækkerne med denne identitet. Der kan være flere: hver upload af
@@ -79,7 +79,7 @@ export async function afhaengigeAf(
     )
     .all();
 
-  const fundet = new Map<string, AfhaengigNeuron>();
+  const fundet = new Map<string, DependentNeuron>();
 
   // 2. KOMPILERET-FRA: Neuroner der selv bærer identiteten.
   const egne = await trail.db
@@ -105,7 +105,7 @@ export async function afhaengigeAf(
     fundet.set(n.id, { documentId: n.id, filename: n.filename, title: n.title, path: n.path, kobling: 'kompileret-fra' });
   }
 
-  // 3. CITERER: Neuroner med en citat-kant til en af kilde-rækkerne. Det er de
+  // 3. CITERER: Neuroner med en citat-kant til en af source-rækkerne. Det er de
   //    fire sider der stod forkert i nat, og som ingen anden mekanisme finder.
   if (kilder.length > 0) {
     const citerende = await trail.db
@@ -146,9 +146,9 @@ export async function afhaengigeAf(
  * på — og en omskrivning af `overview.md` uden at nogen så det ville være
  * præcis den fejl dette kort findes for.
  */
-export async function maerkAfhaengige(
+export async function markDependents(
   trail: TrailDatabase,
-  afhaengige: AfhaengigNeuron[],
+  afhaengige: DependentNeuron[],
   tidspunkt: number,
 ): Promise<number> {
   if (afhaengige.length === 0) return 0;
@@ -158,7 +158,7 @@ export async function maerkAfhaengige(
     .where(inArray(documents.id, afhaengige.map((a) => a.documentId)))
     .run();
   // LÆS TILBAGE. Et stempel der ikke landede ser ud som ingen afhængige.
-  const efter = await trail.db
+  const after = await trail.db
     .select({ n: sql<number>`COUNT(*)` })
     .from(documents)
     .where(
@@ -168,11 +168,11 @@ export async function maerkAfhaengige(
       ),
     )
     .get();
-  return efter?.n ?? 0;
+  return after?.n ?? 0;
 }
 
-/** Ryd mærket — siden er skrevet om og er dermed set efter kilden ændrede sig. */
-export async function rydKildeMaerke(trail: TrailDatabase, documentId: string): Promise<void> {
+/** Ryd mærket — siden er skrevet om og er dermed set after kilden ændrede sig. */
+export async function clearSourceMark(trail: TrailDatabase, documentId: string): Promise<void> {
   await trail.db
     .update(documents)
     .set({ sourceChangedAt: null })

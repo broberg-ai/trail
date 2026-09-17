@@ -25,7 +25,7 @@ import { Hono } from 'hono';
 import { documents, documentImages, knowledgeBases } from '@trail/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
-import { canonicaliseTag, parseTags, kbPrefix, buildFtsQuery , kildeAendretForbehold} from '@trail/shared';
+import { canonicaliseTag, parseTags, kbPrefix, buildFtsQuery , sourceChangedCaveat} from '@trail/shared';
 import { resolveKbId, stripClaimAnchors } from '@trail/core';
 import {
   effectiveAudience,
@@ -170,7 +170,7 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
       // F213.1 — source freshness, so a consumer can say "as of 13/8"
       // instead of restating a decision that has since moved.
       updatedAt: documents.updatedAt,
-      // F275.5 — kilden bag siden fik en ny udgave, og siden er ikke set efter.
+      // F275.5 — kilden bag siden fik en ny udgave, og siden er ikke set after.
       // Uden dette felt her svarer den gamle påstand videre som gældende, og
       // afløsningen ville kun være ryddet op i køen.
       sourceChangedAt: documents.sourceChangedAt,
@@ -247,7 +247,7 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
       rank: chunk.rank,
       userNote: sharedUserNote,
       updatedAt: normaliseUpdatedAt(doc.updatedAt),
-      kildeAendret: kildeAendretForbehold(doc.sourceChangedAt),
+      kildeAendret: sourceChangedCaveat(doc.sourceChangedAt),
     });
     if (filtered.length >= topK) break;
   }
@@ -275,7 +275,7 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
       ? `## ${c.title} — ${c.headerBreadcrumb}`
       : `## ${c.title}`;
     // F275.5 — forbeholdet står FØRST, før indholdet. En advarsel under en
-    // tekst læses efter påstanden er troet — af et menneske og af en model.
+    // tekst læses after påstanden er troet — af et menneske og af en model.
     let section = c.kildeAendret
       ? `${header}\n\n${c.kildeAendret}\n\n${c.content}`
       : `${header}\n\n${c.content}`;

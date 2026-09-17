@@ -3,7 +3,7 @@
  *
  * Christians sag, ordret: *«når jeg retter et dokument i CMS, gør det at der
  * ikke kommer en ny modsigelse i køen hver gang.»* Den enhedsprøvede version
- * beviser at springet virker i funktionen; denne beviser at der ikke lander en
+ * beviser at springet effective i funktionen; denne beviser at der ikke lander en
  * række i den kø han faktisk kigger i.
  *
  * Kontrollanten siger ALTID «de modsiger hinanden». Alt der er grønt her, er
@@ -68,13 +68,13 @@ beforeEach(async () => {
   await trail.db.insert(knowledgeBases).values({ id: KB, tenantId: T, createdBy: U, name: 'Afl', slug: KB, language: 'da' }).run();
   // KILDEN. Konnektoren er den der faktisk leverer broberg.ai's sider.
   await trail.db.insert(documents).values({
-    id: 'kilde-a', tenantId: T, userId: U, knowledgeBaseId: KB, kind: 'source',
-    path: '/sources/', filename: 'bid.md', content: tekst('kilde'), fileType: 'md',
+    id: 'source-a', tenantId: T, userId: U, knowledgeBaseId: KB, kind: 'source',
+    path: '/sources/', filename: 'bid.md', content: tekst('source'), fileType: 'md',
     sourceIdentity: URL_A, metadata: JSON.stringify({ connector: 'broberg-ai-site-sync', sourceUrl: 'https://broberg.ai/flagskibe/bid' }),
   }).run();
 });
 
-test('AC#0 — to udgaver af SAMME kilde: NUL modsigelser i køen', async () => {
+test('AC#0 — to udgaver af SAMME source: NUL modsigelser i køen', async () => {
   await neuron('udgave-1', URL_A, 'Projektet bygges nu og er endnu ikke lanceret.');
   await neuron('udgave-2', URL_A, 'Projektet er lanceret og i drift hos kunderne.');
   await scanDocForContradictions(trail, 'udgave-2', ALTID_MODSIGELSE);
@@ -84,8 +84,8 @@ test('AC#0 — to udgaver af SAMME kilde: NUL modsigelser i køen', async () => 
 test('AC#1 NEGATIV KONTROL — to FORSKELLIGE kilder: modsigelsen overlever', async () => {
   // Uden denne beviser AC#0 kun at linten er tavs, ikke at den er præcis.
   await trail.db.insert(documents).values({
-    id: 'kilde-b', tenantId: T, userId: U, knowledgeBaseId: KB, kind: 'source',
-    path: '/sources/', filename: 'design.md', content: tekst('anden kilde'), fileType: 'md',
+    id: 'source-b', tenantId: T, userId: U, knowledgeBaseId: KB, kind: 'source',
+    path: '/sources/', filename: 'design.md', content: tekst('anden source'), fileType: 'md',
     sourceIdentity: URL_B, metadata: JSON.stringify({ connector: 'broberg-ai-site-sync' }),
   }).run();
   await neuron('fra-a', URL_A, 'Projektet bygges nu og er endnu ikke lanceret.');
@@ -107,7 +107,7 @@ test('AC#4 POSITIV KONTROL — samme opsætning MED identitet springes over', as
 
 test('AC#4 DEN SIKRE STANDARD — uden proveniens rejses modsigelsen', async () => {
   // Hele den eksisterende base har feltet tomt. Læste linten «tomt» som «samme
-  // kilde», ville den blive usynlig for detektion i det sekund kontakten blev
+  // source», ville den blive usynlig for detektion i det sekund kontakten blev
   // slået til — og en modsigelse der ikke rejses ser ud som en der ikke findes.
   //
   // INTET ANDET I DENNE BRAIN. De to prøver er bevidst adskilt: lå begge
@@ -125,11 +125,11 @@ test('AC#4 DEN SIKRE STANDARD — uden proveniens rejses modsigelsen', async () 
  * TO SPÆRRER PÅ DEN SIKRE STANDARD, og de MASKERER hinanden:
  *
  *   ydre   `sammeKildeAfloeserHer`: ingen identitet ⇒ falsk (sparer et opslag)
- *   indre  `sammeKilde`:            null matcher aldrig null (den bærende)
+ *   indre  `sameSource`:            null matcher aldrig null (den bærende)
  *
  * Brydes kun ÉN af dem, fanger den anden det, og denne fil bliver grøn. Den
  * indre spærre er derfor mutations-bevist hvor den lever alene — i
- * `packages/core/src/lint/kilde-afloesning.test.ts`, hvor den vender 2 prøver
+ * `packages/core/src/lint/source-supersession.test.ts`, hvor den vender 2 prøver
  * røde. AC#4-prøven herover vender først rød når BEGGE brydes, hvilket er det
  * rigtige svar for en e2e: den måler kæden, ikke det enkelte led.
  */
@@ -154,7 +154,7 @@ test('AC#3 — KONNEKTOR-kontakten alene er nok til at slå det fra', async () =
   expect(await modsigelserIKoeen()).toBeGreaterThan(0);
 });
 
-test('en ANDEN konnektor slukket rører ikke denne kilde', async () => {
+test('en ANDEN konnektor slukket rører ikke denne source', async () => {
   // Beviser at undtagelsen rammer den navngivne konnektor og ikke bare «en».
   await trail.db.update(knowledgeBases)
     .set({ canonOffConnectors: JSON.stringify(['upload']) })
