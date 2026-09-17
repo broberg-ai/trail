@@ -26,11 +26,39 @@ test('AC#6 hvert metadata-skrivested sætter OGSÅ sourceIdentity', () => {
   expect(steder.length).toBeGreaterThanOrEqual(3);
 
   for (const m of steder) {
-    const efter = s.slice(m.index!, m.index! + 400);
-    expect(efter, `metadata-skrivested uden sourceIdentity:\n${efter.slice(0, 180)}`)
+    const felter = objektetOmkring(s, m.index!);
+    expect(felter, `metadata-skrivested uden sourceIdentity:\n${felter.slice(0, 220)}`)
       .toContain('sourceIdentity');
   }
 });
+
+/**
+ * Klipper hele det objekt-literal ud som positionen ligger i — fra dets `{`
+ * til den matchende `}`, med tællede tuborgparenteser.
+ *
+ * FØRSTE UDGAVE MÅLTE AFSTAND I TEGN (`slice(i, i + 400)`), og det holdt ikke.
+ * 17/9 2026 blev en kommentar på fire linjer indsat mellem `metadata` og
+ * `sourceIdentity` i den chunk-delte upload — feltet stod der stadig, ti
+ * linjer nede, men uden for vinduet. Vagten blev rød på en fil der var
+ * korrekt. En vagt der fejler på formatering lærer læseren at hæve tallet,
+ * og næste gang hæver man det forbi en ægte fejl.
+ */
+function objektetOmkring(s: string, pos: number): string {
+  let start = pos;
+  let dybde = 0;
+  while (start > 0) {
+    const c = s[start];
+    if (c === '}') dybde++;
+    else if (c === '{') { if (dybde === 0) break; dybde--; }
+    start--;
+  }
+  let dyb = 0;
+  for (let i = start; i < s.length; i++) {
+    if (s[i] === '{') dyb++;
+    else if (s[i] === '}') { dyb--; if (dyb === 0) return s.slice(start, i + 1); }
+  }
+  return s.slice(start);   // uafsluttet — lad påstanden fejle på indholdet
+}
 
 test('AC#6 identiteten har kaldesteder UDEN FOR sine egne prøver', () => {
   // En hjælpefunktion ingen kalder er ikke en integration.

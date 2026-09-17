@@ -312,6 +312,11 @@ async function claimAndRun(
   tenantId: string,
   userId: string,
 ): Promise<void> {
+  // F281 — sat når vi bailer fordi kapaciteten er fuld. Dræningen i
+  // finally-blokken må IKKE gen-kalde da: det «mere i kø» den finder er
+  // netop det job vi lige lagde fra os, så et øjeblikkeligt gen-kald er en
+  // ring. Den periodiske planlægger ejer det forsøg.
+  let holdtPaaKapacitet = false;
   try {
     const next = await trail.db
       .select()
@@ -355,6 +360,7 @@ async function claimAndRun(
     // tick can claim a job for this KB once capacity exists.
     const decision = await checkBackpressure(trail, tenantId);
     if (!decision.allowed) {
+      holdtPaaKapacitet = true;
       console.log(
         `[backpressure] holding ${next.id} (kb=${kbId}, tenant=${tenantId}) — ${decision.reason}`,
       );
@@ -388,13 +394,22 @@ async function claimAndRun(
     runningLocally.delete(kbId);
     // Drain: if more queued, schedule another tick. A fresh tickScheduler
     // call re-takes the guard and loops until the queue is empty.
-    const more = await trail.db
-      .select({ id: ingestJobs.id })
-      .from(ingestJobs)
-      .where(and(eq(ingestJobs.knowledgeBaseId, kbId), eq(ingestJobs.status, 'queued')))
-      .limit(1)
-      .get();
-    if (more) tickScheduler(trail, kbId, tenantId, userId);
+    //
+    // F281 — men KUN hvis vi rent faktisk fik lov at arbejde. Blev jobbet
+    // holdt tilbage af kapacitetstjekket, ligger det stadig i køen, og
+    // «er der mere?» finder det selv igen. Målt 17/9 2026: 686.041
+    // «holding»-linjer og 62 MB log på få sekunder, fordi hver runde
+    // udløste den næste. Den periodiske planlægger (hvert 30. sekund)
+    // prøver igen når der er plads — det er præcis det den findes til.
+    if (!holdtPaaKapacitet) {
+      const more = await trail.db
+        .select({ id: ingestJobs.id })
+        .from(ingestJobs)
+        .where(and(eq(ingestJobs.knowledgeBaseId, kbId), eq(ingestJobs.status, 'queued')))
+        .limit(1)
+        .get();
+      if (more) tickScheduler(trail, kbId, tenantId, userId);
+    }
   }
 }
 
