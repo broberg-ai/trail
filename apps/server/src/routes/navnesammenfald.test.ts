@@ -170,3 +170,57 @@ test('de to veje er enige om identiteten — ellers afhang «samme kilde» af kl
   expect(body.sourceIdentity).toBe(`path:${KB}/chunket.md`);
   expect(body.advarsel?.erstatter.filename).toBe('chunket.md');
 });
+
+/**
+ * F263.8 — afgrænsningen gælder OGSÅ fortrydelses-ruten.
+ *
+ * Fundet i sikkerhedsgennemgangen af mit eget endepunkt: en `ambient`-afgrænset
+ * nøgle kunne ændre kilde-identiteten på ETHVERT dokument i lejemålet, også i en
+ * Brain den aldrig har fået adgang til. Konsekvensen er stille — en kilde hvis
+ * identitet er skiftet, genkendes ikke længere som en tidligere udgave, så
+ * afløsningen springer den over uden at noget fejler.
+ */
+import { apiKeys as nøgleTabel, knowledgeBases as brainTabel } from '@trail/db';
+
+const AFGRÆNSET = 'trail_' + 'g'.repeat(64);
+const ANDEN_KB = 'kb-anden';
+
+test('SIKKERHED: en AFGRÆNSET nøgle kan IKKE flytte identiteten — og afvisningen er fuldstændig', async () => {
+  // Nøglen er bevilget til en ANDEN Brain end den filen ligger i.
+  await trail.db.insert(brainTabel).values({
+    id: ANDEN_KB, tenantId: T, createdBy: U, name: 'Anden', slug: ANDEN_KB, language: 'da', isSandbox: true,
+  }).run();
+  await trail.db.insert(nøgleTabel).values({
+    id: 'k-graense', tenantId: T, userId: U, name: 'graense',
+    keyHash: createHash('sha256').update(AFGRÆNSET).digest('hex'),
+    scope: 'ambient', scopeKbIds: JSON.stringify([ANDEN_KB]),
+  }).run();
+
+  const { body } = await upload('afgraenset.md', '# en fil i KB');
+  const res = await app.request(`http://engine.local/api/v1/documents/${body.id}/ny-kilde`, {
+    method: 'POST', headers: { Authorization: `Bearer ${AFGRÆNSET}` },
+  });
+  expect(res.status).toBe(403);
+  // MÅLT, ikke antaget: afvisningen kommer fra den ØVERSTE spærre — sti-
+  // allowlisten i middleware/auth.ts, hvor denne rute ikke står. Min første
+  // formodning var at ruten selv skulle stoppe den; den holdt ikke, og prøven
+  // asserter derfor på det der FAKTISK sker. Rutens egen kontrol er anden dør:
+  // den dag nogen udvider allowlisten, er den forskellen på en åbning og en
+  // stille åbning.
+  expect((await res.json() as { error: string }).error).toContain('ambient key scope');
+
+  // Og identiteten står URØRT — afvisningen må ikke være halvt gennemført.
+  const efter = await trail.db
+    .select({ i: documents.sourceIdentity }).from(documents).where(eq(documents.id, body.id)).get();
+  expect(efter!.i).toBe(`path:${KB}/afgraenset.md`);
+});
+
+test('NEGATIV KONTROL: en UAFGRÆNSET nøgle kan stadig fortryde', async () => {
+  // Uden den ville «afvis alle» bestå lige så grønt — og kuratoren ville have
+  // mistet det ene valg der er hele sikkerhedsnettet bag default ON.
+  const { body } = await upload('uafgraenset.md', '# en anden fil');
+  const res = await app.request(`http://engine.local/api/v1/documents/${body.id}/ny-kilde`, {
+    method: 'POST', headers: { Authorization: `Bearer ${NØGLE}` },
+  });
+  expect(res.status).toBe(200);
+});

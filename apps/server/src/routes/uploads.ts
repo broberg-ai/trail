@@ -491,6 +491,25 @@ uploadRoutes.post('/documents/:id/ny-kilde', async (c) => {
     .get();
   if (!doc) return c.json({ error: 'Not found' }, 404);
 
+  // F263.8 — ANDEN DØR, ikke den første.
+  //
+  // Sikkerhedsgennemgangen af denne rute rejste spørgsmålet «kan en
+  // ambient-afgrænset nøgle flytte identiteten i en Brain den ikke har fået?».
+  // MÅLT, ikke antaget: nej — `AMBIENT_ALLOWED` i middleware/auth.ts er en
+  // allowlist over STIER, og denne står ikke på den, så kaldet afvises med
+  // «ambient key scope» før det når hertil. Min første antagelse var forkert,
+  // og prøven herunder asserter derfor på den ÆGTE afvisning.
+  //
+  // Kontrollen bliver alligevel stående, og grunden er hvad der sker DEN DAG
+  // nogen udvider allowlisten: den øverste spærre kender kun stier, ikke hvilken
+  // Brain der ligger bag, så en ny linje i den liste ville åbne denne rute for
+  // enhver Brain i lejemålet — stille. Præcis samme todeling som upload-ruten
+  // ovenfor allerede bruger mod sandkasse-kravet.
+  const grant = getAmbientKbGrant(c);
+  if (grant && !grant.includes(doc.kbId)) {
+    return c.json({ error: 'kb-not-granted', knowledgeBaseId: doc.kbId }, 403);
+  }
+
   const identitet = kildeIdentitet('path', `${doc.kbId}/${doc.id}/${doc.filename}`);
   await trail.db
     .update(documents)
