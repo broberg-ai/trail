@@ -993,7 +993,8 @@
         "error": "Kunne ikke ændre indstillingen",
         "overruled": "Sat ud af kraft af hovedafbryderen",
         "overruledHint": "Kontakten står på Til, men hovedafbryderen for hele Brainen er slået fra — så denne konnektor afløser ikke noget. Slå hovedafbryderen til for at bruge den.",
-        "none": "Ingen konnektorer har leveret kilder til denne Brain endnu."
+        "none": "Ingen konnektorer har leveret kilder til denne Brain endnu.",
+        "source": "kilde"
       }
     },
     "account": {

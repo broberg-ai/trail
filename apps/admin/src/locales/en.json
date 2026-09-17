@@ -993,7 +993,8 @@
         "error": "Could not change the setting",
         "overruled": "Overruled by the master switch",
         "overruledHint": "This switch reads On, but the master switch for the whole Brain is off — so this connector supersedes nothing. Turn the master switch on to use it.",
-        "none": "No connector has delivered sources to this Brain yet."
+        "none": "No connector has delivered sources to this Brain yet.",
+        "source": "source"
       }
     },
     "account": {

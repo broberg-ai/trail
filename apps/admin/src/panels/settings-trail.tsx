@@ -910,7 +910,10 @@ export function SettingsTrailPanel() {
                 <span class="text-xs" style={{ minWidth: 150 }}>
                   {k.label}
                   <span class="text-[color:var(--color-fg-subtle)]">
-                    {' '}· {k.antalKilder} {t('settings.trail.kanon.sources')}
+                    {' '}· {k.antalKilder}{' '}
+                    {k.antalKilder === 1
+                      ? t('settings.trail.kanon.source')
+                      : t('settings.trail.kanon.sources')}
                   </span>
                 </span>
                 <span
