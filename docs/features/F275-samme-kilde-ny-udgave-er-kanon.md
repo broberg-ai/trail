@@ -1,7 +1,8 @@
 # F275 — Samme kilde, ny udgave: den seneste er kanon
 
 **Kort:** trail-F275 · epic · **høj**
-**Status:** foreslået 16. september 2026 — ejeren har afgjort UDFORMNINGEN; GO på selve bygningen mangler stadig
+**Status:** **UDRULLET 17. september 2026** — F275.1, .2, .3 og .5 er live på
+trail-engine-001 og app.trailmem.com. F275.4 og .6 er ikke bygget; se nedenfor.
 
 ---
 
@@ -151,11 +152,21 @@ modsigelse der ikke rejses ser præcis ud som en der ikke findes.*
 
 | # | | |
 |---|---|---|
-| F275.1 | Kilden — og Neuronen — får en identitet | høj · 3 SP |
-| F275.2 | De to kontakter + besked ved navnesammenfald | høj · 3 SP |
-| F275.3 | Linten rejser aldrig modsigelse mellem to udgaver af samme kilde | **kritisk** · 3 SP |
-| F275.4 | Genkompilering erstatter — den lægger ikke lag på | høj · 3 SP |
-| F275.5 | Afløsningen skal forplante sig | **kritisk** · 5 SP |
+| F275.1 | Kilden — og Neuronen — får en identitet | høj · 3 SP | **✓ live** (`ab68c22`, `c0137d6`, `5f3d553`; Neuron-halvdelen i `cd8cb9f`) |
+| F275.2 | De to kontakter + besked ved navnesammenfald | høj · 3 SP | **✓ live** (`8565e3a`, `3b5a4cb`) |
+| F275.3 | Linten rejser aldrig modsigelse mellem to udgaver af samme kilde | **kritisk** · 3 SP | **✓ live** (`cd8cb9f`) |
+| F275.4 | Genkompilering erstatter — den lægger ikke lag på | høj · 3 SP | ikke bygget — se note |
+| F275.5 | Afløsningen skal forplante sig | **kritisk** · 5 SP | **✓ live** (`0342916`) |
+
+**Note om F275.4:** F252 løste allerede den akutte del (én kilde-fil → én side,
+frem for en ny række pr. kompilering), og F275.5's mærkning dækker den del hvor
+en gammel udgave ellers ville leve videre i de afledte sider. Det der står
+tilbage er en oprydning i PROSA — formuleringer der lægger lag frem for at
+erstatte — og det blokerer ikke F277. Kortet står åbent med vilje.
+
+**Note om F275.6:** fingeraftrykket er en SUPPLERENDE identitetsmekanisme til
+filer der skifter navn. Uploads har i dag identitet på filnavn + Brain (F275.2),
+hvilket er ejerens egen afgørelse og dækker den sag featuren blev født af.
 
 **F275.5 er den der redder featuren fra at gøre skade.** Det var ikke kilde-Neuronen der
 stod forkert i nat — det var `overview.md`, `glossary.md` og `flagskib.md`, hvis egen

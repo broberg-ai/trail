@@ -13,8 +13,8 @@
  * (the engine DB handle is the requested tenant's).
  */
 import { Hono } from 'hono';
-import { documents, queueCandidates, knowledgeBases } from '@trail/db';
-import { and, eq, isNotNull, inArray, like, lt, sql } from 'drizzle-orm';
+import { documents, queueCandidates, knowledgeBases , documentReferences} from '@trail/db';
+import { and, eq, isNotNull, inArray, like, lt, sql , ne} from 'drizzle-orm';
 import { resolveKbId } from '@trail/core';
 import { identitetFraMetadata } from '@trail/shared';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
@@ -308,6 +308,106 @@ maintenanceRoutes.post('/maintenance/backfill-source-identity', async (c) => {
     fik,
     havdeAllerede: foer,
     ingenAtFaa,
+    efter: efterRows.length,
+    applied: apply,
+  });
+});
+
+/**
+ * F275.1 AC — BACKFILL AF NEURON-SIDEN.
+ *
+ * MÅLT 17/9 i broberg.ai, efter at kilde-siden var kørt: **66 af 66 kilder bar
+ * en identitet — og 0 af 247 Neuroner gjorde.** Neuronen får kun sin kildes
+ * identitet ved kompilering (F275.3), så hele den eksisterende base stod uden.
+ *
+ * Konsekvensen var ikke en fejl, men noget værre at opdage sent: F275.3's lint
+ * og F275.5's forplantning var **inerte** for alt der allerede lå der. Den
+ * sikre standard gjorde det harmløst — ingen identitet ⇒ modsigelse, aldrig
+ * afløsning — men featuren gjorde ingenting, og det så præcis ud som om den
+ * virkede.
+ *
+ * KOBLINGEN ER CITAT-KANTEN, ikke et gæt: `document_references` peger fra
+ * Neuronen til den kilde den citerer, og kilden bærer identiteten.
+ *
+ * EN NEURON MED FLERE KILDER FÅR INGEN. Det er ikke en mangel, det er svaret:
+ * «hvilken kilde er denne side en udgave AF» har intet entydigt svar når den
+ * hviler på to. Gættede vi på den første, ville en ny udgave af den ene kilde
+ * afløse en side der også hvilede på den anden — altså tage viden væk der
+ * stadig var gyldig. `null` er sandt; et gæt ville være tavst forkert.
+ *
+ * TØRLØB ER STANDARD, som ovenfor.
+ */
+maintenanceRoutes.post('/maintenance/backfill-neuron-identity', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const body = (await c.req.json().catch(() => ({}))) as { apply?: boolean };
+  const apply = body.apply === true;
+
+  const neuroner = await trail.db
+    .select({ id: documents.id, nu: documents.sourceIdentity })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.tenantId, tenant.id),
+        ne(documents.kind, 'source'),
+        eq(documents.archived, false),
+      ),
+    )
+    .all();
+
+  const foer = neuroner.filter((n) => !!n.nu).length;
+  let fik = 0, ingenKilde = 0, flereKilder = 0;
+
+  for (const n of neuroner) {
+    if (n.nu) continue;
+    // DISTINCT: den samme kilde citeret i tre afsnit er ÉN kilde, ikke tre.
+    // Uden det ville hver Neuron med flere citater til samme side tælle som
+    // «flere kilder» og blive sprunget over.
+    const kilder = await trail.db
+      .selectDistinct({ identitet: documents.sourceIdentity })
+      .from(documentReferences)
+      .innerJoin(documents, eq(documents.id, documentReferences.sourceDocumentId))
+      .where(
+        and(
+          eq(documentReferences.tenantId, tenant.id),
+          eq(documentReferences.wikiDocumentId, n.id),
+          isNotNull(documents.sourceIdentity),
+        ),
+      )
+      .all();
+
+    if (kilder.length === 0) { ingenKilde++; continue; }
+    if (kilder.length > 1) { flereKilder++; continue; }
+    const id = kilder[0]!.identitet;
+    if (!id) { ingenKilde++; continue; }
+    if (apply) {
+      await trail.db.update(documents).set({ sourceIdentity: id }).where(eq(documents.id, n.id)).run();
+    }
+    fik++;
+  }
+
+  // LÆST TILBAGE fra basen, ikke regnet ud af mine egne tællere.
+  const efterRows = await trail.db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.tenantId, tenant.id),
+        ne(documents.kind, 'source'),
+        eq(documents.archived, false),
+        isNotNull(documents.sourceIdentity),
+      ),
+    )
+    .all();
+
+  return c.json({
+    tenant: tenant.slug,
+    neuroner: neuroner.length,
+    foer,
+    fik,
+    havdeAllerede: foer,
+    ingenKilde,
+    flereKilder,
     efter: efterRows.length,
     applied: apply,
   });
