@@ -175,6 +175,31 @@ identitet ikke er kildens URL. Fem sider sagde «bygges nu» efter kilden sagde
 svarer på gårsdagens tekst — **og det er værre end i dag, fordi det ikke længere ligner
 et problem.**
 
+## Reuse
+
+Discovery-tjekket blev kørt **17. september, EFTER kortene var bygget** — ikke før,
+som F217 foreskriver. Det står her som det skete frem for at blive dateret
+tilbage; en genbrugs-sektion der lyver om hvornår den blev skrevet er værre end
+ingen, fordi den næste læser tror processen blev fulgt.
+
+Tre opslag mod `discovery.broberg.ai/api/search`:
+
+| søgt efter | nærmeste træf | genbrugt? |
+|---|---|---|
+| url-normalisering / kanonisk form | `@broberg/media`, `@broberg/gravatar` | **nej** — ingen af dem normaliserer en URL; vi bruger platformens egen `new URL().href`, hvilket er et endnu stærkere «genbrug» end en pakke |
+| indholds-hash / dedup | `@broberg/http`, `@broberg/deploy-core` | **nej** — hash'en fandtes i forvejen i Trails egen upload-rute (F162), og at flytte den ville være en omlægning uden gevinst |
+| kilde-identitet / proveniens | `@broberg/config`, `@broberg/lens-engine` | **nej** — «hvad ER en kilde hen over sine udgaver» er Trail-domæne, ikke en tværgående primitiv |
+
+**Konklusionen er BUILD, og den er smal med vilje.** Det eneste stykke der kunne
+være en fleet-primitiv er URL-normaliseringen — og dér er det rigtige svar ikke
+en `@broberg/`-pakke, men at lade være med at skrive sin egen: `new URL().href`
+gør det rigtige (småskriver værten, bevarer stiens kasse, afkoder ikke `%2F`),
+og en håndskrevet hjælper ville have ramt alle tre forkert.
+
+**Hvis en anden i flåden får brug for det samme**, er stedet at kigge
+`packages/shared/src/kilde-identitet.ts` — og så er det værd at flytte til
+`components` frem for at kopiere. Det er ikke sket endnu, og det er ikke lovet.
+
 ## Afhængigheder
 
 - **F263.16** (foreslået) — version + indholds-hash på «færdig». De to hænger sammen:
