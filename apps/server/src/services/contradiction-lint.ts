@@ -29,7 +29,12 @@ import {
   type LlmContradictionResult,
   type NewNeuron,
 } from '@trail/core';
-import type { CandidateApprovedEvent } from '@trail/shared';
+import {
+  laesSlukkedeKonnektorer,
+  nyUdgaveErKanon,
+  type CandidateApprovedEvent,
+  type KanonKontakter,
+} from '@trail/shared';
 import { broadcaster } from './broadcast.js';
 import { ai } from '../lib/ai.js';
 import { decideSupersession } from './supersession.js';
@@ -224,6 +229,9 @@ async function runForEvent(
       knowledgeBaseId: documents.knowledgeBaseId,
       userId: documents.userId,
       version: documents.version,
+      // F275.3 — Neuronens egen kilde-identitet. Den afgør om en «modsigelse»
+      // i virkeligheden er den samme kilde der har skiftet mening om sig selv.
+      sourceIdentity: documents.sourceIdentity,
       lastContradictionScanSignature: documents.lastContradictionScanSignature,
     })
     .from(documents)
@@ -246,7 +254,13 @@ async function runForEvent(
   // Neurons stop flooding the queue with contradiction-alert candidates.
   // Checked BEFORE findSimilarNeurons so the per-pair LLM cost is skipped too.
   const kbRow = await trail.db
-    .select({ enabled: knowledgeBases.contradictionLintEnabled })
+    .select({
+      enabled: knowledgeBases.contradictionLintEnabled,
+      // F275.2 — de to kontakter, hentet i SAMME opslag. Et ekstra opslag ville
+      // være et ekstra sted de kunne blive uenige.
+      kanonBrain: knowledgeBases.newVersionIsCanon,
+      kanonOff: knowledgeBases.canonOffConnectors,
+    })
     .from(knowledgeBases)
     .where(eq(knowledgeBases.id, doc.knowledgeBaseId))
     .get();
@@ -278,15 +292,30 @@ async function runForEvent(
     title: doc.title,
     content: doc.content,
     version: doc.version,
+    sourceIdentity: doc.sourceIdentity,
   };
 
   // F190.6 — tag the per-pair LLM cost with this Neuron's tenant + KB. The
   // scheduled full-pass (scanDocForContradictions) fabricates an event with
   // empty tenantId/kbId, but `doc` is the real row here, so labels are accurate.
-  const findings = await detectContradictions(neuron, similars, check, {
-    tenantId: doc.tenantId,
-    kbId: doc.knowledgeBaseId,
-  });
+  // F275.2 + F275.3 — afgør ÉT sted om samme kilde afløser i denne Brain.
+  // Konnektoren læses af den kilde Neuronen stammer fra: begge sider af parret
+  // deler identitet, så de deler også konnektor.
+  const sammeKildeAfloeser = await sammeKildeAfloeserHer(
+    trail,
+    doc.knowledgeBaseId,
+    doc.tenantId,
+    neuron.sourceIdentity,
+    { brain: kbRow?.kanonBrain ?? true, slukkedeKonnektorer: laesSlukkedeKonnektorer(kbRow?.kanonOff) },
+  );
+
+  const findings = await detectContradictions(
+    neuron,
+    similars,
+    check,
+    { tenantId: doc.tenantId, kbId: doc.knowledgeBaseId },
+    sammeKildeAfloeser,
+  );
 
   // F158 — stamp signature on every successful completion (zero or more
   // findings). Signature update happens BEFORE the early return on empty
@@ -449,6 +478,55 @@ async function runForEvent(
   console.log(`[contradiction-lint] "${doc.filename}": ${findings.length} contradiction${findings.length === 1 ? '' : 's'} emitted`);
 }
 
+/**
+ * F275.2/F275.3 — afløser en ny udgave af DENNE kilde i DENNE Brain?
+ *
+ * To kontakter afgør det, og hierarkiet går kun én vej (se @trail/shared's
+ * `nyUdgaveErKanon`). Konnektoren slås op på kilde-rækken der bærer identiteten:
+ * Neuronen arver identiteten, ikke konnektoren, og at stemple konnektoren ét
+ * sted til ville være endnu en værdi der kunne komme til at være uenig med sig
+ * selv.
+ *
+ * Findes kilden ikke længere, falder vi tilbage på Brain-kontakten alene —
+ * ingen konnektor betyder ingen konnektor-undtagelse, ikke «slukket».
+ */
+async function sammeKildeAfloeserHer(
+  trail: TrailDatabase,
+  kbId: string,
+  tenantId: string,
+  sourceIdentity: string | null,
+  kontakter: KanonKontakter,
+): Promise<boolean> {
+  // Ingen identitet ⇒ intet at afløse. Springet i detectContradictions kræver
+  // to KENDTE identiteter, men vi sparer opslaget her.
+  if (!sourceIdentity) return false;
+
+  const kilde = await trail.db
+    .select({ metadata: documents.metadata })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.tenantId, tenantId),
+        eq(documents.knowledgeBaseId, kbId),
+        eq(documents.kind, 'source'),
+        eq(documents.sourceIdentity, sourceIdentity),
+      ),
+    )
+    .get();
+
+  let konnektor: string | null = null;
+  if (kilde?.metadata) {
+    try {
+      const p = JSON.parse(kilde.metadata) as { connector?: unknown };
+      if (typeof p?.connector === 'string') konnektor = p.connector;
+    } catch {
+      // ikke JSON — så bærer kilden ingen konnektor
+    }
+  }
+
+  return nyUdgaveErKanon(kontakter, konnektor).kanon;
+}
+
 async function findSimilarNeurons(
   trail: TrailDatabase,
   doc: { id: string; title: string | null; content: string | null; knowledgeBaseId: string; tenantId: string },
@@ -475,6 +553,7 @@ async function findSimilarNeurons(
         title: documents.title,
         content: documents.content,
         version: documents.version,
+        sourceIdentity: documents.sourceIdentity,
       })
       .from(documents)
       .where(and(eq(documents.id, hit.id), ne(documents.kind, 'source')))
@@ -490,6 +569,7 @@ async function findSimilarNeurons(
       title: row.title,
       content: row.content,
       version: row.version,
+      sourceIdentity: row.sourceIdentity,
     });
   }
   return results;

@@ -18,6 +18,17 @@ export interface ContradictionCandidate {
   title: string | null;
   content: string;
   version: number;
+  /**
+   * F275.3 — hvilken KILDE denne Neuron stammer fra.
+   *
+   * `null` betyder «vi ved det ikke», ALDRIG «ingen kilde». Forskellen er
+   * bærende: uden identitet rejses en MODSIGELSE, aldrig en afløsning. Faldt
+   * tvivlen den anden vej, ville hele den eksisterende base — hvor feltet er
+   * tomt indtil backfill'en er kørt — blive usynlig for detektion i det sekund
+   * kontakten blev slået til, og *en modsigelse der ikke rejses ser præcis ud
+   * som en der ikke findes.*
+   */
+  sourceIdentity: string | null;
 }
 
 export interface LlmContradictionResult {
@@ -44,6 +55,34 @@ export interface NewNeuron {
   title: string | null;
   content: string;
   version: number;
+  /** F275.3 — se ContradictionCandidate.sourceIdentity. */
+  sourceIdentity: string | null;
+}
+
+/**
+ * F275.3 — to Neuroner er UDGAVER AF SAMME KILDE, ikke uenige parter.
+ *
+ * Christians regel: *«hvis kilden — altså en URL på en hjemmeside — forbliver
+ * den samme, ja så skal den seneste udgave være kanon.»*
+ *
+ * Tre ting skal være sande, og alle tre er med vilje:
+ *
+ *   1. `sammeKildeAfloeser` — ejerens kontakt (F275.2). Står den på FRA,
+ *      opfører linten sig præcis som før featuren fandtes.
+ *   2. BEGGE identiteter er kendte. Én ukendt gør sammenligningen umulig, og
+ *      det umulige må aldrig blive til «samme kilde».
+ *   3. De er ens.
+ *
+ * At holde `null !== null` ude er ikke en detalje ved implementeringen — det er
+ * hele den sikre standard. To Neuroner uden proveniens ville ellers se ud som
+ * to udgaver af den samme ukendte kilde, og enhver modsigelse mellem dem ville
+ * forsvinde tavst.
+ */
+export function sammeKilde(
+  a: { sourceIdentity: string | null },
+  b: { sourceIdentity: string | null },
+): boolean {
+  return a.sourceIdentity !== null && b.sourceIdentity !== null && a.sourceIdentity === b.sourceIdentity;
 }
 
 /**
@@ -58,12 +97,23 @@ export async function detectContradictions(
   check: ContradictionChecker,
   /** F190.6 — forwarded to each per-pair LLM call for per-tenant cost. */
   labels?: Record<string, string>,
+  /**
+   * F275.3 — ejerens kontakt (F275.2), afgjort af kalderen. Standarden her er
+   * `false`: en kalder der ikke har læst kontakten får den GAMLE adfærd, aldrig
+   * den nye. En ny regel må ikke kunne snige sig ind gennem et glemt argument.
+   */
+  sammeKildeAfloeser = false,
 ): Promise<LintFinding[]> {
   const findings: LintFinding[] = [];
 
   for (const cand of candidates) {
     // Skip self — a Neuron can't contradict itself.
     if (cand.documentId === neuron.documentId) continue;
+
+    // F275.3 — og spring over når de to er UDGAVER AF SAMME KILDE. Springet
+    // ligger FØR check(), så en rettelse på broberg.ai hverken koster et
+    // LLM-kald eller producerer en modsigelse kuratoren skal afvise.
+    if (sammeKildeAfloeser && sammeKilde(neuron, cand)) continue;
 
     let result: LlmContradictionResult;
     try {

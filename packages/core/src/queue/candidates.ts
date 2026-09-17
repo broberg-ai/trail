@@ -113,6 +113,12 @@ export interface CandidateOp {
    * Neuronens `captured_at` som NULL: «ikke målt», ikke «samtidig».
    */
   capturedAt?: string;
+  /**
+   * F269/F275.3 — hvilken KILDE denne Neuron blev kompileret af, når vi ved det.
+   * Kompileringen sender den allerede (candidate-api.ts); den blev bare aldrig
+   * skrevet videre til Neuron-rækken, så Neuronen ikke kendte sin egen kilde.
+   */
+  sourceDocumentId?: string;
   targetDocumentId?: string;
   filename?: string;
   path?: string;
@@ -302,6 +308,35 @@ export function parseOp(candidate: QueueCandidate): CandidateOp {
   // værdi (capturedAt) til at forsvinde tavst. Standarden er stadig 'create';
   // det der ændrer sig er at resten af objektet ikke længere kasseres med den.
   return { ...parsed, op: 'create' } as CandidateOp;
+}
+
+/**
+ * F275.3 — kildens identitet, arvet ned på Neuronen.
+ *
+ * Neuronen kendte ikke sin kilde. Målt 16/9: kilden bar `{connector, sourceUrl}`,
+ * Neuronen bar `metadata: None` — det eneste spor tilbage var `sources: [...]` i
+ * frontmatter, altså prosa, og et filnavn er ikke en identitet.
+ *
+ * Uden dette led kan linten ikke skelne «to udgaver af samme side» fra «to sider
+ * der er uenige», og hver eneste rettelse på broberg.ai bliver til en falsk
+ * modsigelse i kuratorkøen.
+ *
+ * `null` er den TREDJE tilstand og betyder «vi ved det ikke» — aldrig «ingen
+ * kilde». Linten skal kunne skelne, for en afløsnings-regel der læser «ved ikke»
+ * som «samme kilde» ville tie om præcis de sager den findes for.
+ */
+async function kildensIdentitet(
+  tx: Db,
+  tenantId: string,
+  sourceDocumentId: string | undefined,
+): Promise<string | null> {
+  if (!sourceDocumentId) return null;
+  const kilde = await tx
+    .select({ identitet: documents.sourceIdentity })
+    .from(documents)
+    .where(and(eq(documents.id, sourceDocumentId), eq(documents.tenantId, tenantId)))
+    .get();
+  return kilde?.identitet ?? null;
 }
 
 async function lastEventIdFor(
@@ -835,11 +870,83 @@ async function executeApprove(
   ctx: CommitContext,
 ): Promise<ResolutionResult> {
   const op = parseOp(candidate);
-  return trail.db.transaction(async (tx) => {
+  // F275.3 AC#5 — opsamles INDE i transaktionen, handles UDENFOR. En
+  // createCandidate inde i den åbne transaktion ville skrive gennem en anden
+  // forbindelse end den der holder låsen.
+  const overskrevet: KuratorOverskrivning[] = [];
+  const resultat = await trail.db.transaction(async (tx) => {
     if (op.op === 'update') return approveUpdate(tx, candidate, op, payload, action, actor, ctx);
     if (op.op === 'archive') return approveArchive(tx, candidate, op, action, actor, ctx);
-    return approveCreate(tx, candidate, op, payload, action, actor, ctx);
+    return approveCreate(tx, candidate, op, payload, action, actor, ctx, overskrevet);
   });
+  for (const o of overskrevet) await meldKuratorOverskrivning(trail, candidate, o);
+  return resultat;
+}
+
+/**
+ * F275.3 AC#5 — en Neuron et MENNESKE har skrevet i, som en maskinel
+ * genkompilering netop har skrevet over.
+ */
+interface KuratorOverskrivning {
+  documentId: string;
+  filename: string;
+  title: string | null;
+  kuratorVersion: number;
+  kuratorIndhold: string;
+}
+
+/**
+ * F275.3 AC#5 — SIG DET HØJT.
+ *
+ * Har en kurator skrevet i en Neuron, er den ikke længere ren kilde-viden. En
+ * ny udgave af kilden må gerne afløse den — det er hele F275 — men den må ikke
+ * gøre det i stilhed, for et lydløst indgreb kan ikke skelnes fra at intet
+ * skete, og mennesket opdager først sin forsvundne rettelse ved et tilfælde.
+ *
+ * Vi ruller IKKE skrivningen tilbage. En naken omlægning midt i en kompilering
+ * ville efterlade kilden og Neuronen uenige. I stedet lander kuratorens egen
+ * tekst i køen som en `version-conflict`, ordret, så den kan sættes tilbage med
+ * ét klik — og indtil nogen svarer, STÅR den der.
+ */
+async function meldKuratorOverskrivning(
+  trail: TrailDatabase,
+  candidate: QueueCandidate,
+  o: KuratorOverskrivning,
+): Promise<void> {
+  const titel = o.title ?? o.filename;
+  try {
+    await createCandidate(
+      trail,
+      candidate.tenantId,
+      {
+        knowledgeBaseId: candidate.knowledgeBaseId,
+        kind: 'version-conflict',
+        title: `Din rettelse i «${titel}» blev skrevet over af en ny udgave af kilden`,
+        content:
+          `En ny udgave af kilden bag **${titel}** er kompileret, og den har erstattet ` +
+          `teksten på siden — inklusive den rettelse du selv skrev i version ${o.kuratorVersion}.\n\n` +
+          `Det er sådan «samme kilde, ny udgave er kanon» skal virke, men din tekst skal ikke ` +
+          `forsvinde uden at du ser det. Her er præcis hvad der stod, så du kan sætte det ` +
+          `tilbage eller skrive det ind i den nye udgave:\n\n---\n\n${o.kuratorIndhold}`,
+        // Under F19's auto-godkendelses-tærskel: et menneske skal svare.
+        confidence: 0.5,
+        metadata: JSON.stringify({
+          connector: 'lint',
+          kilde: 'F275.3',
+          documentId: o.documentId,
+          kuratorVersion: o.kuratorVersion,
+        }),
+      },
+      { kind: 'system', id: 'lint:F275.3' },
+    );
+  } catch (err) {
+    // Beskeden må aldrig vælte selve kompileringen — men den må heller ikke
+    // forsvinde tavst, hvilket er hele pointen med AC#5.
+    console.error(
+      `[F275.3] kunne IKKE melde kurator-overskrivning af ${o.documentId} (${titel}):`,
+      err,
+    );
+  }
 }
 
 async function approveCreate(
@@ -850,6 +957,8 @@ async function approveCreate(
   action: CandidateAction,
   actor: Actor,
   ctx: CommitContext,
+  /** F275.3 AC#5 — fyldes når en maskinel skrivning overskriver et menneskes. */
+  overskrevet?: KuratorOverskrivning[],
 ): Promise<ResolutionResult> {
   // F197 — re-scan at materialize so an approve-time editedContent edit can't
   // smuggle a secret past the enqueue gate (candidate.content is already clean).
@@ -879,6 +988,10 @@ async function approveCreate(
   const path = pathIn.endsWith('/') ? pathIn : `${pathIn}/`;
 
   const docKind = op.docKind ?? 'wiki';
+
+  // F275.3 — Neuronen skal kende sin kilde. `null` når kompileringen ikke
+  // sendte en kilde, eller kilden selv ingen identitet har.
+  const kildeIdent = await kildensIdentitet(tx, candidate.tenantId, op.sourceDocumentId);
 
   // F252 — EN KILDE-FIL HAR ÉN SIDE. Findes path+filename allerede, opdateres
   // den frem for at der indsættes endnu en række.
@@ -911,6 +1024,47 @@ async function approveCreate(
     .get();
 
   if (existing) {
+    // F275.3 AC#5 — SKREV ET MENNESKE HER SIDST?
+    //
+    // Signalet er den SENESTE hændelse på siden, ikke «har der nogensinde været
+    // en». Har maskinen allerede skrevet ovenpå kuratorens tekst én gang, er
+    // beskeden sendt, og at gentage den ved hver eneste gen-synkronisering ville
+    // gøre den til støj — og en besked man lærer at klikke væk er ingen besked.
+    const sidst = await tx
+      .select({
+        actorKind: wikiEvents.actorKind,
+        eventType: wikiEvents.eventType,
+        snapshot: wikiEvents.contentSnapshot,
+        version: wikiEvents.newVersion,
+      })
+      .from(wikiEvents)
+      .where(and(eq(wikiEvents.tenantId, candidate.tenantId), eq(wikiEvents.documentId, existing.id)))
+      // rowid BRYDER UAFGJORT, og det er ikke en detalje. `created_at` er
+      // `datetime('now')` — altså SEKUNDER. Målt her: oprettelsen og kuratorens
+      // rettelse fik NØJAGTIG samme tidsstempel, og med kun `created_at DESC`
+      // returnerede SQLite maskinens 'created' som «den seneste». Beskeden
+      // udeblev, og intet fejlede. rowid er indsættelsesrækkefølge og kan ikke
+      // gå uafgjort.
+      .orderBy(desc(wikiEvents.createdAt), desc(sql`rowid`))
+      .limit(1)
+      .get();
+    const maskinelSkrivning = actor.kind !== 'user';
+    if (
+      overskrevet &&
+      maskinelSkrivning &&
+      sidst?.actorKind === 'user' &&
+      sidst.eventType === 'edited' &&
+      sidst.snapshot
+    ) {
+      overskrevet.push({
+        documentId: existing.id,
+        filename,
+        title: visningsTitel,
+        kuratorVersion: sidst.version ?? existing.version ?? 1,
+        kuratorIndhold: sidst.snapshot,
+      });
+    }
+
     const nextVersion = (existing.version ?? 1) + 1;
     await tx
       .update(documents)
@@ -922,6 +1076,11 @@ async function approveCreate(
         version: nextVersion,
         ...(op.tags ? { tags: op.tags } : {}),
         ...(op.ingestJobId ? { ingestJobId: op.ingestJobId } : {}),
+        // F275.3 — GENKOMPILERINGEN er netop det sted identiteten skal
+        // opdateres. Sattes den kun ved første oprettelse, ville en Neuron
+        // skrevet før feltet fandtes aldrig få det, og den ville blive ved med
+        // at modsige sin egen næste udgave.
+        ...(kildeIdent !== null ? { sourceIdentity: kildeIdent } : {}),
         updatedAt: new Date().toISOString(),
       })
       .where(eq(documents.id, existing.id))
@@ -977,6 +1136,9 @@ async function approveCreate(
       // so this subquery sees the latest committed seq for the KB.
       seq: sql<number>`COALESCE((SELECT MAX(${documents.seq}) FROM ${documents} WHERE ${documents.knowledgeBaseId} = ${candidate.knowledgeBaseId}), 0) + 1`,
       ingestJobId: op.ingestJobId ?? null,
+      // F275.3 — se kildensIdentitet(). NULL = «vi ved det ikke», og linten
+      // behandler det som en MODSIGELSE, aldrig som en afløsning.
+      sourceIdentity: kildeIdent,
       // F273.3 — bar ind, ikke udledt. Mangler den, er svaret NULL.
       capturedAt: gyldigtTidsstempel(op.capturedAt),
       ...(docKind === 'work'
@@ -1064,6 +1226,8 @@ async function approveUpdate(
   const content = updateScan.ren;
   const newVersion = doc.version + 1;
   const prevEventId = await lastEventIdFor(tx, candidate.tenantId, doc.id);
+  // F275.3 — se approveCreate.
+  const kildeIdent = await kildensIdentitet(tx, candidate.tenantId, op.sourceDocumentId);
 
   await tx
     .update(documents)
@@ -1075,6 +1239,9 @@ async function approveUpdate(
       ...(op.title !== undefined ? { title: op.title } : {}),
       ...(op.tags !== undefined ? { tags: op.tags } : {}),
       ...(op.ingestJobId !== undefined ? { ingestJobId: op.ingestJobId } : {}),
+      // F275.3 — samme arv på update-vejen. Rørte vi kun create-vejen, ville
+      // halvdelen af Neuronerne mangle deres kilde uden at noget fejlede.
+      ...(kildeIdent !== null ? { sourceIdentity: kildeIdent } : {}),
     })
     .where(eq(documents.id, doc.id))
     .run();
