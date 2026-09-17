@@ -3,7 +3,7 @@
  * modsatte, fordi «alt er samme kilde» og «alt er forskelligt» begge består
  * en ensidig prøve.
  */
-import { test, expect } from 'bun:test';
+import { test, describe, it, expect } from 'bun:test';
 import { kildeIdentitet, laesIdentitet, identitetFraMetadata } from './kilde-identitet.js';
 
 test('DEN BÆRENDE: samme URL = samme identitet, forskellig URL = forskellig', () => {
@@ -56,4 +56,42 @@ test('laesIdentitet deler op igen — og afviser et ukendt rum', () => {
   expect(laesIdentitet('ingen-kolon')).toBeNull();
   expect(laesIdentitet('url:')).toBeNull();
   expect(laesIdentitet(null)).toBeNull();
+});
+
+// bun:test — samme løber som resten af pakkens prøver
+describe('F275.1 — to skrivemåder af samme URL er ÉN identitet', () => {
+  it('DEN MÅLTE SAG: æøå direkte og procent-kodet giver samme identitet', () => {
+    // Fundet i produktionen 17/9, inde i featurens egen nøgle. Samme side stod
+    // med to identiteter, og afløsningen ville have læst en rettelse af den som
+    // en fremmed kilde.
+    const a = kildeIdentitet('url', 'https://broberg.ai/indsigter/design-i-højere-luftlag');
+    const b = kildeIdentitet('url', 'https://broberg.ai/indsigter/design-i-h%C3%B8jere-luftlag');
+    expect(a).toBe(b);
+    expect(a).toBe('url:https://broberg.ai/indsigter/design-i-h%C3%B8jere-luftlag');
+  });
+
+  it('værtsnavnet småskrives — men STIEN beholder sine store bogstaver', () => {
+    // Værter er ikke versalfølsomme; stier ER. En normalisering der småskrev
+    // begge ville smelte to forskellige sider sammen til én.
+    expect(kildeIdentitet('url', 'https://BROBERG.AI/Indsigter')).toBe('url:https://broberg.ai/Indsigter');
+    expect(kildeIdentitet('url', 'https://broberg.ai/a')).not.toBe(kildeIdentitet('url', 'https://broberg.ai/A'));
+  });
+
+  it('%2F bliver IKKE til en skråstreg — det ville ændre stiens betydning', () => {
+    expect(kildeIdentitet('url', 'https://x.dk/a%2Fb')).toBe('url:https://x.dk/a%2Fb');
+    expect(kildeIdentitet('url', 'https://x.dk/a%2Fb')).not.toBe(kildeIdentitet('url', 'https://x.dk/a/b'));
+  });
+
+  it('en værdi der IKKE er en URL beholdes som den er — ikke droppet', () => {
+    // «Kunne ikke normaliseres» må aldrig blive til «har ingen kilde».
+    expect(kildeIdentitet('url', 'ikke en url')).toBe('url:ikke en url');
+  });
+
+  it('kun `url`-rummet normaliseres — en sti er ikke en URL', () => {
+    expect(kildeIdentitet('path', 'kb/Rapport.PDF')).toBe('path:kb/Rapport.PDF');
+  });
+
+  it('spørgsmålstegn og fragment overlever', () => {
+    expect(kildeIdentitet('url', 'https://x.dk/a?b=1&c=2#d')).toBe('url:https://x.dk/a?b=1&c=2#d');
+  });
 });

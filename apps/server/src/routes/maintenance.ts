@@ -281,11 +281,26 @@ maintenanceRoutes.post('/maintenance/backfill-source-identity', async (c) => {
     .all();
 
   const foer = alle.filter((k) => !!k.nu).length;
-  let fik = 0, ingenAtFaa = 0;
+  let fik = 0, ingenAtFaa = 0, normaliseret = 0;
 
   for (const k of alle) {
-    if (k.nu) continue;
     const id = identitetFraMetadata(k.metadata);
+    // F275.1 — RE-NORMALISÉR de identiteter der allerede står der.
+    //
+    // Målt i produktionen 17/9: den samme side stod med TO identiteter, én med
+    // «ø» og én med «%C3%B8». Fyldte backfill'en kun tomme felter, ville den
+    // forkerte skrivemåde blive stående for evigt — og afløsningen ville læse
+    // en rettelse af netop den side som en fremmed kilde. Det er hele featurens
+    // fejl, i featurens eget felt.
+    if (k.nu) {
+      if (id && id !== k.nu) {
+        if (apply) {
+          await trail.db.update(documents).set({ sourceIdentity: id }).where(eq(documents.id, k.id)).run();
+        }
+        normaliseret++;
+      }
+      continue;
+    }
     if (!id) { ingenAtFaa++; continue; }
     if (apply) {
       await trail.db.update(documents).set({ sourceIdentity: id }).where(eq(documents.id, k.id)).run();
@@ -307,6 +322,7 @@ maintenanceRoutes.post('/maintenance/backfill-source-identity', async (c) => {
     foer,
     fik,
     havdeAllerede: foer,
+    normaliseret,
     ingenAtFaa,
     efter: efterRows.length,
     applied: apply,
@@ -356,10 +372,9 @@ maintenanceRoutes.post('/maintenance/backfill-neuron-identity', async (c) => {
     .all();
 
   const foer = neuroner.filter((n) => !!n.nu).length;
-  let fik = 0, ingenKilde = 0, flereKilder = 0;
+  let fik = 0, ingenKilde = 0, flereKilder = 0, normaliseret = 0;
 
   for (const n of neuroner) {
-    if (n.nu) continue;
     // DISTINCT: den samme kilde citeret i tre afsnit er ÉN kilde, ikke tre.
     // Uden det ville hver Neuron med flere citater til samme side tælle som
     // «flere kilder» og blive sprunget over.
@@ -376,14 +391,20 @@ maintenanceRoutes.post('/maintenance/backfill-neuron-identity', async (c) => {
       )
       .all();
 
-    if (kilder.length === 0) { ingenKilde++; continue; }
-    if (kilder.length > 1) { flereKilder++; continue; }
+    if (kilder.length === 0) { if (!n.nu) ingenKilde++; continue; }
+    if (kilder.length > 1) { if (!n.nu) flereKilder++; continue; }
     const id = kilder[0]!.identitet;
-    if (!id) { ingenKilde++; continue; }
+    if (!id) { if (!n.nu) ingenKilde++; continue; }
+    // Allerede korrekt? Intet at gøre, og intet at påstå.
+    if (n.nu === id) continue;
     if (apply) {
       await trail.db.update(documents).set({ sourceIdentity: id }).where(eq(documents.id, n.id)).run();
     }
-    fik++;
+    // SYNKRONISERING, ikke kun udfyldning: står Neuronen med en ANDEN form end
+    // sin kilde — fx den gamle, ikke-normaliserede — skal den rettes. Ellers
+    // ville de to ender af den samme kobling være uenige, og `sammeKilde()`
+    // ville svare nej på to sider der er den samme side.
+    if (n.nu) normaliseret++; else fik++;
   }
 
   // LÆST TILBAGE fra basen, ikke regnet ud af mine egne tællere.
@@ -406,6 +427,7 @@ maintenanceRoutes.post('/maintenance/backfill-neuron-identity', async (c) => {
     foer,
     fik,
     havdeAllerede: foer,
+    normaliseret,
     ingenKilde,
     flereKilder,
     efter: efterRows.length,

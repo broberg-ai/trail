@@ -23,7 +23,7 @@ const URL_B = 'url:https://broberg.ai/b';
 let app: ReturnType<typeof createApp>;
 let trail: Awaited<ReturnType<typeof createLibsqlDatabase>>;
 
-type Svar = { neuroner: number; foer: number; fik: number; havdeAllerede: number; ingenKilde: number; flereKilder: number; efter: number; applied: boolean };
+type Svar = { neuroner: number; foer: number; fik: number; havdeAllerede: number; normaliseret: number; ingenKilde: number; flereKilder: number; efter: number; applied: boolean };
 
 async function backfill(apply: boolean): Promise<Svar> {
   const res = await app.request('http://engine.local/api/v1/maintenance/backfill-neuron-identity', {
@@ -139,4 +139,28 @@ test('arkiverede Neuroner røres ikke — de svarer ikke på noget', async () =>
   await neuron('n1'); await citerer('n1', 'k1');
   await trail.db.update(documents).set({ archived: true }).where(eq(documents.id, 'n1')).run();
   expect((await backfill(true)).neuroner).toBe(0);
+});
+
+test('SYNKRONISERING: en Neuron med en FORÆLDET form af kildens identitet rettes', async () => {
+  // Den målte sag 17/9: kilden bar «%C3%B8», Neuronen bar «ø». Som to strenge er
+  // de forskellige, så sammeKilde() svarede nej på to sider der ER den samme
+  // side. Fyldte backfill'en kun tomme felter, ville den forkerte form stå for
+  // evigt — og afløsningen ville aldrig ramme netop den side.
+  await kilde('k1', URL_A);
+  await neuron('n1'); await citerer('n1', 'k1');
+  await trail.db.update(documents).set({ sourceIdentity: 'url:https://broberg.ai/GAMMEL-FORM' })
+    .where(eq(documents.id, 'n1')).run();
+
+  const r = await backfill(true);
+  expect([r.fik, r.normaliseret]).toEqual([0, 1]);
+  expect(await identitetenPaa('n1')).toBe(URL_A);
+});
+
+test('en Neuron der ALLEREDE står korrekt tælles hverken som fik eller normaliseret', async () => {
+  // Ellers ville rapporten påstå at der skete noget hver eneste kørsel.
+  await kilde('k1', URL_A);
+  await neuron('n1'); await citerer('n1', 'k1');
+  await backfill(true);
+  const igen = await backfill(true);
+  expect([igen.fik, igen.normaliseret]).toEqual([0, 0]);
 });

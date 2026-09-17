@@ -40,7 +40,43 @@ export type IdentitetsRum = (typeof IDENTITETS_RUM)[number];
 export function kildeIdentitet(rum: IdentitetsRum, vaerdi: string | null | undefined): string | null {
   const v = (vaerdi ?? '').trim();
   if (!v) return null;
-  return `${rum}:${v}`;
+  return `${rum}:${rum === 'url' ? normaliserUrl(v) : v}`;
+}
+
+/**
+ * Bring en URL på ÉN form, så to skrivemåder af samme side er samme identitet.
+ *
+ * MÅLT 17/9 i broberg.ai, inde i featurens egen nøgle: den samme side stod med
+ * TO identiteter —
+ *
+ *   url:https://broberg.ai/indsigter/design-i-højere-luftlag
+ *   url:https://broberg.ai/indsigter/design-i-h%C3%B8jere-luftlag
+ *
+ * — én skrevet af kilde-siden, én af Neuron-siden. Som to strenge er de
+ * forskellige, og afløsningen ville derfor behandle en rettelse af den side som
+ * en fremmed kilde: nøjagtig den fejl hele F275 findes for at fjerne, opstået i
+ * det felt der skulle fjerne den. 1 af 114 i dag — men netop den side var den
+ * Christian bad om at få kompileret igen, så raten siger ikke noget om hvor
+ * meget det betyder.
+ *
+ * VI BRUGER BROWSERENS EGEN REGEL (`new URL().href`) og ikke vores egen
+ * afkodning. Den gør præcis det rigtige, og — vigtigere — den lader være med at
+ * gøre det forkerte: `%2F` bliver IKKE til `/`, for det ville ændre stiens
+ * betydning. Værtsnavnet småskrives (værter er ikke versalfølsomme), mens stien
+ * bevarer sine store bogstaver (stier ER versalfølsomme). En håndskrevet
+ * `unquote()` ville have ramt begge dele forkert.
+ *
+ * KASTER DEN, BEHOLDER VI STRENGEN SOM DEN ER. En værdi der ikke er en URL er
+ * stadig en identitet — bare ikke en vi kan normalisere. At droppe den ville
+ * gøre «kunne ikke normaliseres» til «har ingen kilde», og de to må aldrig
+ * kunne forveksles.
+ */
+export function normaliserUrl(v: string): string {
+  try {
+    return new URL(v).href;
+  } catch {
+    return v;
+  }
 }
 
 /** Del en identitet op igen. `null` når strengen ikke bærer et kendt rum. */
