@@ -306,6 +306,21 @@ export const documents = sqliteTable(
     // is epoch-ms of the last decay pass (NULL = never recomputed).
     // `supersededByNeuronId` points at the newer Neuron that replaced this one
     // (F137 `supersedes` edge); the old Neuron is preserved, never deleted.
+    /**
+     * F275.5 — KILDEN BAG DENNE SIDE ER ÆNDRET, og siden er ikke set efter.
+     *
+     * Sat på de Neuroner der HÆNGER på en afløst kilde — ikke på den der blev
+     * kompileret om. Det var ikke kilde-Neuronen der stod forkert i nat: det
+     * var `overview.md`, `glossary.md` og `flagskib.md`, hvis egen identitet
+     * ikke er kildens URL. Fem sider sagde «bygges nu» efter kilden sagde
+     * «lanceret».
+     *
+     * Ryddes når siden selv skrives om. NULL = intet at melde.
+     *
+     * Epoke-millisekunder, ikke en tekst-dato: feltet sammenlignes, og en
+     * tekst-dato med sekund-opløsning er præcis den fælde F278 handler om.
+     */
+    sourceChangedAt: integer('source_changed_at'),
     confidence: real('confidence').notNull().default(0.7),
     confidenceLastRecomputedAt: integer('confidence_last_recomputed_at'),
     supersededByNeuronId: text('superseded_by_neuron_id').references((): AnySQLiteColumn => documents.id),

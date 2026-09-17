@@ -10,6 +10,9 @@ import {
   type TrailDatabase,
 } from '@trail/db';
 import { ensureRecentBrainVersion } from '../history/versions.js';
+// F275.5 — forplantningen bor i lint/, fordi den producerer et FUND og ikke en
+// mutation af indholdet. Se kilde-forplantning.ts for hvorfor vi ikke skriver om.
+import { afhaengigeAf, maerkAfhaengige } from '../lint/kilde-forplantning.js';
 import { logActivity } from '../activity.js';
 import type {
   CreateQueueCandidate,
@@ -874,13 +877,89 @@ async function executeApprove(
   // createCandidate inde i den åbne transaktion ville skrive gennem en anden
   // forbindelse end den der holder låsen.
   const overskrevet: KuratorOverskrivning[] = [];
+  // F275.5 — samme seam: en GENKOMPILERING betyder at kilden har en ny udgave,
+  // og så er alt der HÆNGER på den kilde bagefter. Opsamles inde, handles ude.
+  const forplantning: { documentId: string; identitet: string; kbId: string }[] = [];
   const resultat = await trail.db.transaction(async (tx) => {
     if (op.op === 'update') return approveUpdate(tx, candidate, op, payload, action, actor, ctx);
     if (op.op === 'archive') return approveArchive(tx, candidate, op, action, actor, ctx);
-    return approveCreate(tx, candidate, op, payload, action, actor, ctx, overskrevet);
+    return approveCreate(tx, candidate, op, payload, action, actor, ctx, overskrevet, forplantning);
   });
   for (const o of overskrevet) await meldKuratorOverskrivning(trail, candidate, o);
+  for (const f of forplantning) await forplantAfloesning(trail, candidate, f);
   return resultat;
+}
+
+/**
+ * F275.5 — FORPLANT AFLØSNINGEN.
+ *
+ * Det var ikke kilde-Neuronen der stod forkert i nat. Det var `overview.md`,
+ * `glossary.md` og `flagskib.md`, hvis egen identitet ikke er kildens URL — fem
+ * sider sagde «bygges nu» efter kilden sagde «lanceret». Rammer afløsningen kun
+ * den ene side, bliver køen ren mens hjernen svarer på gårsdagens tekst, og det
+ * ligner ikke længere et problem.
+ *
+ * VI SKRIVER IKKE SIDERNE OM. Kortets egen betingelse: en stille masse-rettelse
+ * af hjernen er værre end en synlig liste over hvad der skal ses på. Så vi
+ * stempler et tidspunkt (som læseren og chatten viser) og lægger LISTEN i køen.
+ *
+ * Nul afhængige er en helt normal tilstand og melder intet — men så er der
+ * heller intet at tie om.
+ */
+async function forplantAfloesning(
+  trail: TrailDatabase,
+  candidate: QueueCandidate,
+  f: { documentId: string; identitet: string; kbId: string },
+): Promise<void> {
+  try {
+    const afhaengige = await afhaengigeAf(trail, candidate.tenantId, f.kbId, f.identitet, f.documentId);
+    if (afhaengige.length === 0) return;
+
+    const nu = Date.now();
+    const maerket = await maerkAfhaengige(trail, afhaengige, nu);
+    if (maerket !== afhaengige.length) {
+      // Et stempel der ikke landede ser ud som ingen afhængige. Sig det højt
+      // frem for at melde et tal vi ikke har dækning for.
+      console.error(
+        `[F275.5] stemplede ${maerket} af ${afhaengige.length} afhængige sider for ${f.identitet}`,
+      );
+    }
+
+    const liste = afhaengige
+      .map((a) => `- **${a.title ?? a.filename}** (\`${a.path}${a.filename}\`) — ${
+        a.kobling === 'kompileret-fra' ? 'kompileret af kilden' : 'citerer kilden'
+      }`)
+      .join('\n');
+
+    await createCandidate(
+      trail,
+      candidate.tenantId,
+      {
+        knowledgeBaseId: f.kbId,
+        kind: 'gap-detection',
+        title: `${afhaengige.length} side${afhaengige.length === 1 ? '' : 'r'} hænger på en kilde der har fået en ny udgave`,
+        content:
+          `Kilden \`${f.identitet}\` er kompileret om, og den side der bæres direkte af den er ajour.\n\n` +
+          `Disse sider hænger også på den, og de er IKKE skrevet om:\n\n${liste}\n\n` +
+          `De er markeret i produktet, så de ikke svarer som om intet var sket — men de er ikke rettet. ` +
+          `Læs dem igennem mod den nye udgave af kilden, eller kompilér dem om.\n\n` +
+          `Listen er slået op på kilde-identitet og citat-kanter, ikke på tekstlighed: en side der ` +
+          `tilfældigvis nævner de samme ord uden at stamme fra kilden står IKKE her.`,
+        confidence: 0.5,
+        metadata: JSON.stringify({
+          connector: 'lint',
+          kilde: 'F275.5',
+          sourceIdentity: f.identitet,
+          afhaengige: afhaengige.map((a) => ({ id: a.documentId, kobling: a.kobling })),
+        }),
+      },
+      { kind: 'system', id: 'lint:F275.5' },
+    );
+  } catch (err) {
+    // Forplantningen må aldrig vælte kompileringen — men den må heller ikke
+    // forsvinde tavst, for tavshed er nøjagtig den fejl kortet findes for.
+    console.error(`[F275.5] kunne IKKE forplante afløsningen for ${f.identitet}:`, err);
+  }
 }
 
 /**
@@ -959,6 +1038,8 @@ async function approveCreate(
   ctx: CommitContext,
   /** F275.3 AC#5 — fyldes når en maskinel skrivning overskriver et menneskes. */
   overskrevet?: KuratorOverskrivning[],
+  /** F275.5 — fyldes når en GENKOMPILERING gør de afhængige sider bagefter. */
+  forplantning?: { documentId: string; identitet: string; kbId: string }[],
 ): Promise<ResolutionResult> {
   // F197 — re-scan at materialize so an approve-time editedContent edit can't
   // smuggle a secret past the enqueue gate (candidate.content is already clean).
@@ -1081,10 +1162,24 @@ async function approveCreate(
         // skrevet før feltet fandtes aldrig få det, og den ville blive ved med
         // at modsige sin egen næste udgave.
         ...(kildeIdent !== null ? { sourceIdentity: kildeIdent } : {}),
+        // F275.5 — denne side ER netop set efter kilden. Ryd mærket, ellers
+        // bliver den ved med at melde sig bagefter i det uendelige.
+        sourceChangedAt: null,
         updatedAt: new Date().toISOString(),
       })
       .where(eq(documents.id, existing.id))
       .run();
+
+    // F275.5 — en GENKOMPILERING af en side med kendt kilde betyder at kilden
+    // har en ny udgave. Alt andet der hænger på den identitet er nu bagefter.
+    // Kun her, ikke i insert-grenen: første kompilering afløser ingenting.
+    if (forplantning && kildeIdent !== null) {
+      forplantning.push({
+        documentId: existing.id,
+        identitet: kildeIdent,
+        kbId: candidate.knowledgeBaseId,
+      });
+    }
 
     // 'edited', ikke 'created' — historikken skal kunne vise at siden blev
     // skrevet om, ellers ser en omskrivning ud som om intet skete.

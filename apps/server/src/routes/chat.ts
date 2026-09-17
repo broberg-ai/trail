@@ -9,9 +9,9 @@ import {
   chatTurns,
   type TrailDatabase,
 } from '@trail/db';
-import { and, asc, eq, inArray, like, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, like, sql , isNotNull} from 'drizzle-orm';
 import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
-import { ChatRequestSchema, buildFtsQuery } from '@trail/shared';
+import { ChatRequestSchema, buildFtsQuery , kildeAendretForbehold} from '@trail/shared';
 import { exactTitleMatches, resolveKbId, stripClaimAnchors } from '@trail/core';
 import {
   HEURISTIC_PATH,
@@ -878,6 +878,39 @@ async function retrieveContext(
   // Order: (1) first so docs already in `seen` claim their note
   // via the typed Drizzle path; (2) second adds note-only hits
   // without re-emitting notes for docs (1) already covered.
+
+  // F275.5 — FORBEHOLDET FØRST, før kuratorens noter og før budgettet er brugt.
+  //
+  // En side hvis kilde har fået en ny udgave må ikke svare som om intet var
+  // sket. Det er hele forskellen mellem «køen er ren» og «hjernen er ajour»:
+  // rammer afløsningen kun kilde-Neuronen, svarer chatten videre på gårsdagens
+  // tekst — og det ligner ikke længere et problem.
+  if (seen.size > 0 && totalChars < MAX_CHARS) {
+    const aendrede = await trail.db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        filename: documents.filename,
+        sourceChangedAt: documents.sourceChangedAt,
+      })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.tenantId, tenantId),
+          isNotNull(documents.sourceChangedAt),
+          inArray(documents.id, Array.from(seen)),
+        ),
+      )
+      .all();
+    for (const row of aendrede) {
+      const forbehold = kildeAendretForbehold(row.sourceChangedAt);
+      if (!forbehold) continue;
+      if (totalChars >= MAX_CHARS) break;
+      const block = `### Forbehold om "${row.title ?? row.filename}"\n${forbehold}`;
+      chunks.push(block);
+      totalChars += block.length;
+    }
+  }
 
   if (seen.size > 0 && totalChars < MAX_CHARS) {
     const docIds = Array.from(seen);

@@ -112,3 +112,30 @@ export function konnektorTilstand(
     virker: nyUdgaveErKanon(kontakter, konnektor).kanon,
   };
 }
+
+/**
+ * F275.5 — forbeholdet der følger en side hvis kilde har fået en ny udgave.
+ *
+ * Teksten står ÉT sted fordi den skal ind i to sammenhænge — svar-konteksten
+ * til chatten og hentnings-API'et til tredjepart — og fordi den er en PÅSTAND
+ * om hvor pålidelig siden er lige nu. To formuleringer ville før eller siden
+ * blive uenige om hvor stærkt forbeholdet var.
+ *
+ * Den siger hvad der er sket og hvad det betyder, ikke at siden er forkert:
+ * en side hvis kilde er rettet ER som regel stadig mest rigtig. Den er bare
+ * ikke set efter.
+ */
+export function kildeAendretForbehold(naar: number | null | undefined): string | null {
+  if (!naar) return null;
+  const dato = new Date(naar).toLocaleDateString('da-DK', {
+    day: 'numeric',
+    month: 'long',
+    // Serveren kører UTC. Uden zone-NAVNET ville en ændring kl. 00:30 dansk tid
+    // blive skrevet som dagen før — og kun i det vindue hvor ingen kigger.
+    timeZone: 'Europe/Copenhagen',
+  });
+  return (
+    `⚠️ Kilden bag denne side fik en ny udgave den ${dato}, og siden er ikke skrevet om siden. ` +
+    `Behandl indholdet som muligvis forældet og sig det videre — svar aldrig som om det er bekræftet mod den nyeste kilde.`
+  );
+}

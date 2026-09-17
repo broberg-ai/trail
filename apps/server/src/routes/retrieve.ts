@@ -25,7 +25,7 @@ import { Hono } from 'hono';
 import { documents, documentImages, knowledgeBases } from '@trail/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
-import { canonicaliseTag, parseTags, kbPrefix, buildFtsQuery } from '@trail/shared';
+import { canonicaliseTag, parseTags, kbPrefix, buildFtsQuery , kildeAendretForbehold} from '@trail/shared';
 import { resolveKbId, stripClaimAnchors } from '@trail/core';
 import {
   effectiveAudience,
@@ -170,6 +170,10 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
       // F213.1 — source freshness, so a consumer can say "as of 13/8"
       // instead of restating a decision that has since moved.
       updatedAt: documents.updatedAt,
+      // F275.5 — kilden bag siden fik en ny udgave, og siden er ikke set efter.
+      // Uden dette felt her svarer den gamle påstand videre som gældende, og
+      // afløsningen ville kun være ryddet op i køen.
+      sourceChangedAt: documents.sourceChangedAt,
     })
     .from(documents)
     .where(
@@ -209,6 +213,8 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
     userNote: string | null;
     /** F213.1 — parent document's last edit, ISO-8601 UTC, null if unparseable. */
     updatedAt: string | null;
+    /** F275.5 — forbeholdet, når kilden bag siden har fået en ny udgave. */
+    kildeAendret: string | null;
   }> = [];
 
   for (const chunk of rawChunks) {
@@ -241,6 +247,7 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
       rank: chunk.rank,
       userNote: sharedUserNote,
       updatedAt: normaliseUpdatedAt(doc.updatedAt),
+      kildeAendret: kildeAendretForbehold(doc.sourceChangedAt),
     });
     if (filtered.length >= topK) break;
   }
@@ -267,7 +274,11 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
     const header = c.headerBreadcrumb
       ? `## ${c.title} — ${c.headerBreadcrumb}`
       : `## ${c.title}`;
-    let section = `${header}\n\n${c.content}`;
+    // F275.5 — forbeholdet står FØRST, før indholdet. En advarsel under en
+    // tekst læses efter påstanden er troet — af et menneske og af en model.
+    let section = c.kildeAendret
+      ? `${header}\n\n${c.kildeAendret}\n\n${c.content}`
+      : `${header}\n\n${c.content}`;
     if (c.userNote && !userNoteAppendedFor.has(c.documentId)) {
       section += `\n\n### Curator's reflection (their own words, opt-in shared)\n${c.userNote}`;
       userNoteAppendedFor.add(c.documentId);

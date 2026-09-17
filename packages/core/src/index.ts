@@ -34,6 +34,10 @@ export {
   detectStale,
   detectContradictions,
   detectFadedHeuristics,
+  sammeKilde,
+  afhaengigeAf,
+  maerkAfhaengige,
+  rydKildeMaerke,
 } from './lint/index.js';
 export { DEFAULT_HUB_PAGES } from './lint/orphans.js';
 export type {
@@ -45,6 +49,8 @@ export type {
   ContradictionChecker,
   LlmContradictionResult,
   NewNeuron,
+  AfhaengigNeuron,
+  Kobling,
 } from './lint/index.js';
 
 // F140 — hierarchical schema inheritance (compile-prompt per wiki-path).
