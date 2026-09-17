@@ -622,7 +622,15 @@
     "failed": "Failed",
     "uploading": "Uploading {name}…",
     "uploadHint": "Drag & drop files to upload, or click to browse.",
-    "uploadBrowse": "Choose a file"
+    "uploadBrowse": "Choose a file",
+    "navnesammenfald": {
+      "erstatter": "This replaces {filnavn} from {dato}. The new version is now canon.",
+      "erstatterIkke": "A {filnavn} from {dato} already exists in this Brain — but superseding is switched off, so both stand as separate sources.",
+      "knap": "This is a new source",
+      "gemmer": "Saving…",
+      "nuEgenKilde": "Marked as its own source. It replaces nothing.",
+      "fejl": "Could not mark as a new source"
+    }
   },
   "wikiTree": {
     "title": "Neurons",
@@ -968,6 +976,24 @@
         "saved": "Minimum image variation saved",
         "error": "Could not save",
         "invalid": "Enter a number between 0 and 8, or leave the field empty"
+      },
+      "kanon": {
+        "title": "A new version of the same source becomes canon",
+        "subtitle": "When a page on your site is rewritten, the new text is the truth — not a claim to be weighed against the old one. With this on, a new version supersedes the previous one instead of landing a contradiction in your queue. The master switch covers the whole Brain; each connector can be excepted on its own.",
+        "brainTitle": "This whole Brain",
+        "connectorsTitle": "Per connector",
+        "connectorsHint": "A Brain can receive both website sync and manual uploads. That is why each connector is set on its own — one choice for the whole Brain would necessarily be wrong for one of them.",
+        "sources": "sources",
+        "stateOn": "On",
+        "stateOff": "Off",
+        "turnOn": "Turn on",
+        "turnOff": "Turn off",
+        "saving": "Saving…",
+        "saved": "Setting saved",
+        "error": "Could not change the setting",
+        "overruled": "Overruled by the master switch",
+        "overruledHint": "This switch reads On, but the master switch for the whole Brain is off — so this connector supersedes nothing. Turn the master switch on to use it.",
+        "none": "No connector has delivered sources to this Brain yet."
       }
     },
     "account": {

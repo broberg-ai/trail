@@ -28,6 +28,9 @@ import {
   type IngestBackendId,
   type ChatSettingsResponse,
   ApiError,
+  getKanonSettings,
+  setKanonSettings,
+  type KanonIndstillinger,
 } from '../api';
 import { matchKb } from '../lib/kb-cache';
 import { t, useLocale } from '../lib/i18n';
@@ -120,6 +123,10 @@ export function SettingsTrailPanel() {
   // F200.1 — per-Trail contradiction-lint on/off (root-cause throttle for
   // high-volume session KBs flooding the queue with alert candidates).
   const [lintEnabled, setLintEnabled] = useState<boolean | null>(null);
+  // F275.2 — de to kontakter. `null` = ikke hentet endnu; kontakterne vises
+  // først når vi VED hvad der står i databasen, aldrig som et gæt på default.
+  const [kanon, setKanon] = useState<KanonIndstillinger | null>(null);
+  const [kanonGemmer, setKanonGemmer] = useState<string | null>(null);
   const [lintToggling, setLintToggling] = useState(false);
 
   useEffect(() => {
@@ -184,6 +191,10 @@ export function SettingsTrailPanel() {
           getLintSettings(match.id)
             .then((s) => setLintEnabled(s.contradictionLintEnabled))
             .catch(() => setLintEnabled(null));
+          // F275.2 — de to kontakter for denne Trail. Samme fail-soft.
+          getKanonSettings(match.id)
+            .then((k) => setKanon(k))
+            .catch(() => setKanon(null));
         }
       })
       .catch((err: ApiError) => setError(err.message));
@@ -214,6 +225,26 @@ export function SettingsTrailPanel() {
       setToast({ kind: 'error', text: t('settings.trail.lintToggle.error') });
     } finally {
       setLintToggling(false);
+    }
+  }
+
+  // F275.2 — ÉN handler til begge kontakter. Svaret fra serveren er læst
+  // tilbage fra databasen, så vi sætter hele tilstanden fra det frem for at
+  // regne den nye videre selv — panelets egen formodning er præcis det der
+  // gør en gemning der fejlede umulig at skelne fra en der lykkedes.
+  async function handleToggleKanon(
+    aendring: { brain: boolean } | { konnektor: { id: string; kanon: boolean } },
+    noegle: string,
+  ) {
+    if (!kb || kanonGemmer) return;
+    setKanonGemmer(noegle);
+    try {
+      setKanon(await setKanonSettings(kb.id, aendring));
+      setToast({ kind: 'success', text: t('settings.trail.kanon.saved') });
+    } catch {
+      setToast({ kind: 'error', text: t('settings.trail.kanon.error') });
+    } finally {
+      setKanonGemmer(null);
     }
   }
 
@@ -794,6 +825,142 @@ export function SettingsTrailPanel() {
                     : t('settings.trail.lintToggle.turnOn')}
               </button>
             ) : null}
+          </div>
+        </section>
+
+        {/* F275.2 — de to kontakter: hovedafbryderen pr. Brain og én pr. konnektor.
+            Hierarkiet vises, det gættes ikke: serveren regner `satUdAfKraft` ud og
+            panelet gengiver den. En kontakt der ser aktiv ud uden at virke er værre
+            end ingen kontakt — så den siger det selv, på skærmen. */}
+        <section class="pt-2 border-t border-[color:var(--color-border)]" data-testid="settings-kanon-root">
+          <div class="mb-3">
+            <h2 class="text-sm font-medium">{t('settings.trail.kanon.title')}</h2>
+            <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-xl">
+              {t('settings.trail.kanon.subtitle')}
+            </p>
+          </div>
+
+          {/* Hovedafbryderen */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span class="text-xs font-medium" style={{ minWidth: 150 }}>
+              {t('settings.trail.kanon.brainTitle')}
+            </span>
+            <span
+              data-testid="settings-kanon-brain-state"
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                padding: '4px 10px',
+                borderRadius: 999,
+                background: kanon?.brain ? 'var(--color-accent-soft)' : 'var(--color-bg-sunk)',
+                color: 'var(--color-fg)',
+              }}
+            >
+              {kanon === null
+                ? '…'
+                : kanon.brain
+                  ? t('settings.trail.kanon.stateOn')
+                  : t('settings.trail.kanon.stateOff')}
+            </span>
+            {kanon !== null ? (
+              <button
+                type="button"
+                data-testid="settings-kanon-brain-toggle"
+                onClick={() => handleToggleKanon({ brain: !kanon.brain }, 'brain')}
+                disabled={kanonGemmer !== null}
+                class="btn active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ padding: '6px 14px', fontSize: 12.5 }}
+              >
+                {kanonGemmer === 'brain'
+                  ? t('settings.trail.kanon.saving')
+                  : kanon.brain
+                    ? t('settings.trail.kanon.turnOff')
+                    : t('settings.trail.kanon.turnOn')}
+              </button>
+            ) : null}
+          </div>
+
+          {/* Pr. konnektor */}
+          <div class="mt-5">
+            <h3 class="text-xs font-medium">{t('settings.trail.kanon.connectorsTitle')}</h3>
+            <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-xl">
+              {t('settings.trail.kanon.connectorsHint')}
+            </p>
+          </div>
+          {kanon !== null && kanon.konnektorer.length === 0 ? (
+            <p class="mt-3 text-[11px] text-[color:var(--color-fg-subtle)]" data-testid="settings-kanon-connectors-empty">
+              {t('settings.trail.kanon.none')}
+            </p>
+          ) : null}
+          <div class="mt-3" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(kanon?.konnektorer ?? []).map((k) => (
+              <div
+                key={k.id}
+                data-testid={`settings-kanon-connector-${k.id}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                  // Sat ud af kraft dæmpes — men kontakten forbliver brugbar, så
+                  // han kan rette den FØR han slår hovedafbryderen til igen.
+                  opacity: k.satUdAfKraft ? 0.55 : 1,
+                }}
+              >
+                <span class="text-xs" style={{ minWidth: 150 }}>
+                  {k.label}
+                  <span class="text-[color:var(--color-fg-subtle)]">
+                    {' '}· {k.antalKilder} {t('settings.trail.kanon.sources')}
+                  </span>
+                </span>
+                <span
+                  data-testid={`settings-kanon-connector-state-${k.id}`}
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 500,
+                    padding: '4px 10px',
+                    borderRadius: 999,
+                    background: k.egenKontakt ? 'var(--color-accent-soft)' : 'var(--color-bg-sunk)',
+                    color: 'var(--color-fg)',
+                  }}
+                >
+                  {k.egenKontakt
+                    ? t('settings.trail.kanon.stateOn')
+                    : t('settings.trail.kanon.stateOff')}
+                </span>
+                <button
+                  type="button"
+                  data-testid={`settings-kanon-connector-toggle-${k.id}`}
+                  onClick={() =>
+                    handleToggleKanon({ konnektor: { id: k.id, kanon: !k.egenKontakt } }, k.id)
+                  }
+                  disabled={kanonGemmer !== null}
+                  class="btn active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ padding: '6px 14px', fontSize: 12.5 }}
+                >
+                  {kanonGemmer === k.id
+                    ? t('settings.trail.kanon.saving')
+                    : k.egenKontakt
+                      ? t('settings.trail.kanon.turnOff')
+                      : t('settings.trail.kanon.turnOn')}
+                </button>
+                {k.satUdAfKraft ? (
+                  <span
+                    data-testid={`settings-kanon-connector-overruled-${k.id}`}
+                    title={t('settings.trail.kanon.overruledHint')}
+                    style={{
+                      fontSize: 11,
+                      padding: '3px 8px',
+                      borderRadius: 999,
+                      border: '1px solid var(--color-border)',
+                      color: 'var(--color-fg-subtle)',
+                    }}
+                  >
+                    {t('settings.trail.kanon.overruled')}
+                  </span>
+                ) : null}
+              </div>
+            ))}
           </div>
         </section>
 

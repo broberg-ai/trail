@@ -87,6 +87,26 @@ export const knowledgeBases = sqliteTable(
     isSandbox: integer('is_sandbox', { mode: 'boolean' })
       .notNull()
       .default(false),
+    /**
+     * F275.2 — hovedafbryderen: «en ny udgave af samme kilde bliver automatisk
+     * kanon». Default TIL (ejerens ord 16/9 2026).
+     *
+     * FRA ⇒ ingen konnektor i denne Brain afløser, uanset sin egen kontakt.
+     * Hierarkiet går kun én vej, og det afgøres ÉT sted: `nyUdgaveErKanon()`
+     * i @trail/shared. Læs aldrig de to kolonner direkte på et kaldested.
+     */
+    newVersionIsCanon: integer('new_version_is_canon', { mode: 'boolean' })
+      .notNull()
+      .default(true),
+    /**
+     * F275.2 — de konnektorer der er slået FRA i netop denne Brain, som en
+     * JSON-liste af konnektor-id'er. NULL = ingen er slukket.
+     *
+     * Vi gemmer de SLUKKEDE og ikke de tændte, fordi det er den eneste form
+     * hvor en konnektor vi aldrig har set før automatisk står TIL — som ejeren
+     * har bestemt — uden at nogen skal huske at oprette en række for den.
+     */
+    canonOffConnectors: text('canon_off_connectors'),
     // F201.8 — per-KB auto-approval threshold. NULL (default) = OFF: current
     // behaviour, ambient captures stay pending. When set to a number in [0,1],
     // AMBIENT candidates with confidence >= threshold auto-approve unattended

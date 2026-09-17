@@ -152,11 +152,25 @@ async function fetchWithRetry(
  * fresh File the curator re-selected; init is skipped + chunks pick
  * up from `receivedBytes`.
  */
+/**
+ * F275.2 AC#4 — serveren fortæller når uploaden ERSTATTER en tidligere udgave af
+ * samme kilde. Feltet er valgfrit, så kaldere der ikke bruger det er upåvirkede —
+ * men den der viser uploads på skærmen SKAL vise det.
+ */
+export interface NavnesammenfaldAdvarsel {
+  kind: 'samme-kilde';
+  erstatter: { id: string; filename: string; uploadet: string };
+  /** Hvad der SKER — ikke hvad der er sat op. Kontakterne er allerede læst. */
+  erstatterNu: boolean;
+  grund: 'til' | 'brain-fra' | 'konnektor-fra';
+  nyKildeEndpoint: string;
+}
+
 export async function uploadChunked(
   kbId: string,
   file: File,
   opts: UploadOptions = {},
-): Promise<Document> {
+): Promise<Document & { advarsel?: NavnesammenfaldAdvarsel }> {
   let uploadId: string;
   let chunkSize: number;
   let contentHash: string;
@@ -281,9 +295,12 @@ export async function uploadChunked(
     throw new ApiError(finalRes.status, message, body);
   }
 
-  const result = (await finalRes.json()) as { doc: Document };
+  const result = (await finalRes.json()) as {
+    doc: Document;
+    advarsel?: NavnesammenfaldAdvarsel;
+  };
   forgetActiveUpload(uploadId);
-  return result.doc;
+  return result.advarsel ? { ...result.doc, advarsel: result.advarsel } : result.doc;
 }
 
 /**

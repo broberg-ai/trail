@@ -577,6 +577,47 @@ export function setKbContradictionLint(
   });
 }
 
+/** F275.2 — de to kontakter: «en ny udgave af samme kilde bliver automatisk kanon». */
+export interface KanonKonnektor {
+  id: string;
+  label: string;
+  antalKilder: number;
+  /** Konnektorens EGEN kontakt. */
+  egenKontakt: boolean;
+  /** Står på TIL, men hovedafbryderen er fra — skal kunne SES som netop det. */
+  satUdAfKraft: boolean;
+  /** Hvad der faktisk sker. */
+  virker: boolean;
+}
+
+export interface KanonIndstillinger {
+  brain: boolean;
+  slukkedeKonnektorer: string[];
+  konnektorer: KanonKonnektor[];
+}
+
+export function getKanonSettings(kbId: string): Promise<KanonIndstillinger> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/canon-settings`);
+}
+
+/** Sender ÉN ændring ad gangen — hovedafbryderen eller én konnektor. Serveren
+ *  læser værdien tilbage fra databasen og returnerer den udregnede tilstand, så
+ *  panelet aldrig viser sin egen formodning om hvad der blev gemt. */
+export function setKanonSettings(
+  kbId: string,
+  aendring: { brain: boolean } | { konnektor: { id: string; kanon: boolean } },
+): Promise<KanonIndstillinger> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/canon-settings`, {
+    method: 'PATCH',
+    body: JSON.stringify(aendring),
+  });
+}
+
+/** F275.2 AC#4 — «det er en ny kilde, ikke en ny udgave af den forrige». */
+export function markerSomNyKilde(docId: string): Promise<{ id: string; sourceIdentity: string }> {
+  return api(`/api/v1/documents/${encodeURIComponent(docId)}/ny-kilde`, { method: 'POST' });
+}
+
 export function listQueue(filter: QueueFilter = {}): Promise<QueueListResponse> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(filter)) {

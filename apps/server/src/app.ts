@@ -44,6 +44,7 @@ import { beamRoutes } from './routes/beam.js';
 import { activityRoutes } from './routes/activity.js';
 import { maintenanceRoutes } from './routes/maintenance.js';
 import { lintSettingsRoutes } from './routes/lint-settings.js';
+import { canonSettingsRoutes } from './routes/canon-settings.js';
 import { ambientRoutes } from './routes/ambient.js';
 
 /**
@@ -227,6 +228,7 @@ export function createApp(trail: TrailDatabase | null, tenantPool: TenantPool): 
   app.route('/api/v1', maintenanceRoutes);
   // F200.1 — per-KB lint settings (contradiction-lint toggle).
   app.route('/api/v1', lintSettingsRoutes);
+  app.route('/api/v1', canonSettingsRoutes);
   // F247.3 — web-push: config/subscribe/unsubscribe/prefs/test.
   app.route('/api/v1', pushRoutes);
 

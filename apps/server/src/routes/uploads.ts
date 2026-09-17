@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
 import { documents, documentChunks, uploadSessions, knowledgeBases, type TrailDatabase } from '@trail/db';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { requireAuth, getUser, getTenant, getTrail, getAmbientKbGrant } from '../middleware/auth.js';
-import { kildeIdentitet } from '@trail/shared';
+import { kildeIdentitet, laesSlukkedeKonnektorer, nyUdgaveErKanon } from '@trail/shared';
 import { processPdf, processDocx, processPptx, processXlsx, dispatch, pickPipeline } from '@trail/pipelines';
 import { storage, sourcePath, stagingFsPath } from '../lib/storage.js';
 import { chunkText, storeChunks } from '../services/chunker.js';
@@ -180,6 +180,9 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
   // for $0 in-session compile by the /local-ingest skill instead of the cloud
   // OpenRouter compile. Defaults off → existing uploads behave unchanged.
   const localCompile = c.req.query('localCompile') === 'true';
+  // F275.2 AC#4 — brugerens svar på «det er en ny kilde, ikke en ny udgave».
+  // Uden den er default ON en lydløs overskrivning ved navnesammenfald.
+  const nyKilde = c.req.query('nyKilde') === 'true';
 
   // F243.1 — UPSERT ON SOURCE URL. A re-push of the SAME page must update the
   // document, not create a twin.
@@ -367,7 +370,7 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
       metadata: connector ? JSON.stringify({ connector, sourceUrl }) : null,
       // F275.1 — se ovenfor. `null` når der ingen URL er (en upload); den
       // identitet hører til F275.6's fingeraftryk, og null er sandt frem for gættet.
-      sourceIdentity: kildeIdentitet('url', sourceUrl),
+      sourceIdentity: uploadIdentitet(kbId, file.name, sourceUrl, nyKilde, docId),
       // F162 — dedup hash. Set even on force-uploaded duplicates so the
       // audit trail is complete; subsequent dedup-tjeks just bypass on
       // ?force=true rather than hide the fact that the hash collided.
@@ -455,8 +458,57 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
     triggerIngest({ trail, docId, kbId, tenantId: tenant.id, userId: user.id });
   }
 
+  // F275.2 AC#4 — BESKED VED NAVNESAMMENFALD. Ejeren valgte default ON for
+  // uploads mod rådgivningen, og denne besked er derfor det eneste sikkerhedsnet:
+  // uden den er ON en lydløs overskrivning, og et lydløst indgreb kan ikke
+  // skelnes fra at intet skete.
+  //
+  // Vi siger også OM afløsningen faktisk sker — begge kontakter læses her, ét
+  // sted, gennem `nyUdgaveErKanon()`. En besked der påstod «dette erstatter …»
+  // mens Brain-kontakten stod på FRA ville være forkert i den beroligende retning.
+  const advarsel = await navnesammenfaldAdvarsel(trail, tenant.id, kbId, doc, connector);
+
   console.log(`[upload] response-ready 201 ${lap()}`);
-  return c.json(doc, 201);
+  return c.json(advarsel ? { ...doc, advarsel } : doc, 201);
+});
+
+/**
+ * F275.2 AC#4 — «det er en ny kilde, ikke en ny udgave.»
+ *
+ * Giver dokumentet sin egen identitet for altid. Fortrydelsen er en HANDLING og
+ * ikke en indstilling: den gælder netop denne fil, den kan ikke komme til at
+ * gælde noget andet, og den kan ikke falde tilbage ved næste upload.
+ */
+uploadRoutes.post('/documents/:id/ny-kilde', async (c) => {
+  const trail = getTrail(c);
+  const tenant = getTenant(c);
+  const id = c.req.param('id');
+
+  const doc = await trail.db
+    .select({ id: documents.id, kbId: documents.knowledgeBaseId, filename: documents.filename })
+    .from(documents)
+    .where(and(eq(documents.id, id), eq(documents.tenantId, tenant.id)))
+    .get();
+  if (!doc) return c.json({ error: 'Not found' }, 404);
+
+  const identitet = kildeIdentitet('path', `${doc.kbId}/${doc.id}/${doc.filename}`);
+  await trail.db
+    .update(documents)
+    .set({ sourceIdentity: identitet, updatedAt: new Date().toISOString() })
+    .where(and(eq(documents.id, id), eq(documents.tenantId, tenant.id)))
+    .run();
+
+  // LÆS TILBAGE. En kolonne ORM'en taber lydløst ville ellers se ud som et
+  // valg der blev registreret — og brugeren ville tro han havde reddet sin fil.
+  const efter = await trail.db
+    .select({ sourceIdentity: documents.sourceIdentity })
+    .from(documents)
+    .where(eq(documents.id, id))
+    .get();
+  if (efter?.sourceIdentity !== identitet) {
+    return c.json({ error: 'ny-kilde-blev-ikke-gemt' }, 500);
+  }
+  return c.json({ id, sourceIdentity: efter.sourceIdentity });
 });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -475,6 +527,109 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
 // file under `_tmp/`. A 24h expires_at is set at /init; the GC service
 // (apps/server/src/services/upload-session-gc.ts) reaps expired rows
 // + temp files hourly.
+
+/**
+ * F275.2 — hvad ER en uploadet fils kilde-identitet?
+ *
+ * Ejerens afgørelse 16/9: **filnavn + Brain**. To gange `rapport.pdf` i samme
+ * Brain er altså to udgaver af samme kilde, og den seneste er kanon.
+ *
+ * Han overtog forbeholdet bevidst — peer-sessionens råd var upload default OFF,
+ * fordi en upload lige så godt kan være et TILLÆG som en erstatning. Prisen for
+ * ON er derfor at to forskellige `rapport.pdf` lydløst ville overskrive hinandens
+ * viden, og `nyKilde` er det eneste sted den pris kan betales tilbage: den giver
+ * filen sin egen identitet for altid, så den aldrig kan læses som en ny udgave.
+ *
+ * En URL slår altid filnavnet — en site-sync-kilde ER sin adresse.
+ */
+function uploadIdentitet(
+  kbId: string,
+  filename: string,
+  sourceUrl: string | null | undefined,
+  nyKilde: boolean,
+  docId: string,
+): string | null {
+  const url = kildeIdentitet('url', sourceUrl);
+  if (url) return url;
+  // docId'et gør identiteten unik for evigt. Uden det ville «ny kilde» kun
+  // holde indtil næste upload med samme navn, og brugerens valg ville
+  // forsvinde uden at nogen fik det at vide.
+  return kildeIdentitet('path', nyKilde ? `${kbId}/${docId}/${filename}` : `${kbId}/${filename}`);
+}
+
+/**
+ * F275.2 AC#4 — beskeden, bygget ÉT sted for begge upload-veje.
+ *
+ * Der er to: den gamle enkelt-POST og den chunk-delte, og admin-panelet bruger
+ * KUN den chunk-delte. En besked der blev bygget hvert sted for sig ville derfor
+ * kunne findes i en prøve og mangle på skærmen — netop det lydløse hul featuren
+ * findes for at lukke.
+ */
+async function navnesammenfaldAdvarsel(
+  trail: ReturnType<typeof getTrail>,
+  tenantId: string,
+  kbId: string,
+  doc: { id: string; sourceIdentity: string | null } | null | undefined,
+  connector: string | null | undefined,
+): Promise<Record<string, unknown> | undefined> {
+  if (!doc) return undefined;
+  const forrige = await forrigeUdgave(trail, tenantId, kbId, doc.sourceIdentity ?? null, doc.id);
+  if (!forrige) return undefined;
+
+  // Begge kontakter læses HER, gennem den ene resolver. Beskeden siger hvad der
+  // SKER — ikke hvad der er sat op. En besked der påstod «dette erstatter …»
+  // mens hovedafbryderen stod på FRA ville være forkert i den beroligende retning.
+  const kbRow = await trail.db
+    .select({ brain: knowledgeBases.newVersionIsCanon, off: knowledgeBases.canonOffConnectors })
+    .from(knowledgeBases)
+    .where(eq(knowledgeBases.id, kbId))
+    .get();
+  const svar = nyUdgaveErKanon(
+    { brain: kbRow?.brain ?? true, slukkedeKonnektorer: laesSlukkedeKonnektorer(kbRow?.off) },
+    connector ?? 'upload',
+  );
+  return {
+    kind: 'samme-kilde',
+    erstatter: { id: forrige.id, filename: forrige.filename, uploadet: forrige.createdAt },
+    erstatterNu: svar.kanon,
+    grund: svar.grund,
+    // Fortrydelsen skal med i beskeden, ellers er valget kun teoretisk.
+    nyKildeEndpoint: `/api/v1/documents/${doc.id}/ny-kilde`,
+  };
+}
+
+/**
+ * F275.2 AC#4 — den forrige udgave af samme kilde, hvis der er en.
+ *
+ * Returnerer `null` når identiteten er `null`: «vi ved ikke hvilken kilde det er»
+ * må ALDRIG kunne matche en anden ukendt og se ud som et navnesammenfald.
+ */
+async function forrigeUdgave(
+  trail: ReturnType<typeof getTrail>,
+  tenantId: string,
+  kbId: string,
+  identitet: string | null,
+  egetDocId: string,
+) {
+  if (!identitet) return null;
+  return (
+    (await trail.db
+      .select({ id: documents.id, filename: documents.filename, createdAt: documents.createdAt })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.tenantId, tenantId),
+          eq(documents.knowledgeBaseId, kbId),
+          eq(documents.kind, 'source'),
+          eq(documents.archived, false),
+          eq(documents.sourceIdentity, identitet),
+          ne(documents.id, egetDocId),
+        ),
+      )
+      .orderBy(desc(documents.createdAt))
+      .get()) ?? null
+  );
+}
 
 const CHUNK_SIZE = 1 * 1024 * 1024; // 1 MB — see plan-doc "Open questions"
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
@@ -638,8 +793,16 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload/init', async (c) => {
       metadata: body.metadata?.connector
         ? JSON.stringify({ connector: body.metadata.connector, sourceUrl: body.metadata.sourceUrl })
         : null,
-      // F275.1 — se ovenfor.
-      sourceIdentity: kildeIdentitet('url', body.metadata?.sourceUrl),
+      // F275.1 + F275.2 — samme identitet som enkelt-POST'en. Var de to veje
+      // uenige om hvad en kildes identitet ER, ville det afhænge af hvilken
+      // klient der uploadede om to filer var samme kilde.
+      sourceIdentity: uploadIdentitet(
+        kbId,
+        filename,
+        body.metadata?.sourceUrl,
+        c.req.query('nyKilde') === 'true',
+        docId,
+      ),
       contentHash,
       seq: sql<number>`COALESCE((SELECT MAX(${documents.seq}) FROM ${documents} WHERE ${documents.knowledgeBaseId} = ${kbId}), 0) + 1`,
     })
@@ -918,7 +1081,17 @@ uploadRoutes.post('/uploads/:uploadId/finalize', async (c) => {
     });
   }
 
-  return c.json({ doc }, 201);
+  // F275.2 AC#4 — beskeden hører til HER også. Admin-panelet uploader kun ad
+  // denne vej, så uden den ville sikkerhedsnettet kun findes i prøverne.
+  const advarsel = await navnesammenfaldAdvarsel(
+    trail,
+    tenant.id,
+    session.knowledgeBaseId,
+    doc,
+    connector,
+  );
+
+  return c.json(advarsel ? { doc, advarsel } : { doc }, 201);
 });
 
 // GET /api/v1/uploads/:uploadId — resume probe

@@ -622,7 +622,15 @@
     "failed": "Fejlede",
     "uploading": "Uploader {name}…",
     "uploadHint": "Træk og slip filer for at uploade, eller klik for at vælge.",
-    "uploadBrowse": "Vælg en fil"
+    "uploadBrowse": "Vælg en fil",
+    "navnesammenfald": {
+      "erstatter": "Dette erstatter {filnavn} fra {dato}. Den nye udgave er nu kanon.",
+      "erstatterIkke": "Der findes allerede en {filnavn} fra {dato} i denne Brain — men afløsning er slået fra, så begge står som selvstændige kilder.",
+      "knap": "Det er en ny kilde",
+      "gemmer": "Gemmer…",
+      "nuEgenKilde": "Markeret som sin egen kilde. Den erstatter ikke noget.",
+      "fejl": "Kunne ikke markere som ny kilde"
+    }
   },
   "wikiTree": {
     "title": "Neuroner",
@@ -968,6 +976,24 @@
         "saved": "Mindste billed-variation gemt",
         "error": "Kunne ikke gemme",
         "invalid": "Angiv et tal mellem 0 og 8, eller lad feltet være tomt"
+      },
+      "kanon": {
+        "title": "Ny udgave af samme kilde bliver kanon",
+        "subtitle": "Rettes en side på dit site, er den nye tekst sandheden — ikke en påstand der skal vejes mod den gamle. Står den til, afløser en ny udgave den forrige i stedet for at give dig en modsigelse i køen. Hovedafbryderen gælder hele Brainen; hver konnektor kan undtages for sig.",
+        "brainTitle": "Hele denne Brain",
+        "connectorsTitle": "Pr. konnektor",
+        "connectorsHint": "En Brain kan modtage både hjemmeside-sync og manuelle uploads. Derfor kan hver konnektor sættes for sig — ét valg for hele Brainen ville nødvendigvis være forkert for den ene af dem.",
+        "sources": "kilder",
+        "stateOn": "Til",
+        "stateOff": "Fra",
+        "turnOn": "Slå til",
+        "turnOff": "Slå fra",
+        "saving": "Gemmer…",
+        "saved": "Indstilling gemt",
+        "error": "Kunne ikke ændre indstillingen",
+        "overruled": "Sat ud af kraft af hovedafbryderen",
+        "overruledHint": "Kontakten står på Til, men hovedafbryderen for hele Brainen er slået fra — så denne konnektor afløser ikke noget. Slå hovedafbryderen til for at bruge den.",
+        "none": "Ingen konnektorer har leveret kilder til denne Brain endnu."
       }
     },
     "account": {

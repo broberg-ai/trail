@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
-import { ApiError } from '../api';
+import { ApiError, markerSomNyKilde } from '../api';
 import type { Document } from '@trail/shared';
 import { Modal, ModalButton } from './modal';
 import { t } from '../lib/i18n';
-import { uploadChunked } from '../lib/upload-client';
+import { uploadChunked, type NavnesammenfaldAdvarsel } from '../lib/upload-client';
 import { danskFuld } from '../lib/dates';
 
 /**
@@ -50,6 +50,13 @@ export function UploadDropzone({
       state: 'pending' | 'uploading' | 'done' | 'error' | 'skipped';
       message?: string;
       progress?: number;
+      /** F275.2 AC#4 — uploaden erstatter en tidligere udgave af samme kilde. */
+      advarsel?: NavnesammenfaldAdvarsel;
+      /** Den netop uploadede kildes id — bæres frem for at blive læst ud af en URL. */
+      docId?: string;
+      /** Sat når kuratoren har svaret «det er en ny kilde». */
+      nyKilde?: boolean;
+      nyKildeGemmer?: boolean;
     }>
   >([]);
   const [conflict, setConflict] = useState<DuplicateConflict | null>(null);
@@ -59,6 +66,32 @@ export function UploadDropzone({
   const dragDepth = useRef(0);
 
   const pickFiles = useCallback(() => inputRef.current?.click(), []);
+
+  /**
+   * F275.2 AC#4 — «det er en ny kilde, ikke en ny udgave.»
+   *
+   * Ejeren valgte default ON for uploads. Uden dette valg ville et
+   * navnesammenfald være en lydløs overskrivning — og et lydløst indgreb kan
+   * ikke skelnes fra at intet skete. Derfor står knappen ved siden af beskeden,
+   * ikke i en indstilling et andet sted.
+   */
+  const markerNyKilde = useCallback(async (entryId: string, docId: string) => {
+    setQueue((prev) => prev.map((q) => (q.id === entryId ? { ...q, nyKildeGemmer: true } : q)));
+    try {
+      await markerSomNyKilde(docId);
+      setQueue((prev) =>
+        prev.map((q) => (q.id === entryId ? { ...q, nyKilde: true, nyKildeGemmer: false } : q)),
+      );
+    } catch {
+      setQueue((prev) =>
+        prev.map((q) =>
+          q.id === entryId
+            ? { ...q, nyKildeGemmer: false, message: t('sources.navnesammenfald.fejl') }
+            : q,
+        ),
+      );
+    }
+  }, []);
 
   const handleFiles = useCallback(
     async (files: File[]) => {
@@ -85,7 +118,11 @@ export function UploadDropzone({
             },
           });
           setQueue((prev) =>
-            prev.map((q) => (q.id === id ? { ...q, state: 'done', progress: 100 } : q)),
+            prev.map((q) =>
+              q.id === id
+                ? { ...q, state: 'done', progress: 100, advarsel: doc.advarsel, docId: doc.id }
+                : q,
+            ),
           );
           onUploaded(doc);
         } catch (err) {
@@ -274,6 +311,38 @@ export function UploadDropzone({
                   {q.state === 'skipped' && `⊘ ${q.message ?? 'skipped'}`}
                 </span>
               </div>
+              {/* F275.2 AC#4 — beskeden ved navnesammenfald, med dato og fortrydelse. */}
+              {q.advarsel ? (
+                <div
+                  data-testid={`upload-navnesammenfald-${q.id}`}
+                  class="mt-1 rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-bg-card)] px-2.5 py-2 text-[11px] leading-relaxed"
+                >
+                  <div class="text-[color:var(--color-fg-muted)]">
+                    {q.nyKilde
+                      ? t('sources.navnesammenfald.nuEgenKilde')
+                      : q.advarsel.erstatterNu
+                        ? t('sources.navnesammenfald.erstatter')
+                            .replace('{filnavn}', q.advarsel.erstatter.filename)
+                            .replace('{dato}', danskFuld(q.advarsel.erstatter.uploadet))
+                        : t('sources.navnesammenfald.erstatterIkke')
+                            .replace('{filnavn}', q.advarsel.erstatter.filename)
+                            .replace('{dato}', danskFuld(q.advarsel.erstatter.uploadet))}
+                  </div>
+                  {!q.nyKilde ? (
+                    <button
+                      type="button"
+                      data-testid={`upload-navnesammenfald-ny-kilde-${q.id}`}
+                      disabled={q.nyKildeGemmer}
+                      onClick={() => q.docId && markerNyKilde(q.id, q.docId)}
+                      class="mt-1.5 rounded-md border border-[color:var(--color-border)] px-2 py-1 text-[11px] transition-colors hover:border-[color:var(--color-border-strong)] active:translate-y-px disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {q.nyKildeGemmer
+                        ? t('sources.navnesammenfald.gemmer')
+                        : t('sources.navnesammenfald.knap')}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
               {q.state === 'uploading' ? (
                 <div class="h-1 rounded-full bg-[color:var(--color-bg-card)] overflow-hidden">
                   <div
