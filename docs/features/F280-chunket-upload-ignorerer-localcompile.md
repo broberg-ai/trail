@@ -70,3 +70,26 @@ finalize får samme spærre som sin søskende. Prøver der er RØDE uden rettels
 | # | | |
 |---|---|---|
 | F280.1 | Begge upload-veje ærer localCompile — bevist på hver sin prøve | høj · 2 SP |
+
+## Reuse
+
+Søgt på Discovery for «upload», «chunked upload», «resumable upload» før
+rettelsen. Ingen `@broberg/*`-pakke ejer Trails upload-ruter, og det her er
+ikke en ny evne — det er to søskende-ruter i vores egen kode der var uenige om
+ét forespørgselsflag. Der er intet at genbruge og intet nyt at dele.
+
+## RETTELSE 17/9 2026 — F280 var IKKE årsag til log-stormen
+
+Denne plan blev skrevet mens jeg troede at den betalte kompilering også var
+det der skrev 2,5 mio. `[backpressure]`-linjer. **Det var den ikke.** Efter
+F280.1 var rettet og udrullet målte jeg 686.041 linjer og nul færdige prøver.
+
+Den rigtige årsag var en pre-eksisterende ring i kø-motoren: et tilbageholdt
+job kaldte sig selv igen med det samme i stedet for at vente på den periodiske
+planlægger. Kortlagt og lukket som **F281.1**, og oveni den **F281.2** (den
+periodiske planlægger kørte kun for den første kunde).
+
+F280.1 står som en rigtig rettelse — en kilde der bad om gratis kompilering
+fik en betalt — men den rettede ikke dette symptom. Non-goal'et ovenfor om
+ikke at dæmpe backpressure-loggen står stadig, og blev bekræftet af forløbet:
+havde vi dæmpet loggen dengang, havde ringen aldrig vist sig.
