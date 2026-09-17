@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
 import { documents, documentChunks, uploadSessions, knowledgeBases, type TrailDatabase } from '@trail/db';
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, ne, sql , isNotNull} from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { requireAuth, getUser, getTenant, getTrail, getAmbientKbGrant } from '../middleware/auth.js';
-import { kildeIdentitet, laesSlukkedeKonnektorer, nyUdgaveErKanon } from '@trail/shared';
+import { kildeIdentitet, laesSlukkedeKonnektorer, nyUdgaveErKanon, fingeraftryk, lighed, navnesag } from '@trail/shared';
 import { processPdf, processDocx, processPptx, processXlsx, dispatch, pickPipeline } from '@trail/pipelines';
 import { storage, sourcePath, stagingFsPath } from '../lib/storage.js';
 import { chunkText, storeChunks } from '../services/chunker.js';
@@ -384,6 +384,10 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
   if (isText) {
     const content = new TextDecoder().decode(buffer);
     const title = ext === 'md' ? extractTitle(content) ?? file.name : file.name;
+    // F275.6 — lighedsaftrykket sættes hvor teksten FØRST findes. En binær fil
+    // (PDF, DOCX) får sit når pipelinen har udtrukket teksten; indtil da er det
+    // NULL, hvilket betyder «ikke målt» og ikke «ny kilde».
+    const aftryk = fingeraftryk(content);
     // NOTE: we store the extracted content but leave status='processing'
     // (set below) rather than jumping straight to 'ready'. Text files
     // have no file-format-extract step so the row could technically
@@ -395,7 +399,7 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
     // 'ready' when the compile actually completes.
     await trail.db
       .update(documents)
-      .set({ content, title, status: 'processing', version: 1 })
+      .set({ content, title, status: 'processing', version: 1, contentFingerprint: aftryk })
       .where(eq(documents.id, docId))
       .run();
 
@@ -466,7 +470,18 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
   // Vi siger også OM afløsningen faktisk sker — begge kontakter læses her, ét
   // sted, gennem `nyUdgaveErKanon()`. En besked der påstod «dette erstatter …»
   // mens Brain-kontakten stod på FRA ville være forkert i den beroligende retning.
-  const advarsel = await navnesammenfaldAdvarsel(trail, tenant.id, kbId, doc, connector);
+  // F275.6 — to sager, i rækkefølge. Navnesammenfaldet er det alvorligste
+  // (identiteten siger allerede «samme kilde»), så det vinder. Er der intet
+  // navnesammenfald, spørger vi om den ligner noget under et ANDET navn.
+  const advarsel =
+    (await navnesammenfaldAdvarsel(trail, tenant.id, kbId, doc, connector)) ??
+    (doc
+      ? await sammeVaerkNytNavn(trail, tenant.id, kbId, {
+          id: doc.id,
+          filename: doc.filename,
+          contentFingerprint: doc.contentFingerprint,
+        })
+      : undefined);
 
   console.log(`[upload] response-ready 201 ${lap()}`);
   return c.json(advarsel ? { ...doc, advarsel } : doc, 201);
@@ -588,7 +603,7 @@ async function navnesammenfaldAdvarsel(
   trail: ReturnType<typeof getTrail>,
   tenantId: string,
   kbId: string,
-  doc: { id: string; sourceIdentity: string | null } | null | undefined,
+  doc: { id: string; sourceIdentity: string | null; contentFingerprint?: string | null } | null | undefined,
   connector: string | null | undefined,
 ): Promise<Record<string, unknown> | undefined> {
   if (!doc) return undefined;
@@ -607,13 +622,92 @@ async function navnesammenfaldAdvarsel(
     { brain: kbRow?.brain ?? true, slukkedeKonnektorer: laesSlukkedeKonnektorer(kbRow?.off) },
     connector ?? 'upload',
   );
+  // F275.6 — HVOR MEGET ligner de to hinanden? Aftrykket afgør ikke hvad der
+  // sker; det afgør hvilken af de fire sager vi står i, og dermed hvad vi
+  // SPØRGER om. Se fingeraftryk.ts for hvorfor ingen tærskel må afgøre.
+  const grad = lighed(doc.contentFingerprint ?? null, forrige.contentFingerprint ?? null);
+  const sag = navnesag(grad, true);
+
   return {
     kind: 'samme-kilde',
     erstatter: { id: forrige.id, filename: forrige.filename, uploadet: forrige.createdAt },
     erstatterNu: svar.kanon,
     grund: svar.grund,
+    sag,
+    lighed: grad,
     // Fortrydelsen skal med i beskeden, ellers er valget kun teoretisk.
     nyKildeEndpoint: `/api/v1/documents/${doc.id}/ny-kilde`,
+  };
+}
+
+/**
+ * F275.6 — SAMME VÆRK UNDER ET NYT NAVN.
+ *
+ * Den anden halvdel af advarselslampen: en fil hvis navn er FRIT, men hvis
+ * indhold er næsten identisk med noget vi har i forvejen. Filnavn+Brain-
+ * identiteten kan ikke se den — for navnene er jo forskellige — og uden dette
+ * opslag lander «Årsrapport 2025 (endelig).pdf» ved siden af «Årsrapport
+ * 2025.pdf» som to uafhængige værker, og hjernen svarer på begge.
+ *
+ * Vi sammenligner mod hver kilde i Brain'en. Målt på broberg.ai: 212 kilder, og
+ * hver sammenligning er 64 strengstykker — prisen er intet ved siden af en
+ * upload. Bliver det en dag for meget, er svaret et indeks, ikke at holde op
+ * med at spørge.
+ */
+async function sammeVaerkNytNavn(
+  trail: ReturnType<typeof getTrail>,
+  tenantId: string,
+  kbId: string,
+  doc: { id: string; filename: string; contentFingerprint: string | null },
+): Promise<Record<string, unknown> | undefined> {
+  if (!doc.contentFingerprint) return undefined;
+
+  const andre = await trail.db
+    .select({
+      id: documents.id,
+      filename: documents.filename,
+      createdAt: documents.createdAt,
+      aftryk: documents.contentFingerprint,
+    })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.tenantId, tenantId),
+        eq(documents.knowledgeBaseId, kbId),
+        eq(documents.kind, 'source'),
+        eq(documents.archived, false),
+        ne(documents.id, doc.id),
+        isNotNull(documents.contentFingerprint),
+      ),
+    )
+    .all();
+
+  let bedst: { id: string; filename: string; createdAt: string; grad: number } | null = null;
+  for (const a of andre) {
+    if (a.filename === doc.filename) continue; // den sag er allerede dækket ovenfor
+    const g = lighed(doc.contentFingerprint, a.aftryk);
+    if (g === null) continue;
+    if (!bedst || g > bedst.grad) bedst = { id: a.id, filename: a.filename, createdAt: a.createdAt, grad: g };
+  }
+  if (!bedst) return undefined;
+
+  const sag = navnesag(bedst.grad, false);
+  // Kun 'samme-vaerk-nyt-navn' er værd at forstyrre for. 'ny-kilde' er det
+  // normale udfald for enhver upload, og en besked ved hver eneste ville være
+  // støj — og en besked man lærer at klikke væk er ingen besked.
+  if (sag !== 'samme-vaerk-nyt-navn') return undefined;
+
+  return {
+    kind: 'samme-vaerk-nyt-navn',
+    ligner: { id: bedst.id, filename: bedst.filename, uploadet: bedst.createdAt },
+    lighed: bedst.grad,
+    sag,
+    // Den ER en selvstændig kilde indtil nogen siger andet — vi spørger, vi
+    // afgør ikke. Derfor peger fortrydelsen den ANDEN vej end ved navnesammenfald.
+    besked:
+      'Denne fil ligner en vi har i forvejen, under et andet navn. Er det en ny udgave ' +
+      'af det samme værk, så giv den samme filnavn som den forrige — så afløser den. ' +
+      'Er det et selvstændigt værk, skal du ikke gøre noget.',
   };
 }
 
@@ -633,7 +727,12 @@ async function forrigeUdgave(
   if (!identitet) return null;
   return (
     (await trail.db
-      .select({ id: documents.id, filename: documents.filename, createdAt: documents.createdAt })
+      .select({
+        id: documents.id,
+        filename: documents.filename,
+        createdAt: documents.createdAt,
+        contentFingerprint: documents.contentFingerprint,
+      })
       .from(documents)
       .where(
         and(
@@ -734,6 +833,8 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload/init', async (c) => {
   }
   const { filename, contentLength, contentHash } = body;
   const path = body.path ?? '/';
+  // F280.1 — samme flag, samme navn, samme betydning som på enkelt-POST'en.
+  const localCompileChunket = c.req.query('localCompile') === 'true';
 
   if (!filename || typeof filename !== 'string') return c.json({ error: 'filename required' }, 400);
   if (typeof contentLength !== 'number' || contentLength <= 0) {
@@ -812,6 +913,10 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload/init', async (c) => {
       metadata: body.metadata?.connector
         ? JSON.stringify({ connector: body.metadata.connector, sourceUrl: body.metadata.sourceUrl })
         : null,
+      // F280.1 — PARKÉR, hvis der bliver bedt om det. Enkelt-POST'en har gjort
+      // det hele tiden; denne vej læste slet ikke flaget, så en kilde der var
+      // bedt parkeret til $0-kompilering blev alligevel sendt til skyen.
+      awaitingLocalCompile: localCompileChunket,
       // F275.1 + F275.2 — samme identitet som enkelt-POST'en. Var de to veje
       // uenige om hvad en kildes identitet ER, ville det afhænge af hvilken
       // klient der uploadede om to filer var samme kilde.
@@ -1018,7 +1123,17 @@ uploadRoutes.post('/uploads/:uploadId/finalize', async (c) => {
     const title = ext === 'md' ? extractTitle(content) ?? session.filename : session.filename;
     await trail.db
       .update(documents)
-      .set({ content, title, status: 'processing', version: 1 })
+      .set({
+        content,
+        title,
+        status: 'processing',
+        version: 1,
+        // F275.6 — SAMME sted som enkelt-POST'en. Admin-panelet uploader kun ad
+        // DENNE vej, så et aftryk der kun blev sat på den anden ville være
+        // grønt i prøverne og fraværende på skærmen. Den fælde har allerede
+        // kostet én gang i F275.2.
+        contentFingerprint: fingeraftryk(content),
+      })
       .where(eq(documents.id, session.documentId))
       .run();
 
@@ -1090,7 +1205,16 @@ uploadRoutes.post('/uploads/:uploadId/finalize', async (c) => {
     },
   });
 
-  if (isText) {
+  // F280.1 — SAMME SPÆRRE SOM SØSKENDEN på linje ~462. Uden `!parkeret` blev en
+  // kilde der udtrykkeligt var bedt parkeret til gratis kompilering alligevel
+  // sendt til en betalt sky-model — og en sky-kompilering ser ud som en
+  // vellykket kompilering, så regningen ville komme uden en beslutning bag.
+  const parkeret = await trail.db
+    .select({ p: documents.awaitingLocalCompile })
+    .from(documents)
+    .where(eq(documents.id, session.documentId))
+    .get();
+  if (isText && !parkeret?.p) {
     triggerIngest({
       trail,
       docId: session.documentId,
@@ -1102,13 +1226,15 @@ uploadRoutes.post('/uploads/:uploadId/finalize', async (c) => {
 
   // F275.2 AC#4 — beskeden hører til HER også. Admin-panelet uploader kun ad
   // denne vej, så uden den ville sikkerhedsnettet kun findes i prøverne.
-  const advarsel = await navnesammenfaldAdvarsel(
-    trail,
-    tenant.id,
-    session.knowledgeBaseId,
-    doc,
-    connector,
-  );
+  const advarsel =
+    (await navnesammenfaldAdvarsel(trail, tenant.id, session.knowledgeBaseId, doc, connector)) ??
+    (doc
+      ? await sammeVaerkNytNavn(trail, tenant.id, session.knowledgeBaseId, {
+          id: doc.id,
+          filename: doc.filename,
+          contentFingerprint: doc.contentFingerprint,
+        })
+      : undefined);
 
   return c.json(advarsel ? { doc, advarsel } : { doc }, 201);
 });

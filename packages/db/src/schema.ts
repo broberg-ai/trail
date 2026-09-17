@@ -321,6 +321,18 @@ export const documents = sqliteTable(
      * tekst-dato med sekund-opløsning er præcis den fælde F278 handler om.
      */
     sourceChangedAt: integer('source_changed_at'),
+    /**
+     * F275.6 — LIGHEDS-aftryk (MinHash), ikke en checksum.
+     *
+     * `contentHash` svarer på «er de byte-identiske?». Dette svarer på «er det
+     * 97 % det samme dokument?». Ret ét årstal i en rapport, og hash'en er helt
+     * anderledes mens aftrykket næsten ikke flytter sig — derfor to felter.
+     *
+     * NULL = «kunne ikke måles» (scannet PDF uden tekstlag, en fil på tre ord),
+     * ALDRIG «ny kilde». At læse det ene som det andet ville gøre netop de filer
+     * vi ved mindst om til dem vi er mest sikre på.
+     */
+    contentFingerprint: text('content_fingerprint'),
     confidence: real('confidence').notNull().default(0.7),
     confidenceLastRecomputedAt: integer('confidence_last_recomputed_at'),
     supersededByNeuronId: text('superseded_by_neuron_id').references((): AnySQLiteColumn => documents.id),

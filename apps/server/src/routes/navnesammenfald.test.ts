@@ -32,7 +32,7 @@ async function upload(navn: string, indhold: string, query = '') {
   const fd = new FormData();
   fd.append('file', new Blob([indhold], { type: 'text/markdown' }), navn);
   const res = await app.request(
-    `http://engine.local/api/v1/knowledge-bases/${KB}/documents/upload${query}`,
+    `http://engine.local/api/v1/knowledge-bases/${KB}/documents/upload${query ? query + '&' : '?'}localCompile=true`,
     { method: 'POST', headers: { Authorization: `Bearer ${NØGLE}` }, body: fd },
   );
   return { res, body: (await res.json()) as { id: string; sourceIdentity: string | null; advarsel?: Advarsel } };
@@ -126,7 +126,7 @@ async function uploadChunket(navn: string, indhold: string, query = '') {
   const H = { Authorization: `Bearer ${NØGLE}`, 'Content-Type': 'application/json' };
 
   const init = await app.request(
-    `http://engine.local/api/v1/knowledge-bases/${KB}/documents/upload/init${query}`,
+    `http://engine.local/api/v1/knowledge-bases/${KB}/documents/upload/init${query ? query + '&' : '?'}localCompile=true`,
     { method: 'POST', headers: H, body: JSON.stringify({ filename: navn, contentLength: bytes.length, contentHash: hash }) },
   );
   expect(init.status).toBe(201);

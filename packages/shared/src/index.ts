@@ -26,3 +26,4 @@ export * from './cpr.js';
 export * from './skrub.js';
 export * from './kilde-identitet.js';
 export * from './kanon.js';
+export * from './fingeraftryk.js';

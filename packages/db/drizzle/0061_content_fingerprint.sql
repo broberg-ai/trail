@@ -1,0 +1,11 @@
+-- F275.6 — lighedsmålingens fingeraftryk (MinHash, 64 pladser à 8 hex = 512 tegn).
+--
+-- IKKE en checksum. `content_hash` svarer på «er de byte-identiske?»; dette
+-- svarer på «er det 97 % det samme dokument?». Ret ét årstal, og hash'en er helt
+-- anderledes mens aftrykket næsten ikke flytter sig — og det er hele grunden til
+-- at der skal være to felter i stedet for ét.
+--
+-- NULL = «kunne ikke måles» (en scannet PDF uden tekstlag, en fil på tre ord),
+-- ALDRIG «ny kilde». Additiv: hver eksisterende række får NULL og opfører sig
+-- som i dag.
+ALTER TABLE `documents` ADD COLUMN `content_fingerprint` TEXT;
