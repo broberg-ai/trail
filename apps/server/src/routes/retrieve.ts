@@ -274,7 +274,7 @@ retrieveRoutes.post('/knowledge-bases/:kbId/retrieve', async (c) => {
     const header = c.headerBreadcrumb
       ? `## ${c.title} — ${c.headerBreadcrumb}`
       : `## ${c.title}`;
-    // F275.5 — forbeholdet står FØRST, før indholdet. En advarsel under en
+    // F275.5 — forbeholdet står FØRST, før indholdet. En warning under en
     // tekst læses after påstanden er troet — af et menneske og af en model.
     let section = c.kildeAendret
       ? `${header}\n\n${c.kildeAendret}\n\n${c.content}`

@@ -1,9 +1,9 @@
 /**
- * F275.2 — de to kontakter, målt gennem endpointet.
+ * F275.2 — the two switches, measured through the endpoint.
  *
- * Prøverne er skrevet mod acceptkriterierne: default TIL (AC#2), hierarkiet
- * (AC#3), GEM-BEVIS ved en FRISK hentning (AC#5) og negativ kontrol på både en
- * anden Brain og en anden connector (AC#6).
+ * The tests are written against the acceptance criteria: default ON (AC#2), the
+ * hierarchy (AC#3), SAVE PROOF via a FRESH read (AC#5), and negative controls on
+ * both another Brain and another connector (AC#6).
  */
 import { test, expect, beforeAll } from 'bun:test';
 import { join } from 'node:path';
@@ -13,57 +13,59 @@ import { createLibsqlDatabase, tenants, users, knowledgeBases, apiKeys, document
 import { createApp } from '../app.js';
 
 const T = 't-kan', U = 'u-kan', A = 'kb-a', B = 'kb-b';
-const NØGLE = 'trail_' + 'k'.repeat(64);
+const KEY = 'trail_' + 'k'.repeat(64);
 let app: ReturnType<typeof createApp>;
 let trail: Awaited<ReturnType<typeof createLibsqlDatabase>>;
 
-type Svar = {
+type Settings = {
   brain: boolean;
   disabledConnectors: string[];
   connectors: { id: string; label: string; sourceCount: number; ownSwitch: boolean; overriddenByBrain: boolean; effective: boolean }[];
 };
 
-/** FRISK hentning — aldrig PATCH-svarets eget ekko. Det er hele pointen i AC#5. */
-async function fetch(kb: string): Promise<Svar> {
+/** A FRESH read — never the PATCH response's own echo. That is the whole point
+ *  of AC#5. */
+async function read(kb: string): Promise<Settings> {
   const res = await app.request(`http://engine.local/api/v1/knowledge-bases/${kb}/canon-settings`, {
-    headers: { Authorization: `Bearer ${NØGLE}` },
+    headers: { Authorization: `Bearer ${KEY}` },
   });
   expect(res.status).toBe(200);
-  return (await res.json()) as Svar;
+  return (await res.json()) as Settings;
 }
 
 async function patch(kb: string, body: unknown) {
   return app.request(`http://engine.local/api/v1/knowledge-bases/${kb}/canon-settings`, {
     method: 'PATCH',
-    headers: { Authorization: `Bearer ${NØGLE}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
 }
 
-function connector(s: Svar, id: string) {
+function connector(s: Settings, id: string) {
   return s.connectors.find((k) => k.id === id);
 }
 
 beforeAll(async () => {
   const p = join(process.env.TMPDIR ?? '/tmp', `kanon-${process.pid}.db`);
-  for (const f of [p, `${p}-wal`, `${p}-shm`]) { try { rmSync(f, { force: true }); } catch { /* frisk */ } }
+  for (const f of [p, `${p}-wal`, `${p}-shm`]) { try { rmSync(f, { force: true }); } catch { /* fresh */ } }
   trail = await createLibsqlDatabase({ path: p });
   await trail.runMigrations();
   await trail.db.insert(tenants).values({ id: T, slug: 'kan', name: 'Kan', plan: 'hobby' }).run();
   await trail.db.insert(users).values({ id: U, tenantId: T, email: 'k@b.dk', displayName: 'K', role: 'owner', onboarded: true }).run();
-  // slug == id: resolveKbId slår et ikke-UUID op på SLUG, ikke på id.
+  // slug == id: resolveKbId looks up a non-UUID by SLUG, not by id.
   for (const id of [A, B])
     await trail.db.insert(knowledgeBases).values({ id, tenantId: T, createdBy: U, name: id, slug: id, language: 'da' }).run();
   await trail.db.insert(apiKeys).values({
     id: 'k1', tenantId: T, userId: U, name: 'k1',
-    keyHash: createHash('sha256').update(NØGLE).digest('hex'), scope: 'all',
+    keyHash: createHash('sha256').update(KEY).digest('hex'), scope: 'all',
   }).run();
-  // To connectors på A's kilder, så listen er MÅLT og ikke pickedUp fra registret.
-  // `broberg-ai-site-sync` står IKKE i @trail/shared's register — den er netop
-  // derfor med her: en liste fra registret ville mangle den kontakt ejeren skal bruge.
+  // Two connectors on A's sources, so the list is MEASURED and not read off the
+  // static registry. `broberg-ai-site-sync` is NOT in @trail/shared's registry —
+  // which is exactly why it is here: a list built from the registry would be
+  // missing the very switch the owner needs.
   let n = 0;
-  for (const [c, counts] of [['broberg-ai-site-sync', 3], ['upload', 1]] as const)
-    for (let i = 0; i < counts; i++)
+  for (const [c, count] of [['broberg-ai-site-sync', 3], ['upload', 1]] as const)
+    for (let i = 0; i < count; i++)
       await trail.db.insert(documents).values({
         id: `d${n++}`, tenantId: T, userId: U, knowledgeBaseId: A, path: '/sources/', filename: `f${n}.md`,
         content: 'x', kind: 'source', fileType: 'md', metadata: JSON.stringify({ connector: c }),
@@ -71,90 +73,90 @@ beforeAll(async () => {
   app = createApp(trail, new Map([['kan', trail]]));
 });
 
-test('AC#2 — en frisk Brain: BEGGE kontakter står TIL uden at nogen har rørt dem', async () => {
-  const s = await fetch(A);
+test('AC#2 — a fresh Brain: BOTH switches are ON without anyone touching them', async () => {
+  const s = await read(A);
   expect(s.brain).toBe(true);
   expect(s.disabledConnectors).toEqual([]);
   expect(s.connectors.length).toBe(2);
   for (const k of s.connectors) expect([k.ownSwitch, k.effective, k.overriddenByBrain]).toEqual([true, true, false]);
 });
 
-test('connector-listen er MÅLT på Brainens egne kilder — ikke pickedUp fra registret', async () => {
-  const s = await fetch(A);
+test('the connector list is MEASURED from the Brain\'s own sources — not read off the registry', async () => {
+  const s = await read(A);
   const site = connector(s, 'broberg-ai-site-sync');
   expect(site?.sourceCount).toBe(3);
-  // Uden for registret ⇒ id'et er sit eget mærkat frem for at forsvinde.
+  // Outside the registry ⇒ the id is its own label rather than disappearing.
   expect(site?.label).toBe('broberg-ai-site-sync');
   expect(connector(s, 'upload')?.label).toBe('Upload');
 });
 
-test('AC#5 GEM-BEVIS — slå konnektoren fra, fetch PÅ NY, den står stadig fra', async () => {
+test('AC#5 SAVE PROOF — switch the connector off, read AFRESH, it is still off', async () => {
   expect((await patch(A, { connector: { id: 'upload', canon: false } })).status).toBe(200);
-  const frisk = await fetch(A);
-  expect(frisk.disabledConnectors).toEqual(['upload']);
-  expect(connector(frisk, 'upload')?.effective).toBe(false);
-  // Den anden connector i SAMME Brain er urørt — ellers gemte vi på Brainen
-  // i stedet for på konnektoren, og det ville bestå AC#5 ved et tilfælde.
-  expect(connector(frisk, 'broberg-ai-site-sync')?.effective).toBe(true);
+  const fresh = await read(A);
+  expect(fresh.disabledConnectors).toEqual(['upload']);
+  expect(connector(fresh, 'upload')?.effective).toBe(false);
+  // The other connector in the SAME Brain is untouched — otherwise we saved on
+  // the Brain instead of on the connector, and that would pass AC#5 by accident.
+  expect(connector(fresh, 'broberg-ai-site-sync')?.effective).toBe(true);
 });
 
-test('AC#5 negativ vej — slå til igen, fetch PÅ NY, den står til', async () => {
-  // En kontakt der kun kan SÆTTES ser identisk ud med en der effective, indtil
-  // nogen prøver at rydde den. Derfor har vejen tilbage sin egen prøve.
+test('AC#5 the way back — switch it on again, read AFRESH, it is on', async () => {
+  // A switch that can only be SET looks identical to one that works, until
+  // someone tries to clear it. So the way back has its own test.
   expect((await patch(A, { connector: { id: 'upload', canon: true } })).status).toBe(200);
-  const frisk = await fetch(A);
-  expect(frisk.disabledConnectors).toEqual([]);
-  expect(connector(frisk, 'upload')?.effective).toBe(true);
+  const fresh = await read(A);
+  expect(fresh.disabledConnectors).toEqual([]);
+  expect(connector(fresh, 'upload')?.effective).toBe(true);
 });
 
-test('AC#3 — Brain FRA slår ALT fra, og konnektoren vises som SAT UD AF KRAFT', async () => {
+test('AC#3 — Brain OFF turns EVERYTHING off, and the connector shows as OVERRIDDEN', async () => {
   expect((await patch(A, { brain: false })).status).toBe(200);
-  const frisk = await fetch(A);
-  expect(frisk.brain).toBe(false);
-  for (const k of frisk.connectors) {
-    expect(k.ownSwitch).toBe(true);   // kontakten står stadig på TIL …
-    expect(k.overriddenByBrain).toBe(true);  // … men den er sat ud af kraft, og det kan SES
+  const fresh = await read(A);
+  expect(fresh.brain).toBe(false);
+  for (const k of fresh.connectors) {
+    expect(k.ownSwitch).toBe(true);           // the switch still reads ON …
+    expect(k.overriddenByBrain).toBe(true);   // … but it is overridden, and that is VISIBLE
     expect(k.effective).toBe(false);
   }
 });
 
-test('AC#3 — en connector der SELV er fra er ikke «sat ud af kraft», den er bare fra', async () => {
+test('AC#3 — a connector that is itself off is not "overridden", it is simply off', async () => {
   await patch(A, { connector: { id: 'upload', canon: false } });
-  const frisk = await fetch(A);
-  const k = connector(frisk, 'upload');
+  const fresh = await read(A);
+  const k = connector(fresh, 'upload');
   expect([k?.ownSwitch, k?.overriddenByBrain, k?.effective]).toEqual([false, false, false]);
 });
 
-test('en kontakt brugeren har slået FRA forsvinder ikke selv om ingen source bærer konnektoren', async () => {
-  // Ellers kan han ikke slå den til igen — kontakten ville være væk fra skærmen
-  // mens den stadig virkede i databasen.
-  await patch(A, { connector: { id: 'en-connector-uden-kilder', canon: false } });
-  expect(connector(await fetch(A), 'en-connector-uden-kilder')?.sourceCount).toBe(0);
+test('a switch the user turned OFF does not disappear even when no source carries the connector', async () => {
+  // Otherwise they cannot turn it back on — the switch would be gone from the
+  // screen while still taking effect in the database.
+  await patch(A, { connector: { id: 'a-connector-with-no-sources', canon: false } });
+  expect(connector(await read(A), 'a-connector-with-no-sources')?.sourceCount).toBe(0);
 });
 
-test('AC#6 NEGATIV KONTROL — Brain B er fuldstændig urørt af alt ovenstående', async () => {
-  const b = await fetch(B);
+test('AC#6 NEGATIVE CONTROL — Brain B is completely untouched by all of the above', async () => {
+  const b = await read(B);
   expect(b.brain).toBe(true);
   expect(b.disabledConnectors).toEqual([]);
-  // Beviser at værdien gemmes på den rigtige RÆKKE og ikke globalt.
+  // Proves the value is saved on the right ROW and not globally.
 });
 
-test('AC#3 tilbage — slå Brainen til igen: konnektorernes egne kontakter huskes', async () => {
+test('AC#3 back again — switch the Brain on: the connectors\' own switches are remembered', async () => {
   expect((await patch(A, { brain: true })).status).toBe(200);
-  const frisk = await fetch(A);
-  expect(frisk.brain).toBe(true);
-  expect(connector(frisk, 'upload')?.effective).toBe(false);                 // var slået fra før
-  expect(connector(frisk, 'broberg-ai-site-sync')?.effective).toBe(true);    // var ikke
+  const fresh = await read(A);
+  expect(fresh.brain).toBe(true);
+  expect(connector(fresh, 'upload')?.effective).toBe(false);               // was switched off earlier
+  expect(connector(fresh, 'broberg-ai-site-sync')?.effective).toBe(true);  // was not
 });
 
-test('en tom krop afvises frem for at gemme ingenting og melde succes', async () => {
+test('an empty body is rejected rather than saving nothing and reporting success', async () => {
   expect((await patch(A, {})).status).toBe(400);
-  expect((await patch(A, { ukendt: true })).status).toBe(400);
+  expect((await patch(A, { unknownField: true })).status).toBe(400);
 });
 
-test('en ukendt Brain giver 404 — ikke en tavs 200 på den forkerte række', async () => {
+test('an unknown Brain gives 404 — not a silent 200 on the wrong row', async () => {
   const res = await app.request('http://engine.local/api/v1/knowledge-bases/findes-ikke/canon-settings', {
-    headers: { Authorization: `Bearer ${NØGLE}` },
+    headers: { Authorization: `Bearer ${KEY}` },
   });
   expect(res.status).toBe(404);
 });

@@ -937,7 +937,7 @@ async function propagateSupersession(
       {
         knowledgeBaseId: f.kbId,
         kind: 'gap-detection',
-        title: `${dependents.length} side${dependents.length === 1 ? '' : 'r'} hænger på en source der har fået en ny udgave`,
+        title: `${dependents.length} side${dependents.length === 1 ? '' : 'r'} hænger på en kilde der har fået en ny udgave`,
         content:
           `Kilden \`${f.identity}\` er kompileret om, og den side der bæres direkte af den er ajour.\n\n` +
           `Disse sider hænger også på den, og de er IKKE skrevet om:\n\n${list}\n\n` +
@@ -1004,7 +1004,7 @@ async function reportCuratorOverwrite(
         content:
           `En ny udgave af kilden bag **${titel}** er kompileret, og den har erstattet ` +
           `teksten på siden — inklusive den rettelse du selv skrev i version ${o.kuratorVersion}.\n\n` +
-          `Det er sådan «samme source, ny udgave er kanon» skal virke, men din tekst skal ikke ` +
+          `Det er sådan «samme kilde, ny udgave er kanon» skal virke, men din tekst skal ikke ` +
           `forsvinde uden at du ser det. Her er præcis hvad der stod, så du kan sætte det ` +
           `tilbage eller skrive det ind i den nye udgave:\n\n---\n\n${o.kuratorIndhold}`,
         // Under F19's auto-godkendelses-tærskel: et menneske skal svare.

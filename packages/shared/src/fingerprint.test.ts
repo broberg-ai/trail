@@ -1,14 +1,18 @@
 /**
- * F275.6 — fingeraftrykket skal kunne sige BÅDE ja og nej.
+ * F275.6 — the fingerprint must be able to say BOTH yes and no.
  *
- * En lighedsmåling der altid svarer «samme værk» består lige så grønt som en der
- * effective. Derfor har hver påstand her sin modpart.
+ * A similarity measure that always answers "same work" passes just as green as
+ * one that works. So every claim here has its counterpart.
+ *
+ * The fixture documents stay in Danish on purpose. MinHash works on words, and
+ * the documents customers actually upload are Danish — an English fixture would
+ * measure a word distribution we do not serve.
  */
 import { test, describe, it, expect } from 'bun:test';
 import { fingerprint, similarity, nameVerdict, ASK_ABOVE, MINHASH_K } from './fingerprint.js';
 
-/** Et dokument langt nok til at måle på — som en real rapport. */
-const RAPPORT = `
+/** A document long enough to measure — like a real report. */
+const REPORT = `
 Årsrapport 2025 for Broberg ApS. Selskabet har i regnskabsåret realiseret en
 omsætning på 12,4 millioner kroner mod 9,8 millioner året før. Væksten kommer
 primært fra nye kundeaftaler inden for hosting og softwareudvikling. Resultatet
@@ -18,112 +22,113 @@ medarbejdere. Ledelsen forventer fortsat vækst i det kommende regnskabsår,
 drevet af den samme kombination af hosting og udvikling som hidtil.
 `;
 
-/** SAMME dokument, kun årstallet rettet — Christians eget eksempel. */
-const RAPPORT_ANDET_AAR = RAPPORT.replace('2025', '2026');
+/** The SAME document, only the year edited — the owner's own example. */
+const REPORT_OTHER_YEAR = REPORT.replace('2025', '2026');
 
-/** Et ægte ANDET dokument om et beslægtet emne. */
-const ANDET = `
+/** A genuinely DIFFERENT document on a related topic. */
+const OTHER = `
 Databehandleraftale mellem Broberg ApS og kunden. Aftalen regulerer behandling af
 personoplysninger i forbindelse med levering af hosting. Databehandleren må alene
-behandle oplysninger after dokumenteret instruks fra den dataansvarlige.
+behandle oplysninger efter dokumenteret instruks fra den dataansvarlige.
 Oplysningerne opbevares inden for EU og slettes ved aftalens ophør. Parterne er
 enige om at tekniske og organisatoriske sikkerhedsforanstaltninger skal afspejle
 risikoen ved behandlingen. Aftalen træder i kraft ved underskrift.
 `;
 
-describe('F275.6 AC#0 — en checksum kan ikke det her', () => {
-  it('ét rettet årstal ændrer fingeraftrykket NÆSTEN ikke', () => {
-    const l = similarity(fingerprint(RAPPORT), fingerprint(RAPPORT_ANDET_AAR))!;
-    expect(l).toBeGreaterThan(ASK_ABOVE);
-    expect(l).toBeLessThan(1); // … men det er ikke det SAMME dokument
+describe('F275.6 AC#0 — a checksum cannot do this', () => {
+  it('one edited year barely moves the fingerprint', () => {
+    const s = similarity(fingerprint(REPORT), fingerprint(REPORT_OTHER_YEAR))!;
+    expect(s).toBeGreaterThan(ASK_ABOVE);
+    expect(s).toBeLessThan(1); // … but it is not the SAME document
   });
 
-  it('… mens en exakt sammenligning ville sige «helt forskellige»', () => {
-    // Selve grunden til at vi ikke bruger en checksum: de to strenge er
-    // forskellige, og en hash ville derfor ikke kunne se at de er samme værk.
-    expect(RAPPORT).not.toBe(RAPPORT_ANDET_AAR);
-    expect(fingerprint(RAPPORT)).not.toBe(fingerprint(RAPPORT_ANDET_AAR));
+  it('… while an exact comparison would say "completely different"', () => {
+    // The very reason we do not use a checksum: the two strings differ, so a
+    // hash could never see that they are the same work.
+    expect(REPORT).not.toBe(REPORT_OTHER_YEAR);
+    expect(fingerprint(REPORT)).not.toBe(fingerprint(REPORT_OTHER_YEAR));
   });
 
-  it('identisk tekst giver identisk aftryk', () => {
-    expect(fingerprint(RAPPORT)).toBe(fingerprint(RAPPORT));
-    expect(similarity(fingerprint(RAPPORT), fingerprint(RAPPORT))).toBe(1);
+  it('identical text yields an identical fingerprint', () => {
+    expect(fingerprint(REPORT)).toBe(fingerprint(REPORT));
+    expect(similarity(fingerprint(REPORT), fingerprint(REPORT))).toBe(1);
   });
 
-  it('linjeombrydning og tegnsætning tæller IKKE som en forskel', () => {
-    // To udgaver af samme PDF, den ene gen-eksporteret: samme ORD, anden opsætning.
+  it('line wrapping and punctuation do NOT count as a difference', () => {
+    // Two versions of the same PDF, one re-exported: same WORDS, different layout.
     //
-    // Fiksturen fjernede først også kommaerne — og PRØVEN FANGEDE MIG: «12,4»
-    // bliver til «124», altså et andet TAL. Det er en indholdsændring forklædt
-    // som en formatering, og ligheden faldt korrekt til 0,625. Kun ægte layout
-    // varieres her: linjeskift, dobbelte mellemrum, mellemrum omkring tegn.
-    const omsat = RAPPORT.replace(/\n/g, '  ').replace(/\./g, ' . ') + '   ';
-    expect(similarity(fingerprint(RAPPORT), fingerprint(omsat))).toBe(1);
+    // The fixture first stripped commas too — and THE TEST CAUGHT ME: "12,4"
+    // becomes "124", i.e. a different NUMBER. That is a content change disguised
+    // as formatting, and the similarity correctly fell to 0.625. Only genuine
+    // layout is varied here: line breaks, double spaces, spaces around marks.
+    const reflowed = REPORT.replace(/\n/g, '  ').replace(/\./g, ' . ') + '   ';
+    expect(similarity(fingerprint(REPORT), fingerprint(reflowed))).toBe(1);
   });
 });
 
-describe('F275.6 AC#4 — fingeraftrykket skal kunne sige NEJ', () => {
-  it('to ægte forskellige dokumenter ligner IKKE hinanden', () => {
-    // Uden denne består «svar altid samme værk» lige så grønt som reglen.
-    const l = similarity(fingerprint(RAPPORT), fingerprint(ANDET))!;
-    expect(l).toBeLessThan(ASK_ABOVE);
+describe('F275.6 AC#4 — the fingerprint must be able to say NO', () => {
+  it('two genuinely different documents do NOT resemble each other', () => {
+    // Without this, "always answer same work" passes just as green as the rule.
+    const s = similarity(fingerprint(REPORT), fingerprint(OTHER))!;
+    expect(s).toBeLessThan(ASK_ABOVE);
   });
 
-  it('… og de deler samme afsender uden at det trækker dem sammen', () => {
-    // Begge nævner «Broberg ApS» og «hosting». Fælles ord er ikke fælles værk.
-    expect(similarity(fingerprint(RAPPORT), fingerprint(ANDET))).toBeLessThan(0.3);
+  it('… and sharing a sender does not pull them together', () => {
+    // Both mention "Broberg ApS" and "hosting". Shared words are not a shared work.
+    expect(similarity(fingerprint(REPORT), fingerprint(OTHER))).toBeLessThan(0.3);
   });
 });
 
-describe('F275.6 AC#5 — «kan ikke afgøres» er en TREDJE tilstand', () => {
-  it('en scannet PDF uden tekstlag har intet aftryk — og er ikke «ny source»', () => {
+describe('F275.6 AC#5 — "cannot be decided" is a THIRD state', () => {
+  it('a scanned PDF with no text layer has no fingerprint — and is not "new source"', () => {
     expect(fingerprint('')).toBeNull();
     expect(fingerprint(null)).toBeNull();
     expect(fingerprint('   \n  ')).toBeNull();
-    // Nogle få ord fra et OCR-forsøg er heller ikke nok til at måle på.
+    // A few words from an OCR attempt are not enough to measure either.
     expect(fingerprint('Side 1 af 4')).toBeNull();
   });
 
-  it('mangler ét af to aftryk, er ligheden NULL — ikke nul', () => {
-    // 0 ville betyde «målt til helt forskellige». null betyder «ikke målt».
-    expect(similarity(fingerprint(RAPPORT), null)).toBeNull();
+  it('with one of two fingerprints missing, similarity is NULL — not zero', () => {
+    // 0 would mean "measured as completely different". null means "not measured".
+    expect(similarity(fingerprint(REPORT), null)).toBeNull();
     expect(similarity(null, null)).toBeNull();
-    expect(similarity(fingerprint(RAPPORT), 'for kort')).toBeNull();
+    expect(similarity(fingerprint(REPORT), 'too short')).toBeNull();
   });
 
-  it('og navnesagen siger det HØJT frem for at gætte', () => {
+  it('and the name verdict says so OUT LOUD rather than guessing', () => {
     expect(nameVerdict(null, true)).toBe('undecidable');
     expect(nameVerdict(null, false)).toBe('undecidable');
   });
 });
 
-describe('F275.6 AC#3 — filnavnet er en ADVARSELSLAMPE, fire tilfælde', () => {
-  it('høj similarity + SAMME navn = ny udgave', () => {
+describe('F275.6 AC#3 — the filename is a WARNING LIGHT, four cases', () => {
+  it('high similarity + SAME name = new edition', () => {
     expect(nameVerdict(0.97, true)).toBe('new-edition');
   });
-  it('høj similarity + ANDET navn = samme værk under nyt navn', () => {
+  it('high similarity + DIFFERENT name = same work under a new name', () => {
     expect(nameVerdict(0.97, false)).toBe('same-work-new-name');
   });
-  it('LAV similarity + SAMME navn = NAVNEKOLLISION — to værker slås om ét navn', () => {
-    // Den vigtigste af de fire. Med filnavn+Brain som identitet er det NETOP
-    // her en lydløs overskrivning ville ske, og den er usynlig bagefter.
+  it('LOW similarity + SAME name = NAME COLLISION — two works fighting over one name', () => {
+    // The most important of the four. With filename + Brain as the identity,
+    // this is EXACTLY where a silent overwrite would happen, and it is invisible
+    // afterwards.
     expect(nameVerdict(0.12, true)).toBe('name-collision');
   });
-  it('lav similarity + andet navn = ny source, og vi siger intet', () => {
+  it('low similarity + different name = a new source, and we say nothing', () => {
     expect(nameVerdict(0.12, false)).toBe('new-source');
   });
-  it('tærsklen er inklusiv i sin egen grænse', () => {
+  it('the threshold is inclusive at its own boundary', () => {
     expect(nameVerdict(ASK_ABOVE, true)).toBe('new-edition');
     expect(nameVerdict(ASK_ABOVE - 0.0001, true)).toBe('name-collision');
   });
 });
 
-describe('F275.6 — signaturens form', () => {
-  it('fast bredde, så to altid kan sammenlignes plads for plads', () => {
-    expect(fingerprint(RAPPORT)!.length).toBe(MINHASH_K * 8);
-    expect(fingerprint(ANDET)!.length).toBe(MINHASH_K * 8);
+describe('F275.6 — the shape of the signature', () => {
+  it('fixed width, so two can always be compared slot by slot', () => {
+    expect(fingerprint(REPORT)!.length).toBe(MINHASH_K * 8);
+    expect(fingerprint(OTHER)!.length).toBe(MINHASH_K * 8);
   });
-  it('en ødelagt signatur giver NULL, ikke et falsk tal', () => {
-    expect(similarity('abc', fingerprint(RAPPORT))).toBeNull();
+  it('a corrupted signature yields NULL, not a false number', () => {
+    expect(similarity('abc', fingerprint(REPORT))).toBeNull();
   });
 });

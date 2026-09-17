@@ -1,13 +1,16 @@
 /**
- * F275.3 AC#0 — hele vejen igennem, talt fra en FRISK hentning af køen.
+ * F275.3 AC#0 — the whole way through, counted from a FRESH read of the queue.
  *
- * Christians sag, ordret: *«når jeg retter et dokument i CMS, gør det at der
- * ikke kommer en ny modsigelse i køen hver gang.»* Den enhedsprøvede version
- * beviser at springet effective i funktionen; denne beviser at der ikke lander en
- * række i den kø han faktisk kigger i.
+ * The owner's case, verbatim: *"when I edit a document in the CMS, it means a new
+ * contradiction does not land in the queue every time."* The unit-tested version
+ * proves the skip works inside the function; this one proves no row lands in the
+ * queue he actually looks at.
  *
- * Kontrollanten siger ALTID «de modsiger hinanden». Alt der er grønt her, er
- * derfor grønt fordi springet virkede — ikke fordi der ikke var noget at finde.
+ * The checker ALWAYS says "these contradict each other". So everything green here
+ * is green because the skip worked — not because there was nothing to find.
+ *
+ * The document text is Danish because the pages this lint runs over are Danish,
+ * and the full-text pre-filter tokenises them.
  */
 import { test, expect, beforeEach } from 'bun:test';
 import { join } from 'node:path';
@@ -21,146 +24,150 @@ const URL_A = 'url:https://broberg.ai/flagskibe/bid';
 const URL_B = 'url:https://broberg.ai/indsigter/design';
 let trail: Awaited<ReturnType<typeof createLibsqlDatabase>>;
 
-const ALTID_MODSIGELSE = async () => ({
+const ALWAYS_CONTRADICTS = async () => ({
   contradicts: true,
   summary: 'de siger hver sit om det samme',
   newQuote: 'lanceret',
   existingQuote: 'bygges nu',
 });
 
-/** Fælles ordforråd, så FTS-forfiltret FINDER modparten. Uden overlap ville
- *  prøven bestå fordi der ikke var nogen kandidater — ikke fordi vi sprang over. */
-function tekst(hale: string) {
+/** Shared vocabulary, so the full-text pre-filter FINDS the counterpart. Without
+ *  overlap the test would pass because there were no candidates — not because we
+ *  skipped. */
+function text(tail: string) {
   return (
     'Flagskibet BID er platformen for bygherrer og entreprenører i Danmark. ' +
     'Projektet omfatter udbudsmateriale, licitation, tilbudsgivning og aftaleindgåelse ' +
     'mellem parterne i byggeriet. Platformen understøtter digitale processer hele vejen ' +
-    'fra projektering til aflevering af byggeriet. ' + hale
+    'fra projektering til aflevering af byggeriet. ' + tail
   );
 }
 
-async function neuron(id: string, identitet: string | null, hale: string) {
+async function neuron(id: string, identity: string | null, tail: string) {
   await trail.db.insert(documents).values({
     id, tenantId: T, userId: U, knowledgeBaseId: KB, kind: 'wiki',
     path: '/neurons/sources/', filename: `${id}.md`, title: `BID ${id}`,
-    content: tekst(hale), fileType: 'md', version: 1, sourceIdentity: identitet,
+    content: text(tail), fileType: 'md', version: 1, sourceIdentity: identity,
   }).run();
 }
 
-/** FRISK hentning af køen — aldrig et returtal fra den funktion vi lige kaldte. */
-async function modsigelserIKoeen(): Promise<number> {
-  const raekker = await trail.db
+/** A FRESH read of the queue — never a return value from the function we just
+ *  called. */
+async function contradictionsInQueue(): Promise<number> {
+  const rows = await trail.db
     .select({ id: queueCandidates.id })
     .from(queueCandidates)
     .where(and(eq(queueCandidates.knowledgeBaseId, KB), eq(queueCandidates.kind, 'contradiction-alert')))
     .all();
-  return raekker.length;
+  return rows.length;
 }
 
 beforeEach(async () => {
   const p = join(process.env.TMPDIR ?? '/tmp', `afl-${process.pid}-${Math.random().toString(36).slice(2, 8)}.db`);
-  for (const f of [p, `${p}-wal`, `${p}-shm`]) { try { rmSync(f, { force: true }); } catch { /* frisk */ } }
+  for (const f of [p, `${p}-wal`, `${p}-shm`]) { try { rmSync(f, { force: true }); } catch { /* fresh */ } }
   trail = await createLibsqlDatabase({ path: p });
   await trail.runMigrations();
   await trail.initFTS();
   await trail.db.insert(tenants).values({ id: T, slug: 'afl', name: 'Afl', plan: 'hobby' }).run();
   await trail.db.insert(users).values({ id: U, tenantId: T, email: 'a@b.dk', displayName: 'A', role: 'owner', onboarded: true }).run();
   await trail.db.insert(knowledgeBases).values({ id: KB, tenantId: T, createdBy: U, name: 'Afl', slug: KB, language: 'da' }).run();
-  // KILDEN. Konnektoren er den der faktisk leverer broberg.ai's sider.
+  // THE SOURCE. The connector is the one that actually delivers broberg.ai's pages.
   await trail.db.insert(documents).values({
     id: 'source-a', tenantId: T, userId: U, knowledgeBaseId: KB, kind: 'source',
-    path: '/sources/', filename: 'bid.md', content: tekst('source'), fileType: 'md',
+    path: '/sources/', filename: 'bid.md', content: text('kilde'), fileType: 'md',
     sourceIdentity: URL_A, metadata: JSON.stringify({ connector: 'broberg-ai-site-sync', sourceUrl: 'https://broberg.ai/flagskibe/bid' }),
   }).run();
 });
 
-test('AC#0 — to udgaver af SAMME source: NUL modsigelser i køen', async () => {
-  await neuron('udgave-1', URL_A, 'Projektet bygges nu og er endnu ikke lanceret.');
-  await neuron('udgave-2', URL_A, 'Projektet er lanceret og i drift hos kunderne.');
-  await scanDocForContradictions(trail, 'udgave-2', ALTID_MODSIGELSE);
-  expect(await modsigelserIKoeen()).toBe(0);
+test('AC#0 — two editions of the SAME source: ZERO contradictions in the queue', async () => {
+  await neuron('edition-1', URL_A, 'Projektet bygges nu og er endnu ikke lanceret.');
+  await neuron('edition-2', URL_A, 'Projektet er lanceret og i drift hos kunderne.');
+  await scanDocForContradictions(trail, 'edition-2', ALWAYS_CONTRADICTS);
+  expect(await contradictionsInQueue()).toBe(0);
 });
 
-test('AC#1 NEGATIV KONTROL — to FORSKELLIGE kilder: modsigelsen overlever', async () => {
-  // Uden denne beviser AC#0 kun at linten er tavs, ikke at den er præcis.
+test('AC#1 NEGATIVE CONTROL — two DIFFERENT sources: the contradiction survives', async () => {
+  // Without this, AC#0 only proves the lint is silent, not that it is precise.
   await trail.db.insert(documents).values({
     id: 'source-b', tenantId: T, userId: U, knowledgeBaseId: KB, kind: 'source',
-    path: '/sources/', filename: 'design.md', content: tekst('anden source'), fileType: 'md',
+    path: '/sources/', filename: 'design.md', content: text('anden kilde'), fileType: 'md',
     sourceIdentity: URL_B, metadata: JSON.stringify({ connector: 'broberg-ai-site-sync' }),
   }).run();
-  await neuron('fra-a', URL_A, 'Projektet bygges nu og er endnu ikke lanceret.');
-  await neuron('fra-b', URL_B, 'Projektet er lanceret og i drift hos kunderne.');
-  await scanDocForContradictions(trail, 'fra-b', ALTID_MODSIGELSE);
-  expect(await modsigelserIKoeen()).toBeGreaterThan(0);
+  await neuron('from-a', URL_A, 'Projektet bygges nu og er endnu ikke lanceret.');
+  await neuron('from-b', URL_B, 'Projektet er lanceret og i drift hos kunderne.');
+  await scanDocForContradictions(trail, 'from-b', ALWAYS_CONTRADICTS);
+  expect(await contradictionsInQueue()).toBeGreaterThan(0);
 });
 
-test('AC#4 POSITIV KONTROL — samme opsætning MED identitet springes over', async () => {
-  // Uden den beviser prøven herunder kun at der kom noget i køen, ikke at
-  // springet ville have virket hvis identiteten var der. To Neuroner der ligner
-  // hinanden nok til at FTS finder dem er en forudsætning for begge halvdele,
-  // og den skal måles, ikke antages.
-  await neuron('med-1', URL_A, 'Projektet bygges nu og er endnu ikke lanceret.');
-  await neuron('med-2', URL_A, 'Projektet er lanceret og i drift hos kunderne.');
-  await scanDocForContradictions(trail, 'med-2', ALTID_MODSIGELSE);
-  expect(await modsigelserIKoeen()).toBe(0);
+test('AC#4 POSITIVE CONTROL — the same setup WITH an identity is skipped', async () => {
+  // Without it, the test below only proves something landed in the queue, not
+  // that the skip would have worked had the identity been there. Two Neurons
+  // similar enough for full-text search to find each other is a precondition for
+  // both halves, and it must be measured, not assumed.
+  await neuron('with-1', URL_A, 'Projektet bygges nu og er endnu ikke lanceret.');
+  await neuron('with-2', URL_A, 'Projektet er lanceret og i drift hos kunderne.');
+  await scanDocForContradictions(trail, 'with-2', ALWAYS_CONTRADICTS);
+  expect(await contradictionsInQueue()).toBe(0);
 });
 
-test('AC#4 DEN SIKRE STANDARD — uden proveniens rejses modsigelsen', async () => {
-  // Hele den eksisterende base har feltet tomt. Læste linten «tomt» som «samme
-  // source», ville den blive usynlig for detektion i det sekund kontakten blev
-  // slået til — og en modsigelse der ikke rejses ser ud som en der ikke findes.
+test('AC#4 THE SAFE DEFAULT — with no provenance the contradiction is raised', async () => {
+  // The entire existing base has the field empty. If the lint read "empty" as
+  // "same source", it would go invisible to detection the second the switch was
+  // turned on — and a contradiction that is never raised looks exactly like one
+  // that does not exist.
   //
-  // INTET ANDET I DENNE BRAIN. De to prøver er bevidst adskilt: lå begge
-  // halvdele i samme opsætning, ville den navnløse Neuron modsige den MED
-  // identitet, køen ville være ikke-tom, og prøven ville bestå selv med begge
-  // null-spærrer brudt. Målt — den gjorde præcis det, og det var derfor de blev
-  // delt op.
-  await neuron('uden-1', null, 'Projektet bygges nu og er endnu ikke lanceret.');
-  await neuron('uden-2', null, 'Projektet er lanceret og i drift hos kunderne.');
-  await scanDocForContradictions(trail, 'uden-2', ALTID_MODSIGELSE);
-  expect(await modsigelserIKoeen()).toBeGreaterThan(0);
+  // NOTHING ELSE IN THIS BRAIN. The two tests are deliberately separated: with
+  // both halves in one setup, the nameless Neuron would contradict the one WITH
+  // an identity, the queue would be non-empty, and the test would pass even with
+  // both null guards broken. Measured — it did exactly that, which is why they
+  // were split.
+  await neuron('without-1', null, 'Projektet bygges nu og er endnu ikke lanceret.');
+  await neuron('without-2', null, 'Projektet er lanceret og i drift hos kunderne.');
+  await scanDocForContradictions(trail, 'without-2', ALWAYS_CONTRADICTS);
+  expect(await contradictionsInQueue()).toBeGreaterThan(0);
 });
 
 /**
- * TO SPÆRRER PÅ DEN SIKRE STANDARD, og de MASKERER hinanden:
+ * TWO GUARDS ON THE SAFE DEFAULT, and they MASK each other:
  *
- *   ydre   `sammeKildeAfloeserHer`: ingen identitet ⇒ falsk (sparer et opslag)
- *   indre  `sameSource`:            null matcher aldrig null (den bærende)
+ *   outer  `sameSourceSupersedesHere`: no identity ⇒ false (saves a lookup)
+ *   inner  `sameSource`:               null never matches null (load-bearing)
  *
- * Brydes kun ÉN af dem, fanger den anden det, og denne fil bliver grøn. Den
- * indre spærre er derfor mutations-bevist hvor den lever alene — i
- * `packages/core/src/lint/source-supersession.test.ts`, hvor den vender 2 prøver
- * røde. AC#4-prøven herover vender først rød når BEGGE brydes, hvilket er det
- * rigtige svar for en e2e: den måler kæden, ikke det enkelte led.
+ * Break only ONE and the other catches it, and this file stays green. The inner
+ * guard is therefore mutation-proven where it lives alone — in
+ * `packages/core/src/lint/source-supersession.test.ts`, where it turns 2 tests
+ * red. The AC#4 test above only goes red when BOTH are broken, which is the right
+ * answer for an e2e: it measures the chain, not the individual link.
  */
 
-test('AC#3 — kontakten FRA på Brainen: linten opfører sig som før featuren fandtes', async () => {
+test('AC#3 — the Brain switch OFF: the lint behaves as before the feature existed', async () => {
   await trail.db.update(knowledgeBases).set({ newVersionIsCanon: false }).where(eq(knowledgeBases.id, KB)).run();
-  await neuron('udgave-1', URL_A, 'Projektet bygges nu og er endnu ikke lanceret.');
-  await neuron('udgave-2', URL_A, 'Projektet er lanceret og i drift hos kunderne.');
-  await scanDocForContradictions(trail, 'udgave-2', ALTID_MODSIGELSE);
-  expect(await modsigelserIKoeen()).toBeGreaterThan(0);
+  await neuron('edition-1', URL_A, 'Projektet bygges nu og er endnu ikke lanceret.');
+  await neuron('edition-2', URL_A, 'Projektet er lanceret og i drift hos kunderne.');
+  await scanDocForContradictions(trail, 'edition-2', ALWAYS_CONTRADICTS);
+  expect(await contradictionsInQueue()).toBeGreaterThan(0);
 });
 
-test('AC#3 — KONNEKTOR-kontakten alene er nok til at slå det fra', async () => {
-  // Hierarkiet den anden vej: hovedafbryderen står på TIL, men netop denne
-  // konnektor er undtaget. Uden denne prøve ville kun den grove kontakt være målt.
+test('AC#3 — the CONNECTOR switch alone is enough to turn it off', async () => {
+  // The hierarchy from the other side: the master switch is ON, but this
+  // particular connector is exempted. Without this test only the coarse switch
+  // would have been measured.
   await trail.db.update(knowledgeBases)
     .set({ canonOffConnectors: JSON.stringify(['broberg-ai-site-sync']) })
     .where(eq(knowledgeBases.id, KB)).run();
-  await neuron('udgave-1', URL_A, 'Projektet bygges nu og er endnu ikke lanceret.');
-  await neuron('udgave-2', URL_A, 'Projektet er lanceret og i drift hos kunderne.');
-  await scanDocForContradictions(trail, 'udgave-2', ALTID_MODSIGELSE);
-  expect(await modsigelserIKoeen()).toBeGreaterThan(0);
+  await neuron('edition-1', URL_A, 'Projektet bygges nu og er endnu ikke lanceret.');
+  await neuron('edition-2', URL_A, 'Projektet er lanceret og i drift hos kunderne.');
+  await scanDocForContradictions(trail, 'edition-2', ALWAYS_CONTRADICTS);
+  expect(await contradictionsInQueue()).toBeGreaterThan(0);
 });
 
-test('en ANDEN konnektor slukket rører ikke denne source', async () => {
-  // Beviser at undtagelsen rammer den navngivne konnektor og ikke bare «en».
+test('a DIFFERENT connector being off does not touch this source', async () => {
+  // Proves the exemption hits the named connector and not merely "a" connector.
   await trail.db.update(knowledgeBases)
     .set({ canonOffConnectors: JSON.stringify(['upload']) })
     .where(eq(knowledgeBases.id, KB)).run();
-  await neuron('udgave-1', URL_A, 'Projektet bygges nu og er endnu ikke lanceret.');
-  await neuron('udgave-2', URL_A, 'Projektet er lanceret og i drift hos kunderne.');
-  await scanDocForContradictions(trail, 'udgave-2', ALTID_MODSIGELSE);
-  expect(await modsigelserIKoeen()).toBe(0);
+  await neuron('edition-1', URL_A, 'Projektet bygges nu og er endnu ikke lanceret.');
+  await neuron('edition-2', URL_A, 'Projektet er lanceret og i drift hos kunderne.');
+  await scanDocForContradictions(trail, 'edition-2', ALWAYS_CONTRADICTS);
+  expect(await contradictionsInQueue()).toBe(0);
 });

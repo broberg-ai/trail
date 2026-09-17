@@ -1,10 +1,11 @@
 /**
- * F275.3 — linten må aldrig rejse en modsigelse mellem to udgaver af SAMME source.
+ * F275.3 — the lint must never raise a contradiction between two editions of the
+ * SAME source.
  *
- * Kontrollanten herunder siger ALTID «de modsiger hinanden». Det er med vilje:
- * en prøve hvor modellen selv kunne svare nej ville bestå uden at bevise noget.
- * Alt der er grønt her, er grønt fordi springet virkede — ikke fordi der ikke
- * var noget at springe over.
+ * The checker below ALWAYS says "these contradict each other". That is
+ * deliberate: a test where the model could answer no by itself would pass
+ * without proving anything. Everything green here is green because the skip
+ * worked — not because there was nothing to skip.
  */
 import { describe, it, expect, mock } from 'bun:test';
 import {
@@ -14,119 +15,119 @@ import {
   type NewNeuron,
 } from './contradictions.js';
 
-const ALTID_MODSIGELSE = mock(async () => ({
+const ALWAYS_CONTRADICTS = mock(async () => ({
   contradicts: true,
-  summary: 'de siger hver sit',
-  newQuote: 'nu',
-  existingQuote: 'før',
+  summary: 'they each say something else',
+  newQuote: 'now',
+  existingQuote: 'before',
 }));
 
-function neuron(id: string, identitet: string | null): NewNeuron {
-  return { documentId: id, filename: `${id}.md`, title: id, content: `indhold ${id}`, version: 1, sourceIdentity: identitet };
+function neuron(id: string, identity: string | null): NewNeuron {
+  return { documentId: id, filename: `${id}.md`, title: id, content: `content ${id}`, version: 1, sourceIdentity: identity };
 }
-function modpart(id: string, identitet: string | null): ContradictionCandidate {
-  return { documentId: id, filename: `${id}.md`, title: id, content: `indhold ${id}`, version: 1, sourceIdentity: identitet };
+function counterpart(id: string, identity: string | null): ContradictionCandidate {
+  return { documentId: id, filename: `${id}.md`, title: id, content: `content ${id}`, version: 1, sourceIdentity: identity };
 }
 
 const URL_A = 'url:https://broberg.ai/flagskibe/bid';
 const URL_B = 'url:https://broberg.ai/indsigter/design';
 
-describe('F275.3 AC#0 — to udgaver af samme source rejser INGEN modsigelse', () => {
-  it('samme URL ⇒ nul fund, og kontrollanten blev slet ikke spurgt', async () => {
-    ALTID_MODSIGELSE.mockClear();
-    const fund = await detectContradictions(
-      neuron('ny', URL_A), [modpart('gammel', URL_A)], ALTID_MODSIGELSE, undefined, true,
+describe('F275.3 AC#0 — two editions of the same source raise NO contradiction', () => {
+  it('same URL ⇒ zero findings, and the checker was never even asked', async () => {
+    ALWAYS_CONTRADICTS.mockClear();
+    const findings = await detectContradictions(
+      neuron('new', URL_A), [counterpart('old', URL_A)], ALWAYS_CONTRADICTS, undefined, true,
     );
-    expect(fund).toEqual([]);
-    // Springet ligger FØR kaldet: en rettelse på sitet koster heller ikke penge.
-    expect(ALTID_MODSIGELSE).not.toHaveBeenCalled();
+    expect(findings).toEqual([]);
+    // The skip sits BEFORE the call: an edit on the site costs no money either.
+    expect(ALWAYS_CONTRADICTS).not.toHaveBeenCalled();
   });
 });
 
-describe('F275.3 AC#1 — NEGATIV KONTROL: forskellige kilder modsiger stadig hinanden', () => {
-  it('to forskellige URL\'er giver et fund', async () => {
-    const fund = await detectContradictions(
-      neuron('ny', URL_A), [modpart('anden', URL_B)], ALTID_MODSIGELSE, undefined, true,
+describe('F275.3 AC#1 — NEGATIVE CONTROL: different sources still contradict', () => {
+  it('two different URLs produce a finding', async () => {
+    const findings = await detectContradictions(
+      neuron('new', URL_A), [counterpart('other', URL_B)], ALWAYS_CONTRADICTS, undefined, true,
     );
-    expect(fund.length).toBe(1);
-    expect(fund[0]!.kind).toBe('contradiction-alert');
+    expect(findings.length).toBe(1);
+    expect(findings[0]!.kind).toBe('contradiction-alert');
   });
 
-  it('blandet flok: kun modparten med SAMME source springes over', async () => {
-    // Uden denne ville «spring altid over» bestå lige så grønt som reglen.
-    const fund = await detectContradictions(
-      neuron('ny', URL_A),
-      [modpart('samme-source', URL_A), modpart('anden-source', URL_B), modpart('ukendt', null)],
-      ALTID_MODSIGELSE, undefined, true,
+  it('mixed batch: only the counterpart with the SAME source is skipped', async () => {
+    // Without this, "always skip" would pass just as green as the rule.
+    const findings = await detectContradictions(
+      neuron('new', URL_A),
+      [counterpart('same-source', URL_A), counterpart('other-source', URL_B), counterpart('unknown', null)],
+      ALWAYS_CONTRADICTS, undefined, true,
     );
-    expect(fund.map((f) => (f.details as { existingDocumentId: string }).existingDocumentId).sort())
-      .toEqual(['anden-source', 'ukendt']);
+    expect(findings.map((f) => (f.details as { existingDocumentId: string }).existingDocumentId).sort())
+      .toEqual(['other-source', 'unknown']);
   });
 });
 
-describe('F275.3 AC#4 — DEN SIKRE STANDARD: ingen identitet ⇒ MODSIGELSE', () => {
-  it('to Neuroner UDEN identitet er ikke «samme ukendte source»', async () => {
-    // Faldt tvivlen den anden vej, ville hele den nuværende base — hvor feltet
-    // er tomt indtil backfill'en er kørt — blive usynlig for detektion i det
-    // sekund kontakten blev slået til. Og en modsigelse der ikke rejses ser
-    // præcis ud som en der ikke findes.
-    const fund = await detectContradictions(
-      neuron('ny', null), [modpart('gammel', null)], ALTID_MODSIGELSE, undefined, true,
+describe('F275.3 AC#4 — THE SAFE DEFAULT: no identity ⇒ CONTRADICTION', () => {
+  it('two Neurons WITHOUT an identity are not "the same unknown source"', async () => {
+    // Had the doubt fallen the other way, the entire current base — where the
+    // field is empty until the backfill has run — would become invisible to
+    // detection the second the switch was turned on. And a contradiction that is
+    // never raised looks exactly like one that does not exist.
+    const findings = await detectContradictions(
+      neuron('new', null), [counterpart('old', null)], ALWAYS_CONTRADICTS, undefined, true,
     );
-    expect(fund.length).toBe(1);
+    expect(findings.length).toBe(1);
   });
 
-  it('kun den ene side kendt ⇒ stadig modsigelse, i begge retninger', async () => {
-    expect((await detectContradictions(neuron('n', URL_A), [modpart('g', null)], ALTID_MODSIGELSE, undefined, true)).length).toBe(1);
-    expect((await detectContradictions(neuron('n', null), [modpart('g', URL_A)], ALTID_MODSIGELSE, undefined, true)).length).toBe(1);
+  it('only one side known ⇒ still a contradiction, in both directions', async () => {
+    expect((await detectContradictions(neuron('n', URL_A), [counterpart('g', null)], ALWAYS_CONTRADICTS, undefined, true)).length).toBe(1);
+    expect((await detectContradictions(neuron('n', null), [counterpart('g', URL_A)], ALWAYS_CONTRADICTS, undefined, true)).length).toBe(1);
   });
 
-  it('sameSource() siger det selv: null matcher aldrig null', () => {
+  it('sameSource() says it itself: null never matches null', () => {
     expect(sameSource({ sourceIdentity: null }, { sourceIdentity: null })).toBe(false);
     expect(sameSource({ sourceIdentity: URL_A }, { sourceIdentity: null })).toBe(false);
     expect(sameSource({ sourceIdentity: URL_A }, { sourceIdentity: URL_A })).toBe(true);
     expect(sameSource({ sourceIdentity: URL_A }, { sourceIdentity: URL_B })).toBe(false);
   });
 
-  it('en tom streng er heller ikke en identitet der matcher en anden tom', () => {
-    // sourceIdentity() returnerer aldrig '', men en rå DB-værdi kunne være det.
+  it('an empty string is not an identity that matches another empty one either', () => {
+    // sourceIdentity() never returns '', but a raw DB value could be.
     expect(sameSource({ sourceIdentity: '' }, { sourceIdentity: '' })).toBe(true);
-    // ^ dokumenteret ærligt: '' === '' er sandt. Derfor er det sourceIdentity()
-    //   der skal blive ved med at afvise tomme værdier — se source-identity.ts.
+    // ^ documented honestly: '' === '' is true. That is why sourceIdentity() must
+    //   keep rejecting empty values — see source-identity.ts.
   });
 });
 
-describe('F275.3 AC#3 — kontakten styrer det', () => {
-  it('kontakten FRA ⇒ linten opfører sig som før featuren fandtes', async () => {
-    const fund = await detectContradictions(
-      neuron('ny', URL_A), [modpart('gammel', URL_A)], ALTID_MODSIGELSE, undefined, false,
+describe('F275.3 AC#3 — the switch governs it', () => {
+  it('switch OFF ⇒ the lint behaves as it did before the feature existed', async () => {
+    const findings = await detectContradictions(
+      neuron('new', URL_A), [counterpart('old', URL_A)], ALWAYS_CONTRADICTS, undefined, false,
     );
-    expect(fund.length).toBe(1);
+    expect(findings.length).toBe(1);
   });
 
-  it('argumentet UDELADT ⇒ også gammel adfærd', async () => {
-    // Standarden er `false` med vilje: en ny regel må ikke kunne snige sig ind
-    // gennem et argument en kalder glemte at sende.
-    const fund = await detectContradictions(neuron('ny', URL_A), [modpart('gammel', URL_A)], ALTID_MODSIGELSE);
-    expect(fund.length).toBe(1);
+  it('argument OMITTED ⇒ old behaviour as well', async () => {
+    // The default is `false` on purpose: a new rule must not be able to sneak in
+    // through an argument a caller forgot to pass.
+    const findings = await detectContradictions(neuron('new', URL_A), [counterpart('old', URL_A)], ALWAYS_CONTRADICTS);
+    expect(findings.length).toBe(1);
   });
 });
 
-describe('F275.3 — springet rører ikke de gamle regler', () => {
-  it('en Neuron modsiger stadig ikke sig selv', async () => {
-    const fund = await detectContradictions(
-      neuron('samme', URL_A), [modpart('samme', URL_B)], ALTID_MODSIGELSE, undefined, true,
+describe('F275.3 — the skip leaves the old rules alone', () => {
+  it('a Neuron still does not contradict itself', async () => {
+    const findings = await detectContradictions(
+      neuron('same', URL_A), [counterpart('same', URL_B)], ALWAYS_CONTRADICTS, undefined, true,
     );
-    expect(fund).toEqual([]);
+    expect(findings).toEqual([]);
   });
 
-  it('en kontrollant der fejler tier stadig — den rejser ikke et gæt', async () => {
-    const fund = await detectContradictions(
-      neuron('ny', URL_A),
-      [modpart('anden', URL_B)],
-      mock(async () => { throw new Error('modellen svarede ikke'); }),
+  it('a checker that fails still stays silent — it does not raise a guess', async () => {
+    const findings = await detectContradictions(
+      neuron('new', URL_A),
+      [counterpart('other', URL_B)],
+      mock(async () => { throw new Error('the model did not answer'); }),
       undefined, true,
     );
-    expect(fund).toEqual([]);
+    expect(findings).toEqual([]);
   });
 });

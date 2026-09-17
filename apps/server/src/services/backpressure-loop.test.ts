@@ -1,19 +1,19 @@
 /**
- * F281.1 — et tilbageholdt kompileringsjob må ALDRIG kalde sig selv i ring.
+ * F281.1 — a held compile job must NEVER call itself in a loop.
  *
- * Når kapaciteten er fuld, skal jobbet blive liggende i køen og vente på den
- * periodiske planlægger. Det gjorde det ikke: dræningsblokken i `claimAndRun`
- * fandt præcis det job vi lige havde lagt fra os, og kaldte sig selv igen med
- * det samme — i ring, uden pause.
+ * When capacity is full the job should stay queued and wait for the periodic
+ * scheduler. It did not: the drain block in `claimAndRun` found precisely the
+ * job we had just put down and called itself again immediately — in a loop,
+ * without pause.
  *
- * MÅLT 17/9 2026 på serverens egen prøvesuite: 686.041 lines
- * «[backpressure] holding job_… — global-concurrency» og en logfil på 62 MB
- * på få sekunder. Suiten nåede aldrig at blive færdig.
+ * MEASURED 17 Sept 2026 on the server's own suite: 686,041 lines of
+ * "[backpressure] holding job_… — global-concurrency" and a 62 MB log file
+ * within seconds. The suite never finished.
  *
- * Presset skabes med TENANT-RATEN og ikke med det globale cap, fordi
- * `runningLocally` er delt modul-tilstand: en tidligere prøvefil kan have
- * efterladt Brains i den, og så ville prøven bestå eller fejle af en anden
- * grund end sin egen. 60 rækker rammer standardloftet uanset rækkefølge.
+ * The pressure is created with the TENANT RATE and not the global cap, because
+ * `runningLocally` is shared module state: an earlier test file may have left
+ * Brains in it, and then this test would pass or fail for a reason other than
+ * its own. 60 rows hit the default ceiling regardless of ordering.
  */
 import { test, expect, beforeAll, afterAll } from 'bun:test';
 import { join } from 'node:path';
@@ -34,33 +34,33 @@ const T = 't-ring', U = 'u-ring', KB = 'kb-ring';
 let trail: Awaited<ReturnType<typeof createLibsqlDatabase>>;
 let heldJobId: string | undefined;
 
-/** Fylder tenantens time-vindue helt op. */
+/** Fills the tenant's hourly window right up. */
 async function fillHourlyWindow(): Promise<void> {
-  const nu = new Date().toISOString();
+  const now = new Date().toISOString();
   for (let i = 0; i < DEFAULT_BACKPRESSURE.maxPerHourPerTenant; i++) {
     await trail.db.insert(ingestJobs).values({
-      id: `job-fyld-${i}`, tenantId: T, knowledgeBaseId: KB,
-      documentId: 'doc-ring', status: 'done', startedAt: nu,
+      id: `job-fill-${i}`, tenantId: T, knowledgeBaseId: KB,
+      documentId: 'doc-ring', status: 'done', startedAt: now,
     }).run();
   }
 }
 
 async function clearHourlyWindow(): Promise<void> {
   for (let i = 0; i < DEFAULT_BACKPRESSURE.maxPerHourPerTenant; i++)
-    await trail.db.delete(ingestJobs).where(eq(ingestJobs.id, `job-fyld-${i}`)).run();
+    await trail.db.delete(ingestJobs).where(eq(ingestJobs.id, `job-fill-${i}`)).run();
 }
 
 /**
- * Kører `fn` og tæller hvor mange «holding»-lines den skrev.
+ * Runs `fn` and counts how many "holding" lines it wrote.
  *
- * NØDBREMSEN er ikke pynt. Ringen er en kæde af await'ede DB-kald, altså rene
- * mikro-opgaver — den sulter timerne, så en `setTimeout`-ventetid aldrig
- * udløses. Uden bremsen HÆNGER prøven i stedet for at fejle, og en prøve der
- * hænger rapporterer ingenting. Målt: prøven blev dræbt after 120 sekunder
- * med en tom log, fordi `console.log` var opsnappet.
+ * THE EMERGENCY BRAKE is not decoration. The loop is a chain of awaited DB calls,
+ * i.e. pure microtasks — it starves the timers, so a `setTimeout` wait never
+ * fires. Without the brake the test HANGS instead of failing, and a test that
+ * hangs reports nothing. Measured: the test was killed after 120 seconds with an
+ * empty log, because `console.log` had been intercepted.
  *
- * Bremsen arkiverer kilden. Næste runde i ringen ser en arkiveret source,
- * annullerer jobbet og stopper — uden at starte en real kompilering.
+ * The brake archives the source. The next round of the loop sees an archived
+ * source, cancels the job and stops — without starting a real compile.
  */
 async function countHoldingLines(fn: () => void, waitMs: number, cap = 200): Promise<number> {
   const real = console.log;
@@ -86,7 +86,7 @@ async function countHoldingLines(fn: () => void, waitMs: number, cap = 200): Pro
 
 beforeAll(async () => {
   const p = join(process.env.TMPDIR ?? '/tmp', `ring-${process.pid}.db`);
-  for (const f of [p, `${p}-wal`, `${p}-shm`]) { try { rmSync(f, { force: true }); } catch { /* frisk */ } }
+  for (const f of [p, `${p}-wal`, `${p}-shm`]) { try { rmSync(f, { force: true }); } catch { /* fresh */ } }
   trail = await createLibsqlDatabase({ path: p });
   await trail.runMigrations();
   await trail.db.insert(tenants).values({ id: T, slug: 'ring', name: 'Ring', plan: 'hobby' }).run();
@@ -98,9 +98,9 @@ beforeAll(async () => {
   }).run();
 });
 
-afterAll(() => { try { trail?.close?.(); } catch { /* lukket */ } });
+afterAll(() => { try { trail?.close?.(); } catch { /* already closed */ } });
 
-test('DEN BÆRENDE: et tilbageholdt job skriver ÉN holding-linje, ikke tusinder', async () => {
+test('LOAD-BEARING: a held job writes ONE holding line, not thousands', async () => {
   await fillHourlyWindow();
 
   const lines = await countHoldingLines(
@@ -108,30 +108,30 @@ test('DEN BÆRENDE: et tilbageholdt job skriver ÉN holding-linje, ikke tusinder
     400,
   );
 
-  // Før rettelsen: titusinder på 400 ms. Loftet er sat lavt nok til at en
-  // ring ikke kan snige sig under det, og højt nok til at en enkelt ekstra
-  // periodisk tik ikke gør prøven flaky.
+  // Before the fix: tens of thousands in 400 ms. The ceiling is low enough that
+  // a loop cannot sneak under it, and high enough that one extra periodic tick
+  // does not make the test flaky.
   expect(lines).toBeLessThanOrEqual(3);
-  expect(lines).toBeGreaterThanOrEqual(1);   // POSITIV KONTROL: presset virkede
+  expect(lines).toBeGreaterThanOrEqual(1);   // POSITIVE CONTROL: the pressure worked
 
-  const holdt = await trail.db.select().from(ingestJobs)
+  const held = await trail.db.select().from(ingestJobs)
     .where(eq(ingestJobs.documentId, 'doc-ring')).all();
-  heldJobId = holdt.find((j) => j.status === 'queued')?.id;
+  heldJobId = held.find((j) => j.status === 'queued')?.id;
   expect(heldJobId).toBeString();
 });
 
-test('JOBBET BLIVER IKKE HÆNGENDE: det ligger stadig i kø og bliver pickedUp af næste tik', async () => {
+test('THE JOB IS NOT STRANDED: it stays queued and is picked up by the next tick', async () => {
   const afterHold = await trail.db.select().from(ingestJobs)
     .where(eq(ingestJobs.id, heldJobId!)).get();
-  expect(afterHold?.status).toBe('queued');   // ikke tabt, ikke fejlet
+  expect(afterHold?.status).toBe('queued');   // not lost, not failed
 
-  // Frigiv kapaciteten og tik Brain'en igen — nøjagtig det samme
-  // `tickScheduler`-kald som den periodiske planlægger laver hvert 30. sekund.
+  // Release the capacity and tick the Brain again — exactly the same
+  // `tickScheduler` call the periodic scheduler makes every 30 seconds.
   //
-  // Kilden arkiveres først, så jobbet afsluttes på den udgang der IKKE
-  // starter en real — og betalt — kompilering. Prøven beviser altså at det
-  // tilbageholdte job bliver TAGET op igen af et senere tik; den beviser
-  // ikke en fuld kompilering, og det påstår den heller ikke.
+  // The source is archived first, so the job terminates on the exit that does
+  // NOT start a real — and paid — compile. So this test proves the held job is
+  // PICKED UP again by a later tick; it does not prove a full compile, and it
+  // does not claim to.
   await clearHourlyWindow();
   await trail.db.update(documents).set({ archived: true })
     .where(eq(documents.id, 'doc-ring')).run();
@@ -140,5 +140,5 @@ test('JOBBET BLIVER IKKE HÆNGENDE: det ligger stadig i kø og bliver pickedUp a
 
   const pickedUp = await trail.db.select().from(ingestJobs)
     .where(eq(ingestJobs.id, heldJobId!)).get();
-  expect(pickedUp?.status).not.toBe('queued');   // planlæggeren tog det
+  expect(pickedUp?.status).not.toBe('queued');   // the scheduler took it
 });

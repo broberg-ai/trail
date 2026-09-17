@@ -182,7 +182,7 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
   const localCompile = c.req.query('localCompile') === 'true';
   // F275.2 AC#4 — brugerens svar på «det er en ny source, ikke en ny udgave».
   // Uden den er default ON en lydløs overskrivning ved navnesammenfald.
-  const nyKilde = c.req.query('nyKilde') === 'true';
+  const newSource = c.req.query('newSource') === 'true';
 
   // F243.1 — UPSERT ON SOURCE URL. A re-push of the SAME page must update the
   // document, not create a twin.
@@ -370,7 +370,7 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
       metadata: connector ? JSON.stringify({ connector, sourceUrl }) : null,
       // F275.1 — se ovenfor. `null` når der ingen URL er (en upload); den
       // identitet hører til F275.6's fingerprint, og null er sandt frem for gættet.
-      sourceIdentity: uploadIdentity(kbId, file.name, sourceUrl, nyKilde, docId),
+      sourceIdentity: uploadIdentity(kbId, file.name, sourceUrl, newSource, docId),
       // F162 — dedup hash. Set even on force-uploaded duplicates so the
       // audit trail is complete; subsequent dedup-tjeks just bypass on
       // ?force=true rather than hide the fact that the hash collided.
@@ -468,12 +468,12 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
   // skelnes fra at intet skete.
   //
   // Vi siger også OM afløsningen faktisk sker — begge kontakter læses her, ét
-  // sted, gennem `newEditionIsCanon()`. En besked der påstod «dette erstatter …»
+  // sted, gennem `newEditionIsCanon()`. En besked der påstod «dette supersedes …»
   // mens Brain-kontakten stod på FRA ville være forkert i den beroligende retning.
   // F275.6 — to sager, i rækkefølge. Navnesammenfaldet er det alvorligste
   // (identiteten siger allerede «samme source»), så det vinder. Er der intet
-  // navnesammenfald, spørger vi om den ligner noget under et ANDET navn.
-  const advarsel =
+  // navnesammenfald, spørger vi om den resembles noget under et ANDET navn.
+  const warning =
     (await filenameClashWarning(trail, tenant.id, kbId, doc, connector)) ??
     (doc
       ? await sameWorkNewName(trail, tenant.id, kbId, {
@@ -484,7 +484,7 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload', async (c) => {
       : undefined);
 
   console.log(`[upload] response-ready 201 ${lap()}`);
-  return c.json(advarsel ? { ...doc, advarsel } : doc, 201);
+  return c.json(warning ? { ...doc, warning } : doc, 201);
 });
 
 /**
@@ -563,15 +563,15 @@ uploadRoutes.post('/documents/:id/new-source', async (c) => {
 // + temp files hourly.
 
 /**
- * F275.2 — hvad ER en uploadet fils source-identity?
+ * F275.2 — hvad ER en uploadedAt fils source-identity?
  *
- * Ejerens afgørelse 16/9: **filnavn + Brain**. To gange `rapport.pdf` i samme
+ * Ejerens afgørelse 16/9: **filename + Brain**. To gange `rapport.pdf` i samme
  * Brain er altså to udgaver af samme source, og den seneste er kanon.
  *
  * Han overtog forbeholdet bevidst — peer-sessionens råd var upload default OFF,
  * fordi en upload lige så godt kan være et TILLÆG som en erstatning. Prisen for
  * ON er derfor at to forskellige `rapport.pdf` lydløst ville overskrive hinandens
- * viden, og `nyKilde` er det eneste sted den pris kan betales tilbage: den giver
+ * viden, og `newSource` er det eneste sted den pris kan betales tilbage: den giver
  * filen sin egen identitet for altid, så den aldrig kan læses som en ny udgave.
  *
  * En URL slår altid filnavnet — en site-sync-source ER sin adresse.
@@ -580,7 +580,7 @@ function uploadIdentity(
   kbId: string,
   filename: string,
   sourceUrl: string | null | undefined,
-  nyKilde: boolean,
+  newSource: boolean,
   docId: string,
 ): string | null {
   const url = sourceIdentity('url', sourceUrl);
@@ -588,7 +588,7 @@ function uploadIdentity(
   // docId'et gør identiteten unik for evigt. Uden det ville «ny source» kun
   // holde indtil næste upload med samme navn, og brugerens valg ville
   // forsvinde uden at nogen fik det at vide.
-  return sourceIdentity('path', nyKilde ? `${kbId}/${docId}/${filename}` : `${kbId}/${filename}`);
+  return sourceIdentity('path', newSource ? `${kbId}/${docId}/${filename}` : `${kbId}/${filename}`);
 }
 
 /**
@@ -611,7 +611,7 @@ async function filenameClashWarning(
   if (!forrige) return undefined;
 
   // Begge kontakter læses HER, gennem den ene resolver. Beskeden siger hvad der
-  // SKER — ikke hvad der er sat op. En besked der påstod «dette erstatter …»
+  // SKER — ikke hvad der er sat op. En besked der påstod «dette supersedes …»
   // mens hovedafbryderen stod på FRA ville være forkert i den beroligende retning.
   const kbRow = await trail.db
     .select({ brain: knowledgeBases.newVersionIsCanon, off: knowledgeBases.canonOffConnectors })
@@ -622,21 +622,21 @@ async function filenameClashWarning(
     { brain: kbRow?.brain ?? true, disabledConnectors: readDisabledConnectors(kbRow?.off) },
     connector ?? 'upload',
   );
-  // F275.6 — HVOR MEGET ligner de to hinanden? Aftrykket afgør ikke hvad der
+  // F275.6 — HVOR MEGET resembles de to hinanden? Aftrykket afgør ikke hvad der
   // sker; det afgør hvilken af de fire sager vi står i, og dermed hvad vi
   // SPØRGER om. Se fingerprint.ts for hvorfor ingen tærskel må afgøre.
   const grad = similarity(doc.contentFingerprint ?? null, forrige.contentFingerprint ?? null);
-  const sag = nameVerdict(grad, true);
+  const verdict = nameVerdict(grad, true);
 
   return {
-    kind: 'samme-source',
-    erstatter: { id: forrige.id, filename: forrige.filename, uploadet: forrige.createdAt },
+    kind: 'same-source',
+    supersedes: { id: forrige.id, filename: forrige.filename, uploadedAt: forrige.createdAt },
     supersedesNow: svar.canon,
     reason: svar.reason,
-    sag,
+    verdict,
     similarity: grad,
     // Fortrydelsen skal med i beskeden, ellers er valget kun teoretisk.
-    nyKildeEndpoint: `/api/v1/documents/${doc.id}/new-source`,
+    newSourceEndpoint: `/api/v1/documents/${doc.id}/new-source`,
   };
 }
 
@@ -684,29 +684,29 @@ async function sameWorkNewName(
 
   let bedst: { id: string; filename: string; createdAt: string; grad: number } | null = null;
   for (const a of andre) {
-    if (a.filename === doc.filename) continue; // den sag er allerede dækket ovenfor
+    if (a.filename === doc.filename) continue; // den verdict er allerede dækket ovenfor
     const g = similarity(doc.contentFingerprint, a.aftryk);
     if (g === null) continue;
     if (!bedst || g > bedst.grad) bedst = { id: a.id, filename: a.filename, createdAt: a.createdAt, grad: g };
   }
   if (!bedst) return undefined;
 
-  const sag = nameVerdict(bedst.grad, false);
+  const verdict = nameVerdict(bedst.grad, false);
   // Kun 'same-work-new-name' er værd at forstyrre for. 'new-source' er det
   // normale udfald for enhver upload, og en besked ved hver eneste ville være
   // støj — og en besked man lærer at klikke væk er ingen besked.
-  if (sag !== 'same-work-new-name') return undefined;
+  if (verdict !== 'same-work-new-name') return undefined;
 
   return {
     kind: 'same-work-new-name',
-    ligner: { id: bedst.id, filename: bedst.filename, uploadet: bedst.createdAt },
+    resembles: { id: bedst.id, filename: bedst.filename, uploadedAt: bedst.createdAt },
     similarity: bedst.grad,
-    sag,
+    verdict,
     // Den ER en selvstændig source indtil nogen siger andet — vi spørger, vi
     // afgør ikke. Derfor peger fortrydelsen den ANDEN vej end ved navnesammenfald.
     besked:
-      'Denne fil ligner en vi har i forvejen, under et andet navn. Er det en ny udgave ' +
-      'af det samme værk, så giv den samme filnavn som den forrige — så afløser den. ' +
+      'Denne fil resembles en vi har i forvejen, under et andet navn. Er det en ny udgave ' +
+      'af det samme værk, så giv den samme filename som den forrige — så afløser den. ' +
       'Er det et selvstændigt værk, skal du ikke gøre noget.',
   };
 }
@@ -924,7 +924,7 @@ uploadRoutes.post('/knowledge-bases/:kbId/documents/upload/init', async (c) => {
         kbId,
         filename,
         body.metadata?.sourceUrl,
-        c.req.query('nyKilde') === 'true',
+        c.req.query('newSource') === 'true',
         docId,
       ),
       contentHash,
@@ -1226,7 +1226,7 @@ uploadRoutes.post('/uploads/:uploadId/finalize', async (c) => {
 
   // F275.2 AC#4 — beskeden hører til HER også. Admin-panelet uploader kun ad
   // denne vej, så uden den ville sikkerhedsnettet kun findes i prøverne.
-  const advarsel =
+  const warning =
     (await filenameClashWarning(trail, tenant.id, session.knowledgeBaseId, doc, connector)) ??
     (doc
       ? await sameWorkNewName(trail, tenant.id, session.knowledgeBaseId, {
@@ -1236,7 +1236,7 @@ uploadRoutes.post('/uploads/:uploadId/finalize', async (c) => {
         })
       : undefined);
 
-  return c.json(advarsel ? { doc, advarsel } : { doc }, 201);
+  return c.json(warning ? { doc, warning } : { doc }, 201);
 });
 
 // GET /api/v1/uploads/:uploadId — resume probe

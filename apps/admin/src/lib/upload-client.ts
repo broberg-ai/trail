@@ -157,20 +157,20 @@ async function fetchWithRetry(
  * samme kilde. Feltet er valgfrit, så kaldere der ikke bruger det er upåvirkede —
  * men den der viser uploads på skærmen SKAL vise det.
  */
-export interface NavnesammenfaldAdvarsel {
-  kind: 'samme-kilde';
-  erstatter: { id: string; filename: string; uploadet: string };
+export interface FilenameClashWarning {
+  kind: 'same-source';
+  supersedes: { id: string; filename: string; uploadedAt: string };
   /** Hvad der SKER — ikke hvad der er sat op. Kontakterne er allerede læst. */
   supersedesNow: boolean;
   grund: 'til' | 'brain-fra' | 'konnektor-fra';
-  nyKildeEndpoint: string;
+  newSourceEndpoint: string;
 }
 
 export async function uploadChunked(
   kbId: string,
   file: File,
   opts: UploadOptions = {},
-): Promise<Document & { advarsel?: NavnesammenfaldAdvarsel }> {
+): Promise<Document & { warning?: FilenameClashWarning }> {
   let uploadId: string;
   let chunkSize: number;
   let contentHash: string;
@@ -297,10 +297,10 @@ export async function uploadChunked(
 
   const result = (await finalRes.json()) as {
     doc: Document;
-    advarsel?: NavnesammenfaldAdvarsel;
+    warning?: FilenameClashWarning;
   };
   forgetActiveUpload(uploadId);
-  return result.advarsel ? { ...result.doc, advarsel: result.advarsel } : result.doc;
+  return result.warning ? { ...result.doc, warning: result.warning } : result.doc;
 }
 
 /**

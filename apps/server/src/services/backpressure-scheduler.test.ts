@@ -1,17 +1,17 @@
 /**
- * F281.2 — den periodiske planlægger skal køre for HVER kunde, ikke kun den første.
+ * F281.2 — the periodic scheduler must run for EVERY tenant, not just the first.
  *
- * `startBackpressureScheduler` blev kaldt én gang pr. kunde ved opstart, men
- * vogtede på en modul-global timer-variabel: den anden kunde og alle derefter
- * fik et tavst no-op. Kaldestedet i index.ts påstod ordret «one timer per
- * tenant so jobs in tenant A never wait on tenant B's rate cap». Det var
- * usandt, og koden — ikke kommentaren — er den der er rettet.
+ * `startBackpressureScheduler` was called once per tenant at boot, but guarded on
+ * a module-global timer variable: the second tenant and every one after got a
+ * silent no-op. The call site in index.ts claimed verbatim "one timer per tenant
+ * so jobs in tenant A never wait on tenant B's rate cap". That was untrue, and it
+ * is the code — not the comment — that has been fixed.
  *
- * DET BLEV BÆRENDE MED F281.1. Før den holdt et tilbageholdt job sig selv i
- * gang ved at kalde sig selv i ring: dyrt og larmende, men det blev pickedUp når
- * der kom plads. F281.1 fjernede ringen og gjorde den periodiske planlægger
- * til den der prøver igen. For kunde nummer to fandtes den ikke — så jeg
- * ville have byttet en CPU der brænder ud med et job der aldrig bliver kørt.
+ * THIS BECAME LOAD-BEARING WITH F281.1. Before it, a held job kept itself going
+ * by calling itself in a loop: expensive and noisy, but it was picked up once
+ * capacity appeared. F281.1 removed the loop and made the periodic scheduler the
+ * thing that retries. For tenant number two it did not exist — so I would have
+ * traded a CPU burning out for a job that never runs at all.
  */
 import { test, expect, afterEach } from 'bun:test';
 import { join } from 'node:path';
@@ -19,18 +19,18 @@ import { rmSync } from 'node:fs';
 import { createLibsqlDatabase } from '@trail/db';
 import { startBackpressureScheduler, stopBackpressureScheduler } from './ingest.js';
 
-async function freshDb(navn: string) {
-  const p = join(process.env.TMPDIR ?? '/tmp', `plan-${navn}-${process.pid}.db`);
-  for (const f of [p, `${p}-wal`, `${p}-shm`]) { try { rmSync(f, { force: true }); } catch { /* frisk */ } }
+async function freshDb(name: string) {
+  const p = join(process.env.TMPDIR ?? '/tmp', `plan-${name}-${process.pid}.db`);
+  for (const f of [p, `${p}-wal`, `${p}-shm`]) { try { rmSync(f, { force: true }); } catch { /* fresh */ } }
   const t = await createLibsqlDatabase({ path: p });
   await t.runMigrations();
   return t;
 }
 
-/** Tæller de timere der er i live lige nu — Bun holder regnskab med dem. */
+/** How many tickers are alive right now. */
 function activeTimers(): number {
-  // `setInterval` returnerer et Timeout-objekt; vi tæller i stedet via en
-  // tælle-indpakning, fordi Bun ikke eksponerer en global liste. Se nedenfor.
+  // `setInterval` returns a Timeout object; we count through a wrapper instead,
+  // because Bun does not expose a global list. See below.
   return timerCount;
 }
 
@@ -45,11 +45,11 @@ afterEach(() => {
   timerCount = 0;
 });
 
-test('DEN BÆRENDE: to kunder giver to tikkere, ikke én', async () => {
+test('LOAD-BEARING: two tenants give two tickers, not one', async () => {
   const a = await freshDb('a');
   const b = await freshDb('b');
 
-  // Tæl hvor mange intervaller planlæggeren faktisk opretter.
+  // Count how many intervals the scheduler actually creates.
   globalThis.setInterval = ((...args: Parameters<typeof setInterval>) => {
     timerCount++;
     return realSetInterval(...args);
@@ -58,12 +58,12 @@ test('DEN BÆRENDE: to kunder giver to tikkere, ikke én', async () => {
   startBackpressureScheduler(a);
   startBackpressureScheduler(b);
 
-  // Før rettelsen: 1. Kunde nummer to fik et tavst no-op, og dens køede
-  // jobs blev aldrig forsøgt igen af nogen.
+  // Before the fix: 1. Tenant number two got a silent no-op, and its queued jobs
+  // were never retried by anyone.
   expect(activeTimers()).toBe(2);
 });
 
-test('IDEMPOTENS BEVARET: samme kunde to gange giver stadig ÉN tikker', async () => {
+test('IDEMPOTENCE PRESERVED: the same tenant twice still gives ONE ticker', async () => {
   const a = await freshDb('c');
 
   globalThis.setInterval = ((...args: Parameters<typeof setInterval>) => {
@@ -74,12 +74,12 @@ test('IDEMPOTENS BEVARET: samme kunde to gange giver stadig ÉN tikker', async (
   startBackpressureScheduler(a);
   startBackpressureScheduler(a);
 
-  // POSITIV KONTROL for at rettelsen ikke bare fjernede vagten: opstart
-  // kalder én gang pr. kunde, men en gentagelse må ikke lægge en timer oveni.
+  // POSITIVE CONTROL that the fix did not simply delete the guard: boot calls
+  // once per tenant, but a repeat must not stack a second timer on top.
   expect(activeTimers()).toBe(1);
 });
 
-test('STOP LUKKER DEM ALLE: ingen tikker overlever en nedlukning', async () => {
+test('STOP CLOSES THEM ALL: no ticker survives a shutdown', async () => {
   const a = await freshDb('d');
   const b = await freshDb('e');
 
@@ -97,12 +97,13 @@ test('STOP LUKKER DEM ALLE: ingen tikker overlever en nedlukning', async () => {
   startBackpressureScheduler(b);
   stopBackpressureScheduler();
 
-  // En tikker der overlever nedlukningen skriver videre til en lukket
-  // database. Begge skal ryddes, ikke kun den første.
+  // A ticker that survives shutdown keeps writing to a closed database. Both
+  // must be cleared, not only the first.
   expect(cleared).toBe(2);
 
-  // Og en ny opstart bagefter skal kunne lave dem igen — ellers ville en
-  // genstartet kunde stå uden planlægger resten af processens levetid.
+  // And a fresh start afterwards must be able to create them again — otherwise a
+  // restarted tenant would sit without a scheduler for the rest of the process's
+  // lifetime.
   timerCount = 0;
   startBackpressureScheduler(a);
   expect(activeTimers()).toBe(1);

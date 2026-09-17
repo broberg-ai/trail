@@ -1,12 +1,13 @@
 /**
- * F275.5 AC#1 — den gamle påstand må ikke svare som GÆLDENDE.
+ * F275.5 AC#1 — the old claim must not answer as if it were CURRENT.
  *
- * At markere en side i databasen er ikke nok: mærket skal nå frem til det sted
- * hvor siden bliver til et svar. Ellers er afløsningen kun ryddet op i køen,
- * mens hjernen svarer videre på gårsdagens tekst — og det er værre end i dag,
- * fordi det ikke længere ligner et problem.
+ * Marking a page in the database is not enough: the mark has to reach the place
+ * where the page turns into an answer. Otherwise supersession has only tidied the
+ * queue while the brain keeps answering from yesterday's text — and that is worse
+ * than today, because it no longer looks like a problem.
  *
- * Målt gennem det ÆGTE hentnings-endepunkt, ikke gennem formateringsfunktionen.
+ * Measured through the REAL retrieval endpoint, not through the formatting
+ * function.
  */
 import { test, expect, beforeAll } from 'bun:test';
 import { join } from 'node:path';
@@ -19,16 +20,17 @@ import { eq } from 'drizzle-orm';
 import { createApp } from '../app.js';
 
 const T = 't-kaf', U = 'u-kaf', KB = 'kb-kaf';
-const NØGLE = 'trail_' + 'f'.repeat(64);
+const KEY = 'trail_' + 'f'.repeat(64);
 let app: ReturnType<typeof createApp>;
 let trail: Awaited<ReturnType<typeof createLibsqlDatabase>>;
 
-const PÅSTAND = 'Projektet bygges nu og er endnu ikke lanceret hos kunderne i Danmark.';
+/** The page content is Danish because the product's content is Danish. */
+const CLAIM = 'Projektet bygges nu og er endnu ikke lanceret hos kunderne i Danmark.';
 
-async function hent() {
+async function retrieve() {
   const res = await app.request(`http://engine.local/api/v1/knowledge-bases/${KB}/retrieve`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${NØGLE}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ query: 'projektet lanceret kunderne', topK: 5 }),
   });
   expect(res.status).toBe(200);
@@ -37,7 +39,7 @@ async function hent() {
 
 beforeAll(async () => {
   const p = join(process.env.TMPDIR ?? '/tmp', `kaf-${process.pid}.db`);
-  for (const f of [p, `${p}-wal`, `${p}-shm`]) { try { rmSync(f, { force: true }); } catch { /* frisk */ } }
+  for (const f of [p, `${p}-wal`, `${p}-shm`]) { try { rmSync(f, { force: true }); } catch { /* fresh */ } }
   trail = await createLibsqlDatabase({ path: p });
   await trail.runMigrations();
   await trail.initFTS();
@@ -46,46 +48,47 @@ beforeAll(async () => {
   await trail.db.insert(knowledgeBases).values({ id: KB, tenantId: T, createdBy: U, name: 'Kaf', slug: KB, language: 'da' }).run();
   await trail.db.insert(apiKeys).values({
     id: 'k1', tenantId: T, userId: U, name: 'k1',
-    keyHash: createHash('sha256').update(NØGLE).digest('hex'), scope: 'all',
+    keyHash: createHash('sha256').update(KEY).digest('hex'), scope: 'all',
   }).run();
   await trail.db.insert(documents).values({
     id: 'overview', tenantId: T, userId: U, knowledgeBaseId: KB, kind: 'wiki',
-    path: '/neurons/', filename: 'overview.md', title: 'Overblik', content: PÅSTAND, fileType: 'md',
+    path: '/neurons/', filename: 'overview.md', title: 'Overblik', content: CLAIM, fileType: 'md',
   }).run();
   await trail.db.insert(documentChunks).values({
-    id: 'c1', tenantId: T, knowledgeBaseId: KB, documentId: 'overview', chunkIndex: 0, content: PÅSTAND, tokenCount: 20,
+    id: 'c1', tenantId: T, knowledgeBaseId: KB, documentId: 'overview', chunkIndex: 0, content: CLAIM, tokenCount: 20,
   }).run();
   app = createApp(trail, new Map([['kaf', trail]]));
 });
 
-test('POSITIV KONTROL: uden mærke svarer siden uden forbehold', async () => {
-  // Uden den beviser prøven herunder kun at der stod noget i svaret.
-  const r = await hent();
-  expect(r.formattedContext).toContain('bygges nu');
-  expect(r.formattedContext).not.toContain('⚠️');
+test('POSITIVE CONTROL: without the mark the page answers with no caveat', () => {
+  // Without it, the test below only proves that something was in the answer.
+  return retrieve().then((r) => {
+    expect(r.formattedContext).toContain('bygges nu');
+    expect(r.formattedContext).not.toContain('⚠️');
+  });
 });
 
-test('AC#1 DEN BÆRENDE: med mærke bærer svaret et forbehold — FØR indholdet', async () => {
+test('AC#1 LOAD-BEARING: with the mark the answer carries a caveat — BEFORE the content', async () => {
   await trail.db.update(documents)
     .set({ sourceChangedAt: Date.parse('2026-09-16T10:00:00Z') })
     .where(eq(documents.id, 'overview')).run();
-  const r = await hent();
+  const r = await retrieve();
 
   expect(r.formattedContext).toContain('Kilden bag denne side fik en ny udgave');
-  // DANSK TID PÅ NAVN: 16/9 kl. 10:00 UTC er 16. september i København.
+  // DANISH TIME BY ZONE NAME: 10:00 UTC on 16 Sept is 16 September in Copenhagen.
   expect(r.formattedContext).toContain('16. september');
   expect(r.formattedContext).toContain('svar aldrig som om det er bekræftet mod den nyeste kilde');
 
-  // RÆKKEFØLGEN ER BÆRENDE. En advarsel UNDER en tekst læses after påstanden
-  // er troet — af et menneske og af en model.
+  // THE ORDER IS LOAD-BEARING. A warning placed UNDER a text is read after the
+  // claim has been believed — by a human and by a model alike.
   expect(r.formattedContext.indexOf('⚠️')).toBeLessThan(r.formattedContext.indexOf('bygges nu'));
 });
 
-test('mærket ryddes ⇒ forbeholdet forsvinder igen', async () => {
-  // Vejen tilbage har sin egen prøve: et mærke der kun kan SÆTTES ville se
-  // identisk ud med et der effective, indtil nogen prøvede at rydde det.
+test('clearing the mark ⇒ the caveat disappears again', async () => {
+  // The way back has its own test: a mark that can only be SET would look
+  // identical to one that works, until someone tried to clear it.
   await trail.db.update(documents).set({ sourceChangedAt: null }).where(eq(documents.id, 'overview')).run();
-  const r = await hent();
+  const r = await retrieve();
   expect(r.formattedContext).not.toContain('⚠️');
   expect(r.formattedContext).toContain('bygges nu');
 });

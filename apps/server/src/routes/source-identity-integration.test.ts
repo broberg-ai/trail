@@ -1,47 +1,47 @@
 /**
- * F275.1 AC#6 — INTEGRATION. Feltet må ikke kun findes i sin egen prøve.
+ * F275.1 AC#6 — INTEGRATION. The field must not exist only in its own unit test.
  *
- * `identityFromMetadata` kan være perfekt og have nul kaldesteder. Vagten læser
- * KILDEN til de ruter der faktisk modtager en source, og kræver at hvert sted
- * der skriver `metadata: … sourceUrl …` også sætter `sourceIdentity`.
+ * `identityFromMetadata` can be perfect and have zero call sites. This guard
+ * reads the SOURCE of the routes that actually receive a source, and requires
+ * that every place writing `metadata: … sourceUrl …` also sets `sourceIdentity`.
  *
- * Tre skrivesteder i uploads.ts konstruerer den samme metadata-form. Det er
- * husets dublet-fælde: de er enige i dag, og bliver uenige den dag ét af dem
- * bliver rettet. Vagten gør uenigheden rød.
+ * Three write sites in uploads.ts construct the same metadata shape. That is the
+ * house's duplicate trap: they agree today, and they disagree the day one of them
+ * is edited. This guard makes the disagreement red.
  */
 import { test, expect } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
 const source = () => readFileSync(new URL('./uploads.ts', import.meta.url), 'utf8');
 
-test('AC#6 hvert metadata-skrivested sætter OGSÅ sourceIdentity', () => {
+test('AC#6 every metadata write site ALSO sets sourceIdentity', () => {
   const s = source();
 
-  // POSITIV KONTROL FØRST: kan vagten overhovedet finde et skrivested? Uden
-  // den ville en omdøbt fil give nul træf, og påstanden bestå på ingenting.
-  // MÅLT: et énlinje-mønster (/metadata:[^\n]*sourceUrl/) fandt kun 2 af 3.
-  // Det tredje skrivested strækker sig over flere lines (en ternær). En vagt
-  // der tæller for lavt, siger grønt om et sted den aldrig så.
+  // POSITIVE CONTROL FIRST: can the guard find a write site at all? Without it a
+  // renamed file would yield zero matches, and the claim would pass on nothing.
+  // MEASURED: a single-line pattern (/metadata:[^\n]*sourceUrl/) found only 2 of
+  // 3. The third write site spans several lines (a ternary). A guard that counts
+  // too low reports green about a place it never looked at.
   const sites = [...s.matchAll(/metadata:[\s\S]{0,220}?sourceUrl/g)];
   expect(sites.length).toBeGreaterThanOrEqual(3);
 
   for (const m of sites) {
     const fields = objectAround(s, m.index!);
-    expect(fields, `metadata-skrivested uden sourceIdentity:\n${fields.slice(0, 220)}`)
+    expect(fields, `metadata write site without sourceIdentity:\n${fields.slice(0, 220)}`)
       .toContain('sourceIdentity');
   }
 });
 
 /**
- * Klipper hele det objekt-literal ud som positionen ligger i — fra dets `{`
- * til den matchende `}`, med tællede tuborgparenteser.
+ * Cuts out the whole object literal the position sits in — from its `{` to the
+ * matching `}`, counting braces.
  *
- * FØRSTE UDGAVE MÅLTE AFSTAND I TEGN (`slice(i, i + 400)`), og det holdt ikke.
- * 17/9 2026 blev en kommentar på fire lines indsat mellem `metadata` og
- * `sourceIdentity` i den chunk-delte upload — feltet stod der stadig, ti
- * lines nede, men uden for vinduet. Vagten blev rød på en fil der var
- * korrekt. En vagt der fejler på formatering lærer læseren at hæve tallet,
- * og næste gang hæver man det forbi en ægte fejl.
+ * THE FIRST VERSION MEASURED DISTANCE IN CHARACTERS (`slice(i, i + 400)`), and
+ * that did not hold. On 17 Sept 2026 a four-line comment was inserted between
+ * `metadata` and `sourceIdentity` in the chunked upload — the field was still
+ * there, ten lines down, but outside the window. The guard went red on a file
+ * that was correct. A guard that fails on formatting teaches the reader to raise
+ * the number, and the next time they raise it past a real defect.
  */
 function objectAround(s: string, pos: number): string {
   let start = pos;
@@ -52,21 +52,21 @@ function objectAround(s: string, pos: number): string {
     else if (c === '{') { if (depth === 0) break; depth--; }
     start--;
   }
-  let dyb = 0;
+  let inner = 0;
   for (let i = start; i < s.length; i++) {
-    if (s[i] === '{') dyb++;
-    else if (s[i] === '}') { dyb--; if (dyb === 0) return s.slice(start, i + 1); }
+    if (s[i] === '{') inner++;
+    else if (s[i] === '}') { inner--; if (inner === 0) return s.slice(start, i + 1); }
   }
-  return s.slice(start);   // uafsluttet — lad påstanden fejle på indholdet
+  return s.slice(start);   // unterminated — let the assertion fail on the content
 }
 
-test('AC#6 identiteten har kaldesteder UDEN FOR sine egne prøver', () => {
-  // En hjælpefunktion ingen kalder er ikke en integration.
+test('AC#6 the identity has call sites OUTSIDE its own tests', () => {
+  // A helper nobody calls is not an integration.
   const s = source();
   expect(s).toContain("sourceIdentity('url'");
   expect((s.match(/sourceIdentity\(/g) ?? []).length).toBeGreaterThanOrEqual(3);
 });
 
-test('NEGATIV KONTROL: vagten kan faktisk sige nej', () => {
-  expect(source()).not.toContain('en-streng-der-med-sikkerhed-ikke-staar-i-filen');
+test('NEGATIVE CONTROL: the guard can actually say no', () => {
+  expect(source()).not.toContain('a-string-that-is-certainly-not-in-the-file');
 });

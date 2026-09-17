@@ -615,7 +615,7 @@ export function setKanonSettings(
 
 /** F275.2 AC#4 — «det er en ny kilde, ikke en ny udgave af den forrige». */
 export function markerSomNyKilde(docId: string): Promise<{ id: string; sourceIdentity: string }> {
-  return api(`/api/v1/documents/${encodeURIComponent(docId)}/ny-kilde`, { method: 'POST' });
+  return api(`/api/v1/documents/${encodeURIComponent(docId)}/new-source`, { method: 'POST' });
 }
 
 export function listQueue(filter: QueueFilter = {}): Promise<QueueListResponse> {

@@ -1,12 +1,12 @@
 /**
- * F275.1 — identiteten skal kunne skelne. Hver påstand er parret med sin
- * modsatte, fordi «alt er samme source» og «alt er forskelligt» begge består
- * en ensidig prøve.
+ * F275.1 — the identity has to be able to tell things apart. Every claim is
+ * paired with its opposite, because "everything is the same source" and
+ * "everything is different" both pass a one-sided test.
  */
 import { test, describe, it, expect } from 'bun:test';
 import { sourceIdentity, readIdentity, identityFromMetadata } from './source-identity.js';
 
-test('DEN BÆRENDE: samme URL = samme identitet, forskellig URL = forskellig', () => {
+test('LOAD-BEARING: same URL = same identity, different URL = different', () => {
   const a = identityFromMetadata(JSON.stringify({ connector: 'broberg-ai-site-sync', sourceUrl: 'https://broberg.ai/flagskibe/bid' }));
   const b = identityFromMetadata(JSON.stringify({ connector: 'broberg-ai-site-sync', sourceUrl: 'https://broberg.ai/flagskibe/bid' }));
   const c = identityFromMetadata(JSON.stringify({ sourceUrl: 'https://broberg.ai/flagskibe/andet' }));
@@ -15,83 +15,84 @@ test('DEN BÆRENDE: samme URL = samme identitet, forskellig URL = forskellig', (
   expect(a).toBe('url:https://broberg.ai/flagskibe/bid');
 });
 
-test('AC#2 NEGATIV KONTROL: samme FILNAVN, forskellig URL → FORSKELLIG identitet', () => {
-  // Det er hele grunden til at identiteten ikke må udledes af navnet. To sites
-  // kan begge levere index.md. Denne prøve skal gå rød hvis nogen senere
-  // bygger en side-identitet på filnavnet.
-  const et = identityFromMetadata(JSON.stringify({ sourceUrl: 'https://a.dk/index' }));
-  const to = identityFromMetadata(JSON.stringify({ sourceUrl: 'https://b.dk/index' }));
-  expect(et).not.toBe(to!);
-  expect(et).not.toBeNull();
-  expect(to).not.toBeNull();
+test('AC#2 NEGATIVE CONTROL: same FILENAME, different URL → DIFFERENT identity', () => {
+  // This is the whole reason the identity must not be derived from the name.
+  // Two sites can both serve index.md. This test must go red if anyone later
+  // builds a page identity on the filename.
+  const one = identityFromMetadata(JSON.stringify({ sourceUrl: 'https://a.dk/index' }));
+  const two = identityFromMetadata(JSON.stringify({ sourceUrl: 'https://b.dk/index' }));
+  expect(one).not.toBe(two!);
+  expect(one).not.toBeNull();
+  expect(two).not.toBeNull();
 });
 
-test('DEN TREDJE TILSTAND: ingen sourceUrl giver NULL, ikke et gæt', () => {
-  // «Vi ved det ikke» må aldrig degradere til «ny source» — så ville
-  // afløsnings-reglen tie om præcis de sager den findes for.
+test('THE THIRD STATE: no sourceUrl yields NULL, not a guess', () => {
+  // "We do not know" must never degrade into "new source" — the supersession
+  // rule would then stay silent about exactly the cases it exists for.
   expect(identityFromMetadata(null)).toBeNull();
   expect(identityFromMetadata('')).toBeNull();
-  expect(identityFromMetadata('{ ikke json')).toBeNull();
+  expect(identityFromMetadata('{ not json')).toBeNull();
   expect(identityFromMetadata(JSON.stringify({ connector: 'upload' }))).toBeNull();
   expect(identityFromMetadata(JSON.stringify({ sourceUrl: 42 }))).toBeNull();
 });
 
-test('PRÆFIKSET holder to identitets-rum adskilt', () => {
-  // Uden det kunne en filsti og en URL kollidere, og kollisionen ville se ud
-  // som «samme source» — featurens egen fejl, opstået af dens eget felt.
+test('THE PREFIX keeps two identity spaces apart', () => {
+  // Without it a file path and a URL could collide, and the collision would
+  // look like "same source" — the feature's own failure, produced by its own
+  // field.
   expect(sourceIdentity('url', '/a/b')).not.toBe(sourceIdentity('path', '/a/b')!);
 });
 
-test('en TOM værdi er ikke en identitet', () => {
-  // Et præfiks foran ingenting ville se gyldigt ud i hver sammenligning,
-  // og to kilder uden identitet ville blive «den samme».
+test('an EMPTY value is not an identity', () => {
+  // A prefix in front of nothing would look valid in every comparison, and two
+  // sources with no identity would become "the same one".
   for (const v of ['', '   ', null, undefined]) expect(sourceIdentity('url', v)).toBeNull();
 });
 
-test('readIdentity deler op igen — og afviser et ukendt rum', () => {
+test('readIdentity splits it back apart — and rejects an unknown space', () => {
   expect(readIdentity('url:https://a.dk')).toEqual({ space: 'url', value: 'https://a.dk' });
   expect(readIdentity('path:/x/y.md')).toEqual({ space: 'path', value: '/x/y.md' });
-  // NEGATIV KONTROL: uden den ville «læs hvad som helst» bestå lige så grønt.
-  expect(readIdentity('vrøvl:abc')).toBeNull();
-  expect(readIdentity('ingen-kolon')).toBeNull();
+  // NEGATIVE CONTROL: without it, "read anything at all" would pass just as green.
+  expect(readIdentity('nonsense:abc')).toBeNull();
+  expect(readIdentity('no-colon')).toBeNull();
   expect(readIdentity('url:')).toBeNull();
   expect(readIdentity(null)).toBeNull();
 });
 
-// bun:test — samme løber som resten af pakkens prøver
-describe('F275.1 — to skrivemåder af samme URL er ÉN identitet', () => {
-  it('DEN MÅLTE SAG: æøå direkte og procent-kodet giver samme identitet', () => {
-    // Fundet i produktionen 17/9, inde i featurens egen nøgle. Samme side stod
-    // med to identiteter, og afløsningen ville have læst en rettelse af den som
-    // en fremmed source.
+// bun:test — same runner as the rest of the package's tests
+describe('F275.1 — two spellings of the same URL are ONE identity', () => {
+  it('THE MEASURED CASE: æøå literal and percent-encoded give the same identity', () => {
+    // Found in production on 17 Sept, inside the feature's own key. The same
+    // page was stored under two identities, and supersession would have read an
+    // edit of it as a foreign source.
     const a = sourceIdentity('url', 'https://broberg.ai/indsigter/design-i-højere-luftlag');
     const b = sourceIdentity('url', 'https://broberg.ai/indsigter/design-i-h%C3%B8jere-luftlag');
     expect(a).toBe(b);
     expect(a).toBe('url:https://broberg.ai/indsigter/design-i-h%C3%B8jere-luftlag');
   });
 
-  it('værtsnavnet småskrives — men STIEN beholder sine store bogstaver', () => {
-    // Værter er ikke versalfølsomme; stier ER. En normalisering der småskrev
-    // begge ville smelte to forskellige sider sammen til én.
+  it('the host is lowercased — but the PATH keeps its capitals', () => {
+    // Hosts are case-insensitive; paths ARE case-sensitive. A normalisation that
+    // lowercased both would melt two different pages into one.
     expect(sourceIdentity('url', 'https://BROBERG.AI/Indsigter')).toBe('url:https://broberg.ai/Indsigter');
     expect(sourceIdentity('url', 'https://broberg.ai/a')).not.toBe(sourceIdentity('url', 'https://broberg.ai/A'));
   });
 
-  it('%2F bliver IKKE til en skråstreg — det ville ændre stiens betydning', () => {
+  it('%2F does NOT become a slash — that would change the meaning of the path', () => {
     expect(sourceIdentity('url', 'https://x.dk/a%2Fb')).toBe('url:https://x.dk/a%2Fb');
     expect(sourceIdentity('url', 'https://x.dk/a%2Fb')).not.toBe(sourceIdentity('url', 'https://x.dk/a/b'));
   });
 
-  it('en værdi der IKKE er en URL beholdes som den er — ikke droppet', () => {
-    // «Kunne ikke normaliseres» må aldrig blive til «har ingen source».
-    expect(sourceIdentity('url', 'ikke en url')).toBe('url:ikke en url');
+  it('a value that is NOT a URL is kept as-is — not dropped', () => {
+    // "Could not be normalised" must never become "has no source".
+    expect(sourceIdentity('url', 'not a url')).toBe('url:not a url');
   });
 
-  it('kun `url`-rummet normaliseres — en sti er ikke en URL', () => {
+  it('only the `url` space is normalised — a path is not a URL', () => {
     expect(sourceIdentity('path', 'kb/Rapport.PDF')).toBe('path:kb/Rapport.PDF');
   });
 
-  it('spørgsmålstegn og fragment overlever', () => {
+  it('query string and fragment survive', () => {
     expect(sourceIdentity('url', 'https://x.dk/a?b=1&c=2#d')).toBe('url:https://x.dk/a?b=1&c=2#d');
   });
 });
