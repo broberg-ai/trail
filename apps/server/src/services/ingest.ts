@@ -129,10 +129,16 @@ async function checkBackpressure(
  * runJob completion). The interval is short enough that a 65-file
  * batch with 5-job global cap drains within minutes, not hours.
  */
-let backpressureTimer: ReturnType<typeof setInterval> | null = null;
+// F281.2 — ÉN tikker pr. kunde-database, ikke én i hele processen.
+// Vagten var før en modul-global variabel, så kunde nummer to og alle
+// derefter fik et tavst no-op: deres køede jobs blev aldrig forsøgt igen af
+// nogen planlægger. Det blev bærende med F281.1, som fjernede den ring et
+// tilbageholdt job ellers holdt sig selv i gang med. Nøglen er databasen
+// selv — præcis den identitet «én planlægger pr. kunde» handler om.
+const backpressureTimers = new Map<TrailDatabase, ReturnType<typeof setInterval>>();
 export function startBackpressureScheduler(trail: TrailDatabase): void {
-  if (backpressureTimer) return; // idempotent — boot calls this once
-  backpressureTimer = setInterval(async () => {
+  if (backpressureTimers.has(trail)) return; // idempotent pr. kunde
+  const timer = setInterval(async () => {
     try {
       // Find every (kbId, tenantId) pair with queued work. Tick each
       // — `tickScheduler` is a no-op if the KB is already running.
@@ -151,6 +157,7 @@ export function startBackpressureScheduler(trail: TrailDatabase): void {
       console.error('[backpressure] scheduler tick failed:', err);
     }
   }, BACKPRESSURE.schedulerIntervalMs);
+  backpressureTimers.set(trail, timer);
   console.log(
     `[backpressure] scheduler started — globalCap=${BACKPRESSURE.maxConcurrentGlobal} ` +
       `tenantRate=${BACKPRESSURE.maxPerHourPerTenant}/h tick=${BACKPRESSURE.schedulerIntervalMs}ms`,
@@ -251,10 +258,10 @@ export async function getIngestStatus(
 }
 
 export function stopBackpressureScheduler(): void {
-  if (backpressureTimer) {
-    clearInterval(backpressureTimer);
-    backpressureTimer = null;
-  }
+  // Rydder HVER kundes tikker. En der overlever en nedlukning bliver ved med
+  // at skrive til en lukket database.
+  for (const timer of backpressureTimers.values()) clearInterval(timer);
+  backpressureTimers.clear();
 }
 
 export function triggerIngest(job: IngestJob): void {
