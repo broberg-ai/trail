@@ -524,7 +524,7 @@ async function sammeKildeAfloeserHer(
     }
   }
 
-  return newEditionIsCanon(kontakter, konnektor).kanon;
+  return newEditionIsCanon(kontakter, konnektor).canon;
 }
 
 async function findSimilarNeurons(

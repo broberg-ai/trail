@@ -233,7 +233,7 @@ export function SettingsTrailPanel() {
   // regne den nye videre selv — panelets egen formodning er præcis det der
   // gør en gemning der fejlede umulig at skelne fra en der lykkedes.
   async function handleToggleKanon(
-    aendring: { brain: boolean } | { konnektor: { id: string; kanon: boolean } },
+    aendring: { brain: boolean } | { connector: { id: string; kanon: boolean } },
     noegle: string,
   ) {
     if (!kb || kanonGemmer) return;
@@ -828,7 +828,7 @@ export function SettingsTrailPanel() {
           </div>
         </section>
 
-        {/* F275.2 — de to kontakter: hovedafbryderen pr. Brain og én pr. konnektor.
+        {/* F275.2 — de to kontakter: hovedafbryderen pr. Brain og én pr. connector.
             Hierarkiet vises, det gættes ikke: serveren regner `satUdAfKraft` ud og
             panelet gengiver den. En kontakt der ser aktiv ud uden at virke er værre
             end ingen kontakt — så den siger det selv, på skærmen. */}
@@ -880,20 +880,20 @@ export function SettingsTrailPanel() {
             ) : null}
           </div>
 
-          {/* Pr. konnektor */}
+          {/* Pr. connector */}
           <div class="mt-5">
             <h3 class="text-xs font-medium">{t('settings.trail.kanon.connectorsTitle')}</h3>
             <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-xl">
               {t('settings.trail.kanon.connectorsHint')}
             </p>
           </div>
-          {kanon !== null && kanon.konnektorer.length === 0 ? (
+          {kanon !== null && kanon.connectors.length === 0 ? (
             <p class="mt-3 text-[11px] text-[color:var(--color-fg-subtle)]" data-testid="settings-kanon-connectors-empty">
               {t('settings.trail.kanon.none')}
             </p>
           ) : null}
           <div class="mt-3" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(kanon?.konnektorer ?? []).map((k) => (
+            {(kanon?.connectors ?? []).map((k) => (
               <div
                 key={k.id}
                 data-testid={`settings-kanon-connector-${k.id}`}
@@ -910,8 +910,8 @@ export function SettingsTrailPanel() {
                 <span class="text-xs" style={{ minWidth: 150 }}>
                   {k.label}
                   <span class="text-[color:var(--color-fg-subtle)]">
-                    {' '}· {k.antalKilder}{' '}
-                    {k.antalKilder === 1
+                    {' '}· {k.sourceCount}{' '}
+                    {k.sourceCount === 1
                       ? t('settings.trail.kanon.source')
                       : t('settings.trail.kanon.sources')}
                   </span>
@@ -935,7 +935,7 @@ export function SettingsTrailPanel() {
                   type="button"
                   data-testid={`settings-kanon-connector-toggle-${k.id}`}
                   onClick={() =>
-                    handleToggleKanon({ konnektor: { id: k.id, kanon: !k.egenKontakt } }, k.id)
+                    handleToggleKanon({ connector: { id: k.id, kanon: !k.egenKontakt } }, k.id)
                   }
                   disabled={kanonGemmer !== null}
                   class="btn active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"

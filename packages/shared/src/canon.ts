@@ -1,61 +1,66 @@
 /**
- * F275.2 — de TO kontakter: «en ny udgave af samme source bliver automatisk kanon».
+ * F275.2 — the TWO switches: "a new edition of the same source automatically
+ * becomes canon".
  *
- * Christian, 16. september 2026, ordret: *«Det lyder virkelig klogt at der både er
- * en på en brain og en på en connector. Vi sætter dem begge to default on så samme
- * source med ny indmad bliver ny kanon.»*
+ * The owner, 16 September 2026, verbatim: *"It sounds really smart that there is
+ * one on a brain and one on a connector. We set both default on, so the same
+ * source with new innards becomes the new canon."*
  *
- * ## Hvorfor to og ikke én
+ * ## Why two and not one
  *
- * En Brain som CB-M1 modtager BÅDE hjemmeside-sync OG manuelle uploads. Ét valg for
- * hele hjernen ville nødvendigvis være forkert for den ene af dem: en rettet side er
- * altid en ny udgave, mens en upload lige så godt kan være et TILLÆG. Derfor er
- * Brain-kontakten hovedafbryderen og konnektor-kontakten den præcise.
+ * A Brain such as CB-M1 receives BOTH website sync AND manual uploads. One choice
+ * for the whole brain would necessarily be wrong for one of them: an edited page
+ * is always a new edition, while an upload may just as well be an ADDITION. So
+ * the Brain switch is the master switch and the connector switch is the precise
+ * one.
  *
- * ## Hierarkiet er entydigt, og det går kun én vej
+ * ## The hierarchy is unambiguous, and it only runs one way
  *
- *   Brain FRA  ⇒  ingen konnektor afløser, uanset sin egen kontakt.
- *   Brain TIL  ⇒  konnektorens egen kontakt afgør.
+ *   Brain OFF  ⇒  no connector supersedes, whatever its own switch says.
+ *   Brain ON   ⇒  the connector's own switch decides.
  *
- * Derfor returnerer resolveren en GRUND og ikke bare et ja/nej: en konnektor-kontakt
- * der står på TIL men er sat ud af kraft af Brain-kontakten SKAL kunne ses som netop
- * det i produktet. En kontakt der ser aktiv ud uden at virke er værre end ingen
- * kontakt — brugeren tror han har slået noget til.
+ * That is why the resolver returns a REASON rather than a bare yes/no: a
+ * connector switch that reads ON while being overridden by the Brain switch MUST
+ * be visible as exactly that in the product. A switch that looks active without
+ * working is worse than no switch — the user believes they turned something on.
  *
- * ## Fraværet betyder TIL, ikke «ved ikke»
+ * ## Absence means ON, not "unknown"
  *
- * Vi gemmer de SLUKKEDE konnektorer, ikke de tændte. Det er den eneste måde hvorpå en
- * konnektor der aldrig er set før automatisk står TIL — som ejeren har bestemt — uden
- * at nogen skal huske at oprette en række for den. Gemte vi de tændte, ville en frisk
- * konnektor være FRA indtil nogen rørte den, og ingen ville kunne se hvorfor.
+ * We store the DISABLED connectors, not the enabled ones. That is the only way a
+ * connector never seen before is automatically ON — as the owner decided —
+ * without anyone having to remember to create a row for it. Store the enabled
+ * ones and a fresh connector would be OFF until someone touched it, and nobody
+ * would be able to see why.
  *
- * Bemærk at dette er en ANDEN tredje-tilstand end `source-identity.ts`'s: dér betyder
- * `null` «vi ved ikke hvilken source det er», og tvivlen falder ud til MODSIGELSE.
- * Her er der ingen tvivl — ejeren har afgjort standarden, og fraværet ER standarden.
+ * Note this is a DIFFERENT third state from the one in `source-identity.ts`:
+ * there, `null` means "we do not know which source this is", and the doubt falls
+ * out as a CONTRADICTION. Here there is no doubt — the owner settled the default,
+ * and absence IS the default.
  */
 
-/** Hvorfor en ny udgave afløser — eller ikke. */
-export type CanonReason = 'til' | 'brain-off' | 'connector-off';
+/** Why a new edition supersedes — or does not. */
+export type CanonReason = 'on' | 'brain-off' | 'connector-off';
 
 export interface CanonSwitches {
-  /** Hovedafbryderen på Brain'en. Default `true`. */
+  /** The master switch on the Brain. Defaults to `true`. */
   brain: boolean;
-  /** Konnektor-id'er der er slået FRA i netop denne Brain. Alle andre er TIL. */
+  /** Connector ids switched OFF in this Brain specifically. Every other is ON. */
   disabledConnectors: string[];
 }
 
 export interface CanonVerdict {
-  kanon: boolean;
-  grund: CanonReason;
+  canon: boolean;
+  reason: CanonReason;
 }
 
 /**
- * Læs kolonnen `canon_off_connectors` (JSON-liste) tilbage til et array.
+ * Read the `canon_off_connectors` column (a JSON list) back into an array.
  *
- * Fejler parsingen, eller er indholdet ikke en liste af strenge, returnerer vi en
- * TOM liste — altså «ingen er slukket», som er default-tilstanden. Det er med vilje:
- * en ødelagt værdi må ikke kunne SLUKKE noget lydløst. Den forkerte retning at fejle
- * i ville være at behandle vrøvl som «alt er slukket».
+ * If parsing fails, or the content is not a list of strings, we return an EMPTY
+ * list — that is, "nothing is disabled", which is the default state. This is
+ * deliberate: a corrupted value must never be able to DISABLE something silently.
+ * The wrong direction to fail in would be treating nonsense as "everything is
+ * off".
  */
 export function readDisabledConnectors(json: string | null | undefined): string[] {
   if (!json) return [];
@@ -68,74 +73,77 @@ export function readDisabledConnectors(json: string | null | undefined): string[
   }
 }
 
-/** Skriv listen tilbage. Tom liste gemmes som `null` så en urørt Brain står ren. */
+/** Write the list back. An empty list is stored as `null` so an untouched Brain stays clean. */
 export function writeDisabledConnectors(ids: string[]): string | null {
-  const rene = Array.from(new Set(ids.filter((x) => typeof x === 'string' && x.trim().length > 0))).sort();
-  return rene.length === 0 ? null : JSON.stringify(rene);
+  const clean = Array.from(new Set(ids.filter((x) => typeof x === 'string' && x.trim().length > 0))).sort();
+  return clean.length === 0 ? null : JSON.stringify(clean);
 }
 
 /**
- * Afgør om en ny udgave fra `konnektor` skal afløse den forrige i denne Brain.
+ * Decide whether a new edition from `connector` should supersede the previous one
+ * in this Brain.
  *
- * `konnektor` må være `null` — 4 af broberg.ai's 70 råkilder bærer ingen. Så afgør
- * Brain-kontakten alene. Det er det sikre valg: en ukendt konnektor får aldrig sin
- * egen skjulte undtagelse, den følger hovedafbryderen.
+ * `connector` may be `null` — 4 of broberg.ai's 70 raw sources carry none. Then
+ * the Brain switch decides alone. That is the safe choice: an unknown connector
+ * never gets its own hidden exception, it follows the master switch.
  */
 export function newEditionIsCanon(
-  kontakter: CanonSwitches,
-  konnektor: string | null | undefined,
+  switches: CanonSwitches,
+  connector: string | null | undefined,
 ): CanonVerdict {
-  if (!kontakter.brain) return { kanon: false, grund: 'brain-off' };
-  const id = (konnektor ?? '').trim();
-  if (id && kontakter.disabledConnectors.includes(id)) {
-    return { kanon: false, grund: 'connector-off' };
+  if (!switches.brain) return { canon: false, reason: 'brain-off' };
+  const id = (connector ?? '').trim();
+  if (id && switches.disabledConnectors.includes(id)) {
+    return { canon: false, reason: 'connector-off' };
   }
-  return { kanon: true, grund: 'til' };
+  return { canon: true, reason: 'on' };
 }
 
 /**
- * Hvad UI'et skal vise for ÉN konnektor-række.
+ * What the UI should show for ONE connector row.
  *
- * `overriddenByBrain` er hele grunden til at denne funktion findes frem for at UI'et
- * regner det ud selv: kontakten står på TIL, og effective alligevel ikke. Regnede
- * panelet det ud på egen hånd, ville de to sites kunne komme til at være uenige —
- * og uenigheden ville vise sig som en kontakt der lyver.
+ * `overriddenByBrain` is the whole reason this function exists rather than the UI
+ * working it out itself: the switch reads ON, and it still has no effect. If the
+ * panel derived that on its own, the two could end up disagreeing — and the
+ * disagreement would surface as a switch that lies.
  */
 export function connectorState(
-  kontakter: CanonSwitches,
-  konnektor: string,
+  switches: CanonSwitches,
+  connector: string,
 ): { ownSwitch: boolean; overriddenByBrain: boolean; effective: boolean } {
-  const ownSwitch = !kontakter.disabledConnectors.includes(konnektor);
+  const ownSwitch = !switches.disabledConnectors.includes(connector);
   return {
     ownSwitch,
-    overriddenByBrain: ownSwitch && !kontakter.brain,
-    effective: newEditionIsCanon(kontakter, konnektor).kanon,
+    overriddenByBrain: ownSwitch && !switches.brain,
+    effective: newEditionIsCanon(switches, connector).canon,
   };
 }
 
 /**
- * F275.5 — forbeholdet der følger en side hvis source har fået en ny udgave.
+ * F275.5 — the caveat that follows a page whose source got a new edition.
  *
- * Teksten står ÉT sted fordi den skal ind i to sammenhænge — svar-konteksten
- * til chatten og hentnings-API'et til tredjepart — og fordi den er en PÅSTAND
- * om hvor pålidelig siden er lige nu. To formuleringer ville før eller siden
- * blive uenige om hvor stærkt forbeholdet var.
+ * The text lives in ONE place because it goes into two contexts — the answer
+ * context for chat and the retrieval API for third parties — and because it is a
+ * CLAIM about how reliable the page is right now. Two wordings would sooner or
+ * later disagree about how strong the caveat was.
  *
- * Den siger hvad der er sket og hvad det betyder, ikke at siden er forkert:
- * en side hvis source er rettet ER som regel stadig mest real. Den er bare
- * ikke set after.
+ * It says what happened and what it means, not that the page is wrong: a page
+ * whose source was edited is usually still the most accurate thing we have. It
+ * has simply not been reviewed since.
+ *
+ * The returned string is shown to end users, so it stays Danish.
  */
-export function sourceChangedCaveat(naar: number | null | undefined): string | null {
-  if (!naar) return null;
-  const dato = new Date(naar).toLocaleDateString('da-DK', {
+export function sourceChangedCaveat(at: number | null | undefined): string | null {
+  if (!at) return null;
+  const date = new Date(at).toLocaleDateString('da-DK', {
     day: 'numeric',
     month: 'long',
-    // Serveren kører UTC. Uden zone-NAVNET ville en ændring kl. 00:30 dansk tid
-    // blive skrevet som dagen før — og kun i det vindue hvor ingen kigger.
+    // The server runs UTC. Without the zone NAME, a change at 00:30 Danish time
+    // would be written as the previous day — and only in the window nobody looks.
     timeZone: 'Europe/Copenhagen',
   });
   return (
-    `⚠️ Kilden bag denne side fik en ny udgave den ${dato}, og siden er ikke skrevet om siden. ` +
-    `Behandl indholdet som muligvis forældet og sig det videre — svar aldrig som om det er bekræftet mod den nyeste source.`
+    `⚠️ Kilden bag denne side fik en ny udgave den ${date}, og siden er ikke skrevet om siden. ` +
+    `Behandl indholdet som muligvis forældet og sig det videre — svar aldrig som om det er bekræftet mod den nyeste kilde.`
   );
 }

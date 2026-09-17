@@ -161,7 +161,7 @@ export interface NavnesammenfaldAdvarsel {
   kind: 'samme-kilde';
   erstatter: { id: string; filename: string; uploadet: string };
   /** Hvad der SKER — ikke hvad der er sat op. Kontakterne er allerede læst. */
-  erstatterNu: boolean;
+  supersedesNow: boolean;
   grund: 'til' | 'brain-fra' | 'konnektor-fra';
   nyKildeEndpoint: string;
 }

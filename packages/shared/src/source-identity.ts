@@ -1,75 +1,74 @@
 /**
- * F275.1 — hvad ER en source, hen over sine udgaver?
+ * F275.1 — what IS a source, across its editions?
  *
- * Christians regel: «hvis kilden — altså en URL på en hjemmeside — forbliver
- * den samme, så skal den seneste udgave være kanon.» Reglen kan først bygges
- * når vi kan sige HVILKEN source to udgaver er udgaver AF.
+ * The owner's rule: "if the source — a URL on a website — stays the same, then
+ * the latest edition should be canon." The rule can only be built once we can say
+ * WHICH source two editions are editions OF.
  *
- * ## Præfikset er ikke pynt
+ * ## The prefix is not decoration
  *
- * `url:` · `path:` · `fp:` holder tre identitets-RUM adskilt. Uden dem kunne en
- * filsti og en URL kollidere, og kollisionen ville se ud som «samme source» —
- * altså den ene fejl hele featuren findes for at undgå, opstået af dens eget
- * felt.
+ * `url:` · `path:` · `fp:` keep three identity SPACES apart. Without them a file
+ * path and a URL could collide, and the collision would look like "same source" —
+ * that is, the one error this whole feature exists to avoid, produced by its own
+ * field.
  *
- * ## Hvorfor ikke bare filnavnet
+ * ## Why not just the filename
  *
- * Fordi det tager fejl BEGGE veje, målt som argument frem for påstået:
+ * Because it is wrong in BOTH directions, measured as an argument rather than
+ * asserted:
  *
- *   samme fil, nyt navn      filnavn: ny source ✗     identitet: samme ✓
- *   to filer, samme navn     filnavn: samme ✗        identitet: forskellig ✓
+ *   same file, new name      filename: new source ✗   identity: same ✓
+ *   two files, same name     filename: same ✗         identity: different ✓
  *
- * To sites kan begge levere `index.md`.
+ * Two sites can both serve `index.md`.
  *
- * ## Den tredje tilstand
+ * ## The third state
  *
- * `null` betyder «vi ved det ikke» — ALDRIG «der er ingen source». Kalderen skal
- * kunne skelne, for en afløsnings-regel der læser «ved ikke» som «ny source»
- * ville tie om præcis de sager den findes for.
+ * `null` means "we do not know" — NEVER "there is no source". The caller must be
+ * able to tell them apart, because a supersession rule that reads "unknown" as
+ * "new source" would stay silent about exactly the cases it exists for.
  */
 
-/** Identitets-rum. Nye rum tilføjes her, aldrig ad hoc på et kaldested. */
+/** Identity spaces. New spaces are added here, never ad hoc at a call site. */
 export const IDENTITY_SPACES = ['url', 'path', 'fp'] as const;
 export type IdentitySpace = (typeof IDENTITY_SPACES)[number];
 
 /**
- * Byg en source-identity. Returnerer `null` når værdien er tom — en tom
- * identitet er ikke en identitet, og et præfiks foran ingenting ville se
- * gyldigt ud i hver eneste sammenligning.
+ * Build a source identity. Returns `null` when the value is empty — an empty
+ * identity is not an identity, and a prefix in front of nothing would look valid
+ * in every single comparison.
  */
-export function sourceIdentity(rum: IdentitySpace, vaerdi: string | null | undefined): string | null {
-  const v = (vaerdi ?? '').trim();
+export function sourceIdentity(space: IdentitySpace, value: string | null | undefined): string | null {
+  const v = (value ?? '').trim();
   if (!v) return null;
-  return `${rum}:${rum === 'url' ? normaliseUrl(v) : v}`;
+  return `${space}:${space === 'url' ? normaliseUrl(v) : v}`;
 }
 
 /**
- * Bring en URL på ÉN form, så to skrivemåder af samme side er samme identitet.
+ * Bring a URL to ONE form, so two spellings of the same page are one identity.
  *
- * MÅLT 17/9 i broberg.ai, inde i featurens egen nøgle: den samme side stod med
- * TO identiteter —
+ * MEASURED 17 Sept in broberg.ai, inside the feature's own key: the same page was
+ * stored under TWO identities —
  *
  *   url:https://broberg.ai/indsigter/design-i-højere-luftlag
  *   url:https://broberg.ai/indsigter/design-i-h%C3%B8jere-luftlag
  *
- * — én skrevet af source-siden, én af Neuron-siden. Som to strenge er de
- * forskellige, og afløsningen ville derfor behandle en rettelse af den side som
- * en fremmed source: nøjagtig den fejl hele F275 findes for at fjerne, opstået i
- * det felt der skulle fjerne den. 1 af 114 i dag — men netop den side var den
- * Christian bad om at få kompileret igen, så raten siger ikke noget om hvor
- * meget det betyder.
+ * — one written by the source side, one by the Neuron side. As strings they
+ * differ, so supersession would have treated an edit of that page as a foreign
+ * source: precisely the error all of F275 exists to remove, occurring in the very
+ * field meant to remove it. 1 of 114 today — but that page was the one the owner
+ * asked to have recompiled, so the rate says nothing about how much it matters.
  *
- * VI BRUGER BROWSERENS EGEN REGEL (`new URL().href`) og ikke vores egen
- * afkodning. Den gør præcis det rigtige, og — vigtigere — den lader være med at
- * gøre det forkerte: `%2F` bliver IKKE til `/`, for det ville ændre stiens
- * betydning. Værtsnavnet småskrives (værter er ikke versalfølsomme), mens stien
- * bevarer sine store bogstaver (stier ER versalfølsomme). En håndskrevet
- * `unquote()` ville have ramt begge dele forkert.
+ * WE USE THE BROWSER'S OWN RULE (`new URL().href`) rather than our own decoding.
+ * It does exactly the right thing, and — more importantly — it refrains from
+ * doing the wrong thing: `%2F` does NOT become `/`, because that would change the
+ * meaning of the path. The host is lowercased (hosts are case-insensitive) while
+ * the path keeps its capitals (paths ARE case-sensitive). A hand-rolled
+ * `unquote()` would have got both halves wrong.
  *
- * KASTER DEN, BEHOLDER VI STRENGEN SOM DEN ER. En værdi der ikke er en URL er
- * stadig en identitet — bare ikke en vi kan normalisere. At droppe den ville
- * gøre «kunne ikke normaliseres» til «har ingen source», og de to må aldrig
- * kunne forveksles.
+ * IF IT THROWS, WE KEEP THE STRING AS IT IS. A value that is not a URL is still
+ * an identity — just not one we can normalise. Dropping it would turn "could not
+ * be normalised" into "has no source", and those two must never be confusable.
  */
 export function normaliseUrl(v: string): string {
   try {
@@ -79,30 +78,30 @@ export function normaliseUrl(v: string): string {
   }
 }
 
-/** Del en identitet op igen. `null` når strengen ikke bærer et kendt rum. */
-export function readIdentity(id: string | null | undefined): { rum: IdentitySpace; vaerdi: string } | null {
+/** Split an identity back apart. `null` when the string carries no known space. */
+export function readIdentity(id: string | null | undefined): { space: IdentitySpace; value: string } | null {
   if (!id) return null;
   const i = id.indexOf(':');
   if (i <= 0) return null;
-  const rum = id.slice(0, i) as IdentitySpace;
-  if (!IDENTITY_SPACES.includes(rum)) return null;
-  const vaerdi = id.slice(i + 1);
-  return vaerdi ? { rum, vaerdi } : null;
+  const space = id.slice(0, i) as IdentitySpace;
+  if (!IDENTITY_SPACES.includes(space)) return null;
+  const value = id.slice(i + 1);
+  return value ? { space, value } : null;
 }
 
 /**
- * Udled en kildes identitet af dens metadata.
+ * Derive a source's identity from its metadata.
  *
- * MÅLT 16/9: 66 af 70 råkilder i broberg.ai bærer allerede `metadata.sourceUrl`
- * — identiteten FANDTES, den havde bare intet felt at bo i. De sidste 4 er
- * uploads og hører til F275.6's fingerprint; indtil da får de `null`, hvilket
- * er sandt frem for gættet.
+ * MEASURED 16 Sept: 66 of 70 raw sources in broberg.ai already carry
+ * `metadata.sourceUrl` — the identity EXISTED, it simply had no field to live in.
+ * The remaining 4 are uploads and belong to F275.6's fingerprint; until then they
+ * get `null`, which is true rather than guessed.
  */
 export function identityFromMetadata(metadata: string | null | undefined): string | null {
   if (!metadata) return null;
   try {
     const p = JSON.parse(metadata) as { sourceUrl?: unknown };
     if (typeof p?.sourceUrl === 'string') return sourceIdentity('url', p.sourceUrl);
-  } catch { /* ikke JSON — så bærer den ingen identitet */ }
+  } catch { /* not JSON — then it carries no identity */ }
   return null;
 }

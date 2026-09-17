@@ -66,8 +66,8 @@ test('AC#0 DEN MÅLTE SAG: alle fem sider findes — ikke kun den der bærer kil
   // 'bid' er den der netop blev kompileret om — den er ajour og undtages.
   const fundne = await dependentsOf(trail, T, KB, URL_A, 'bid');
   expect(fundne.map((f) => f.documentId).sort()).toEqual(['entitet', 'flagskib', 'glossary', 'overview']);
-  expect(fundne.find((f) => f.documentId === 'entitet')?.kobling).toBe('kompileret-fra');
-  expect(fundne.find((f) => f.documentId === 'overview')?.kobling).toBe('citerer');
+  expect(fundne.find((f) => f.documentId === 'entitet')?.link).toBe('compiled-from');
+  expect(fundne.find((f) => f.documentId === 'overview')?.link).toBe('cites');
 });
 
 test('AC#3 AFHÆNGIGHEDEN SLÅS OP — en side der bare NÆVNER de samme ord røres ikke', async () => {
@@ -109,7 +109,7 @@ test('en side der BÅDE er kompileret af kilden og citerer den tælles ÉN gang'
   const f = await dependentsOf(trail, T, KB, URL_A);
   expect(f.length).toBe(1);
   // Den stærkere kobling vinder, så beskeden til kuratoren er den rigtige.
-  expect(f[0]!.kobling).toBe('kompileret-fra');
+  expect(f[0]!.link).toBe('compiled-from');
 });
 
 test('flere UDGAVER af samme source: en citat-kant til den GAMLE række tæller med', async () => {

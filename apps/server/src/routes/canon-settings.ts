@@ -1,17 +1,17 @@
 /**
- * F275.2 — de to kontakter, læst og skrevet ét sted.
+ * F275.2 — de to switches, læst og skrevet ét sted.
  *
  * GET   /api/v1/knowledge-bases/:kbId/canon-settings
  * PATCH /api/v1/knowledge-bases/:kbId/canon-settings
  *
  * Svaret bærer IKKE bare de to gemte værdier. Det bærer også den UDREGNEDE
- * tilstand pr. konnektor — `overriddenByBrain` — fordi AC#3 kræver at brugeren kan SE
- * at en konnektor-kontakt der står på TIL er sat ud af kraft af hovedafbryderen.
+ * tilstand pr. connector — `overriddenByBrain` — fordi AC#3 kræver at brugeren kan SE
+ * at en connector-kontakt der står på TIL er sat ud af kraft af hovedafbryderen.
  * Regnede panelet det ud selv, ville to sites kunne blive uenige, og uenigheden
  * ville vise sig som en kontakt der lyver om sin egen virkning.
  *
  * Konnektor-listen er MÅLT på Brain'ens egne kilder, ikke pickedUp fra det statiske
- * register i @trail/shared. `broberg-ai-site-sync` — den konnektor hele featuren
+ * register i @trail/shared. `broberg-ai-site-sync` — den connector hele featuren
  * blev født af — står ikke i registret, så en liste derfra ville mangle netop den
  * kontakt ejeren har brug for.
  */
@@ -39,19 +39,19 @@ const PatchBodySchema = z
     /** Hovedafbryderen. */
     brain: z.boolean().optional(),
     /** Én konnektors kontakt. Fraværende id'er røres ikke. */
-    konnektor: z.object({ id: z.string().min(1), kanon: z.boolean() }).optional(),
+    connector: z.object({ id: z.string().min(1), canon: z.boolean() }).optional(),
   })
   .strict()
-  .refine((b) => b.brain !== undefined || b.konnektor !== undefined, {
+  .refine((b) => b.brain !== undefined || b.connector !== undefined, {
     message: 'intet at ændre',
   });
 
-/** Konnektor-id'er der faktisk optræder på denne Brains kilder, med antal. */
-async function maaltKonnektorer(
+/** Konnektor-id'er der faktisk optræder på denne Brains kilder, med counts. */
+async function measuredConnectors(
   trail: { db: { all: (q: unknown) => Promise<unknown[]> } },
   kbId: string,
-): Promise<{ id: string; antalKilder: number }[]> {
-  // json_extract frem for LIKE: en konnektor hvis id er en delstreng af en anden
+): Promise<{ id: string; sourceCount: number }[]> {
+  // json_extract frem for LIKE: en connector hvis id er en delstreng af en anden
   // ville ellers tælle med i den forkerte række.
   const rows = (await trail.db.all(sql`
     SELECT json_extract(metadata, '$.connector') AS id, COUNT(*) AS n
@@ -63,24 +63,24 @@ async function maaltKonnektorer(
   `)) as { id: unknown; n: unknown }[];
   return rows
     .filter((r) => typeof r.id === 'string' && r.id.length > 0)
-    .map((r) => ({ id: r.id as string, antalKilder: Number(r.n) || 0 }));
+    .map((r) => ({ id: r.id as string, sourceCount: Number(r.n) || 0 }));
 }
 
-function byg(kontakter: CanonSwitches, maalte: { id: string; antalKilder: number }[]) {
+function build(switches: CanonSwitches, measured: { id: string; sourceCount: number }[]) {
   // De gemte FRA-id'er tages med selv om ingen source bærer dem lige nu — ellers
   // ville en kontakt brugeren selv har slået fra forsvinde fra skærmen, og han
   // ville ikke kunne slå den til igen.
-  const ids = Array.from(new Set([...maalte.map((m) => m.id), ...kontakter.disabledConnectors]));
-  const antal = new Map(maalte.map((m) => [m.id, m.antalKilder]));
+  const ids = Array.from(new Set([...measured.map((m) => m.id), ...switches.disabledConnectors]));
+  const counts = new Map(measured.map((m) => [m.id, m.sourceCount]));
   return {
-    brain: kontakter.brain,
-    disabledConnectors: kontakter.disabledConnectors,
-    konnektorer: ids.map((id) => {
-      const t = connectorState(kontakter, id);
+    brain: switches.brain,
+    disabledConnectors: switches.disabledConnectors,
+    connectors: ids.map((id) => {
+      const t = connectorState(switches, id);
       return {
         id,
         label: (CONNECTORS as Record<string, { label?: string } | undefined>)[id]?.label ?? id,
-        antalKilder: antal.get(id) ?? 0,
+        sourceCount: counts.get(id) ?? 0,
         ownSwitch: t.ownSwitch,
         overriddenByBrain: t.overriddenByBrain,
         effective: t.effective,
@@ -89,7 +89,7 @@ function byg(kontakter: CanonSwitches, maalte: { id: string; antalKilder: number
   };
 }
 
-async function laes(trail: ReturnType<typeof getTrail>, kbId: string, tenantId: string) {
+async function readSwitches(trail: ReturnType<typeof getTrail>, kbId: string, tenantId: string) {
   const kb = await trail.db
     .select({
       brain: knowledgeBases.newVersionIsCanon,
@@ -108,10 +108,10 @@ canonSettingsRoutes.get('/knowledge-bases/:kbId/canon-settings', async (c) => {
   const kbId = await resolveKbId(trail, tenant.id, c.req.param('kbId'));
   if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
 
-  const kontakter = await laes(trail, kbId, tenant.id);
-  if (!kontakter) return c.json({ error: 'Knowledge base not found' }, 404);
+  const switches = await readSwitches(trail, kbId, tenant.id);
+  if (!switches) return c.json({ error: 'Knowledge base not found' }, 404);
 
-  return c.json(byg(kontakter, await maaltKonnektorer(trail as never, kbId)));
+  return c.json(build(switches, await measuredConnectors(trail as never, kbId)));
 });
 
 canonSettingsRoutes.patch('/knowledge-bases/:kbId/canon-settings', async (c) => {
@@ -125,21 +125,21 @@ canonSettingsRoutes.patch('/knowledge-bases/:kbId/canon-settings', async (c) => 
     return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
   }
 
-  const nu = await laes(trail, kbId, tenant.id);
-  if (!nu) return c.json({ error: 'Knowledge base not found' }, 404);
+  const current = await readSwitches(trail, kbId, tenant.id);
+  if (!current) return c.json({ error: 'Knowledge base not found' }, 404);
 
-  const brain = parsed.data.brain ?? nu.brain;
-  let slukkede = [...nu.disabledConnectors];
-  if (parsed.data.konnektor) {
-    const { id, kanon } = parsed.data.konnektor;
-    slukkede = kanon ? slukkede.filter((x) => x !== id) : [...slukkede, id];
+  const brain = parsed.data.brain ?? current.brain;
+  let disabled = [...current.disabledConnectors];
+  if (parsed.data.connector) {
+    const { id, canon } = parsed.data.connector;
+    disabled = canon ? disabled.filter((x) => x !== id) : [...disabled, id];
   }
 
   await trail.db
     .update(knowledgeBases)
     .set({
       newVersionIsCanon: brain,
-      canonOffConnectors: writeDisabledConnectors(slukkede),
+      canonOffConnectors: writeDisabledConnectors(disabled),
       updatedAt: new Date().toISOString(),
     })
     .where(and(eq(knowledgeBases.id, kbId), eq(knowledgeBases.tenantId, tenant.id)))
@@ -148,8 +148,8 @@ canonSettingsRoutes.patch('/knowledge-bases/:kbId/canon-settings', async (c) => 
   // LÆS TILBAGE fra databasen frem for at ekko'e det vi lige sendte. En
   // kolonne ORM'en taber lydløst ser ellers ud som en gemning der lykkedes —
   // og det er nøjagtig den fejlform husreglen om gem-bevis findes for.
-  const after = await laes(trail, kbId, tenant.id);
+  const after = await readSwitches(trail, kbId, tenant.id);
   if (!after) return c.json({ error: 'Knowledge base not found' }, 404);
 
-  return c.json(byg(after, await maaltKonnektorer(trail as never, kbId)));
+  return c.json(build(after, await measuredConnectors(trail as never, kbId)));
 });

@@ -320,7 +320,7 @@ export function UploadDropzone({
                   <div class="text-[color:var(--color-fg-muted)]">
                     {q.nyKilde
                       ? t('sources.navnesammenfald.nuEgenKilde')
-                      : q.advarsel.erstatterNu
+                      : q.advarsel.supersedesNow
                         ? t('sources.navnesammenfald.erstatter')
                             .replace('{filnavn}', q.advarsel.erstatter.filename)
                             .replace('{dato}', danskFuld(q.advarsel.erstatter.uploadet))

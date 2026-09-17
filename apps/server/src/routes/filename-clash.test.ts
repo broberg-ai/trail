@@ -22,8 +22,8 @@ let trail: Awaited<ReturnType<typeof createLibsqlDatabase>>;
 type Advarsel = {
   kind: string;
   erstatter: { id: string; filename: string; uploadet: string };
-  erstatterNu: boolean;
-  grund: string;
+  supersedesNow: boolean;
+  reason: string;
   nyKildeEndpoint: string;
 };
 
@@ -69,17 +69,17 @@ test('AC#4 — samme filnavn igen: brugeren får at vide at det ERSTATTER, MED D
   // Datoen er selve pointen: «dette erstatter rapport.md fra 3. september».
   expect(typeof a?.erstatter.uploadet).toBe('string');
   expect(Number.isNaN(Date.parse(a!.erstatter.uploadet))).toBe(false);
-  expect(a?.erstatterNu).toBe(true);
-  expect(a?.grund).toBe('til');
+  expect(a?.supersedesNow).toBe(true);
+  expect(a?.reason).toBe('on');
 });
 
-test('beskeden siger hvad der SKER, ikke hvad der er sat op — Brain FRA ⇒ erstatterNu false', async () => {
+test('beskeden siger hvad der SKER, ikke hvad der er sat op — Brain FRA ⇒ supersedesNow false', async () => {
   // En besked der påstod «dette erstatter …» mens kontakten stod på FRA ville
   // være forkert i den beroligende retning: brugeren ville tro noget skete.
   await trail.db.update(knowledgeBases).set({ newVersionIsCanon: false }).where(eq(knowledgeBases.id, KB)).run();
   const { body } = await upload('rapport.md', '# udgave 3');
-  expect(body.advarsel?.erstatterNu).toBe(false);
-  expect(body.advarsel?.grund).toBe('brain-off');
+  expect(body.advarsel?.supersedesNow).toBe(false);
+  expect(body.advarsel?.reason).toBe('brain-off');
   await trail.db.update(knowledgeBases).set({ newVersionIsCanon: true }).where(eq(knowledgeBases.id, KB)).run();
 });
 
@@ -161,7 +161,7 @@ test('AC#4 på den vej ADMIN bruger: samme navn igen ⇒ besked med dato', async
   expect(body.advarsel?.kind).toBe('samme-source');
   expect(body.advarsel?.erstatter.filename).toBe('chunket.md');
   expect(Number.isNaN(Date.parse(body.advarsel!.erstatter.uploadet))).toBe(false);
-  expect(body.advarsel?.erstatterNu).toBe(true);
+  expect(body.advarsel?.supersedesNow).toBe(true);
 });
 
 test('de to veje er enige om identiteten — ellers afhang «samme source» af klienten', async () => {

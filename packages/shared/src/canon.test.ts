@@ -15,39 +15,39 @@ const TIL = { brain: true, disabledConnectors: [] };
 
 describe('F275.2 AC#2 — begge kontakter default TIL', () => {
   it('en frisk Brain uden nogen gemt værdi afløser', () => {
-    expect(newEditionIsCanon(TIL, 'broberg-ai-site-sync')).toEqual({ kanon: true, grund: 'til' });
+    expect(newEditionIsCanon(TIL, 'broberg-ai-site-sync')).toEqual({ canon: true, reason: 'on' });
   });
 
   it('en konnektor der ALDRIG er set før står TIL uden at nogen har rørt den', () => {
     // Kernen i «gem de slukkede, ikke de tændte». Gemte vi de tændte, ville
     // denne være FRA — og det er præcis den lydløse fejl kortet forbyder.
     const k = { brain: true, disabledConnectors: ['upload'] };
-    expect(newEditionIsCanon(k, 'en-konnektor-der-lige-er-opfundet').kanon).toBe(true);
+    expect(newEditionIsCanon(k, 'en-konnektor-der-lige-er-opfundet').canon).toBe(true);
   });
 
   it('en source UDEN konnektor følger Brain-kontakten', () => {
-    expect(newEditionIsCanon(TIL, null).kanon).toBe(true);
-    expect(newEditionIsCanon({ brain: false, disabledConnectors: [] }, null).kanon).toBe(false);
+    expect(newEditionIsCanon(TIL, null).canon).toBe(true);
+    expect(newEditionIsCanon({ brain: false, disabledConnectors: [] }, null).canon).toBe(false);
   });
 });
 
 describe('F275.2 AC#3 — hierarkiet er entydigt og går kun én vej', () => {
   it('Brain FRA slår alt fra, også en konnektor der står på TIL', () => {
     const k = { brain: false, disabledConnectors: [] };
-    expect(newEditionIsCanon(k, 'broberg-ai-site-sync')).toEqual({ kanon: false, grund: 'brain-off' });
+    expect(newEditionIsCanon(k, 'broberg-ai-site-sync')).toEqual({ canon: false, reason: 'brain-off' });
   });
 
   it('Brain TIL + konnektor FRA ⇒ kun den konnektor er fra', () => {
     const k = { brain: true, disabledConnectors: ['upload'] };
-    expect(newEditionIsCanon(k, 'upload')).toEqual({ kanon: false, grund: 'connector-off' });
-    expect(newEditionIsCanon(k, 'broberg-ai-site-sync')).toEqual({ kanon: true, grund: 'til' });
+    expect(newEditionIsCanon(k, 'upload')).toEqual({ canon: false, reason: 'connector-off' });
+    expect(newEditionIsCanon(k, 'broberg-ai-site-sync')).toEqual({ canon: true, reason: 'on' });
   });
 
   it('GRUNDEN skelner de to slukkede tilstande fra hinanden', () => {
     // Uden grunden kan produktet ikke sige HVILKEN kontakt der stoppede det,
     // og så kan brugeren ikke se hvad han skal slå til.
     const braendFra = newEditionIsCanon({ brain: false, disabledConnectors: ['upload'] }, 'upload');
-    expect(braendFra.grund).toBe('brain-off');
+    expect(braendFra.reason).toBe('brain-off');
   });
 
   it('en konnektor-kontakt på TIL under en slukket Brain er SAT UD AF KRAFT — og kan ses', () => {

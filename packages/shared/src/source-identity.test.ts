@@ -49,8 +49,8 @@ test('en TOM værdi er ikke en identitet', () => {
 });
 
 test('readIdentity deler op igen — og afviser et ukendt rum', () => {
-  expect(readIdentity('url:https://a.dk')).toEqual({ rum: 'url', vaerdi: 'https://a.dk' });
-  expect(readIdentity('path:/x/y.md')).toEqual({ rum: 'path', vaerdi: '/x/y.md' });
+  expect(readIdentity('url:https://a.dk')).toEqual({ space: 'url', value: 'https://a.dk' });
+  expect(readIdentity('path:/x/y.md')).toEqual({ space: 'path', value: '/x/y.md' });
   // NEGATIV KONTROL: uden den ville «læs hvad som helst» bestå lige så grønt.
   expect(readIdentity('vrøvl:abc')).toBeNull();
   expect(readIdentity('ingen-kolon')).toBeNull();

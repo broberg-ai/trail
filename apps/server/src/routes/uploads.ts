@@ -631,8 +631,8 @@ async function filenameClashWarning(
   return {
     kind: 'samme-source',
     erstatter: { id: forrige.id, filename: forrige.filename, uploadet: forrige.createdAt },
-    erstatterNu: svar.kanon,
-    grund: svar.grund,
+    supersedesNow: svar.canon,
+    reason: svar.reason,
     sag,
     similarity: grad,
     // Fortrydelsen skal med i beskeden, ellers er valget kun teoretisk.

@@ -74,7 +74,7 @@ test('AC#1 DEN BÆRENDE: med mærke bærer svaret et forbehold — FØR indholde
   expect(r.formattedContext).toContain('Kilden bag denne side fik en ny udgave');
   // DANSK TID PÅ NAVN: 16/9 kl. 10:00 UTC er 16. september i København.
   expect(r.formattedContext).toContain('16. september');
-  expect(r.formattedContext).toContain('svar aldrig som om det er bekræftet mod den nyeste source');
+  expect(r.formattedContext).toContain('svar aldrig som om det er bekræftet mod den nyeste kilde');
 
   // RÆKKEFØLGEN ER BÆRENDE. En advarsel UNDER en tekst læses after påstanden
   // er troet — af et menneske og af en model.

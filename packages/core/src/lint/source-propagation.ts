@@ -1,72 +1,73 @@
 /**
- * F275.5 — afløsningen skal FORPLANTE sig.
+ * F275.5 — supersession has to PROPAGATE.
  *
- * ## Den målte sag
+ * ## The measured case
  *
- * Natten mellem 15. og 16. september sagde FEM sider «bygges nu» after kilden
- * sagde «lanceret»: `overview.md`, `glossary.md`, `flagskib.md`, source-Neuronen
- * og entitets-Neuronen. **Kun ÉN af dem bærer kildens URL som sin egen
- * identitet.** De fire andre citerer kilden uden at være kompileret AF den.
+ * On the night of 15–16 September, FIVE pages said "being built now" after the
+ * source said "launched": `overview.md`, `glossary.md`, `flagskib.md`, the source
+ * Neuron and the entity Neuron. **Only ONE of them carries the source's URL as
+ * its own identity.** The other four cite the source without being compiled FROM
+ * it.
  *
- * Rammer afløsningen kun source-Neuronen, bliver køen ren mens hjernen stadig
- * svarer på gårsdagens tekst — **og det er værre end i dag, fordi det ikke
- * længere ligner et problem.**
+ * If supersession only touches the source Neuron, the queue goes clean while the
+ * brain still answers from yesterday's text — **and that is worse than today,
+ * because it no longer looks like a problem.**
  *
- * ## Koblingen SLÅS OP, den gættes ikke
+ * ## The link is LOOKED UP, never guessed
  *
- * To veje ind, begge id-baserede:
+ * Two ways in, both id-based:
  *
- *   kompileret-fra   `documents.source_identity` på Neuronen (F275.1/F275.3)
- *   citerer          `document_references.source_document_id` → source-rækken
+ *   compiled-from   `documents.source_identity` on the Neuron (F275.1/F275.3)
+ *   cites           `document_references.source_document_id` → the source row
  *
- * Ingen tekstsammenligning. En Neuron der tilfældigvis nævner de samme ord uden
- * at stamme fra kilden skal IKKE røres — ellers rydder en rettelse på én side op
- * i sider der intet har med den at gøre, og det ville være en større skade end
- * den featuren fjerner.
+ * No text comparison. A Neuron that happens to mention the same words without
+ * deriving from the source must NOT be touched — otherwise an edit to one page
+ * tidies up pages that have nothing to do with it, which would be greater damage
+ * than the one the feature removes.
  *
- * ## Vi skriver ikke om. Vi gør det SYNLIGT.
+ * ## We do not rewrite. We make it VISIBLE.
  *
- * Kortets egen betingelse: *«Ingen automatisk omskrivning af en Neuron uden at
- * det kan ses. En stille masse-rettelse af hjernen er værre end en synlig liste
- * over hvad der skal ses på.»* Derfor stempler modulet et tidspunkt på hver
- * afhængig side og leverer listen tilbage; kaldestedet melder den i køen.
+ * The card's own constraint: *"No automatic rewriting of a Neuron without it
+ * being visible. A silent mass edit of the brain is worse than a visible list of
+ * what needs looking at."* So this module stamps a timestamp on each dependent
+ * page and hands the list back; the call site reports it into the queue.
  */
 import { documents, documentReferences, type TrailDatabase } from '@trail/db';
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 
-/** Hvordan en Neuron hænger på kilden. */
-export type LinkKind = 'kompileret-fra' | 'citerer';
+/** How a Neuron hangs off the source. */
+export type LinkKind = 'compiled-from' | 'cites';
 
 export interface DependentNeuron {
   documentId: string;
   filename: string;
   title: string | null;
   path: string;
-  kobling: LinkKind;
+  link: LinkKind;
 }
 
 /**
- * Hvilke Neuroner hænger på source-identityen `identitet` i denne Brain?
+ * Which Neurons hang off the source identity `identity` in this Brain?
  *
- * `undtagen` er den Neuron der netop ER blevet kompileret om — den er per
- * definition ajour og skal ikke meldes som bagefter.
+ * `except` is the Neuron that has just been recompiled — by definition it is up
+ * to date and must not be reported as lagging behind.
  *
- * Tom identitet ⇒ tom liste. `null` betyder «vi ved ikke hvilken source det er»
- * (se source-identity.ts), og en ukendt identitet må ALDRIG kunne matche en
- * anden ukendt og trække tilfældige sider med.
+ * Empty identity ⇒ empty list. `null` means "we do not know which source this is"
+ * (see source-identity.ts), and an unknown identity must NEVER be able to match
+ * another unknown one and drag arbitrary pages along with it.
  */
 export async function dependentsOf(
   trail: TrailDatabase,
   tenantId: string,
   kbId: string,
-  identitet: string | null,
-  undtagen: string | null = null,
+  identity: string | null,
+  except: string | null = null,
 ): Promise<DependentNeuron[]> {
-  if (!identitet) return [];
+  if (!identity) return [];
 
-  // 1. KILDE-rækkerne med denne identitet. Der kan være flere: hver upload af
-  //    samme fil er sin egen række, og en citat-kant peger på ÉN af dem.
-  const kilder = await trail.db
+  // 1. The SOURCE rows carrying this identity. There can be several: every upload
+  //    of the same file is its own row, and a citation edge points at ONE of them.
+  const sources = await trail.db
     .select({ id: documents.id })
     .from(documents)
     .where(
@@ -74,15 +75,15 @@ export async function dependentsOf(
         eq(documents.tenantId, tenantId),
         eq(documents.knowledgeBaseId, kbId),
         eq(documents.kind, 'source'),
-        eq(documents.sourceIdentity, identitet),
+        eq(documents.sourceIdentity, identity),
       ),
     )
     .all();
 
-  const fundet = new Map<string, DependentNeuron>();
+  const found = new Map<string, DependentNeuron>();
 
-  // 2. KOMPILERET-FRA: Neuroner der selv bærer identiteten.
-  const egne = await trail.db
+  // 2. COMPILED-FROM: Neurons that carry the identity themselves.
+  const own = await trail.db
     .select({
       id: documents.id,
       filename: documents.filename,
@@ -96,19 +97,20 @@ export async function dependentsOf(
         eq(documents.knowledgeBaseId, kbId),
         ne(documents.kind, 'source'),
         eq(documents.archived, false),
-        eq(documents.sourceIdentity, identitet),
+        eq(documents.sourceIdentity, identity),
       ),
     )
     .all();
-  for (const n of egne) {
-    if (n.id === undtagen) continue;
-    fundet.set(n.id, { documentId: n.id, filename: n.filename, title: n.title, path: n.path, kobling: 'kompileret-fra' });
+  for (const n of own) {
+    if (n.id === except) continue;
+    found.set(n.id, { documentId: n.id, filename: n.filename, title: n.title, path: n.path, link: 'compiled-from' });
   }
 
-  // 3. CITERER: Neuroner med en citat-kant til en af source-rækkerne. Det er de
-  //    fire sider der stod forkert i nat, og som ingen anden mekanisme finder.
-  if (kilder.length > 0) {
-    const citerende = await trail.db
+  // 3. CITES: Neurons with a citation edge to one of the source rows. These are
+  //    the four pages that stood wrong that night, and that no other mechanism
+  //    finds.
+  if (sources.length > 0) {
+    const citing = await trail.db
       .select({
         id: documents.id,
         filename: documents.filename,
@@ -120,58 +122,59 @@ export async function dependentsOf(
       .where(
         and(
           eq(documentReferences.tenantId, tenantId),
-          inArray(documentReferences.sourceDocumentId, kilder.map((k) => k.id)),
+          inArray(documentReferences.sourceDocumentId, sources.map((k) => k.id)),
           eq(documents.archived, false),
           ne(documents.kind, 'source'),
         ),
       )
       .all();
-    for (const n of citerende) {
-      if (n.id === undtagen) continue;
-      // 'kompileret-fra' vinder: den er den stærkere kobling, og en Neuron kan
-      // både være kompileret af kilden og citere den.
-      if (fundet.has(n.id)) continue;
-      fundet.set(n.id, { documentId: n.id, filename: n.filename, title: n.title, path: n.path, kobling: 'citerer' });
+    for (const n of citing) {
+      if (n.id === except) continue;
+      // 'compiled-from' wins: it is the stronger link, and a Neuron can both be
+      // compiled from the source and cite it.
+      if (found.has(n.id)) continue;
+      found.set(n.id, { documentId: n.id, filename: n.filename, title: n.title, path: n.path, link: 'cites' });
     }
   }
 
-  return [...fundet.values()];
+  return [...found.values()];
 }
 
 /**
- * Stempl «kilden er ændret» på hver afhængig side.
+ * Stamp "the source changed" on every dependent page.
  *
- * Mærket er det eneste indgreb. Vi skriver ikke siderne om: en stille
- * masse-rettelse af hjernen er værre end en synlig liste over hvad der skal ses
- * på — og en omskrivning af `overview.md` uden at nogen så det ville være
- * præcis den fejl dette kort findes for.
+ * The mark is the only intervention. We do not rewrite the pages: a silent mass
+ * edit of the brain is worse than a visible list of what needs looking at — and
+ * rewriting `overview.md` without anyone seeing it would be exactly the failure
+ * this card exists to prevent.
  */
 export async function markDependents(
   trail: TrailDatabase,
-  afhaengige: DependentNeuron[],
-  tidspunkt: number,
+  dependents: DependentNeuron[],
+  at: number,
 ): Promise<number> {
-  if (afhaengige.length === 0) return 0;
+  if (dependents.length === 0) return 0;
   await trail.db
     .update(documents)
-    .set({ sourceChangedAt: tidspunkt })
-    .where(inArray(documents.id, afhaengige.map((a) => a.documentId)))
+    .set({ sourceChangedAt: at })
+    .where(inArray(documents.id, dependents.map((a) => a.documentId)))
     .run();
-  // LÆS TILBAGE. Et stempel der ikke landede ser ud som ingen afhængige.
+  // READ IT BACK. A stamp that never landed looks identical to no dependents.
   const after = await trail.db
     .select({ n: sql<number>`COUNT(*)` })
     .from(documents)
     .where(
       and(
-        inArray(documents.id, afhaengige.map((a) => a.documentId)),
-        eq(documents.sourceChangedAt, tidspunkt),
+        inArray(documents.id, dependents.map((a) => a.documentId)),
+        eq(documents.sourceChangedAt, at),
       ),
     )
     .get();
   return after?.n ?? 0;
 }
 
-/** Ryd mærket — siden er skrevet om og er dermed set after kilden ændrede sig. */
+/** Clear the mark — the page has been rewritten and so has been reviewed since
+ *  the source changed. */
 export async function clearSourceMark(trail: TrailDatabase, documentId: string): Promise<void> {
   await trail.db
     .update(documents)

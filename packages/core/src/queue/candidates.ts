@@ -335,11 +335,11 @@ async function identityOfSource(
 ): Promise<string | null> {
   if (!sourceDocumentId) return null;
   const source = await tx
-    .select({ identitet: documents.sourceIdentity })
+    .select({ identity: documents.sourceIdentity })
     .from(documents)
     .where(and(eq(documents.id, sourceDocumentId), eq(documents.tenantId, tenantId)))
     .get();
-  return source?.identitet ?? null;
+  return source?.identity ?? null;
 }
 
 async function lastEventIdFor(
@@ -784,7 +784,7 @@ export async function resolveCandidate(
   //
   // Kun for de effekter der faktisk ændrer viden. En 'acknowledge' eller en
   // 'mark-still-relevant' rører ingen tekst, og et mærke foran dem ville fylde
-  // listen med grænser der ikke afgrænser noget.
+  // listn med grænser der ikke afgrænser noget.
   //
   // Afdæmpet (15 min), så en synkronisering af 100 artikler giver ÉT mærke.
   // Og aldrig fatalt: at et mærke ikke kunne tages må ikke forhindre en
@@ -879,7 +879,7 @@ async function executeApprove(
   const overskrevet: KuratorOverskrivning[] = [];
   // F275.5 — samme seam: en GENKOMPILERING betyder at kilden har en ny udgave,
   // og så er alt der HÆNGER på den source bagefter. Opsamles inde, handles ude.
-  const forplantning: { documentId: string; identitet: string; kbId: string }[] = [];
+  const forplantning: { documentId: string; identity: string; kbId: string }[] = [];
   const resultat = await trail.db.transaction(async (tx) => {
     if (op.op === 'update') return approveUpdate(tx, candidate, op, payload, action, actor, ctx);
     if (op.op === 'archive') return approveArchive(tx, candidate, op, action, actor, ctx);
@@ -900,7 +900,7 @@ async function executeApprove(
  * ligner ikke længere et problem.
  *
  * VI SKRIVER IKKE SIDERNE OM. Kortets egen betingelse: en stille masse-rettelse
- * af hjernen er værre end en synlig liste over hvad der skal ses på. Så vi
+ * af hjernen er værre end en synlig list over hvad der skal ses på. Så vi
  * stempler et tidspunkt (som læseren og chatten viser) og lægger LISTEN i køen.
  *
  * Nul afhængige er en helt normal tilstand og melder intet — men så er der
@@ -909,25 +909,25 @@ async function executeApprove(
 async function propagateSupersession(
   trail: TrailDatabase,
   candidate: QueueCandidate,
-  f: { documentId: string; identitet: string; kbId: string },
+  f: { documentId: string; identity: string; kbId: string },
 ): Promise<void> {
   try {
-    const afhaengige = await dependentsOf(trail, candidate.tenantId, f.kbId, f.identitet, f.documentId);
-    if (afhaengige.length === 0) return;
+    const dependents = await dependentsOf(trail, candidate.tenantId, f.kbId, f.identity, f.documentId);
+    if (dependents.length === 0) return;
 
     const nu = Date.now();
-    const maerket = await markDependents(trail, afhaengige, nu);
-    if (maerket !== afhaengige.length) {
+    const stamped = await markDependents(trail, dependents, nu);
+    if (stamped !== dependents.length) {
       // Et stempel der ikke landede ser ud som ingen afhængige. Sig det højt
       // frem for at melde et tal vi ikke har dækning for.
       console.error(
-        `[F275.5] stemplede ${maerket} af ${afhaengige.length} afhængige sider for ${f.identitet}`,
+        `[F275.5] stemplede ${stamped} af ${dependents.length} afhængige sider for ${f.identity}`,
       );
     }
 
-    const liste = afhaengige
+    const list = dependents
       .map((a) => `- **${a.title ?? a.filename}** (\`${a.path}${a.filename}\`) — ${
-        a.kobling === 'kompileret-fra' ? 'kompileret af kilden' : 'citerer kilden'
+        a.link === 'compiled-from' ? 'kompileret af kilden' : 'citerer kilden'
       }`)
       .join('\n');
 
@@ -937,10 +937,10 @@ async function propagateSupersession(
       {
         knowledgeBaseId: f.kbId,
         kind: 'gap-detection',
-        title: `${afhaengige.length} side${afhaengige.length === 1 ? '' : 'r'} hænger på en source der har fået en ny udgave`,
+        title: `${dependents.length} side${dependents.length === 1 ? '' : 'r'} hænger på en source der har fået en ny udgave`,
         content:
-          `Kilden \`${f.identitet}\` er kompileret om, og den side der bæres direkte af den er ajour.\n\n` +
-          `Disse sider hænger også på den, og de er IKKE skrevet om:\n\n${liste}\n\n` +
+          `Kilden \`${f.identity}\` er kompileret om, og den side der bæres direkte af den er ajour.\n\n` +
+          `Disse sider hænger også på den, og de er IKKE skrevet om:\n\n${list}\n\n` +
           `De er markeret i produktet, så de ikke svarer som om intet var sket — men de er ikke rettet. ` +
           `Læs dem igennem mod den nye udgave af kilden, eller kompilér dem om.\n\n` +
           `Listen er slået op på source-identity og citat-kanter, ikke på tekstlighed: en side der ` +
@@ -949,8 +949,8 @@ async function propagateSupersession(
         metadata: JSON.stringify({
           connector: 'lint',
           source: 'F275.5',
-          sourceIdentity: f.identitet,
-          afhaengige: afhaengige.map((a) => ({ id: a.documentId, kobling: a.kobling })),
+          sourceIdentity: f.identity,
+          dependents: dependents.map((a) => ({ id: a.documentId, link: a.link })),
         }),
       },
       { kind: 'system', id: 'lint:F275.5' },
@@ -958,7 +958,7 @@ async function propagateSupersession(
   } catch (err) {
     // Forplantningen må aldrig vælte kompileringen — men den må heller ikke
     // forsvinde tavst, for tavshed er nøjagtig den fejl kortet findes for.
-    console.error(`[F275.5] kunne IKKE forplante afløsningen for ${f.identitet}:`, err);
+    console.error(`[F275.5] kunne IKKE forplante afløsningen for ${f.identity}:`, err);
   }
 }
 
@@ -1039,7 +1039,7 @@ async function approveCreate(
   /** F275.3 AC#5 — fyldes når en maskinel skrivning overskriver et menneskes. */
   overskrevet?: KuratorOverskrivning[],
   /** F275.5 — fyldes når en GENKOMPILERING gør de afhængige sider bagefter. */
-  forplantning?: { documentId: string; identitet: string; kbId: string }[],
+  forplantning?: { documentId: string; identity: string; kbId: string }[],
 ): Promise<ResolutionResult> {
   // F197 — re-scan at materialize so an approve-time editedContent edit can't
   // smuggle a secret past the enqueue gate (candidate.content is already clean).
@@ -1086,7 +1086,7 @@ async function approveCreate(
   // Og dubletterne er IKKE ens: de er skrevet af forskellige kørsler, af en
   // model, på forskellige tidspunkter. En søgning kunne derfor give tre
   // forskellige svar på samme spørgsmål uden at nogen kunne se hvilket der var
-  // nyest. Det er ikke rod i en liste — det er uenighed inde i vidensbasen.
+  // nyest. Det er ikke rod i en list — det er uenighed inde i vidensbasen.
   //
   // Opslaget sker på FILNAVN, aldrig på titel: den danske og den engelske
   // udgave af samme artikel har samme emne og skal netop have hver sin side.
@@ -1176,7 +1176,7 @@ async function approveCreate(
     if (forplantning && kildeIdent !== null) {
       forplantning.push({
         documentId: existing.id,
-        identitet: kildeIdent,
+        identity: kildeIdent,
         kbId: candidate.knowledgeBaseId,
       });
     }
