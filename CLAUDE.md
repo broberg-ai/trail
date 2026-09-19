@@ -199,7 +199,25 @@ deriving it.
 |---|---|
 | `mcp__buddy__trail_save(...)` | Call at natural milestones: feature ship, bug diagnosed, architectural choice made. You write the finished takeaway; buddy routes it verbatim to Trail (no summarising). **Preferred when buddy is live.** |
 | `mcp__trail__write(command="create", ...)` | When you want to author the Neuron yourself mid-turn (e.g. a specific design note that needs a particular shape). Only available when Trail's MCP is configured in the cc session's `.mcp.json`. |
-| `POST /api/v1/queue/candidates` with `Authorization: Bearer $TRAIL_INGEST_TOKEN` | Scripts, CI hooks, anything non-interactive. `kind: "external-feed"`, path `/neurons/sessions/trail/`. |
+| `POST /api/v1/queue/candidates` with `Authorization: Bearer $TRAIL_INGEST_TOKEN` | Scripts, CI hooks, anything non-interactive that sends a **one-off note**. `kind: "external-feed"`, path `/neurons/sessions/trail/`. **NOT for a file that gets re-sent when it is edited** — see below. |
+| `POST /api/v1/knowledge-bases/<kb>/documents/upload?localCompile=true` | **Any FILE that will be sent again after it changes** — a memory file, a synced page, a document under revision. This route stamps a `path:` source identity (`uploadIdentity()` in `apps/server/src/routes/uploads.ts`); the candidate route cannot. |
+
+**The dividing line is NOTE vs FILE — not interactive vs non-interactive.**
+
+A note is sent once and never revised, so it needs no identity. A file is sent
+again every time someone edits it, and without a stable source identity Trail
+cannot tell the new edition from a stranger.
+
+`CreateQueueCandidateSchema` (`packages/shared/src/schemas.ts`) has **no identity
+field**, and `identityOfSource()` (`packages/core/src/queue/candidates.ts`) only
+inherits one from a source document. So a candidate posted directly lands with
+`sourceIdentity = null`.
+
+That matters because the contradiction lint's safe default is deliberately
+"no identity ⇒ CONTRADICTION" (F275.3 AC#4). Send the same file twice through the
+candidate route and the second edition is read as a stranger disagreeing with the
+first — one queue item per file, per edit. That flood is exactly what F275 was
+built to remove.
 
 **What deserves a Neuron** (not every turn):
 - "Why X over Y" — architectural choices + the alternatives rejected and why.
@@ -629,7 +647,11 @@ Trail (`app.trailmem.com`) er flådens delte **langtidshukommelse** — en knowl
 **Hvordan (virker i ethvert repo via buddy):**
 - **Gem:** `mcp__buddy__trail_save({ title, content })` ved naturlige milepæle — buddy router din `{title, content}` **verbatim** til Trails pending-candidate-kø (Christian reviewer i admin-køen); den komprimerer IKKE for dig, så skriv selv den færdige takeaway (dump aldrig rå chat; skriv pointen). Sæt `confidence ≥ 0.8` kun når den er klart høj-værdi og selvstændig.
 - **Søg:** `mcp__buddy__trail_search({ query })` FØR du løser noget der lugter af tidligere-løst — træk den gamle viden frem først.
-- **Ikke-interaktivt (CI/scripts):** `POST app.trailmem.com/api/v1/queue/candidates` med en `trail_` bearer-token.
+- **Ikke-interaktivt (CI/scripts), en ENGANGS-NOTE:** `POST app.trailmem.com/api/v1/queue/candidates` med en `trail_` bearer-token.
+- **En FIL der sendes igen når den rettes** (en memory-fil, en synkroniseret side, et dokument under revision): brug
+  `POST /api/v1/knowledge-bases/<kb>/documents/upload?localCompile=true` i stedet. Kandidat-ruten kan ikke bære en
+  kilde-identitet, og uden den læser modsigelses-linten anden udgave af samme fil som en MODSIGELSE — én kø-post pr.
+  fil, pr. rettelse. Upload-ruten stempler `path:`-identiteten selv.
 
 **Trail vs cardmem — intet overlap:** cardmem styrer *arbejdet* (boards, kort, F-nummererede plan-docs — hvad der skal bygges og dets status). Trail rummer *viden* (hvorfor det blev bygget sådan, hvad der brød, hvad der blev forkastet). Et kort siger "byg X"; en Neuron siger "vi valgte X over Y fordi Z." Er det en opgave eller en spec → cardmem. Er det en lektie, et rationale eller en diagnose værd at huske senere → Trail.
 
