@@ -11,7 +11,24 @@ primary_region = "arn"
 [env]
   # slug:port pairs — the EXPLICIT list of tenants this machine serves.
   # Grown one tenant at a time as migrations complete (F222.3).
-  TRAIL_DB_TENANTS = "fd-aalborg:6001"
+  #
+  # MEASURED against the live machine 19 Sep 2026, because this file had
+  # drifted to name only fd-aalborg while sqld was serving all three:
+  #
+  #   flyctl ssh console --app trail-db-001 -C "printenv TRAIL_DB_TENANTS"
+  #   → fd-aalborg:6001,broberg-ai:6002,sanne-andersen:6003
+  #
+  # The drift was a customer-outage landmine with a long fuse. This file is
+  # what a deploy SETS, so deploying the stale version would have stopped
+  # sqld serving 6002 and 6003 — broberg-ai and sanne-andersen dark, with
+  # the engine's TRAIL_DB_REMOTE still pointing at them. And the comment
+  # above says deploys here are rare by design, so the gap could sit for
+  # months and then fire on the one deploy nobody was watching closely.
+  #
+  # Growing a tenant means editing THIS LINE in the same change as the
+  # live one. A machine that owns every tenant's data must not be
+  # described by a file that disagrees with it.
+  TRAIL_DB_TENANTS = "fd-aalborg:6001,broberg-ai:6002,sanne-andersen:6003"
 
 [mounts]
   source = "trail_db_data"
