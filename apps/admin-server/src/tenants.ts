@@ -95,6 +95,82 @@ export async function grantOwnerMemberships(
 }
 
 /**
+ * F210.4 — an owner identity that has no `control_users` row yet gets one,
+ * plus owner on every tenant that exists.
+ *
+ * MEASURED 2026-09-20, and it is worse than "he has no memberships":
+ *
+ *   auth.ts:55       no user row → `{ ok: true, sent: false }` — SILENT.
+ *                    No mail, no error, no reason on screen. The silence is
+ *                    deliberate (it must not leak whether an address is
+ *                    registered), which is exactly why the owner could not
+ *                    have told it from a delivery failure.
+ *   oauth.ts:297     no user row → redirect `?error=email_not_registered`.
+ *
+ * So BOTH doors locked the owner out of his own system the moment he used one
+ * of his other two addresses, and one of them did it without saying anything.
+ * The Decision Register names login as one of the three enforcement points for
+ * precisely this reason.
+ *
+ * THIS AUTHENTICATES NOBODY. It creates a row for one of three addresses that
+ * are hardcoded in git, and the magic link still has to be received at that
+ * mailbox (or the OAuth flow completed for it). An attacker who cannot read
+ * the owner's mail gains nothing; what changes is that the mail gets sent at
+ * all.
+ *
+ * Additive, like every other owner-access path here: it never demotes, never
+ * deletes, and it does nothing at all for a non-owner address.
+ *
+ * Returns the user row when the caller may proceed, or null when the email is
+ * not an owner identity (the caller then keeps its existing behaviour).
+ */
+export async function ensureOwnerIdentity(email: string) {
+  const folded = email.trim().toLowerCase();
+  if (!isOwnerIdentity(folded)) return null;
+
+  const existing = await db.query.controlUsers.findFirst({
+    where: eq(schema.controlUsers.email, folded),
+  });
+  if (existing) {
+    // Already known — still make sure he reaches every tenant, in case one
+    // was created while this identity had no row.
+    await grantOwnerOnEveryTenant(existing.id);
+    return existing;
+  }
+
+  // Which organisation? Prefer one another owner identity already sits in, so
+  // his three addresses stay together; otherwise the first organisation that
+  // exists. With no organisation at all there is nothing to own, and creating
+  // a dangling user would be worse than doing nothing.
+  const sibling = await db.query.controlUsers.findFirst({
+    where: inArray(schema.controlUsers.email, [...OWNER_IDENTITIES]),
+  });
+  const orgId =
+    sibling?.organizationId ?? (await db.query.organizations.findFirst())?.id ?? null;
+  if (!orgId) {
+    console.warn(`[owner-access] ${folded}: no organisation exists yet — nothing to own`);
+    return null;
+  }
+
+  const id = randomUUID();
+  await db.insert(schema.controlUsers).values({ id, organizationId: orgId, email: folded });
+  const rows = await grantOwnerOnEveryTenant(id);
+  console.log(`[owner-access] created ${folded} in org ${orgId}; owner on ${rows} tenant(s)`);
+
+  return (
+    (await db.query.controlUsers.findFirst({ where: eq(schema.controlUsers.id, id) })) ?? null
+  );
+}
+
+/** Owner on EVERY tenant — no organisation boundary. Additive; returns rows written. */
+async function grantOwnerOnEveryTenant(userId: string): Promise<number> {
+  const all = await db.query.controlTenants.findMany();
+  let written = 0;
+  for (const t of all) written += await grantOwnerMemberships(t.id, userId);
+  return written;
+}
+
+/**
  * POST /api/control/tenants — create a tenant.
  *
  * Body: { name: string, language?: string, slug?: string }

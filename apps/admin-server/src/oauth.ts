@@ -3,6 +3,7 @@ import { setCookie, getCookie } from 'hono/cookie';
 import { eq, and, gt } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import { db, schema } from './db.js';
+import { ensureOwnerIdentity } from './tenants.js';
 
 /**
  * F35-precursor — GitHub + Google OAuth login on trail-admin.
@@ -290,9 +291,13 @@ oauthRoutes.get('/:provider/callback', async (c) => {
   }
 
   // F194 — LOGIN mode: resolve by stable identity (sub) first, then email.
+  // F210.4 — the same owner-identity fallback as the magic-link door. Without
+  // it this redirected to `?error=email_not_registered` for the owner's own
+  // second and third addresses, which is a lockout from his own system.
   let user =
     (await findUserByIdentity(provider.name, subject)) ??
     (await db.query.controlUsers.findFirst({ where: eq(schema.controlUsers.email, email) })) ??
+    (await ensureOwnerIdentity(email)) ??
     null;
   if (!user) {
     console.warn(

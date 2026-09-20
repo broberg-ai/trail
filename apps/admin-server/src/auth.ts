@@ -3,6 +3,7 @@ import { setCookie, deleteCookie, getCookie } from 'hono/cookie';
 import { eq, and, gt, isNull, inArray } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import { db, schema } from './db.js';
+import { ensureOwnerIdentity } from './tenants.js';
 import { sendMagicLink } from './email.js';
 import { MAGIC_LINK_TTL_MIN } from './ttl.js';
 
@@ -48,9 +49,17 @@ authRoutes.post('/magic-link', async (c) => {
 
   // Lookup user. Silent success if not found — same UX as if found,
   // so the response doesn't leak whether an email is registered.
-  const user = await db.query.controlUsers.findFirst({
-    where: eq(schema.controlUsers.email, email),
-  });
+  //
+  // F210.4 — an OWNER identity with no row is created here rather than
+  // silently refused. The silence above is correct for everyone else and was
+  // catastrophic for him: signing in with christian@broberg.dk produced no
+  // mail, no error and no reason, and it was indistinguishable from a mail
+  // that failed to arrive. ensureOwnerIdentity authenticates nobody — the
+  // magic link still has to be received at that mailbox.
+  const user =
+    (await db.query.controlUsers.findFirst({
+      where: eq(schema.controlUsers.email, email),
+    })) ?? (await ensureOwnerIdentity(email));
   if (!user) {
     return c.json({ ok: true, sent: false });
   }
