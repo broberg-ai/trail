@@ -31,6 +31,7 @@ import { backfillReferences, startReferenceExtractor } from './services/referenc
 import { backfillBacklinks, startBacklinkExtractor } from './services/backlink-extractor.js';
 import { backfillLinkCheck, startLinkChecker } from './services/link-checker.js';
 import { startLintScheduler } from './services/lint-scheduler.js';
+import { startBackupFreshnessWatch } from './services/backup/freshness-watch.js';
 import { startIndexScheduler } from './services/index-scheduler.js';
 import { startConfidenceDecay } from './services/confidence-decay.js';
 import { startQueueBackfill } from './services/queue-backfill.js';
@@ -535,6 +536,10 @@ const stopRejoin = startTenantRejoin({
   },
 });
 serviceStops.push(stopRejoin);
+
+// F212.5 — watch the backup rung that actually runs (the DB machine's
+// sidecar), ONCE for the whole engine rather than once per tenant.
+serviceStops.push(startBackupFreshnessWatch());
 
 // F196 — self-report this deploy to upmetrics (one success POST on boot,
 // fail-soft + no-op unless UPMETRICS_API_KEY + UPMETRICS_SITE are set).

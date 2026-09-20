@@ -12,6 +12,9 @@ import {
   unsubscribePush,
   updatePushPrefs,
   sendTestPush,
+  getBackupHealth,
+  type BackupHealth,
+  type TenantBackupHealth,
   type PushPrefs,
   type PushConfigResponse,
   type AuthMe,
@@ -106,7 +109,7 @@ export function SettingsAccountPanel() {
         }}
       >
         <nav style={{ display: 'flex', gap: 4, overflowX: 'auto' }}>
-          {(['profile', 'login', 'preferences', 'notifications', 'sessions', 'developer', 'danger'] as const).map((id) => (
+          {(['profile', 'login', 'preferences', 'notifications', 'sessions', 'backups', 'developer', 'danger'] as const).map((id) => (
             <a
               key={id}
               href={`#${id}`}
@@ -134,6 +137,7 @@ export function SettingsAccountPanel() {
       <PreferencesSection />
       <NotificationsSection />
       <SessionsSection isDa={isDa} />
+      <BackupSection />
       <DeveloperSection />
       <DangerSection isDa={isDa} />
     </div>
@@ -543,6 +547,132 @@ function NotificationsSection() {
       )}
       </>
     </Section>
+  );
+}
+
+/**
+ * F212.5 — the backup lamp, finally connected to something true.
+ *
+ * `getBackupHealth()` existed since F153 Phase 4 and had ZERO callers
+ * (measured 2026-09-20), so the only backup indicator in the product was
+ * a function nobody rendered — while the endpoint behind it reported on
+ * a rung retired by F222.3 and answered `healthy: false` for 15 days
+ * straight. Both halves are fixed: the endpoint measures the objects
+ * that actually exist, and this section shows them per customer.
+ *
+ * `healthy === null` renders as UNKNOWN, never as an outage. "We cannot
+ * measure it" and "it is broken" are different facts, and conflating
+ * them is how a permanently-red lamp gets ignored.
+ */
+function BackupSection() {
+  const [health, setHealth] = useState<BackupHealth | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    getBackupHealth()
+      .then((h) => { if (alive) setHealth(h); })
+      .catch((err: unknown) => {
+        if (alive) setFailed(err instanceof Error ? err.message : String(err));
+      });
+    return () => { alive = false; };
+  }, []);
+
+  const overall: 'healthy' | 'stale' | 'unknown' =
+    health == null || health.healthy == null ? 'unknown' : health.healthy ? 'healthy' : 'stale';
+
+  return (
+    <Section
+      id="backups"
+      title={t('settings.account.backupHealth.title')}
+      subtitle={t('settings.account.backupHealth.subtitle')}
+    >
+      <Field label={t('settings.account.backupHealth.state')}>
+        <div data-testid="backup-health-state" style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <StatusDot state={overall} />
+          <span>{t(`settings.account.backupHealth.${overall}`)}</span>
+          {health?.maxAgeHours ? (
+            <span style={{ fontSize: 11.5, color: 'var(--color-fg-subtle)' }}>
+              · {t('settings.account.backupHealth.limit')} {health.maxAgeHours}h
+            </span>
+          ) : null}
+        </div>
+        <>
+          {failed ? (
+            <div data-testid="backup-health-error" style={{ fontSize: 11.5, color: 'var(--color-fg-subtle)', marginTop: 6 }}>
+              {failed}
+            </div>
+          ) : null}
+          {health && !health.configured ? (
+            <div data-testid="backup-health-not-configured" style={{ fontSize: 11.5, color: 'var(--color-fg-subtle)', marginTop: 6, lineHeight: 1.5 }}>
+              {t('settings.account.backupHealth.notConfiguredHint')}
+            </div>
+          ) : null}
+        </>
+      </Field>
+
+      <>
+      {health && health.tenants.length > 0 ? (
+        <Field label={t('settings.account.backupHealth.perTenant')}>
+          <div
+            data-testid="backup-health-tenants"
+            style={{
+              background: 'var(--color-bg-card)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-lg)',
+              overflow: 'hidden',
+            }}
+          >
+            {health.tenants.map((row, i) => (
+              <div
+                key={row.slug}
+                data-testid={`settings-backup-health-${row.slug}`}
+                style={{
+                  padding: '12px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  borderTop: i === 0 ? 'none' : '1px solid var(--color-border)',
+                }}
+              >
+                <StatusDot state={row.healthy == null ? 'unknown' : row.healthy ? 'healthy' : 'stale'} />
+                <span class="mono" style={{ fontSize: 12.5, minWidth: 0, flex: '1 1 auto', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {row.slug}
+                </span>
+                <span style={{ fontSize: 12, color: 'var(--color-fg-muted)', whiteSpace: 'nowrap' }}>
+                  {backupAgeLabel(row)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Field>
+      ) : null}
+      </>
+    </Section>
+  );
+}
+
+function backupAgeLabel(row: TenantBackupHealth): string {
+  if (row.reason === 'no_snapshot') return t('settings.account.backupHealth.noSnapshot');
+  if (row.reason === 'not_measured') return t('settings.account.backupHealth.notMeasured');
+  if (row.reason === 'store_unreachable') return t('settings.account.backupHealth.storeUnreachable');
+  if (row.ageHours == null) return t('settings.account.backupHealth.unknown');
+  if (row.ageHours < 1) return t('settings.account.backupHealth.justNow');
+  return t('settings.account.backupHealth.ageHours', { n: Math.round(row.ageHours) });
+}
+
+function StatusDot({ state }: { state: 'healthy' | 'stale' | 'unknown' }) {
+  // --color-success, not --color-accent: the accent is orange in this theme,
+  // so a healthy row read as a warning next to the red stale one (measured in
+  // a Lens capture, 2026-09-20). Three states need three distinguishable
+  // colours, and "OK" must not look like "careful".
+  const color =
+    state === 'healthy' ? 'var(--color-success)' : state === 'stale' ? 'var(--color-danger)' : 'var(--color-fg-subtle)';
+  return (
+    <span
+      aria-hidden="true"
+      style={{ width: 8, height: 8, borderRadius: '50%', background: color, flex: '0 0 auto' }}
+    />
   );
 }
 

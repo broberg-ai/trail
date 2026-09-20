@@ -25,6 +25,13 @@ import { getTrail, getUser, requireAuth } from '../middleware/auth.js';
 import { createBackupProvider, readBackupConfigFromEnv } from '../services/backup/providers/index.js';
 import { readManifest } from '../services/backup/manifest.js';
 import { runBackupPass } from '../services/backup/pass.js';
+import {
+  assessBackupFreshness,
+  createS3BackupLister,
+  readDbBackupStoreConfigFromEnv,
+  readMaxAgeHoursFromEnv,
+} from '../services/backup/freshness.js';
+import { remoteTenantConfig } from '../lib/tenant-pool.js';
 
 export const backupRoutes = new Hono();
 
@@ -36,15 +43,100 @@ backupRoutes.use('/admin/backups/*', requireAuth);
 
 /**
  * GET /backups/health — read-only aggregate for the F153 Phase 4
- * status card. Exposes nothing tenant-sensitive: just whether the
- * backup pipeline is configured + last-success timestamp + count
- * over the last 30 days + a derived `healthy` boolean.
+ * status card. Exposes nothing tenant-sensitive: whether the backup
+ * pipeline is configured, how fresh the newest backup is, and a
+ * derived `healthy` boolean.
  *
- * `healthy` = `configured AND lastSuccess within 25h` (24h cadence
- * + 1h grace). Non-configured returns `healthy=null` so the UI can
- * render "not configured" without making it look like an outage.
+ * F212.5 — WHICH RUNG IS MEASURED DEPENDS ON WHERE THE DATA LIVES.
+ * A tenant listed in TRAIL_DB_REMOTE is backed up by the DB machine's
+ * sidecar (apps/db/backup.sh → object storage), not by this engine's
+ * F153 pass, which refuses remote tenants before it writes anything to
+ * the manifest. So for remote tenants the manifest is not just stale,
+ * it is STRUCTURALLY unable to describe them — it froze on 2026-09-04
+ * and `healthy` stayed false for 15 days while every tenant was being
+ * backed up nightly.
+ *
+ *   remote tenants + store configured  → measure the OBJECTS per tenant
+ *   remote tenants, store NOT configured → configured:false, healthy:null
+ *                                          ("cannot measure", not "broken")
+ *   no remote tenants                  → the original manifest reading
+ *
+ * `healthy` = every measured tenant within 25h (24h cadence + 1h grace).
+ * Not-configured returns `healthy=null` so the UI renders "not
+ * configured" rather than an outage.
  */
 backupRoutes.get('/backups/health', async (c) => {
+  const remoteSlugs = Object.keys(remoteTenantConfig());
+
+  if (remoteSlugs.length > 0) {
+    const store = readDbBackupStoreConfigFromEnv();
+    if (!store) {
+      return c.json({
+        configured: false,
+        providerType: 'db-machine-sidecar',
+        lastSuccess: null,
+        last30Days: 0,
+        healthy: null,
+        reason: 'db_backup_store_not_configured',
+        tenants: remoteSlugs.map((slug) => ({
+          slug,
+          newestSnapshotAt: null,
+          ageHours: null,
+          newestBytes: null,
+          snapshotCount: 0,
+          healthy: null,
+          reason: 'not_measured',
+        })),
+      });
+    }
+
+    const maxAgeHours = readMaxAgeHoursFromEnv();
+    let objects;
+    try {
+      objects = await createS3BackupLister(store)();
+    } catch (err) {
+      // A listing that cannot be taken is UNKNOWN, never "healthy".
+      return c.json({
+        configured: true,
+        providerType: 'db-machine-sidecar',
+        lastSuccess: null,
+        last30Days: 0,
+        healthy: false,
+        reason: 'store_unreachable',
+        error: err instanceof Error ? err.message : String(err),
+        tenants: remoteSlugs.map((slug) => ({
+          slug,
+          newestSnapshotAt: null,
+          ageHours: null,
+          newestBytes: null,
+          snapshotCount: 0,
+          healthy: false,
+          reason: 'store_unreachable',
+        })),
+      });
+    }
+
+    const tenants = assessBackupFreshness(remoteSlugs, objects, {
+      maxAgeHours,
+      prefix: store.prefix,
+    });
+    const measured = tenants
+      .map((t) => t.newestSnapshotAt)
+      .filter((at): at is string => at !== null)
+      .sort();
+    const cutoff30d = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+    return c.json({
+      configured: true,
+      providerType: 'db-machine-sidecar',
+      lastSuccess: measured.length > 0 ? measured[measured.length - 1] : null,
+      last30Days: objects.filter((o) => Date.parse(o.lastModified) >= cutoff30d).length,
+      healthy: tenants.every((t) => t.healthy),
+      maxAgeHours,
+      tenants,
+    });
+  }
+
   const dataDir = resolveDataDir();
   const manifest = await readManifest(dataDir);
   const config = readBackupConfigFromEnv();
@@ -72,6 +164,7 @@ backupRoutes.get('/backups/health', async (c) => {
     lastSuccess,
     last30Days,
     healthy,
+    tenants: [],
   });
 });
 

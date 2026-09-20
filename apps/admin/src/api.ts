@@ -2017,13 +2017,35 @@ export function updateChatSettings(
 
 // ── F153 Phase 4 — Read-only backup health ─────────────────────────
 
+/**
+ * F212.5 — one row per customer, measured from the objects that exist in
+ * the backup store. `healthy: null` means "not measured", which is a
+ * third state and not a synonym for false: the engine may be unable to
+ * read the store while the nightly backups keep running fine.
+ */
+export interface TenantBackupHealth {
+  slug: string;
+  newestSnapshotAt: string | null;
+  ageHours: number | null;
+  newestBytes: number | null;
+  snapshotCount: number;
+  healthy: boolean | null;
+  reason: 'ok' | 'stale' | 'no_snapshot' | 'not_measured' | 'store_unreachable';
+}
+
 export interface BackupHealth {
   configured: boolean;
   providerType: string;
   lastSuccess: string | null;
   last30Days: number;
-  /** null = not configured; bool reflects "fresh enough". */
+  /** null = not configured / not measurable; bool reflects "fresh enough". */
   healthy: boolean | null;
+  /** Freshness limit in hours the engine applied. */
+  maxAgeHours?: number;
+  reason?: string;
+  error?: string;
+  /** Empty when this engine owns its own backups (no remote tenants). */
+  tenants: TenantBackupHealth[];
 }
 
 export function getBackupHealth(): Promise<BackupHealth> {

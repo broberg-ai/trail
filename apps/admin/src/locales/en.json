@@ -94,7 +94,8 @@
       "notifications": "Notifications",
       "sessions": "Sessions",
       "developer": "Developer",
-      "danger": "Danger"
+      "danger": "Danger",
+      "backups": "Backups"
     },
     "loginMethods": {
       "heading": "How you sign in",
@@ -1040,9 +1041,9 @@
       },
       "backupHealth": {
         "title": "Backup system",
-        "subtitle": "This engine's trail.db is continuously backed up to R2. Each engine has its own DB with its own tenants; backup passes run independently per engine. Read-only — only the operator role can trigger backups.",
+        "subtitle": "Each customer's Trail database lives on the dedicated DB machine and is backed up from there to object storage every night. The number below is the age of the NEWEST file actually in the store — not a receipt from a script. Read-only.",
         "state": "Status",
-        "lastSuccess": "Last backup",
+        "lastSuccess": "Newest backup",
         "last30Days": "Last 30 days",
         "healthy": "OK",
         "stale": "Stale",
@@ -1050,7 +1051,14 @@
         "never": "never run",
         "justNow": "just now",
         "notConfigured": "Not configured",
-        "notConfiguredHint": "TRAIL_BACKUP_R2_* env vars aren't set on the engine — set them via flyctl secrets and the 24h scheduler pass activates automatically."
+        "notConfiguredHint": "TRAIL_DB_BACKUP_S3_* is not set on the engine, so the backup store cannot be read. Status shows as \"unknown\" — that does NOT mean backups stopped, only that we cannot measure them from here.",
+        "perTenant": "Per customer",
+        "noSnapshot": "no backup found",
+        "notMeasured": "not measured",
+        "storeUnreachable": "store unreachable",
+        "snapshotCount": "{n} files",
+        "ageHours": "{n} hours old",
+        "limit": "Limit"
       }
     }
   },
