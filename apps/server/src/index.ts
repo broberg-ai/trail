@@ -32,6 +32,8 @@ import { backfillBacklinks, startBacklinkExtractor } from './services/backlink-e
 import { backfillLinkCheck, startLinkChecker } from './services/link-checker.js';
 import { startLintScheduler } from './services/lint-scheduler.js';
 import { startBackupFreshnessWatch } from './services/backup/freshness-watch.js';
+import { startDiskGuard } from './services/disk-guard.js';
+import { startDeployFreshness } from './services/deploy-freshness.js';
 import { startIndexScheduler } from './services/index-scheduler.js';
 import { startConfidenceDecay } from './services/confidence-decay.js';
 import { startQueueBackfill } from './services/queue-backfill.js';
@@ -540,6 +542,12 @@ serviceStops.push(stopRejoin);
 // F212.5 — watch the backup rung that actually runs (the DB machine's
 // sidecar), ONCE for the whole engine rather than once per tenant.
 serviceStops.push(startBackupFreshnessWatch());
+
+// F212.3 — the two numbers nobody was watching: free space on the data
+// volume, and how long since a deploy last SUCCEEDED. Engine-wide, not
+// per tenant.
+serviceStops.push(startDiskGuard());
+serviceStops.push(startDeployFreshness());
 
 // F196 — self-report this deploy to upmetrics (one success POST on boot,
 // fail-soft + no-op unless UPMETRICS_API_KEY + UPMETRICS_SITE are set).
