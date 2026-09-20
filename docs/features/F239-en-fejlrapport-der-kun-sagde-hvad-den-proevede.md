@@ -60,3 +60,40 @@ det.
 
 Næste gang det sker, står grunden i loggen. Det er dét denne ændring køber:
 ikke en forklaring, men muligheden for at få en.
+
+## Reuse
+
+Discovery-tjek kørt 20. september 2026 (`discovery.broberg.ai/api/search`) på
+tre kapaciteter: *error reporting*, *logging*, *observability*.
+
+| Pakke | Status | Beslutning her |
+|---|---|---|
+| `@upmetrics/sdk` | shipped | **Allerede adopteret.** Vi sender fejl gennem den; ingen rå provider-integration. |
+| `@broberg/logger` v0.2.3 (L3, ejet af components) | shipped | **IKKE adopteret, og ikke på dette kort.** Se nedenfor. |
+| `upmetrics-swift`, `@broberg/mail`, `@broberg/webpush` | shipped | Ikke relevante for denne flade. |
+
+**Hvorfor `@broberg/logger` ikke bygges ind her.** Den er den rigtige pakke til
+opgaven på papiret — strukturet server-logning med fire niveauer, og den
+serialiserer en `Error` som `{name,message,stack}` frem for det `{}` man får af
+`JSON.stringify(err)`. Men dette kort er fem linjer i en eksisterende
+`catch`-blok der skriver ÉN `console.error`-linje. At skifte log-lag i Trail er
+en migrering af hvert kaldested i motoren, og den hører i sit eget kort med sin
+egen plan. At smugle den ind under en fem-linjers fejlrettelse ville være
+præcis det nøgne skifte harness-kontrakten forbyder.
+
+**Og pakken løser IKKE den del man umiddelbart håber.** Dens redaction er slået
+til som standard, men den er **mønster-baseret** — ~38 mønstre fra
+`@broberg/secret-scan`, så en API-nøgle, et token eller en connection-string
+bliver `[REDACTED:<type>]`. Pakkens egen beskrivelse siger det lige ud: «read
+the limit before relying on it.»
+
+Det betyder noget konkret for fundet i idé `01a0bec1-a15b-74a0-8b57-4808ec810c71`:
+den værdi der i dag havner i fejl-sporeren er en **bar sha256** (`params:
+5cce0064…`). 64 hex-tegn er også en commit-sha, et checksum og et vilkårligt id,
+så der findes ikke et mønster der kan skelne den — og en mønster-matcher ville
+derfor lade den passere. Redaction er altså ikke svaret på den halvdel;
+svaret er at `params:` slet ikke skal med ud af huset.
+
+**Adoption-status:** `@broberg/logger` står stadig på dette repos
+`discovery_reuse`-gap. Den er ikke fravalgt, kun ikke taget — og den er det
+oplagte hjem for det fund ovenfor, hvis nogen tager det kort.
