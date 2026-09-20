@@ -14,6 +14,7 @@ import {
 } from './lib/tenant-pool.js';
 import { ensureIngestUser } from './bootstrap/ingest-user.js';
 import { seedTenantIdentity } from './bootstrap/seed-tenant.js';
+import { adminTenantRoutes } from './routes/admin-tenants.js';
 import { recoverZombieIngests } from './bootstrap/zombie-ingest.js';
 import { rewriteWikiToNeurons } from './bootstrap/rewrite-wiki-paths.js';
 import { cleanupExternalOrphans } from './bootstrap/F98-cleanup-external-orphans.js';
@@ -343,78 +344,9 @@ const app = createApp(trail, tenantPool);
 
 // F210.2 — provision a brand-new tenant and make it live WITHOUT a restart.
 //
-// Called by the control plane right after it writes the control_tenants row.
-// Before this existed the pool was frozen at boot, so a tenant created in the
-// admin answered 401 to every request until someone restarted the engine —
-// and nothing on screen said why.
-//
-// Ships dark: with TRAIL_PROVISION_SECRET unset the route refuses everything
-// with 503, so an engine that has not been given the secret cannot have
-// directories created on its volume by anyone who can reach it.
-app.post('/api/admin/tenants', async (c) => {
-  const secret = process.env.TRAIL_PROVISION_SECRET;
-  if (!secret) {
-    return c.json({ error: 'provisioning not configured' }, 503);
-  }
-  const auth = c.req.header('authorization') ?? '';
-  const presented = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  // Length-independent compare would be better; Bun has no timingSafeEqual on
-  // strings, and this secret is machine-to-machine over the private network.
-  if (presented !== secret) {
-    return c.json({ error: 'unauthorized' }, 401);
-  }
-
-  let body: {
-    slug?: string;
-    name?: string;
-    ownerEmail?: string;
-    keyHash?: string;
-  } = {};
-  try {
-    body = await c.req.json();
-  } catch {
-    /* validated below */
-  }
-  const slug = body.slug?.trim();
-  if (!slug) return c.json({ error: 'slug required' }, 400);
-  const name = body.name?.trim() || slug;
-  const ownerEmail = body.ownerEmail?.trim().toLowerCase();
-  const keyHash = body.keyHash?.trim();
-
-  /**
-   * F210.5 — a provisioned tenant must be REACHABLE.
-   *
-   * `keyHash` is the sha256 of the bearer the control plane minted and will
-   * forward on this tenant's behalf. The raw key never crosses this wire —
-   * the engine only ever stores hashes, so sending the hash is both
-   * sufficient and the smaller thing to leak.
-   *
-   * Refused when absent rather than provisioning a tenant that cannot be
-   * reached: the failure this replaces was a database that existed, migrated
-   * cleanly, reported 201, and answered every subsequent request with
-   * "Invalid or revoked API key".
-   */
-  if (!keyHash || !ownerEmail) {
-    return c.json({ error: 'keyHash and ownerEmail are required to provision a reachable tenant' }, 400);
-  }
-
-  try {
-    const result = await provisionTenant({
-      pool: tenantPool,
-      slug,
-      boot: bootTenant,
-      seed: (db) => seedTenantIdentity(db, { slug, name, ownerEmail, keyHash }),
-    });
-    return c.json({ ok: true, slug: result.slug, live: tenantPool.has(result.slug) }, 201);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    // "already exists" is a conflict, not a server fault — the caller can
-    // tell a name clash from a broken engine.
-    const conflict = /already (exists|live)/.test(msg);
-    console.error(`[provision] ${slug}: ${msg}`);
-    return c.json({ error: msg }, conflict ? 409 : 400);
-  }
-});
+// The handler moved to routes/admin-tenants.ts so a probe can drive it without
+// booting the engine; see that file's header for why that mattered.
+app.route('/api', adminTenantRoutes({ pool: tenantPool, boot: bootTenant, seed: seedTenantIdentity }));
 
 const server = Bun.serve({
   port: PORT,
