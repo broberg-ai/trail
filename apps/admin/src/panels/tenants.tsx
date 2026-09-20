@@ -1,7 +1,6 @@
 import type { JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import {
-  fetchAuthMe,
   switchTenant,
   listInvitations,
   createInvitation,
@@ -12,6 +11,7 @@ import {
   type Invitation,
   type InvitationRole,
 } from '../api';
+import { authMe, refreshAuthMe } from '../lib/auth-me-store';
 import { useLocale, getLocale, t } from '../lib/i18n';
 import { Icons } from '../components/ui/icons';
 import { CenteredLoader } from '../components/centered-loader';
@@ -32,7 +32,9 @@ import { CenteredLoader } from '../components/centered-loader';
  */
 export function ManageTenantsPanel() {
   useLocale();
-  const [me, setMe] = useState<AuthMe | null>(null);
+  // F210.1 — reads the SHARED store, so the top-bar switcher and this table
+  // can never disagree about which tenants exist (they did; Lens measured it).
+  const me = authMe.value;
   const [tab, setTab] = useState<'all' | 'owner' | 'invitations'>('all');
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -51,7 +53,7 @@ export function ManageTenantsPanel() {
   }
 
   useEffect(() => {
-    fetchAuthMe().then(setMe).catch(() => setMe(null));
+    void refreshAuthMe().catch(() => { authMe.value = null; });
     loadInvitations();
   }, []);
 
@@ -97,9 +99,9 @@ export function ManageTenantsPanel() {
       setNewName('');
       showToast(isDa ? `Oprettet: ${created.name}` : `Created: ${created.name}`);
       // Re-read from the server rather than pushing the new tenant into local
-      // state: the switcher must show what the server actually stored.
-      const fresh = await fetchAuthMe();
-      setMe(fresh);
+      // state: the switcher must show what the server actually stored. Via the
+      // shared store, so the top-bar switcher updates in the same breath.
+      await refreshAuthMe();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setCreateError(
@@ -513,6 +515,9 @@ function TenantRow({
 }) {
   return (
     <div
+      // F210.1 — a stable per-tenant anchor, so a probe can wait for a newly
+      // created tenant to APPEAR rather than sleeping and hoping.
+      data-testid={`tenants-row-${tenant.slug}`}
       style={{
         display: 'grid',
         gridTemplateColumns: '1fr 90px 110px 120px 40px',

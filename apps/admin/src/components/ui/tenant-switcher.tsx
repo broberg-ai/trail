@@ -96,6 +96,10 @@ export function TenantSwitcher({ tenants, isMobile = false, onManageTenants }: T
         return (
           <button
             key={tn.slug}
+            // F210.1 — the options had no testid, so a probe could only reach
+            // them by class. The switcher is where a newly created tenant has
+            // to APPEAR, so that assertion needs a stable anchor per tenant.
+            data-testid={`tenant-switcher-option-${tn.slug}`}
             class={'menu-item' + (isCurrent ? ' is-active' : '')}
             onClick={() => handleSwitch(tn.slug)}
             disabled={pending === tn.slug}

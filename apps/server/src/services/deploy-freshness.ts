@@ -109,9 +109,13 @@ export async function readRelease(site: string, baseUrl?: string): Promise<Relea
     // distinction is kept: "never deployed" points at a wrong site name,
     // "cannot tell" points at Upmetrics being down. Collapsing them sends
     // whoever reads the issue to the wrong place.
-    let body: { deployedAt?: string; sha?: string; error?: string } | null = null;
+    // Named rather than `as typeof body`: that annotation refers to the
+    // variable being declared, so TypeScript collapsed the parsed value to
+    // `never` and every field read below became an error.
+    type ReleaseBody = { deployedAt?: string; sha?: string; error?: string };
+    let body: ReleaseBody | null = null;
     try {
-      body = (await res.json()) as typeof body;
+      body = (await res.json()) as ReleaseBody;
     } catch {
       // No JSON at all — then the status IS the only thing we know.
       return { deployedAt: null, sha: null, unreachable: `HTTP ${res.status} (no JSON body)` };

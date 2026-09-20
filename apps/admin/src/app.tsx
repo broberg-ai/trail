@@ -4,6 +4,7 @@ import { useLocation } from 'preact-iso';
 import { fetchAuthMe, listKnowledgeBases, type AuthMe } from './api';
 import { mountConstellation } from './lib/constellation';
 import { TopNav } from './components/ui/top-nav';
+import { authMe } from './lib/auth-me-store';
 import { TrailSidebar } from './components/ui/trail-sidebar';
 import { CommandPalette } from './components/ui/command-palette';
 import { PwaUpdate } from './components/pwa-update';
@@ -44,7 +45,10 @@ function clearReturnToCookie(): void {
  */
 export function App({ children }: { children: ComponentChildren }) {
   useLocale(); // subscribe to locale changes so labels re-render
-  const [me, setMe] = useState<AuthMe | null>(null);
+  // F210.1 — the shell and the Tenants panel used to hold SEPARATE copies of
+  // /api/auth/me, so a tenant created in the panel never reached this
+  // switcher. One signal, every reader.
+  const me = authMe.value;
   const [bootstrappedKbId, setBootstrappedKbId] = useState<string | null>(() => {
     try { return localStorage.getItem('trail.admin.lastKbId'); } catch { return null; }
   });
@@ -143,7 +147,7 @@ export function App({ children }: { children: ComponentChildren }) {
   useEffect(() => {
     fetchAuthMe()
       .then((data) => {
-        setMe(data);
+        authMe.value = data;
         // F201.17 — if this login started from a deep-link, resume to it now
         // that we're authed. All providers converge here (SPA boots authed).
         const raw = readReturnToCookie();
