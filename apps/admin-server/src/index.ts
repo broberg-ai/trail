@@ -16,7 +16,7 @@ import { meTenantRoutes } from './me-tenants.js';
 import { lensReadOnlyGuard, lensSessionRoute } from './lens-session.js';
 import { init as upInit, captureException, setTag } from '@upmetrics/sdk';
 import { setCookie } from 'hono/cookie';
-import { UPMETRICS_DSN, reportDeploy, safeReturnPath } from '@trail/shared';
+import { UPMETRICS_DSN, reportDeploy, safeReturnPath, returnPathForRequest } from '@trail/shared';
 
 // Upmetrics fleet-dogfooding — server-side error capture for app.trailmem.com.
 // DSN is the single source from @trail/shared (compiled in). Gated on
@@ -481,7 +481,15 @@ if (hasSpa) {
       // link /kb/<kb>/neurons/<slug>) so we can land the user there after
       // login. Consumed by the SPA once it boots authed (provider-agnostic).
       // Validated to prevent open-redirect.
-      const intended = safeReturnPath(c.req.path + new URL(c.req.url).search);
+      // F285 — only a HUMAN navigation is remembered. The browser fetches
+      // /favicon.ico by itself, and that fetch used to write itself in as the
+      // intended destination and overwrite the real one (measured on prod,
+      // owner-reported: login landed on an in-app 404 at /favicon.ico).
+      const intended = returnPathForRequest({
+        pathWithSearch: c.req.path + new URL(c.req.url).search,
+        secFetchDest: c.req.header('Sec-Fetch-Dest'),
+        accept: c.req.header('Accept'),
+      });
       if (intended) {
         setCookie(c, 'trail-return-to', intended, {
           httpOnly: false, // SPA reads it via document.cookie to resume
