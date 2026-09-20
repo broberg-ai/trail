@@ -164,3 +164,53 @@ test('en fjern-kunde afvises FØR der skrives noget — hverken fil eller manife
     rmSync(L.root, { recursive: true, force: true });
   }
 });
+
+/**
+ * F212.2 — DEN UKONSUMEREDE STRØM SKAL LUKKES, og det skal hævdes
+ * DETERMINISTISK frem for ved held.
+ *
+ * Prøven ovenfor («en LYKKET pass…») fangede fejlen i CI og bestod på min
+ * Mac: `createReadStream` åbner filen DOVENT, så når en provider svarer uden
+ * at læse strømmen, flytter `rename` filen væk under en uåbnet handle, og
+ * den dovne åbning fejler bagefter med ENOENT som UHÅNDTERET fejl. Det er et
+ * skeduleringskapløb — «den er grøn hos mig» var aldrig et bevis.
+ *
+ * Denne hævder i stedet den EGENSKAB rettelsen indfører: efter passet er
+ * strømmen destrueret. Ingen timing, intet kapløb, samme svar hver gang og
+ * på hvert styresystem.
+ */
+test('en provider der IKKE læser strømmen efterlader ingen åben handle', async () => {
+  const L = layout();
+  await healthyDb(L.dbPath);
+  let handed: Readable | null = null;
+  const lazyProvider: BackupProvider = {
+    ...failingProvider('unused'),
+    // Tager imod strømmen og læser den ALDRIG — netop det en provider gør
+    // når den fejler tidligt (auth, net, en 4xx før kroppen læses).
+    upload: (filename: string, body: Readable) => {
+      handed = body;
+      return Promise.resolve({ key: `prefix/${filename}`, size: 1 });
+    },
+  };
+  try {
+    const result = await runBackupPass({
+      dbPath: L.dbPath,
+      dataDir: L.dataDir,
+      stagingDir: L.stagingDir,
+      localDir: L.localDir,
+      provider: lazyProvider,
+      trigger: 'manual',
+    });
+    expect(result.ok).toBe(true);
+    expect(handed).not.toBe(null);
+    // KERNEN: handlen er lukket, så den dovne åbning ikke kan ramme en fil
+    // `rename` har flyttet væk.
+    expect((handed as unknown as Readable).destroyed).toBe(true);
+    // Og filen ER flyttet — ellers ville hævdelsen ovenfor kunne bestå på en
+    // pass der slet ikke nåede så langt.
+    expect(readdirSync(L.localDir)).toEqual([`${result.snapshot.id}.db.gz`]);
+    expect(readdirSync(L.stagingDir)).toEqual([]);
+  } finally {
+    rmSync(L.root, { recursive: true, force: true });
+  }
+});

@@ -122,9 +122,37 @@ export async function runBackupPass(input: BackupPassInput): Promise<BackupPassR
   });
 
   // ── Upload ──────────────────────────────────────────────────────
+  //
+  // THE STREAM IS OWNED HERE, NOT BY THE PROVIDER. `createReadStream` opens
+  // the file LAZILY — nothing touches the disk until something reads it. A
+  // provider that resolves without consuming the stream therefore leaves an
+  // unopened handle behind, and the `rename` below moves the file out from
+  // under it. The lazy open then fires on a path that no longer exists and
+  // emits ENOENT as an UNHANDLED error event on the Readable.
+  //
+  // MEASURED 20/9 2026: green on macOS, red in CI on Linux —
+  //   ENOENT: no such file or directory, open
+  //   '/tmp/f212-2-pass-VjIhhZ/data/backups/staging/trail_…_5127e2.db.gz'
+  // It is a scheduling race, so "it passes on my machine" was never evidence.
+  //
+  // It is not only a test artefact: a real provider that rejects early (auth,
+  // network, a 4xx before it reads the body) hits the same path, and the
+  // ENOENT would then surface AFTER we have already handled the upload
+  // failure — an unhandled error on top of a handled one.
+  //
+  // So: attach an error handler before anything can open the file, and
+  // destroy the stream once the upload has finished with it either way.
   let uploadKey: string;
+  let stream: ReturnType<typeof createReadStream> | null = null;
   try {
-    const stream = createReadStream(snap.path);
+    stream = createReadStream(snap.path);
+    // Swallowing is correct here and only here: a read error on this handle
+    // is either the race above (the file is already safely moved) or a real
+    // read failure, which `provider.upload` reports on its own rejection.
+    // Left unhandled it would take the process down.
+    stream.on('error', (err) => {
+      console.warn('[backup/pass] staged-file stream error:', stringifyErr(err));
+    });
     const result = await provider.upload(filename, stream, snap.compressedBytes);
     uploadKey = result.key;
   } catch (err) {
@@ -143,6 +171,9 @@ export async function runBackupPass(input: BackupPassInput): Promise<BackupPassR
       ok: false,
       error: msg,
     };
+  } finally {
+    // Closes an unconsumed handle so the rename below cannot race its open.
+    stream?.destroy();
   }
 
   // ── Move staged -> local keep-dir ───────────────────────────────
