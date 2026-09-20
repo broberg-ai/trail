@@ -52,6 +52,7 @@ import { runFullLinkCheck } from './link-checker.js';
 import { createBackupProvider, readBackupConfigFromEnv } from './backup/providers/index.js';
 import { runBackupPass } from './backup/pass.js';
 import { pruneRetention } from './backup/retention.js';
+import { reportBackupFailure, BENIGN_REFUSAL } from './backup/alarm.js';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -411,7 +412,12 @@ async function runBackupStep(trail: TrailDatabase): Promise<void> {
       // F247.3 — system-push ved ÆGTE backup-fejl. Den forventede afvisning
       // på fjern-tenants (backup ejes af DB-maskinens sidecar efter F222.3)
       // er ikke en fejl og må ikke pinge nogen hvert kvarter.
-      if (result.error !== 'remote_tenant_backup_runs_on_db_machine') {
+      // F212.2 — og fejlen skal nå Upmetrics, ikke kun en push og en log.
+      // 68 fejl over tre måneder rejste NUL issues. Beslutningen om HVAD
+      // der alarmerer (og hvad der ikke gør) ligger i backup/alarm.ts,
+      // hvor den kan prøves i begge retninger.
+      reportBackupFailure(result);
+      if (result.error !== BENIGN_REFUSAL) {
         for (const t of await distinctSubscriptionTenants(trail)) {
           void notifyPush(trail, t, 'system', {
             title: 'Trail — backup fejlede',

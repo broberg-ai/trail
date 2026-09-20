@@ -76,45 +76,72 @@ export async function snapshotDb(
   const escaped = rawPath.replace(/'/g, "''");
   await source.execute(`VACUUM INTO '${escaped}'`);
 
-  let uncompressedBytes: number;
+  // F212.2 — THE FUNCTION THAT CREATED THE FILE OWNS DELETING IT.
+  //
+  // `VACUUM INTO` has now written a full copy of the database. Every exit
+  // below this line must leave the staging directory as it found it, and
+  // before this card only the SUCCESS path did: the `finally` around the
+  // gzip pipeline unlinks the raw copy, but it sits AFTER the integrity
+  // check — so an integrity failure returned while the uncompressed `.db`
+  // stayed behind.
+  //
+  // Measured on prod 2026-08-27: 68 consecutive integrity failures left
+  // 7.4 GB in `/data/backups/staging`, which filled a 10 GB volume to
+  // 99.8 % and crash-looped the engine for 75 minutes with SQLITE_FULL.
+  // The two live databases together were 194 MB. The disk was never a
+  // capacity problem; it was this missing unlink rendered as disk space.
+  //
+  // The caller's retry-friendly "keep the file" behaviour is NOT affected:
+  // that applies to an UPLOAD failure, which happens after this function
+  // has already returned successfully.
   try {
-    uncompressedBytes = statSync(rawPath).size;
-  } catch (err) {
-    throw new Error(`VACUUM INTO did not produce ${rawPath}: ${stringifyErr(err)}`);
-  }
-
-  // Integrity check via a fresh client. Different URL = different handle,
-  // so there's no write-lock contention with the source engine.
-  const checkClient = createClient({ url: `file:${rawPath}` });
-  try {
-    const result = await checkClient.execute('PRAGMA integrity_check');
-    const firstRow = result.rows[0];
-    const firstCol = firstRow ? Object.values(firstRow)[0] : undefined;
-    if (firstCol !== 'ok') {
-      throw new Error(
-        `snapshot integrity_check != 'ok' for ${rawPath}: ${JSON.stringify(result.rows)}`,
-      );
+    let uncompressedBytes: number;
+    try {
+      uncompressedBytes = statSync(rawPath).size;
+    } catch (err) {
+      throw new Error(`VACUUM INTO did not produce ${rawPath}: ${stringifyErr(err)}`);
     }
-  } finally {
-    checkClient.close();
-  }
 
-  // Stream .db -> gzip -> .db.gz. Never buffers the whole DB in memory.
-  try {
-    await pipeline(
-      createReadStream(rawPath),
-      createGzip({ level: opts.gzipLevel ?? 6 }),
-      createWriteStream(gzPath),
-    );
-  } finally {
-    // Always unlink the uncompressed copy, success or failure.
+    // Integrity check via a fresh client. Different URL = different handle,
+    // so there's no write-lock contention with the source engine.
+    const checkClient = createClient({ url: `file:${rawPath}` });
+    try {
+      const result = await checkClient.execute('PRAGMA integrity_check');
+      const firstRow = result.rows[0];
+      const firstCol = firstRow ? Object.values(firstRow)[0] : undefined;
+      if (firstCol !== 'ok') {
+        throw new Error(
+          `snapshot integrity_check != 'ok' for ${rawPath}: ${JSON.stringify(result.rows)}`,
+        );
+      }
+    } finally {
+      checkClient.close();
+    }
+
+    // Stream .db -> gzip -> .db.gz. Never buffers the whole DB in memory.
+    try {
+      await pipeline(
+        createReadStream(rawPath),
+        createGzip({ level: opts.gzipLevel ?? 6 }),
+        createWriteStream(gzPath),
+      );
+    } finally {
+      // Always unlink the uncompressed copy, success or failure.
+      await unlink(rawPath).catch(() => {});
+    }
+
+    const compressedBytes = statSync(gzPath).size;
+    const sha256 = await sha256File(gzPath);
+
+    return { path: gzPath, compressedBytes, uncompressedBytes, sha256, snappedAt };
+  } catch (err) {
+    // Both names, because which one exists depends on how far we got: an
+    // integrity failure leaves the `.db`, a gzip/stat failure can leave a
+    // partial `.db.gz`. Unlinking a path that is not there is a no-op.
     await unlink(rawPath).catch(() => {});
+    await unlink(gzPath).catch(() => {});
+    throw err;
   }
-
-  const compressedBytes = statSync(gzPath).size;
-  const sha256 = await sha256File(gzPath);
-
-  return { path: gzPath, compressedBytes, uncompressedBytes, sha256, snappedAt };
 }
 
 async function sha256File(path: string): Promise<string> {
