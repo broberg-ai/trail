@@ -21,7 +21,7 @@
 import { Hono } from 'hono';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { getTrail, getUser, requireAuth } from '../middleware/auth.js';
+import { getTenant, getTrail, getUser, requireAuth } from '../middleware/auth.js';
 import { createBackupProvider, readBackupConfigFromEnv } from '../services/backup/providers/index.js';
 import { readManifest } from '../services/backup/manifest.js';
 import { runBackupPass } from '../services/backup/pass.js';
@@ -30,6 +30,7 @@ import {
   createS3BackupLister,
   readDbBackupStoreConfigFromEnv,
   readMaxAgeHoursFromEnv,
+  slugOfKey,
 } from '../services/backup/freshness.js';
 import { remoteTenantConfig } from '../lib/tenant-pool.js';
 
@@ -61,12 +62,24 @@ backupRoutes.use('/admin/backups/*', requireAuth);
  *                                          ("cannot measure", not "broken")
  *   no remote tenants                  → the original manifest reading
  *
- * `healthy` = every measured tenant within 25h (24h cadence + 1h grace).
+ * SCOPED TO THE CALLER'S OWN TENANT, and that is a security property, not
+ * a convenience. This route is open to ANY authenticated user (the path
+ * gate above), and `owner` is a role WITHIN a tenant — every customer's
+ * admin is owner of their own. The first version of this card returned a
+ * row per tenant on the machine, which would have told one customer the
+ * slugs, backup sizes and failure state of the others. The docstring
+ * above already promised "nothing tenant-sensitive"; a cross-tenant list
+ * broke that promise while the comment still claimed it.
+ *
+ * `healthy` = the caller's tenant within 25h (24h cadence + 1h grace).
  * Not-configured returns `healthy=null` so the UI renders "not
  * configured" rather than an outage.
  */
 backupRoutes.get('/backups/health', async (c) => {
-  const remoteSlugs = Object.keys(remoteTenantConfig());
+  const remoteMap = remoteTenantConfig();
+  const callerSlug = getTenant(c).slug;
+  // Only the caller's own tenant, and only when IT is served remotely.
+  const remoteSlugs = callerSlug in remoteMap ? [callerSlug] : [];
 
   if (remoteSlugs.length > 0) {
     const store = readDbBackupStoreConfigFromEnv();
@@ -130,7 +143,11 @@ backupRoutes.get('/backups/health', async (c) => {
       configured: true,
       providerType: 'db-machine-sidecar',
       lastSuccess: measured.length > 0 ? measured[measured.length - 1] : null,
-      last30Days: objects.filter((o) => Date.parse(o.lastModified) >= cutoff30d).length,
+      last30Days: objects.filter(
+        (o) =>
+          slugOfKey(o.key, store.prefix) === callerSlug &&
+          Date.parse(o.lastModified) >= cutoff30d,
+      ).length,
       healthy: tenants.every((t) => t.healthy),
       maxAgeHours,
       tenants,

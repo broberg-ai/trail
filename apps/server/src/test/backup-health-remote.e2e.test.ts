@@ -17,13 +17,24 @@
  * frosset 2026-09-04T23:22:07.065Z), og endpointet svarer alligevel
  * healthy:true. Læste ruten stadig manifestet, ville den svare false.
  *
- * MUTATIONS-TJEK, kørt 20. september 2026. Baseline 6/6 grønne:
- *   - `if (remoteSlugs.length > 0)` → `if (false)`                  0/6
+ * DEN ANDEN HALVDEL AF FILEN ER EN SIKKERHEDSPRØVE, og den kom af kortets
+ * egen review-runde: første udgave svarede med ÉN RÆKKE PR. KUNDE PÅ
+ * MASKINEN. Ruten er åben for enhver indlogget bruger, og `owner` er en
+ * rolle INDE I en kunde — så Sannes egen admin ville have kunnet læse
+ * broberg-ai's og fd-aalborgs slug, filstørrelse og fejltilstand. Rutens
+ * egen docstring lovede «nothing tenant-sensitive» mens koden brød det.
+ * Nu er svaret afgrænset til kalderens egen kunde.
+ *
+ * MUTATIONS-TJEK, kørt 20. september 2026. Baseline 7/7 grønne:
+ *   - `if (remoteSlugs.length > 0)` → `if (false)`                    0/7
  *       Hele filen falder, altså er det denne gren prøverne måler.
- *   - `tenants.every((t) => t.healthy)` → `tenants.some(...)`       5/1
- *       rød: «ÉN kunde uden backup gør det samlede svar rødt».
- *       Det er mutationen der ville lade to raske kunder dække over
- *       en tredje uden nogen backup — altså den farlige retning.
+ *   - `[callerSlug]` → `Object.keys(remoteMap)` (den LÆKKENDE udgave)  2/5
+ *       rød: «ÉN KUNDE KAN IKKE SE EN ANDENS». Det er mutationen der
+ *       gendanner netop den fejl review-runden fandt.
+ *   - `last30Days` tæller hele bøtten igen                            6/1
+ *       rød: «tællingen er KALDERENS egne filer». Et totaltal lækker
+ *       også — det afslører at der ER andre kunder og hvor mange filer
+ *       de har, selv når rækkerne er væk.
  */
 import { test, expect, beforeAll, afterAll } from 'bun:test';
 import { join } from 'node:path';
@@ -32,7 +43,10 @@ import { tmpdir } from 'node:os';
 import { createLibsqlDatabase, tenants, users, sessions } from '@trail/db';
 import { createApp } from '../app.js';
 
-const T = 't-bh', U = 'u-bh';
+// Two real tenants, because the load-bearing question is no longer only
+// "is the number right" but "can one customer see another's".
+const T_BRO = 't-bro', U_BRO = 'u-bro';
+const T_SAN = 't-san', U_SAN = 'u-san';
 const PREFIX = '_db-backups/';
 // 15 dage før "nu" i prøven — samme afstand som prod-manifestets frysning.
 const STALE_MANIFEST_AT = new Date(Date.now() - 15 * 24 * 3_600_000).toISOString();
@@ -114,16 +128,22 @@ beforeAll(async () => {
   const trail = await createLibsqlDatabase({ path: dbPath });
   await trail.runMigrations();
   await trail.initFTS();
-  await trail.db.insert(tenants).values({ id: T, slug: 'bh', name: 'BH', plan: 'hobby' }).run();
-  await trail.db
-    .insert(users)
-    .values({ id: U, tenantId: T, email: 'bh@local.trail', displayName: 'B', role: 'owner', onboarded: true })
-    .run();
-  await trail.db
-    .insert(sessions)
-    .values({ id: 'sess-bh', userId: U, expiresAt: new Date(Date.now() + 3_600_000).toISOString() })
-    .run();
-  app = createApp(trail, new Map([['bh', trail]]));
+  await trail.db.insert(tenants).values([
+    { id: T_BRO, slug: 'broberg-ai', name: 'broberg.ai', plan: 'business' },
+    { id: T_SAN, slug: 'sanne-andersen', name: 'Sanne Andersen', plan: 'pro' },
+  ]).run();
+  await trail.db.insert(users).values([
+    { id: U_BRO, tenantId: T_BRO, email: 'bro@local.trail', displayName: 'B', role: 'owner', onboarded: true },
+    // Also `owner` — deliberately. `owner` is a role WITHIN a tenant, so a
+    // customer's own admin carries it, and a test that gave them a lesser
+    // role would prove nothing about the leak.
+    { id: U_SAN, tenantId: T_SAN, email: 'san@local.trail', displayName: 'S', role: 'owner', onboarded: true },
+  ]).run();
+  await trail.db.insert(sessions).values([
+    { id: 'sess-bro', userId: U_BRO, expiresAt: new Date(Date.now() + 3_600_000).toISOString() },
+    { id: 'sess-san', userId: U_SAN, expiresAt: new Date(Date.now() + 3_600_000).toISOString() },
+  ]).run();
+  app = createApp(trail, new Map([['broberg-ai', trail], ['sanne-andersen', trail]]));
 });
 
 afterAll(() => {
@@ -139,6 +159,7 @@ type Health = {
   providerType: string;
   healthy: boolean | null;
   lastSuccess: string | null;
+  last30Days: number;
   maxAgeHours?: number;
   reason?: string;
   tenants: Array<{
@@ -167,49 +188,30 @@ function unconfigureStore() {
   delete process.env.TRAIL_DB_BACKUP_S3_PREFIX;
 }
 
-async function health(): Promise<{ status: number; body: Health }> {
+async function health(session = 'sess-bro'): Promise<{ status: number; body: Health }> {
   const res = await app.request('http://engine.local/api/v1/backups/health', {
-    headers: { Cookie: 'session=sess-bh' },
+    headers: { Cookie: `session=${session}` },
   });
   return { status: res.status, body: (await res.json()) as Health };
 }
 
 test('en fjern-kunde måles på OBJEKTERNE, ikke på manifestet', async () => {
   configureStore();
-  // Kun de to kunder der HAR et friskt objekt, så det samlede svar
-  // afhænger af objekterne alene. Manifestet på disken siger 15 dage;
-  // læste ruten stadig det, ville svaret her være false.
-  const allTenants = process.env.TRAIL_DB_REMOTE;
-  process.env.TRAIL_DB_REMOTE = JSON.stringify({
-    'broberg-ai': 'http://trail-db-001.internal:6002',
-    'fd-aalborg': 'http://trail-db-001.internal:6001',
-  });
-  try {
-    const { status, body } = await health();
-    expect(status).toBe(200);
-    expect(body.configured).toBe(true);
-    expect(body.providerType).toBe('db-machine-sidecar');
-    expect(body.healthy).toBe(true);
-    expect(body.lastSuccess).toBe(FRESH.toISOString());
-    expect(body.lastSuccess).not.toBe(STALE_MANIFEST_AT);
-  } finally {
-    process.env.TRAIL_DB_REMOTE = allTenants;
-  }
+  const { status, body } = await health();
+  expect(status).toBe(200);
+  expect(body.configured).toBe(true);
+  expect(body.providerType).toBe('db-machine-sidecar');
+  // Manifestet på disken siger 15 dage. Svaret gør ikke.
+  expect(body.healthy).toBe(true);
+  expect(body.lastSuccess).toBe(FRESH.toISOString());
+  expect(body.lastSuccess).not.toBe(STALE_MANIFEST_AT);
 });
 
-test('ÉN kunde uden backup gør det samlede svar rødt — flertallet må ikke dække den', async () => {
+test('svaret bærer kun KALDERENS egen kunde — og alle fire felter', async () => {
   configureStore();
   const { body } = await health();
-  expect(body.healthy).toBe(false);
-  expect(body.tenants.filter((t) => t.healthy === true)).toHaveLength(2);
-  expect(body.tenants.filter((t) => t.healthy === false)).toHaveLength(1);
-});
-
-test('svaret bærer én række pr. konfigureret kunde med alle fire felter', async () => {
-  configureStore();
-  const { body } = await health();
-  expect(body.tenants.map((t) => t.slug).sort()).toEqual(['broberg-ai', 'fd-aalborg', 'sanne-andersen']);
-  const bro = body.tenants.find((t) => t.slug === 'broberg-ai')!;
+  expect(body.tenants.map((t) => t.slug)).toEqual(['broberg-ai']);
+  const bro = at(body.tenants, 0);
   // Streng lighed på tidsstemplet — aldrig «indeholder».
   expect(bro.newestSnapshotAt).toBe(FRESH.toISOString());
   expect(bro.ageHours).toBeGreaterThan(1.9);
@@ -220,22 +222,55 @@ test('svaret bærer én række pr. konfigureret kunde med alle fire felter', asy
   expect(body.maxAgeHours).toBe(25);
 });
 
-test('en kunde uden ét objekt er TIL STEDE og rød — og trækker det samlede svar ned', async () => {
+test('ÉN KUNDE KAN IKKE SE EN ANDENS — hverken slug, alder eller fejltilstand', async () => {
   configureStore();
-  const { body } = await health();
-  const sanne = body.tenants.find((t) => t.slug === 'sanne-andersen');
-  expect(sanne).toBeDefined();
-  expect(sanne!.healthy).toBe(false);
-  expect(sanne!.reason).toBe('no_snapshot');
-  expect(sanne!.newestSnapshotAt).toBe(null);
-  expect(sanne!.snapshotCount).toBe(0);
+  const bro = (await health('sess-bro')).body;
+  const san = (await health('sess-san')).body;
+
+  // Sanne har intet objekt i attrappen. Havde hun kunnet se broberg-ai's
+  // række, ville hun kende en anden kundes slug, filstørrelse og status.
+  expect(bro.tenants.map((t) => t.slug)).toEqual(['broberg-ai']);
+  expect(san.tenants.map((t) => t.slug)).toEqual(['sanne-andersen']);
+
+  const broJson = JSON.stringify(bro);
+  expect(broJson).not.toContain('sanne-andersen');
+  expect(broJson).not.toContain('fd-aalborg');
+  const sanJson = JSON.stringify(san);
+  expect(sanJson).not.toContain('broberg-ai');
+  expect(sanJson).not.toContain('fd-aalborg');
+
+  // Og hendes eget svar er ÆRLIGT rødt — ikke skjult, kun afgrænset.
+  expect(at(san.tenants, 0).healthy).toBe(false);
+  expect(at(san.tenants, 0).reason).toBe('no_snapshot');
+  expect(san.healthy).toBe(false);
+});
+
+test('tællingen «sidste 30 dage» er KALDERENS egne filer, ikke hele bøttens', async () => {
+  configureStore();
+  const bro = (await health('sess-bro')).body;
+  const san = (await health('sess-san')).body;
+  // Attrappen har 2 broberg-ai-objekter, 1 fd-aalborg og 1 fremmed fil.
+  // Et utilsigtet totaltal ville give 3 til begge.
+  expect(bro.last30Days).toBe(2);
+  expect(san.last30Days).toBe(0);
+});
+
+test('en kunde uden ét objekt er TIL STEDE og rød — aldrig udeladt', async () => {
+  configureStore();
+  const { body } = await health('sess-san');
+  const san = at(body.tenants, 0);
+  expect(san.slug).toBe('sanne-andersen');
+  expect(san.healthy).toBe(false);
+  expect(san.reason).toBe('no_snapshot');
+  expect(san.newestSnapshotAt).toBe(null);
+  expect(san.snapshotCount).toBe(0);
 });
 
 test('en fremmed fil under præfikset tælles ikke som en kundes backup', async () => {
   configureStore();
   const { body } = await health();
-  expect(body.tenants.some((t) => t.slug === 'stray')).toBe(false);
-  expect(body.tenants.find((t) => t.slug === 'fd-aalborg')!.snapshotCount).toBe(1);
+  expect(JSON.stringify(body)).not.toContain('stray');
+  expect(at(body.tenants, 0).snapshotCount).toBe(2);
 });
 
 test('uden butiks-nøglen er svaret IKKE-KONFIGURERET og healthy:null — ikke rødt', async () => {
@@ -244,10 +279,16 @@ test('uden butiks-nøglen er svaret IKKE-KONFIGURERET og healthy:null — ikke r
   expect(body.configured).toBe(false);
   expect(body.healthy).toBe(null);
   expect(body.reason).toBe('db_backup_store_not_configured');
-  expect(body.tenants).toHaveLength(3);
-  for (const row of body.tenants) {
-    expect(row.healthy).toBe(null);
-    expect(row.reason).toBe('not_measured');
-  }
+  expect(body.tenants).toHaveLength(1);
+  expect(at(body.tenants, 0).slug).toBe('broberg-ai');
+  expect(at(body.tenants, 0).healthy).toBe(null);
+  expect(at(body.tenants, 0).reason).toBe('not_measured');
   configureStore();
 });
+
+/** Indexed access with an explicit failure — never a silent undefined. */
+function at<T>(rows: readonly T[], i: number): T {
+  const row = rows[i];
+  if (row === undefined) throw new Error(`expected a row at index ${i}, got ${rows.length} rows`);
+  return row;
+}
