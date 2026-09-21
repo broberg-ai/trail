@@ -321,6 +321,15 @@ importers:
         specifier: ^5.5.0
         version: 5.9.3
 
+  apps/trail-model:
+    devDependencies:
+      '@types/bun':
+        specifier: ^1.1.0
+        version: 1.3.12
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
   apps/web-clipper:
     dependencies:
       '@mozilla/readability':

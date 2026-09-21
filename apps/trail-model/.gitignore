@@ -1,0 +1,4 @@
+# Exported datasets: large, regenerable, and they carry customer content.
+# The export is reproducible from the API — the bytes do not belong in git.
+data/
+training/.venv/
