@@ -7,13 +7,20 @@
 
 ## Åbne spørgsmål — læs først
 
-Intet blokerer start. To ting står åbne og påvirker F3, ikke F2:
+Intet blokerer start. Tre ting står åbne:
 
 1. **Hvilket emne bliver den nye store hjerne?** Ejeren har selv rejst det, og
    det er den hurtigste vej ud af compile-modellens datamangel. Kriterierne
-   står under «Datagrundlaget» nedenfor. Ikke valgt endnu.
-2. **Hvor meget disk kan compile-modellen få?** 19 GB fri i alt i dag.
-   Klassifikatoren er ligeglad; compile-modellen skal have et tal.
+   står under «Datagrundlaget». Ikke valgt endnu — og den haster ikke, for
+   klassifikatoren bruger den ikke.
+2. **Må Ubuntu-maskinen bære et vedvarende job?** Den kører allerede en
+   buddy-edge med `camera9`-sessionen. At SERVERE klassifikatoren er let (se
+   afsnit 4); at TRÆNE natten igennem dér er en ny belastning på en maskine
+   der bærer en levende cc-session. Ejerens beslutning, ikke vores. Med
+   arbejdsdelingen nedenfor er spørgsmålet dog næsten bortfaldet: vi træner
+   ikke dér.
+3. **Hvor meget disk må compile-modellen få?** Mindre presserende nu — se
+   afsnit 4.
 
 ---
 
@@ -99,25 +106,50 @@ En ny harness ville kunne drive fra produktionen; denne kan ikke. Og
 ind som en tredje backend — så F4's integration og F0's måling er det samme
 kodested, ikke to.
 
-**Det sparer en hel fase, og det fjerner en risiko:** vi måler mod den pipeline
-der faktisk kører, ikke mod vores gengivelse af den.
+## 4. Hardware — to maskiner, og de laver ikke det samme
 
-## 4. Hardware — M1 alene
-
-Ejeren, 21/9: *«Du må nøjes med M1 indtil videre.»* Ubuntu-serveren er ude af
-planen (8 GB, kun CPU).
+**RETTELSE, 21. september 2026.** Denne plan sagde først at Ubuntu-maskinen var
+ude af billedet, at den havde 8 GB og kun CPU, og at «der er ikke andet jern».
+**Tre af de fire påstande var forkerte.** Jeg ledte på `192.168.1.92`, hvor der
+intet er, konkluderede «kan ikke nås», og planlagde videre på et tal ejeren
+havde husket forkert. buddy fandt den rigtige adresse; jeg har efterprøvet hver
+linje selv over Tailscale.
 
 ```
-RAM        16 GB     planens absolutte minimum for 4-bit LoRA på 4B
-Fri disk   19 GB     DEN STRAMME RESSOURCE
+                    M1 (Mac)          cb-ubuntu
+CPU                 Apple M1          i7-6600U @2.6GHz, 2 fysiske kerner (4 tråde), 2016
+Acceleration        MLX (GPU)         INGEN — avx2, ikke avx512, ingen CUDA
+RAM                 16 GB             14 GB (9 GB ledig med buddy-edge + camera9 kørende)
+Fri disk            19 GB             112 GB af 233
+Tilgængelig         når den er vågen  35 dages oppetid, agent-adgang uden at ejeren sidder der
+OS / Python         macOS             Ubuntu 26.04 LTS · Python 3.14.4
+Adresse             —                 cb@100.65.39.89 (Tailscale) · 192.168.1.73 (LAN)
 ```
 
-**Disken, ikke hukommelsen, er grænsen.** Modelvægte, checkpoint-serier og
-datasæt-versioner skal dele 19 GB. Klassifikatoren (100–300 MB) er ubekymret.
-Compile-modellen skal have en pladsplan, og hver træningskørsel en oprydning —
-en fuld disk på denne maskine har taget produktionen ned før (F212).
+**ARBEJDSDELINGEN FØLGER AF TALLENE — det er buddys pointe, og den er rigtig:
+hvor en model TRÆNES og hvor den KØRER behøver ikke være samme maskine.**
 
-Og planens ord om at «frigøre Mac'en» bortfalder: der er ikke andet jern.
+- **Træning på M1.** MLX bruger Apple-GPU'en. En 2016-bærbar-CPU med to
+  fysiske kerner kan godt træne en lille encoder, men den er langsom, og den
+  deler maskine med en levende cc-session.
+- **Servering på cb-ubuntu.** En klassifikator på 100–300 MB svarer på
+  millisekunder på CPU, og maskinen har 35 dages oppetid og er agent-nåelig
+  uden at ejeren sidder ved den. Det er dét en model i drift skal kunne.
+- **Datasæt og checkpoints på cb-ubuntu.** 112 GB mod M1'erens 19. Det
+  disk-pres planen først var bekymret for, findes ikke dér — og en fuld disk på
+  M1 har taget produktionen ned før (F212).
+
+Så planens ord om at «frigøre Mac'en» holder alligevel — bare kun for den
+halvdel der kører i drift. Træningen bliver liggende.
+
+**Compile-modellen kan IKKE serveres på cb-ubuntu.** CPU-only på en 2016-CPU
+til en 4B generativ model er for langsomt til noget brugbart, også til en
+natlig kø. Den bliver på M1 indtil der er andet jern.
+
+**En ting der er ejerens:** et vedvarende træningsjob på cb-ubuntu ville lægge
+sig oven på den buddy-edge der bærer `camera9`. Med arbejdsdelingen ovenfor
+træner vi ikke dér — men beslutningen er hans, ikke vores, hvis det bliver
+aktuelt.
 
 ## 5. Faser
 
@@ -138,8 +170,9 @@ plan-doc'en, før første træning.
 golden-sættet og mod baseline.
 
 **F286.5 — Skyggetilstand.** Den lokale klassifikator kører ved siden af
-produktionen på al ny ingest. Resultaterne sammenlignes automatisk; kun
-produktionens bruges. Uenigheds-andelen er tallet der viser fremskridt.
+produktionen på al ny ingest — serveret fra cb-ubuntu. Resultaterne
+sammenlignes automatisk; kun produktionens bruges. Uenigheds-andelen er tallet
+der viser fremskridt.
 
 **Senere (ikke i denne runde):** compile-modellen (planens F3), kaskade,
 kontinuerlig træning. De venter på datagrundlaget.
@@ -151,13 +184,14 @@ kontinuerlig træning. De venter på datagrundlaget.
   sandt, og «vi træner jo alligevel en model» er præcis den formulering der
   ville lukke det ind ad bagdøren.
 - **Ingen bake-off mellem tre modelfamilier.** Planen nævner Qwen3.5, Gemma 4 og
-  Ministral 3. Disk og tid rækker ikke til tre. Vælg én, mål den, skift kun ved
+  Ministral 3. Tid rækker ikke til tre. Vælg én, mål den, skift kun ved
   dokumenteret fejl.
 - **Ingen ny målestok.** `apps/model-lab` er den.
 - **Ingen kundedata ud af huset.** Tilladelsen til Sanne-data gælder træning på
-  eget jern.
+  eget jern — M1 og cb-ubuntu er begge eget jern.
 - **Ingen udskiftning af den kørende pipeline i denne runde.** Skyggetilstand
   kun. Kaskaden er en senere beslutning på målte tal.
+- **Ingen træning på cb-ubuntu.** Den serverer. Se afsnit 4.
 
 ## 7. Hvor det bor
 
@@ -190,6 +224,8 @@ Discovery-tjek 21/9 2026 på *model*, *training*, *classifier*, *ml*.
   Se afsnit 3.
 - **F149 (pluggable ingest backends)** — den lokale model bliver en
   `IngestBackend` som `MistralBackend` og `OpenRouterBackend`. Sømmen findes.
+- **buddy** ejer adgangen til cb-ubuntu (buddy-edge kører der). Spørg dem frem
+  for at hånd-rulle en ny vej ind på maskinen.
 
 Bliver klassifikatoren brugbar for andre repoer, er den rigtige vej at løfte den
 til `components` som en `@broberg/*`-pakke — ikke at kopiere mappen.
@@ -200,8 +236,19 @@ til `components` som en `@broberg/*`-pakke — ikke at kopiere mappen.
 |---|---|
 | Klassifikation | Mindst på niveau med baseline på golden-sættet |
 | Uenighed i skyggetilstand | Faldende, målt uge for uge |
+| Svartid i drift | Målt på cb-ubuntu, ikke på M1 — det er dér den kører |
 | Pris pr. klassifikation | 0 kr. |
-| Datagrundlag | Målbart på kommando, ikke tællet i hånden |
+| Datagrundlag | Målbart på kommando, ikke talt i hånden |
 
 Compile-modellens kriterier (≥90 % enighed, 100 % skemagyldighed) står uforandret
 fra ejerens plan, men de hører til en senere runde.
+
+## 10. Lektien fra denne plans egen rettelse
+
+Jeg skrev «Ubuntu er ude» og «der er ikke andet jern» ud fra ét mislykket
+ping mod en adresse der var forkert. Det var en konklusion, ikke en måling — og
+den var på vej til at binde hele epicen til én maskine med 19 GB fri disk.
+
+Det der fandt fejlen var at spørge nogen der kunne nå maskinen, ikke at tænke
+skarpere. **En «kan ikke nås» er et udsagn om MIN adgang, ikke om maskinen.**
+De to ligner hinanden lige indtil nogen anden prøver.
