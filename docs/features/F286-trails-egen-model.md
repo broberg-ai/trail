@@ -7,7 +7,7 @@
 
 ## Åbne spørgsmål — læs først
 
-Intet blokerer start. Fire ting står åbne:
+**Ét spørgsmål blokerer nu F286.3 (nr. 4).** Fem ting står åbne:
 
 1. **Hvilket emne bliver den nye store hjerne?** Ejeren har selv rejst det, og
    det er den hurtigste vej ud af compile-modellens datamangel. Kriterierne
@@ -21,7 +21,12 @@ Intet blokerer start. Fire ting står åbne:
    ikke dér.
 3. **Hvor meget disk må compile-modellen få?** Mindre presserende nu — se
    afsnit 4.
-4. **Skal arkiverede kilder med i kildetype-opgaven?** Billed- og lydkilder
+4. **Hvad ER klassifikatorens baseline?** `apps/model-lab` måler compile, ikke
+   klassifikation, og der findes ingen klassifikator i produktionen at måle op
+   imod (målt 22/9, afsnit 3). Forslag: en sky-model stilles de samme seks
+   spørgsmål på golden-sættet gennem `@broberg/ai-sdk`, præcision pr. kategori.
+   Metereret forbrug — derfor din beslutning. **Den blokerer F286.3.**
+5. **Skal arkiverede kilder med i kildetype-opgaven?** Billed- og lydkilder
    FINDES, men hver eneste er arkiveret, så de to kategorier har nul aktive
    eksempler. For netop den opgave er en arkiveret kilde stadig et gyldigt
    eksempel — for en Neuron er den det modsatte. F286.4's valg; tal og
@@ -116,21 +121,45 @@ compile-grundlaget på én gang. Men **størrelsen er ikke det der afgør værdi
 
 ## 3. Hvad der allerede findes — genbrug før vi bygger
 
-### `apps/model-lab` ER baseline-harnesset
+### `apps/model-lab` er baseline-harnesset — for COMPILE-modellen, ikke for klassifikatoren
 
-Planens F0 vil bygge en målestok. Den findes: `apps/model-lab` plus
-`apps/server/src/services/model-eval/runner.ts` (F202) kører den rigtige
-ingest-pipeline mod en engangs-base og scorer resultatet.
+**RETTELSE, 22. september 2026, efter F286.2's måling.** Dette afsnit sagde uden
+forbehold at planens F0 «ikke skal bygge en målestok; den skal køre den der er».
+Det holder for compile-modellen og **ikke** for klassifikatoren.
 
-Dens design-princip er ordret det vi har brug for:
+`apps/model-lab` plus `apps/server/src/services/model-eval/runner.ts` (F202) kører
+den rigtige ingest-pipeline mod en engangs-base og scorer resultatet. Design-
+princippet er ordret det vi har brug for:
 
 > *«Parity is guaranteed by calling the REAL backend classes (MistralBackend /
 > OpenRouterBackend) — NOT a re-implemented tool loop.»*
 
-En ny harness ville kunne drive fra produktionen; denne kan ikke. Og
-`backendFor()` i runneren er nøjagtig dét sted den lokale model senere kobles
-ind som en tredje backend — så F4's integration og F0's måling er det samme
-kodested, ikke to.
+**Men to ting er målt siden, og de flytter F286.3:**
+
+1. **Harnessets eneste kvalitetsmål er `scoreRecall()`** (`recall.ts`): en
+   substring-match af kilde-fakta inde i den kompilerede Neuron-tekst.
+   `runIngestComparison()` tager ét helt dokument som `source: string` og kører
+   hele compile-løkken. Der er intet sted der forudsiger en ETIKET og
+   sammenligner den. Den måler compile, ikke klassifikation.
+2. **Der findes ingen klassifikator i produktionen at måle op imod.** Søgt i hele
+   `apps/server/src` og `packages/core/src`: nul selvstændige klassifikations-kald.
+   Sti og kanttype vælges INDE I compile-prompten (`ingest.ts:582-596`), mens den
+   store model skriver. Klassificering er en egenskab ved compile-løbet, ikke et
+   trin man kan køre for sig.
+
+**Constraintens bekymring er stadig rigtig** — en ny harness må ikke kunne drive
+fra produktionen — men den kan ikke bide på denne opgave, for der er ingen
+produktions-løkke at drive fra. `backendFor()` i runneren er fortsat dér
+compile-modellen senere kobles ind; det er uændret.
+
+**Hvad klassifikatorens baseline så er, er en ÅBEN BESLUTNING (spørgsmål 5).**
+Forslaget står på F286.3-kortet: stil en sky-model de samme seks spørgsmål på
+golden-sættet gennem `@broberg/ai-sdk` og notér præcision **pr. kategori**. Det er
+metereret forbrug (444 kald, ~115k input-tokens), og derfor ejerens valg.
+
+**Uanset hvad han vælger, står to ting fast:** baseline skal på skrift FØR første
+træning, og den skal rapporteres pr. kategori — `cites` er 98 % af alle kanter, så
+et samlet tal kan være højt alene fordi modellen altid svarer `cites`.
 
 ## 4. Hardware — to maskiner, og de laver ikke det samme
 
@@ -190,8 +219,10 @@ eksempler der er holdt ude af træningen — bevist med et script der er set bli
 rødt. Fuld opgørelse og de fire fund i **afsnit 11**. For compile-modellen er
 det ærlige tal 39 par (afsnit 2), så dens golden-sæt venter på den nye hjerne.
 
-**F286.3 — Baseline.** Kør `apps/model-lab` mod golden-sættet. Tallene i
-plan-doc'en, før første træning.
+**F286.3 — Baseline. BLOKERET på en beslutning, 22/9.** Kortet sagde «kør
+`apps/model-lab` mod golden-sættet»; målingen viser at de to flader ikke mødes —
+se afsnit 3 og kortets noter. Tallene skal stadig i plan-doc'en før første
+træning; det er VEJEN dertil der skal vælges.
 
 **F286.4 — Klassifikatoren.** Træn på M1. Mål præcision pr. kategori mod
 golden-sættet og mod baseline.
