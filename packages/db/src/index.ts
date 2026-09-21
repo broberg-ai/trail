@@ -50,6 +50,15 @@ export {
 } from './response-size-guard.js';
 export type { OversizedResponse, ResponseSizeGuardOptions } from './response-size-guard.js';
 
+// F222.8 — walk a whole KB without asking sqld for it in one response.
+export {
+  scanPaged,
+  collectPaged,
+  isResponseTooLarge,
+  DEFAULT_PAGE_SIZE,
+} from './paged-scan.js';
+export type { FetchPage, PagedScanOptions } from './paged-scan.js';
+
 // F265.7 — escaping af et søgeuddrag. Eksporteret fordi der er TO steder der
 // bygger et uddrag: snippet()-vejen her i pakken, og vektor-vejen i motorens
 // routes/search.ts. Begge lander i samme felt, og feltet renderes som HTML.

@@ -17,8 +17,8 @@
  * Fire-and-forget from the F102 bootstrap so a slow LLM call on 4 KBs
  * doesn't add 40s to engine boot.
  */
-import { documents, type TrailDatabase } from '@trail/db';
-import { and, asc, eq } from 'drizzle-orm';
+import { documents, collectPaged, type TrailDatabase } from '@trail/db';
+import { and, asc, eq, gt } from 'drizzle-orm';
 import { createCandidate } from '@trail/core';
 import { ai } from '../lib/ai.js';
 
@@ -74,23 +74,35 @@ export async function backfillGlossaryForKb(
   // Pull every non-archived, non-hub wiki Neuron as input material. Skip
   // the glossary itself (feeding it back in would be a confusing echo)
   // and the structural hub pages (overview.md, log.md).
-  const neurons = await trail.db
-    .select({
-      filename: documents.filename,
-      title: documents.title,
-      content: documents.content,
-    })
-    .from(documents)
-    .where(
-      and(
-        eq(documents.knowledgeBaseId, kb.id),
-        eq(documents.tenantId, kb.tenantId),
-        eq(documents.kind, 'wiki'),
-        eq(documents.archived, false),
-      ),
-    )
-    .orderBy(asc(documents.filename))
-    .all();
+  // F222.8 — paged. The walk has to order by `id` (a unique, stable cursor),
+  // so the filename order this function depends on is restored afterwards in
+  // JS. Sorting a page at a time would NOT give the same result, and the
+  // order is load-bearing: it decides which terms the glossary LLM sees first.
+  const unordered = await collectPaged(
+    (cursor, limit) =>
+      trail.db
+        .select({
+          id: documents.id,
+          filename: documents.filename,
+          title: documents.title,
+          content: documents.content,
+        })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.knowledgeBaseId, kb.id),
+            eq(documents.tenantId, kb.tenantId),
+            eq(documents.kind, 'wiki'),
+            eq(documents.archived, false),
+            ...(cursor ? [gt(documents.id, cursor)] : []),
+          ),
+        )
+        .orderBy(asc(documents.id))
+        .limit(limit)
+        .all(),
+    (r) => r.id,
+  );
+  const neurons = [...unordered].sort((a, b) => a.filename.localeCompare(b.filename));
 
   const eligible = neurons
     .filter((n) => n.filename !== GLOSSARY_FILENAME)

@@ -20,11 +20,12 @@
  * has the context resolved.
  */
 
-import { and, eq, like } from 'drizzle-orm';
+import { and, asc, eq, gt, like } from 'drizzle-orm';
 import {
   documents,
   documentAccess,
   knowledgeBases,
+  collectPaged,
   type TrailDatabase,
 } from '@trail/db';
 import { skrubStreng } from '@trail/shared';
@@ -344,25 +345,35 @@ export async function read(
     const dirPath = args.path.slice(0, lastSlash + 1) || '/';
     const filePattern = args.path.slice(lastSlash + 1);
 
-    const rows = await ctx.trail.db
-      .select({
-        id: documents.id,
-        filename: documents.filename,
-        path: documents.path,
-        title: documents.title,
-        content: documents.content,
-        seq: documents.seq,
-      })
-      .from(documents)
-      .where(
-        and(
-          eq(documents.tenantId, ctx.tenantId),
-          eq(documents.knowledgeBaseId, kb.id),
-          eq(documents.archived, false),
-          like(documents.path, dirPath.replace('*', '%')),
-        ),
-      )
-      .all();
+    // F222.8 — paged. A directory prefix can be the whole KB ('/'), and the
+    // glob below is applied in JS AFTER the fetch, so the query has no bound
+    // of its own.
+    const rows = await collectPaged(
+      (cursor, limit) =>
+        ctx.trail.db
+          .select({
+            id: documents.id,
+            filename: documents.filename,
+            path: documents.path,
+            title: documents.title,
+            content: documents.content,
+            seq: documents.seq,
+          })
+          .from(documents)
+          .where(
+            and(
+              eq(documents.tenantId, ctx.tenantId),
+              eq(documents.knowledgeBaseId, kb.id),
+              eq(documents.archived, false),
+              like(documents.path, dirPath.replace('*', '%')),
+              ...(cursor ? [gt(documents.id, cursor)] : []),
+            ),
+          )
+          .orderBy(asc(documents.id))
+          .limit(limit)
+          .all(),
+      (r) => r.id,
+    );
     const filtered = rows.filter((d) => globMatch(d.filename, filePattern));
 
     const docs: ReadDocHit[] = [];

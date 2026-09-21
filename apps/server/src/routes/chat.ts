@@ -7,9 +7,10 @@ import {
   knowledgeBases,
   chatSessions,
   chatTurns,
+  collectPaged,
   type TrailDatabase,
 } from '@trail/db';
-import { and, asc, eq, inArray, like, sql , isNotNull} from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, like, sql , isNotNull} from 'drizzle-orm';
 import { requireAuth, getTenant, getUser, getTrail } from '../middleware/auth.js';
 import { ChatRequestSchema, buildFtsQuery , sourceChangedCaveat} from '@trail/shared';
 import { exactTitleMatches, resolveKbId, stripClaimAnchors } from '@trail/core';
@@ -1079,23 +1080,32 @@ async function listFadedHeuristicIds(
   kbId: string,
   tenantId: string,
 ): Promise<Set<string>> {
-  const rows = await trail.db
-    .select({
-      id: documents.id,
-      content: documents.content,
-      updatedAt: documents.updatedAt,
-    })
-    .from(documents)
-    .where(
-      and(
-        eq(documents.knowledgeBaseId, kbId),
-        eq(documents.tenantId, tenantId),
-        eq(documents.kind, 'wiki'),
-        eq(documents.archived, false),
-        like(documents.path, `${HEURISTIC_PATH}%`),
-      ),
-    )
-    .all();
+  // F222.8 — paged. Narrower than a whole KB (heuristics subtree only), but
+  // the subtree has no ceiling of its own, so the bound has to be here.
+  const rows = await collectPaged(
+    (cursor, limit) =>
+      trail.db
+        .select({
+          id: documents.id,
+          content: documents.content,
+          updatedAt: documents.updatedAt,
+        })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.knowledgeBaseId, kbId),
+            eq(documents.tenantId, tenantId),
+            eq(documents.kind, 'wiki'),
+            eq(documents.archived, false),
+            like(documents.path, `${HEURISTIC_PATH}%`),
+            ...(cursor ? [gt(documents.id, cursor)] : []),
+          ),
+        )
+        .orderBy(asc(documents.id))
+        .limit(limit)
+        .all(),
+    (r) => r.id,
+  );
 
   const faded = new Set<string>();
   for (const r of rows) {

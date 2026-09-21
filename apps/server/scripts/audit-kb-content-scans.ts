@@ -116,10 +116,13 @@ export function unboundedKbContentScans(roots = ROOTS): Offender[] {
           /\.where\(|\bWHERE\b/i.test(stmt) && /knowledgeBaseId|knowledge_base_id/.test(where);
         if (!wholeKb) continue;
 
-        // A filter on a single document id bounds the result at one row,
-        // however the rest of the WHERE is written.
-        if (/documents\.id\s*,|\bd?\.?id\s*=\s*\?/.test(where) && /\.get\(\)|\bLIMIT 1\b/i.test(stmt))
-          continue;
+        // `.get()` returns ONE row, whatever the filter says. My earlier
+        // version only honoured it alongside an id filter, which is backwards:
+        // the row cap comes from `.get()` itself, not from what is being
+        // matched. It cost two more false positives (`F102-seed-glossary`
+        // filters on filename+path, `mcp-router` on path+filename) — both
+        // fetch a single named document.
+        if (/\.get\(\)|\bLIMIT 1\b/i.test(stmt)) continue;
 
         // An explicit id LIST bounds the result at the list's length — the KB
         // filter beside it is a scope check, not the thing that decides the row

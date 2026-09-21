@@ -24,8 +24,9 @@ import {
   knowledgeBases,
   documents,
   type TrailDatabase,
+  collectPaged,
 } from '@trail/db';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, gt } from 'drizzle-orm';
 import { createCandidateQueueAPI } from '@trail/core';
 import { buildCompilePrompt, type IngestJob } from '../ingest.js';
 import { MistralBackend } from '../ingest/mistral-backend.js';
@@ -150,11 +151,26 @@ async function runOne(
 
   try {
     const r = await backendFor(m).run(input);
-    const neurons = await trail.db
-      .select({ content: documents.content })
-      .from(documents)
-      .where(and(eq(documents.knowledgeBaseId, kbId), eq(documents.kind, 'wiki')))
-      .all();
+    // F222.8 — paged. This one reads EVERY Neuron by design (it joins them
+    // into one blob to score recall), so it is the call site most certain to
+    // grow past the cap. `id` is selected only to carry the cursor.
+    const neurons = await collectPaged(
+      (cursor, limit) =>
+        trail.db
+          .select({ id: documents.id, content: documents.content })
+          .from(documents)
+          .where(
+            and(
+              eq(documents.knowledgeBaseId, kbId),
+              eq(documents.kind, 'wiki'),
+              ...(cursor ? [gt(documents.id, cursor)] : []),
+            ),
+          )
+          .orderBy(asc(documents.id))
+          .limit(limit)
+          .all(),
+      (r) => r.id,
+    );
     const blob = neurons.map((n) => n.content ?? '').join('\n\n');
     const recall = facts && facts.length ? scoreRecall(blob, facts) : null;
     return {

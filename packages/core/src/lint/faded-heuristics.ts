@@ -1,5 +1,5 @@
-import { documents, type TrailDatabase } from '@trail/db';
-import { and, eq, like } from 'drizzle-orm';
+import { documents, collectPaged, type TrailDatabase } from '@trail/db';
+import { and, asc, eq, gt, like } from 'drizzle-orm';
 import {
   HEURISTIC_PATH,
   HEURISTIC_FADED_THRESHOLD,
@@ -32,27 +32,37 @@ export async function detectFadedHeuristics(
   tenantId: string,
   _opts: LintOptions = {},
 ): Promise<{ scanned: number; findings: LintFinding[] }> {
-  const rows = await trail.db
-    .select({
-      id: documents.id,
-      filename: documents.filename,
-      title: documents.title,
-      path: documents.path,
-      content: documents.content,
-      updatedAt: documents.updatedAt,
-      version: documents.version,
-    })
-    .from(documents)
-    .where(
-      and(
-        eq(documents.knowledgeBaseId, kbId),
-        eq(documents.tenantId, tenantId),
-        eq(documents.kind, 'wiki'),
-        eq(documents.archived, false),
-        like(documents.path, `${HEURISTIC_PATH}%`),
-      ),
-    )
-    .all();
+  // F222.8 — paged. F222.8's own card listed this file as metadata-only and
+  // therefore exempt; it is not, and has selected `content` since April. The
+  // exemption would have left a real full-KB scan in place.
+  const rows = await collectPaged(
+    (cursor, limit) =>
+      trail.db
+        .select({
+          id: documents.id,
+          filename: documents.filename,
+          title: documents.title,
+          path: documents.path,
+          content: documents.content,
+          updatedAt: documents.updatedAt,
+          version: documents.version,
+        })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.knowledgeBaseId, kbId),
+            eq(documents.tenantId, tenantId),
+            eq(documents.kind, 'wiki'),
+            eq(documents.archived, false),
+            like(documents.path, `${HEURISTIC_PATH}%`),
+            ...(cursor ? [gt(documents.id, cursor)] : []),
+          ),
+        )
+        .orderBy(asc(documents.id))
+        .limit(limit)
+        .all(),
+    (r) => r.id,
+  );
 
   const findings: LintFinding[] = [];
   let scanned = 0;

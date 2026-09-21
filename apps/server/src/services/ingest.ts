@@ -1,5 +1,5 @@
-import { documents, knowledgeBases, ingestJobs, documentReferences, tenants, tenantSecrets, DATA_DIR, type TrailDatabase } from '@trail/db';
-import { and, asc, eq, gte } from 'drizzle-orm';
+import { documents, knowledgeBases, ingestJobs, documentReferences, tenants, tenantSecrets, DATA_DIR, collectPaged, type TrailDatabase } from '@trail/db';
+import { and, asc, eq, gt, gte } from 'drizzle-orm';
 import {
   parseSchemaNeuron,
   renderSchemaForPrompt,
@@ -958,22 +958,32 @@ async function loadSchemaNeurons(
   tenantId: string,
   kbId: string,
 ): Promise<SchemaNeuronRow[]> {
-  const rows = await trail.db
-    .select({
-      path: documents.path,
-      content: documents.content,
-    })
-    .from(documents)
-    .where(
-      and(
-        eq(documents.tenantId, tenantId),
-        eq(documents.knowledgeBaseId, kbId),
-        eq(documents.kind, 'wiki'),
-        eq(documents.archived, false),
-        eq(documents.filename, '_schema.md'),
-      ),
-    )
-    .all();
+  // F222.8 — paged. Narrow in practice (one _schema.md per directory), but
+  // "few today" is not a bound, and that is the shape this card exists for.
+  const rows = await collectPaged(
+    (cursor, limit) =>
+      trail.db
+        .select({
+          id: documents.id,
+          path: documents.path,
+          content: documents.content,
+        })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.tenantId, tenantId),
+            eq(documents.knowledgeBaseId, kbId),
+            eq(documents.kind, 'wiki'),
+            eq(documents.archived, false),
+            eq(documents.filename, '_schema.md'),
+            ...(cursor ? [gt(documents.id, cursor)] : []),
+          ),
+        )
+        .orderBy(asc(documents.id))
+        .limit(limit)
+        .all(),
+    (r) => r.id,
+  );
 
   const out: SchemaNeuronRow[] = [];
   for (const r of rows) {

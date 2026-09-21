@@ -3,8 +3,9 @@ import {
   documents,
   documentAccessRollup,
   wikiBacklinks,
+  collectPaged,
 } from '@trail/db';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, sql } from 'drizzle-orm';
 import { requireAuth, getTenant, getTrail } from '../middleware/auth.js';
 import { resolveKbId, DEFAULT_HUB_PAGES } from '@trail/core';
 import { parseTags } from '@trail/shared';
@@ -109,37 +110,48 @@ graphRoutes.get('/knowledge-bases/:kbId/graph', async (c) => {
   // of the Work Layer is that tasks/bugs live alongside the Neurons
   // they reference. Node shape is carried in the response so the admin
   // renders circles for knowledge and squares for work.
-  const nodeRows = await trail.db
-    .select({
-      id: documents.id,
-      kind: documents.kind,
-      title: documents.title,
-      filename: documents.filename,
-      path: documents.path,
-      tags: documents.tags,
-      content: documents.content,
-      workStatus: documents.workStatus,
-      workKind: documents.workKind,
-      // F182.6 — confidence drives node opacity; pinned never dims; superseded
-      // nodes render deemphasised (replaced by a newer Neuron).
-      confidence: documents.confidence,
-      confidencePinned: documents.confidencePinned,
-      supersededByNeuronId: documents.supersededByNeuronId,
-      backlinkCount: sql<number>`(
-        SELECT COUNT(*) FROM ${wikiBacklinks}
-        WHERE ${wikiBacklinks.toDocumentId} = ${documents.id}
-      )`.as('backlink_count'),
-    })
-    .from(documents)
-    .where(
-      and(
-        eq(documents.tenantId, tenant.id),
-        eq(documents.knowledgeBaseId, kbId),
-        sql`(${documents.kind} = 'wiki' OR ${documents.kind} = 'work')`,
-        eq(documents.archived, false),
-      ),
-    )
-    .all();
+  // F222.8 — the graph IS the whole KB by definition, so this is the query
+  // that grows with every Neuron a customer writes. Paged: identical rows in
+  // identical order (`id` is creation-ordered), but no single response
+  // anywhere near sqld's 10MB cap.
+  const nodeRows = await collectPaged(
+    (cursor, limit) =>
+      trail.db
+        .select({
+          id: documents.id,
+          kind: documents.kind,
+          title: documents.title,
+          filename: documents.filename,
+          path: documents.path,
+          tags: documents.tags,
+          content: documents.content,
+          workStatus: documents.workStatus,
+          workKind: documents.workKind,
+          // F182.6 — confidence drives node opacity; pinned never dims; superseded
+          // nodes render deemphasised (replaced by a newer Neuron).
+          confidence: documents.confidence,
+          confidencePinned: documents.confidencePinned,
+          supersededByNeuronId: documents.supersededByNeuronId,
+          backlinkCount: sql<number>`(
+            SELECT COUNT(*) FROM ${wikiBacklinks}
+            WHERE ${wikiBacklinks.toDocumentId} = ${documents.id}
+          )`.as('backlink_count'),
+        })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.tenantId, tenant.id),
+            eq(documents.knowledgeBaseId, kbId),
+            sql`(${documents.kind} = 'wiki' OR ${documents.kind} = 'work')`,
+            eq(documents.archived, false),
+            ...(cursor ? [gt(documents.id, cursor)] : []),
+          ),
+        )
+        .orderBy(asc(documents.id))
+        .limit(limit)
+        .all(),
+    (r) => r.id,
+  );
 
   // Edges: wiki_backlinks. F137 — carry edge_type along so the admin
   // renders typed relations (contradicts, supersedes, is-a ...)
