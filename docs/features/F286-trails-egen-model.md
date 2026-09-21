@@ -268,9 +268,9 @@ apps/trail-model/
   training/     Python — KUN selve træningen (MLX findes ikke i andet)
 ```
 
-## 8. Reuse
+## Reuse
 
-Discovery-tjek 21/9 2026 på *model*, *training*, *classifier*, *ml*.
+*(afsnit 8)* — Discovery-tjek 21/9 2026 på *model*, *training*, *classifier*, *ml*.
 
 - **Intet `@broberg/*` rører modeltræning.** Fladen findes ikke i flåden.
 - **`@broberg/ai-sdk` ER integrationspunktet** og skal bruges: planens F4 siger
