@@ -26,33 +26,44 @@ import { test, expect } from 'bun:test';
 import { unboundedKbContentScans } from '../../scripts/audit-kb-content-scans.js';
 
 /**
- * De TOLV kaldesteder målt 21. september 2026, før nogen blev migreret.
+ * De NI kaldesteder målt 21. september 2026, før nogen blev migreret.
+ * To af dem er brugervendte ruter (chat, graph).
  *
  * Listen kan kun KRYMPE. Den findes fordi alternativet var værre på en bestemt
  * måde: en vagt committet rød blokerer hver eneste udrulning ud af dette repo
  * for alle — også arbejde der intet har med F222.8 at gøre — og en port man skal
- * udenom for at komme videre, går man udenom. Med listen fejler kaldested nr. 13
- * den dag det skrives, hvilket er dét der ellers ville ske i stilhed mens kortet
- * er åbent.
+ * udenom for at komme videre, går man udenom.
  *
- * FIRE af de tolv er BRUGERVENDTE RUTER (search ×2, chat, graph), ikke de
- * efter-ingest-scanninger F222.8 antog. En fejl dér er en 500 foran en kunde.
+ * TALLET HAR VÆRET FORKERT TRE GANGE, og den historie er vigtigere end tallet:
  *
- * MIT FØRSTE TAL VAR 20, OG DET VAR FORKERT. Prædikatet ledte efter
- * `knowledgeBaseId` hvor som helst i sætningen — også i KOLONNE-listen — så
- * f.eks. `contradiction-lint.ts`, der henter ét dokument på id, blev talt med.
- * Otte af de tyve var falske. Det er værd at have stående, fordi fejlen også
- * pegede den farlige vej: et ægte fuld-KB-scan der filtrerer på en variabel
- * uden at nævne kolonnen ville være sluppet igennem. En forespørgsel der
- * VÆLGER en kolonne siger intet om hvor mange rækker der kommer tilbage.
+ *   20   `knowledgeBaseId` hvor som helst i sætningen — også i KOLONNE-listen.
+ *        `contradiction-lint.ts` henter ét dokument på id og blev talt med.
+ *   12   scopet skal stå i WHERE. Men en eksplicit `id IN (…)` bounder
+ *        resultatet ved listens længde, og `search.ts` gør præcis det.
+ *    9   nuværende tal.
+ *
+ * Hver rettelse kom af at LÆSE kaldestedet, aldrig af at læse reglen igen. Og
+ * hver af dem fejlede i BEGGE retninger samtidig: den talte uskyldige med, og
+ * den ville have sluppet et ægte fuld-KB-scan igennem hvis det var skrevet med
+ * en variabel i stedet for kolonnenavnet.
+ *
+ * KONKLUSIONEN, og den ændrer kortets plan: **et regex over kildetekst kan ikke
+ * svare på hvor mange rækker en forespørgsel giver.** Spørgsmålet afhænger af
+ * data, ikke af hvordan forespørgslen er skrevet. Denne vagt er derfor
+ * DEGRADERET til en hurtig «skriv ikke den form»-lint — nyttig, billig, og
+ * ikke beviset.
+ *
+ * Det bærende instrument skal måle den ÆGTE svarstørrelse ved kørsel. Der er
+ * ét sted at hænge det op: `openRemoteTenantDb` i `lib/tenant-pool.ts` pakker
+ * libsql-klienten i `LibsqlTrailDatabase`, og hver eneste kundeforespørgsel
+ * passerer dén. En måling dér kan ikke narres af hvordan forespørgslen er
+ * formuleret, dækker både rå SQL og drizzle, og fanger et kaldested nummer ti
+ * som ingen har tænkt på. Det er næste skridt på kortet.
  */
-const KNOWN_12 = new Set([
+const KNOWN_9 = new Set([
   'apps/server/src/bootstrap/F102-seed-glossary-neurons.ts:94',
-  'apps/server/src/routes/search.ts:287', //  BRUGERVENDT
-  'apps/server/src/routes/search.ts:288', //  BRUGERVENDT
   'apps/server/src/routes/chat.ts:1083', //   BRUGERVENDT
   'apps/server/src/routes/graph.ts:113', //   BRUGERVENDT
-  'apps/server/src/services/source-inferer.ts:165',
   'apps/server/src/services/chat/mcp-router.ts:239',
   'apps/server/src/services/model-eval/runner.ts:154',
   'apps/server/src/services/glossary-backfill.ts:78',
@@ -62,7 +73,7 @@ const KNOWN_12 = new Set([
 ]);
 
 test("INGEN NY forespørgsel henter et helt KB's tekst på én gang", () => {
-  const fresh = unboundedKbContentScans().filter((o) => !KNOWN_12.has(`${o.file}:${o.line}`));
+  const fresh = unboundedKbContentScans().filter((o) => !KNOWN_9.has(`${o.file}:${o.line}`));
 
   // Printed rather than counted, so a failure names the file to fix instead of
   // handing the next reader a number to go and re-derive.
@@ -81,12 +92,12 @@ test('listen KRYMPER — en migreret post skal fjernes, ikke blive stående', ()
   // the guard exists to prevent, one level up. It is also what caught my own
   // bad predicate: eight entries stopped matching the moment it was corrected.
   const live = new Set(unboundedKbContentScans().map((o) => `${o.file}:${o.line}`));
-  const stale = [...KNOWN_12].filter((k) => !live.has(k));
+  const stale = [...KNOWN_9].filter((k) => !live.has(k));
 
   expect(
     stale.length === 0
       ? ''
-      : `${stale.length} post(er) i KNOWN_12 rammer ingen kode længere — fjern dem:\n  ${stale.join('\n  ')}`,
+      : `${stale.length} post(er) i KNOWN_9 rammer ingen kode længere — fjern dem:\n  ${stale.join('\n  ')}`,
   ).toBe('');
 });
 

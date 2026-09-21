@@ -121,6 +121,12 @@ export function unboundedKbContentScans(roots = ROOTS): Offender[] {
         if (/documents\.id\s*,|\bd?\.?id\s*=\s*\?/.test(where) && /\.get\(\)|\bLIMIT 1\b/i.test(stmt))
           continue;
 
+        // An explicit id LIST bounds the result at the list's length — the KB
+        // filter beside it is a scope check, not the thing that decides the row
+        // count. `search.ts` reads exactly this shape: it has already chosen
+        // which documents it wants and asks for those.
+        if (/\bid\s+IN\s*\(|inArray\s*\(/i.test(where)) continue;
+
         if (/\.limit\(|\bLIMIT\b/i.test(stmt)) continue;
 
         found.push({ file: file.replace(/^.*\/(apps|packages)\//, '$1/'), line: i + 1 });
