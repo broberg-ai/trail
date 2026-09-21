@@ -26,7 +26,13 @@
 import { readdirSync, statSync, existsSync, mkdirSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 import { createClient } from '@libsql/client';
-import { createLibsqlDatabase, LibsqlTrailDatabase, type TrailDatabase } from '@trail/db';
+import {
+  createLibsqlDatabase,
+  LibsqlTrailDatabase,
+  withResponseSizeGuard,
+  type TrailDatabase,
+} from '@trail/db';
+import { captureException } from '@upmetrics/sdk';
 
 export type TenantPool = Map<string, TrailDatabase>;
 
@@ -70,7 +76,35 @@ function remoteTokenFor(slug: string): string | undefined {
  * and FTS parity have been verified against the source.
  */
 export async function openRemoteTenantDb(slug: string, url: string): Promise<TrailDatabase> {
-  const client = createClient({ url, authToken: remoteTokenFor(slug) });
+  // F222.8 — every query for this tenant passes through this one client, so
+  // wrapping it here covers raw `execute` AND everything Drizzle issues.
+  //
+  // It REPORTS, it does not throw. sqld already refuses the request at its own
+  // 10MB limit, so a second failure adds nothing; what the error board lacks
+  // is WHICH call site — its RESPONSE_TOO_LARGE reports carry only
+  // `@libsql/client` frames, which is true of every such failure and so
+  // identifies none of them. This fills that in, and it fires BEFORE the wall
+  // (at 60%) so a KB growing toward the limit is visible while it is still
+  // only growing.
+  const client = withResponseSizeGuard(
+    createClient({ url, authToken: remoteTokenFor(slug) }),
+    {
+      onOversized: (info) => {
+        captureException(
+          new Error(
+            `[F222.8] oversized query response for tenant "${slug}": ~${(
+              info.bytes /
+              1024 /
+              1024
+            ).toFixed(1)}MB in ${info.rows} rows (sqld refuses at ${
+              info.limitBytes / 1024 / 1024
+            }MB) — at ${info.callSite} — ${info.sql}`,
+          ),
+          { tags: { tenant: slug, callSite: info.callSite } },
+        );
+      },
+    },
+  );
   const db = new LibsqlTrailDatabase({ path: url, tenantId: slug }, client);
   await assertMigrationComplete(db, slug);
   return db;
