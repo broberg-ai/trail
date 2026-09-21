@@ -322,6 +322,13 @@ importers:
         version: 5.9.3
 
   apps/trail-model:
+    dependencies:
+      '@trail/pipelines':
+        specifier: workspace:*
+        version: link:../../packages/pipelines
+      '@trail/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
     devDependencies:
       '@types/bun':
         specifier: ^1.1.0

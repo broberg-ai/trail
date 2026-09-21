@@ -7,7 +7,7 @@
 
 ## Åbne spørgsmål — læs først
 
-Intet blokerer start. Tre ting står åbne:
+Intet blokerer start. Fire ting står åbne:
 
 1. **Hvilket emne bliver den nye store hjerne?** Ejeren har selv rejst det, og
    det er den hurtigste vej ud af compile-modellens datamangel. Kriterierne
@@ -21,6 +21,11 @@ Intet blokerer start. Tre ting står åbne:
    ikke dér.
 3. **Hvor meget disk må compile-modellen få?** Mindre presserende nu — se
    afsnit 4.
+4. **Skal arkiverede kilder med i kildetype-opgaven?** Billed- og lydkilder
+   FINDES, men hver eneste er arkiveret, så de to kategorier har nul aktive
+   eksempler. For netop den opgave er en arkiveret kilde stadig et gyldigt
+   eksempel — for en Neuron er den det modsatte. F286.4's valg; tal og
+   argument i afsnit 11.
 
 ---
 
@@ -42,32 +47,53 @@ Ejerens ordre 21/9: klassifikatoren først.
 
 ## 2. Datagrundlaget — målt, ikke antaget
 
-Planen sagde at Trail «allerede ligger inde med et færdigt træningssæt». Talt i
-produktionen 21. september 2026:
+**RETTELSE, 22. september 2026.** Dette afsnit stod med tal jeg havde talt i
+hånden: «~282 kilder, ~737 neuroner». F286.1's script målte dem, og det VÆLTEDE
+grundlaget. Tallene nedenfor kommer fra
+`bun run apps/trail-model/src/export-dataset.ts` og kan køres igen.
 
 ```
-brain                   kilder  neuroner
-sanne-andersen              82       239
-trail-research              80       100
-broberg-ai                  70       247
-agent-memory                40        87
-claude-code                  5        29
-trail-development            2        20
-llm-technical-research       3        15
-                          ----      ----
-I ALT                     ~282      ~737
+brain                       kilder  neuroner  kompileret   par
+agent-memory                    40        87          70    33
+broberg-ai                      70       247          16     3   skrevet direkte
+cb-m1                            2      1288           2     2   skrevet direkte
+development-tester               6        69           2     1   skrevet direkte
+trail-research                  80       100           0     0   skrevet direkte
+sanne-andersen                  82       239           0     0   skrevet direkte
+buddy-sessions                   2      5679           0     0   skrevet direkte
+buddy-research                   6        27           0     0
+claude-code                      5        29           0     0
+zoneterapi-demo                  1        31           0     0
+trail-development                2        20           0     0
+llm-technical-research           3        15           0     0
+helpdesk-dev                     1         4           0     0
+                              ----      ----        ----  ----
+I ALT                          300      7835          92    39
 ```
 
-**To store brains tæller ikke med, og det er vigtigt:** `buddy-sessions` (5.679
-neuroner) og `cb-m1` (1.287) har **2 kilder hver**. Deres neuroner er skrevet
-direkte af agenter gennem `trail_save` — de er ikke kompileret fra et dokument,
-og de er derfor ikke kilde→facit-par. De er glimrende **klassifikator**-data og
+**«Par» er den eneste søjle der betyder noget for compile-modellen**, og den
+siger 39 — ikke 282. Kilderne findes, Neuronerne findes, men **sporet mellem
+dem findes næsten ikke**: kun 33 af parrene ligger i en hjerne der overhovedet
+er kompileret frem for skrevet.
+
+**Årsagen er målt, og det er en dato.** Sporet kilde → Neuron går gennem
+kø-kandidatens peger tilbage til kildedokumentet. Den gamle ingest-pipeline
+satte ikke den peger. `agent-memory` er bygget 19. september med den nye
+pipeline og er sporbar hele vejen (70 af 87 Neuroner); `trail-research` (april)
+har 0 af 100, `sanne-andersen` (april–juni) 0 af 239. Indholdet er der.
+Forbindelsen er ikke, og den kan ikke genskabes bagud.
+
+**To store hjerner tæller stadig ikke med som compile-materiale:**
+`buddy-sessions` (5.679 neuroner) og `cb-m1` (1.288) har **2 kilder hver**.
+Deres neuroner er skrevet direkte af agenter gennem `trail_save` — de er ikke
+kompileret fra et dokument. De er glimrende **klassifikator**-data og
 ubrugelige som **compile**-data.
 
-**Konsekvensen er skarp:** planens F0 beder om et golden-sæt på 300–500
-eksempler der *aldrig* bruges til træning. På kilde-niveau er det større end
-hele grundlaget. Regner man pr. (kilde, neuron)-par — 737 — æder facit-sættet
-stadig omkring halvdelen.
+**Konsekvensen er skarpere end før målingen:** planens F0 beder om et golden-sæt
+på 300–500 eksempler der *aldrig* bruges til træning. For compile-modellen er
+der 39 par i alt. Facit-sættet er altså ti gange større end hele grundlaget —
+og det er derfor klassifikatoren bygges først, og derfor en ny stor hjerne ikke
+er en genvej men den ENESTE vej til compile-modellen.
 
 ### Den nye store hjerne
 
@@ -158,10 +184,11 @@ aktuelt.
 i hånden; F6's løbende træning kræver at de kan måles igen på kommando.
 Versioneret datasæt, deterministisk, kan genkøres.
 
-**F286.2 — Etiketter og golden-sæt.** De præcise klassifikations-kategorier
-defineres, og et golden-sæt udtages som **aldrig** trænes på. For
-klassifikatoren er 300–500 realistisk; for compile-modellen skrives det ærligt
-hvor lidt der er tilbage.
+**F286.2 — Etiketter og golden-sæt. BYGGET 22/9.** Seks opgaver, alle med
+kategorier udledt af produktionens egne værdier, og et golden-sæt på 444
+eksempler der er holdt ude af træningen — bevist med et script der er set blive
+rødt. Fuld opgørelse og de fire fund i **afsnit 11**. For compile-modellen er
+det ærlige tal 39 par (afsnit 2), så dens golden-sæt venter på den nye hjerne.
 
 **F286.3 — Baseline.** Kør `apps/model-lab` mod golden-sættet. Tallene i
 plan-doc'en, før første træning.
@@ -252,3 +279,200 @@ den var på vej til at binde hele epicen til én maskine med 19 GB fri disk.
 Det der fandt fejlen var at spørge nogen der kunne nå maskinen, ikke at tænke
 skarpere. **En «kan ikke nås» er et udsagn om MIN adgang, ikke om maskinen.**
 De to ligner hinanden lige indtil nogen anden prøver.
+
+## 11. F286.2 — etiketterne, og et facit der aldrig trænes på
+
+Målt 22. september 2026 med `bun run apps/trail-model/src/build-dataset.ts`.
+Hele afsnittet kan køres om; intet her er talt i hånden.
+
+### Seks opgaver, og hvor etiketten kommer fra
+
+Ingen kategori er fundet på. Hver enkelt er en værdi produktionen allerede
+holder, hentet fra det sted produktet selv bruger den:
+
+| Opgave | Hvad modellen skal svare på | Etiketten kommer fra |
+|---|---|---|
+| `source-type` | hvilken pipeline skal køre på filen? | `pickPipeline()` i `@trail/pipelines` — **samme funktion upload-ruten kalder** |
+| `routing` | hvilken hjerne hører det til? | dokumentets egen knowledge base |
+| `neuron-type` | hvor skal Neuronen ligge? | `kind`-leddet i `/neurons/<kind>/<kilde>/` |
+| `edge-type` | hvilken slags forbindelse? | `wiki_backlinks.edge_type` |
+| `admit` | skal det overhovedet ind? | kuratorens godkendt/afvist i køen |
+| `candidate-kind` | hvad slags forslag er det? | `queue_candidates.kind` |
+
+**Kildetypen spørger registeret frem for at gætte.** Det oplagte var en liste
+over filendelser i træningskoden — så ville to steder bestemme hvad en `.docx`
+er, og de ville skride fra hinanden. En ny pipeline i produktet er nu en ny
+kategori i modellen, uden at nogen skal huske det.
+
+### Etiket-rummet, talt i produktionen
+
+```
+source-type          300 eksempler, 4 kategorier med data
+  text     213 · pdf 57 · docx 29 · pptx 1
+  erklæret uden data: xlsx, image, audio
+
+routing             8.135 eksempler, 13 kategorier
+  buddy-sessions 5.681 · cb-m1 1.290 · sanne-andersen 321 · broberg-ai 317
+  trail-research 180 · agent-memory 127 · development-tester 75 · claude-code 34
+  buddy-research 33 · zoneterapi-demo 32 · trail-development 22
+  llm-technical-research 18 · helpdesk-dev 5
+
+neuron-type         7.835 eksempler, 17 kategorier
+  intercom 4.325 · auto 1.284 · sessions 674 · adr 581 · concepts 330
+  sources 273 · entities 208 · root 45 · caught-bugs 27 · error-patterns 26
+  precompact 26 · queries 15 · tur 11 · heuristics 4 · test 3
+  architecture 2 · commitments 1
+
+edge-type           6.022 eksempler, 7 kategorier — ALLE syv findes
+  cites 5.925 · part-of 57 · example-of 23 · is-a 12 · contradicts 3
+  caused-by 1 · supersedes 1
+
+admit              15.255 eksempler, 2 kategorier
+  approved 10.678 · rejected 4.577
+  erklæret uden data: ingested
+
+candidate-kind     15.255 eksempler, 11 kategorier
+  external-feed 8.391 · gap-detection 1.835 · ingest-page-update 1.828
+  contradiction-alert 1.668 · ingest-summary 924 · supersede 421
+  cross-ref-suggestion 120 · user-correction 47 · chat-answer 16
+  reader-feedback 4 · source-retraction 1
+  erklæret uden data: version-conflict, scheduled-recompile
+```
+
+Fuld opgørelse i `data/label-space.json` (gitignored — den bærer kundeindhold).
+
+### `emne` er IKKE en opgave, og det er et fund
+
+Planen nævner emne som den femte klassifikations-opgave. Tags i produktionen er
+fritekst: **253 forskellige, 120 af dem med én eneste forekomst**, og den
+hyppigste er `internal` (329). En model der skal vælge mellem 253 muligheder med
+et par eksempler i halen lærer ingenting. Emne kræver et kontrolleret ordforråd
+først — eget kort, ikke noget der presses ind her. Tallene tælles med af
+værktøjet, så udeladelsen kan efterprøves i stedet for at blive troet.
+
+### Fire fund målingen gav, som ingen havde gættet
+
+**1. Tre af de syv kildetyper har nul aktive eksempler — og de tre er ikke ens.**
+
+```
+              aktive   arkiverede
+text             213          176
+pdf               57            3
+docx              29            1
+pptx               1            0
+image              0            8
+audio              0            6
+xlsx               0            0
+```
+
+`image` og `audio` FINDES i produktionen — hver eneste er bare arkiveret.
+`xlsx` er aldrig brugt én eneste gang, selv om pipelinen er der.
+
+Forskellen peger på et valg F286.4 skal tage: **for netop kildetypen er en
+arkiveret kilde et fuldt gyldigt eksempel.** At et dokument er taget ud af
+hjernen ændrer ikke at `.wav` håndteres af lyd-pipelinen. For en Neuron gælder
+det modsatte — dér BETYDER arkivering at en kurator fjernede den, og så er den
+det sidste man vil træne på. Derfor er arkiverede rækker udeladt som standard,
+og derfor er det værd at genoverveje for denne ene opgave. Selv da er 8 og 6 for
+lidt til at måle noget.
+
+**2. To kategorier i kø-kandidaterne er erklæret og aldrig produceret.**
+`version-conflict` og `scheduled-recompile` står i skemaet og findes ikke i
+virkeligheden. De navngives frem for at blive tiet ihjel.
+
+**3. Fire kanttyper har for lidt data til at blive målt.** `supersedes` og
+`caused-by` har ét eksempel hver og får ingen golden-række — holdt ude ville de
+intet have at træne på. `contradicts` har tre. **98 % af alle kanter er
+`cites`**, så en model kan blive «god» ved altid at svare `cites`. Det tal må
+F286.3 ikke læse som dygtighed.
+
+**4. Den næststørste Neuron-type er «ingen valgte en type».** `/neurons/auto/`
+er stien der stemples når en kandidat bliver AUTO-godkendt (`candidates.ts:586`)
+— 1.284 Neuroner, 16 % af materialet. Det er ikke et arkiverings-valg, det er
+fraværet af et. Den bliver liggende i datasættet, fordi modellen møder præcis de
+dokumenter i drift — men høj præcision på `auto` er ikke evnen til at arkivere
+rigtigt og skal ikke læses sådan.
+
+### Golden-sættet er en egenskab ved TEKSTEN, ikke ved rækken
+
+Det samme stykke skrift optræder i mere end én opgave: en Neuron er både et
+`neuron-type`- og et `routing`-eksempel; en kø-kandidat er både et `admit`- og
+et `candidate-kind`-eksempel.
+
+Deler man rækkevis, ender en tekst med at være holdt ude for den ene opgave mens
+modellen læser den under træning til den anden. Resultatet er en model der scorer
+flot på noget den allerede har set — og **det viser sig ikke som en fejl, kun som
+et mistænkeligt godt tal**.
+
+Derfor: en tekst er golden alle steder eller intet sted. `train` er simpelthen
+«ikke golden», så adskillelsen er sand i kraft af hvordan filerne skrives.
+
+**To filer, ikke ét flag.** `data/train.jsonl` og `data/golden.jsonl` er fysisk
+adskilte. Træningen peges på den første og **kan ikke læse facitlisten**. Ét
+datasæt med `split: "golden"` på nogle rækker ville lægge hele garantien over på
+at indlæseren husker at filtrere.
+
+**Kvoten er stratificeret, ikke en procentdel.** En flad procentdel ville give
+`cites` hundredvis af golden-eksempler og `contradicts` nul. Hver kategori der
+kan undvære et eksempel, får et — og hver kategori beholder mindst én
+træningsrække.
+
+### Resultatet
+
+```
+golden            444 eksempler        (planens mål: 300–500)
+træn           52.358 rækker
+sprog           da 186 · en 180 · unknown 78     (heuristik, se labels.ts)
+kildetyper      text 14 · pdf 14 · docx 14
+```
+
+`unknown` er de korte tekster — et kant-eksempel er to Neuron-titler og har
+sjældent nok funktionsord til at afgøre sprog. Det er rapporteret som `unknown`
+frem for gættet.
+
+### Sådan bevises det, og hvordan det blev vist rødt
+
+```
+bun run apps/trail-model/src/build-dataset.ts     # mål + skriv de to filer
+bun run apps/trail-model/src/verify-split.ts      # bevis adskillelsen
+bun test apps/trail-model/                        # 16 prøver, inkl. de negative
+```
+
+`verify-split.ts` kører seks kontroller og går i exit 1 på den første der
+svigter. De to bærende:
+
+- **intet golden-id optræder i træningssættet** — den direkte lækage.
+- **ingen golden-TEKST optræder i træningssættet** — den lækage forskellige
+  id'er ikke standser: samme dokument eksporteret under to identiteter.
+
+Kørt mod de rigtige filer 22. september: alle seks grønne, 444 golden-id'er og
+226 distinkte golden-tekster, ingen genfundet blandt 52.358 træningsrækker.
+
+**Og kontrollen er set fejle, ikke bare bestå** — på de ægte data, ikke kun i en
+prøve. Ét golden-eksempel kopieret ind i træningen gør begge kontroller røde;
+kopieres KUN teksten under et nyt id, bliver tekst-kontrollen stadig rød og
+navngiver begge de opgaver der deler teksten. `labels.test.ts` holder de samme
+mutationer plus en ensproget golden-liste, en med kun én kildetype, og en
+kategori tømt for træningsdata. En kontrol man aldrig har set fejle, er en
+kontrol ingen har kontrolleret.
+
+### To fejl i værktøjet, fundet af værktøjets egne prøver
+
+**Opdelingen afhang af inputrækkefølgen.** Første udgave gik opgaverne igennem i
+den rækkefølge rækkerne tilfældigvis kom i — så en omrokering af de SAMME data
+flyttede hele golden-sættet. Determinisme-prøven fangede det.
+
+**Og en kategori endte uden træningsdata.** `neuron-type/test` har tre rækker,
+holdt én tilbage — og så tog `routing` netop den tekst til sin egen kvote.
+Resultat: 3 golden, 0 træn. En kategori modellen skulle genkende og aldrig ville
+få at se. Der er nu en reparations-runde der frigiver tekster igen indtil hver
+kategori har mindst én træningsrække, plus en prøve der går rød hvis den fjernes.
+
+Begge blev fundet ved at KØRE prøverne, ikke ved at læse koden.
+
+**Og en tredje, fanget inden den nåede ud:** første udgave brugte `Bun.hash` til
+at vælge golden-teksterne. Den hash er ikke lovet stabil mellem Bun-versioner —
+så en helt almindelig opgradering af runtime ville i stilhed have skåret
+golden-sættet om, og en model trænet i sidste måned ville være målt på rækker
+denne måneds eksport træner på. Præcis den lækage værktøjet findes for at
+forhindre, ankommet gennem værktøjet selv. Nu `sha256`.

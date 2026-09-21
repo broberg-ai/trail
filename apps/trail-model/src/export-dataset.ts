@@ -44,39 +44,18 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  TENANTS,
+  allDocuments,
+  get,
+  kbGraph,
+  requireKey,
+  rowsOf,
+  type DocumentRow,
+  type KnowledgeBase,
+} from './api.js';
 
-const API = process.env.TRAIL_CLOUD_API ?? 'https://app.trailmem.com';
-const KEY = process.env.TRAIL_API_KEY;
 const OUT = join(import.meta.dir, '..', 'data');
-
-if (!KEY) {
-  console.error(
-    'TRAIL_API_KEY mangler. Kør med:  set -a; . ./.env.local-ingest; set +a; bun run …',
-  );
-  process.exit(1);
-}
-
-/** Every tenant whose material we are allowed to train on (owner, 21/9 2026). */
-const TENANTS = ['broberg-ai', 'sanne-andersen'] as const;
-
-interface KnowledgeBase {
-  slug: string;
-  name: string;
-}
-
-interface DocumentRow {
-  id: string;
-  filename?: string | null;
-  path?: string | null;
-  title?: string | null;
-  kind?: string | null;
-}
-
-interface GraphEdge {
-  source: string;
-  target: string;
-  edgeType: string;
-}
 
 interface DerivedNeuron {
   id: string;
@@ -84,52 +63,6 @@ interface DerivedNeuron {
   path: string;
   title: string | null;
   archived: boolean;
-}
-
-async function get<T>(tenant: string, path: string): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    headers: { Authorization: `Bearer ${KEY}`, 'X-Trail-Tenant': tenant },
-  });
-  if (!res.ok) {
-    // A failed call must never be counted as "this brain has nothing" — an
-    // absence and an error look identical in a total, and only one of them
-    // means what the total says.
-    throw new Error(`${res.status} ${res.statusText} on ${path} (tenant ${tenant})`);
-  }
-  return (await res.json()) as T;
-}
-
-function rowsOf(payload: unknown): DocumentRow[] {
-  if (Array.isArray(payload)) return payload as DocumentRow[];
-  if (payload && typeof payload === 'object') {
-    const o = payload as Record<string, unknown>;
-    for (const key of ['documents', 'items', 'rows']) {
-      if (Array.isArray(o[key])) return o[key] as DocumentRow[];
-    }
-  }
-  return [];
-}
-
-/**
- * Every document of a kind in a knowledge base.
- *
- * ONE call, no paging — MEASURED 21/9 2026, not assumed. The route takes
- * `path`, `kind`, `archived`, `sort`, `from`/`to` and NOTHING else: no
- * `limit`, no `offset`, no cursor. It ends in `.all()` and returns a bare
- * array. `buddy-sessions` answers with all 5.679 rows in one 4 MB response.
- *
- * My first version paged with `limit`+`offset`. Both were ignored, so every
- * "page" returned the same 200 rows and the loop ran forever — caught only by
- * the refuse-past-100k rail I had put in as an afterthought. Building
- * pagination against an API that has none is worse than not paging: it looks
- * careful and it never terminates.
- *
- * (That the route is unbounded is the API's design, not this tool's problem.
- * It selects metadata columns, not `content`, so F222.8's response-size work
- * does not cover it — noted rather than fixed here.)
- */
-async function allDocuments(tenant: string, kb: string, kind: string): Promise<DocumentRow[]> {
-  return rowsOf(await get(tenant, `/api/v1/knowledge-bases/${kb}/documents?kind=${kind}`));
 }
 
 /**
@@ -145,16 +78,6 @@ async function sourceText(tenant: string, id: string): Promise<string | null> {
     // A source whose body cannot be read is reported as null rather than as an
     // empty string: "" would train the model that this document said nothing.
     return null;
-  }
-}
-
-/** Every typed edge in the KB, fetched ONCE and filtered per pair. */
-async function kbEdges(tenant: string, kb: string): Promise<GraphEdge[]> {
-  try {
-    const g = await get<{ edges?: GraphEdge[] }>(tenant, `/api/v1/knowledge-bases/${kb}/graph`);
-    return g.edges ?? [];
-  } catch {
-    return [];
   }
 }
 
@@ -209,7 +132,7 @@ export async function measureBrain(
   if (opts.exportPairs && pairs.length > 0) {
     // Edges once per KB, not once per pair — the graph is the whole KB either
     // way, so N calls would fetch the same bytes N times.
-    const edges = await kbEdges(tenant, kb.slug);
+    const { edges } = await kbGraph(tenant, kb.slug);
     const enriched = [];
     for (const p of pairs) {
       const ids = new Set(p.neurons.map((n) => n.id));
@@ -261,7 +184,7 @@ async function main(): Promise<void> {
   const results: BrainMeasurement[] = [];
 
   for (const tenant of TENANTS) {
-    const kbs = rowsOf(await get(tenant, '/api/v1/knowledge-bases')) as unknown as KnowledgeBase[];
+    const kbs = rowsOf<KnowledgeBase>(await get(tenant, '/api/v1/knowledge-bases'));
     for (const kb of kbs) {
       results.push(await measureBrain(tenant, kb, { exportPairs }));
     }
@@ -323,5 +246,6 @@ async function main(): Promise<void> {
 }
 
 if (import.meta.main) {
+  requireKey();
   await main();
 }

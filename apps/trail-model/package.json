@@ -5,10 +5,17 @@
   "type": "module",
   "scripts": {
     "export": "bun run src/export-dataset.ts",
+    "build-dataset": "bun run src/build-dataset.ts",
+    "verify-split": "bun run src/verify-split.ts",
+    "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/bun": "^1.1.0",
     "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "@trail/pipelines": "workspace:*",
+    "@trail/shared": "workspace:*"
   }
 }
