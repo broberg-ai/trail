@@ -98,18 +98,56 @@ skridt 2 — ikke omvendt.
 **I scope:**
 
 1. Læs hvad der ændrede sig fra 0.38.0 til 0.47.1. Kilde: CHANGELOG, commits,
-   eller `ai-sdk`-sessionens eget svar — de har tilbudt at svare direkte, og de
-   kender brudfladerne bedre end en changelog gør. **Tre er allerede navngivet af
-   dem, ugennemgået mod vores `ai.ts`:**
+   eller `ai-sdk`-sessionens eget svar — de har tilbudt at svare direkte.
 
-   | fra | brudflade |
-   |---|---|
-   | 0.43+ | `override:{provider}` UDEN `model` KASTER nu. Før kørte den videre med tierens model og postede den til den forkerte udbyder — altså en rettelse, men en der kan vælte et kaldested der levede med fejlen |
-   | 0.45+ | `arguments` på en tool-call er valgfri når man læser en `Message` tilbage → `msg.toolCalls[0].arguments.x` kræver en narrow under strict |
-   | 0.47+ | `usage.region` findes og udledes af det endpoint der FAKTISK svarede |
+   > **FØRSTE LISTE VI FIK VAR FORKERT, og det er selve grunden til at dette
+   > skridt ikke må springes over.** `ai-sdk` navngav først tre brudflader
+   > (`override:{provider}` uden model, valgfri tool-call-`arguments`,
+   > `usage.region`) som liggende i 0.43–0.47. De målte selv efter med
+   > `git tag --contains` og trak dem tilbage: **alle tre ligger i 0.35–0.36 —
+   > vi har dem allerede.** Anden forkerte versionsangivelse på én nat, samme
+   > form: et tal gengivet fra prosa i stedet for målt mod tags.
+**MÅLT I VORES EGEN KODE 22. september — og opgraderingen er langt mindre
+farlig end afsnit 5 frygtede.**
 
-   Den sidste er ikke breaking, men den er den vi har mest brug for: den svarer
-   på hvor data endte, hvilket `resolveModel()` udtrykkeligt ikke gør.
+De reelle brudflader i vinduet, efter `ai-sdk`s egen type-diff:
+
+| udgivelse | brudflade | rammer os? |
+|---|---|---|
+| 0.42.0 | `contracts.classify()`: `label` bliver `string \| null`, `confidence` bliver `number \| null`, nyt `rawLabel` | **NEJ** — nul kaldesteder |
+| 0.42.0 | `contracts.rerank()` KASTER nu på et ulæseligt svar, hvor den før gav `[]` | **NEJ** — nul kaldesteder |
+| 0.48.0 | `sqliteSink()` + `getCostSummary()` KASTER på Node | **NEJ** — se fælden nedenfor |
+
+Alt øvrigt i vinduet er additivt (`usage.costBasis`, TTS/podcast-felter,
+tier-prognose).
+
+**HVAD VI FAKTISK IMPORTERER fra pakken, målt med grep over `apps/` + `packages/`:**
+`createAI`, `upmetricsSink`, `defaultProviders`, `openrouterAdapter`,
+`anthropicAdapter`, og typerne `Tool`, `ChatResult`, `CostSink`, `AiClient`,
+`Usage`. **Ingen `contracts.*`. Ingen `sqliteSink`. Ingen `getCostSummary`
+fra pakken.**
+
+> **FÆLDEN, og den er værd at skrive ned fordi næste læser vil grep'e:**
+> `grep getCostSummary` giver FEM træf i vores repo — og ingen af dem er
+> pakkens. Vores egen `getCostSummary()` bor i
+> `apps/server/src/services/cost-aggregator.ts:78` og tager
+> `(trail, tenantId, kbId, windowDays)`. Samme navn, andet væsen. Et grep
+> siger «ja vi bruger den»; importlinjen siger nej. **Spørg
+> importlinjen, ikke navnet.**
+
+**Konsekvens for afsnit 5:** blast radius er reelt ÉT kaldested — vores egen
+`ai`-facade — og de syv forbrugere (vision, chat-syntese, oversættelse,
+tag-forslag, source-infer, glossary-backfill, contradiction-lint) går alle
+gennem `ai.chat`/`ai.vision`, ikke gennem `contracts`. Det gør ikke
+udrulningen til en formalitet — 13 udgivelser kan stadig bære noget ingen
+har navngivet — men den kendte brudflade mod os er nul.
+
+**MÅLVERSION: 0.48.0, når den findes.** `ai-sdk` taggede den mens dette blev
+skrevet. **Målt samme minut: npm har den IKKE endnu** (`npm view versions`
+slutter på 0.47.1). Et tag er ikke en udgivelse — pin ikke mod noget der ikke
+kan installeres. 0.47.1 bærer begge classify-rettelser og er den sikre
+målversion hvis 0.48.0 lader vente på sig.
+
 2. Opgradér alle tre `package.json` samtidig.
 3. Skriv pinnet så det ikke kan fryse igen.
 4. Kør motorens LLM-veje mod den nye SDK og se dem svare.
