@@ -121,3 +121,60 @@ test('id-et bruges KUN til det filnavn det hører til — en anden citeret kilde
 
   expect([await neuronCount('kilde-b'), await neuronCount('kilde-anden')]).toEqual([1, 1]);
 });
+
+// ── F288.2 — navneopslaget selv ────────────────────────────────────────────
+// Kaldes UDEN id, så det er `findSourceByName` der afgør, ikke hintet.
+
+test('F288.2: en ARKIVERET kilde vælges aldrig, selvom den matcher navnet', async () => {
+  await kilde('kilde-arkiveret', 'https://mb.org/x#gammel');
+  await trail.db.update(documents).set({ archived: true }).where(eq(documents.id, 'kilde-arkiveret')).run();
+  await kilde('kilde-levende', 'https://mb.org/x#ny');
+  await neuron('miles-davis');
+
+  await backfillReferencesForSource(trail, KB, FILNAVN);
+
+  expect([await neuronCount('kilde-levende'), await neuronCount('kilde-arkiveret')]).toEqual([1, 0]);
+});
+
+/**
+ * `createdAt` sættes EKSPLICIT i begge retninger frem for at lade
+ * indsættelses-rækkefølgen bestemme. Ellers ville testen bevise at
+ * «den sidst indsatte vinder» — hvilket den gjorde FØR rettelsen også,
+ * ved et tilfælde. Her er den nyeste én gang den sidst indsatte og én
+ * gang den først indsatte, så kun sorteringen kan bære resultatet.
+ */
+test.each([
+  ['nyeste indsat SIDST', ['kilde-gammel', '2026-09-20T10:00:00.000Z'], ['kilde-nyest', '2026-09-22T10:00:00.000Z']],
+  ['nyeste indsat FØRST', ['kilde-nyest', '2026-09-22T10:00:00.000Z'], ['kilde-gammel', '2026-09-20T10:00:00.000Z']],
+] as const)('F288.2: med to AKTIVE kandidater vælges den NYESTE (%s)', async (_navn, foerste, anden) => {
+  for (const [id, skabt] of [foerste, anden]) {
+    await kilde(id, `https://mb.org/x#${id}`);
+    await trail.db.update(documents).set({ createdAt: skabt }).where(eq(documents.id, id)).run();
+  }
+  await neuron('miles-davis');
+
+  await backfillReferencesForSource(trail, KB, FILNAVN);
+
+  expect([await neuronCount('kilde-nyest'), await neuronCount('kilde-gammel')]).toEqual([1, 0]);
+});
+
+test('F288.2: tvetydigheden LOGGES med begge id-er — en tavs vilkårlighed er selve fejlen', async () => {
+  await kilde('kilde-en', 'https://mb.org/x#1');
+  await kilde('kilde-to', 'https://mb.org/x#2');
+  await neuron('miles-davis');
+
+  const linjer: string[] = [];
+  const original = console.warn;
+  console.warn = (...a: unknown[]) => { linjer.push(a.join(' ')); };
+  try {
+    await backfillReferencesForSource(trail, KB, FILNAVN);
+  } finally {
+    console.warn = original;
+  }
+
+  const advarsel = linjer.find((l) => l.includes(FILNAVN));
+  expect(advarsel).toBeDefined();
+  // BEGGE id-er skal stå der. En linje der kun nævner vinderen fortæller ikke
+  // at der VAR et valg, og så er den lige så tavs som ingen linje.
+  expect(advarsel!.includes('kilde-en') && advarsel!.includes('kilde-to')).toBe(true);
+});

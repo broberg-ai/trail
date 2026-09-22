@@ -26,7 +26,7 @@
  * sweep.
  */
 import { documents, documentReferences, type TrailDatabase } from '@trail/db';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import type { CandidateApprovedEvent, IngestCompletedEvent } from '@trail/shared';
 import { broadcaster } from './broadcast.js';
 
@@ -141,8 +141,21 @@ async function findSourceByName(
   const normalised = target.trim().normalize('NFC');
   if (!normalised) return null;
 
-  // Strategy 1: exact filename match (case-sensitive).
-  const exact = await trail.db
+  // F288.2 — ÉT opslag, NYESTE FØRST, og ARKIVEREDE KILDER ER IKKE MED.
+  //
+  // Tidligere var strategi 1 en egen forespørgsel med `.get()`, uden
+  // archived-filter og uden en rækkefølge. Den kunne derfor svare med en
+  // ARKIVERET kilde, og med to aktive kandidater bestemte SQLite hvilken —
+  // begge dele tavst. Målt i Music 22/9: referencerne landede på den kilde der
+  // bagefter blev arkiveret, og den levende stod tilbage med neuronCount 0.
+  //
+  // Rækkefølgen er `createdAt` faldende, fordi en genuploadet kilde er den
+  // kanoniske (beslutning 01a0a7bb: «samme kilde, nyt indhold = ny kanon»).
+  // Det er et VALG, ikke en selvfølge — derfor står det her hvor det tages.
+  //
+  // Det er samtidig ÉN forespørgsel hvor der før var to: strategi 2 hentede
+  // allerede hele listen, så dette er billigere end det den erstatter.
+  const kilder = await trail.db
     .select({ id: documents.id, filename: documents.filename })
     .from(documents)
     .where(
@@ -150,34 +163,50 @@ async function findSourceByName(
         eq(documents.tenantId, tenantId),
         eq(documents.knowledgeBaseId, kbId),
         eq(documents.kind, 'source'),
-        eq(documents.filename, normalised),
+        eq(documents.archived, false),
       ),
     )
-    .get();
-  if (exact) return exact;
-
-  // Strategy 2: case-insensitive match. SQLite LIKE is case-insensitive by
-  // default for ASCII — load the source list once and match in JS so
-  // non-ASCII (Ø, Æ, Å) also works.
-  const allSources = await trail.db
-    .select({ id: documents.id, filename: documents.filename })
-    .from(documents)
-    .where(
-      and(
-        eq(documents.tenantId, tenantId),
-        eq(documents.knowledgeBaseId, kbId),
-        eq(documents.kind, 'source'),
-      ),
-    )
+    .orderBy(desc(documents.createdAt))
     .all();
 
+  /**
+   * Vælg blandt kandidaterne — og SIG DET når der var mere end én.
+   *
+   * En tavs vilkårlighed er hele grunden til at fejlen tog en uge at opdage:
+   * der var intet at læse nogen steder. Linjen navngiver begge id'er, så den
+   * næste der undrer sig over et tal kan se hvorfor.
+   */
+  const vaelg = (kandidater: SourceDoc[], strategi: string): SourceDoc | null => {
+    if (kandidater.length === 0) return null;
+    const valgt = kandidater[0]!;
+    if (kandidater.length > 1) {
+      console.warn(
+        `[reference-extractor] «${normalised}» matcher ${kandidater.length} aktive kilder i kb=${kbId} `
+        + `(${strategi}): ${kandidater.map((k) => k.id).join(', ')} — vælger den nyeste, ${valgt.id}.`,
+      );
+    }
+    return valgt;
+  };
+
+  // Strategi 1: nøjagtigt filnavn (versalfølsomt).
+  const exact = vaelg(kilder.filter((s) => s.filename === normalised), 'nøjagtigt navn');
+  if (exact) return exact;
+
+  // Strategi 2: versal-ufølsom. SQLites LIKE er kun versal-ufølsom for ASCII,
+  // så sammenligningen sker i JS og virker dermed også for Ø, Æ, Å.
   const needle = normalised.toLowerCase();
-  const caseHit = allSources.find((s) => s.filename.normalize('NFC').toLowerCase() === needle);
+  const caseHit = vaelg(
+    kilder.filter((s) => s.filename.normalize('NFC').toLowerCase() === needle),
+    'versal-ufølsomt navn',
+  );
   if (caseHit) return caseHit;
 
-  // Strategy 3: stem match ignoring extension.
+  // Strategi 3: stamme uden filendelse.
   const stem = stripExt(needle);
-  return allSources.find((s) => stripExt(s.filename.normalize('NFC').toLowerCase()) === stem) ?? null;
+  return vaelg(
+    kilder.filter((s) => stripExt(s.filename.normalize('NFC').toLowerCase()) === stem),
+    'stamme uden endelse',
+  );
 }
 
 function stripExt(filename: string): string {
