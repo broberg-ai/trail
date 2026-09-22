@@ -56,7 +56,7 @@ Kæden:
    `backfillReferencesForSource(trail, kbId, doc.filename)`
    — **den sender FILNAVNET videre, selvom den har kildens `doc.id` i hånden.**
 2. Den finder kandidat-Neuroner og kalder `extractReferencesForDoc()`.
-3. Den løser hvert citeret filnavn til en kilde via `resolveSource()`, hvis
+3. Den løser hvert citeret filnavn til en kilde via `findSourceByName()`, hvis
    strategi 1 er `eq(documents.filename, normalised)` efterfulgt af `.get()`.
 4. `.get()` returnerer ÉN række. Med to kilder på samme filnavn er valget
    SQLites, ikke vores — og opslaget filtrerer **ikke** på `archived`.
@@ -74,17 +74,17 @@ filnavn, den ene arkiveret bagefter.
 
 **I scope:**
 
-1. **`/local-compiled` sender kildens ID, ikke dens filnavn.** Det fjerner
-   opslaget helt på den sti hvor svaret allerede er kendt. Det er rettelsen;
-   resten er hærdning for de stier der ikke kan undgå et navneopslag.
-2. **`resolveSource()` må ikke vælge vilkårligt.** Den skal udelukke
+1. **`/local-compiled` sender kildens ID, ikke dens filnavn.** — **F288.1,
+   LANDET** (`d1227b5`). Det fjerner opslaget helt på den sti hvor svaret
+   allerede er kendt.
+2. **`findSourceByName()` må ikke vælge vilkårligt.** Den skal udelukke
    arkiverede kilder, og ved flere aktive kandidater vælge den NYESTE
-   deterministisk frem for at lade `.get()` bestemme.
+   deterministisk frem for at lade `.get()` bestemme. — **F288.2.**
 3. **Tvetydigheden skal kunne ses.** Rammer et navneopslag mere end én aktiv
    kilde, skal det logges med begge id'er. En tavs vilkårlighed er hele
-   grunden til at det her tog en uge at opdage.
+   grunden til at det her tog en uge at opdage. — **F288.2.**
 4. **Bagfyld produktionen** for de kilder der i dag står `ready` med 0 og
-   HAR Neuroner — Music's 181c3073 er den kendte.
+   HAR Neuroner — Music's 181c3073 er den kendte. — **F288.3.**
 
 **Non-goals:**
 
@@ -113,7 +113,7 @@ Discovery-tjek 22. september 2026.
   reference-udtrækning over Trails egen dokumenttabel — der er ingen
   fælles-primitiv at genbruge og intet her der hører hjemme i `components`.
 * **Genbrugt INDEN i repoet:** rettelsen tilføjer ingen ny opslagsvej.
-  `resolveSource()` bliver det ene sted navneopslaget sker, og
+  `findSourceByName()` bliver det ene sted navneopslaget sker, og
   `/local-compiled` holder op med at bruge det, fordi den kender svaret.
 * **Instrumentet der fandt det var en peers read-back**, ikke vores eget
   tilsyn. Værd at notere: feltet havde været forkert i Music fra første
@@ -126,3 +126,9 @@ forkert tal, der læses som et rigtigt.** `0` betød her enten «intet
 produceret» eller «vi mistede sporet», og de to kræver modsat handling: den
 første er en fejl i kompileringen, den anden er en fejl i bogføringen. En
 kontrol der returnerer samme værdi for begge kan ikke bruges til nogen af dem.
+
+**Og en tilføjelse fra F288.1's mutations-prøve, som er værd at have:** da
+rettelsen blev fjernet igen, blev den ene af to rækkefølge-tests rød og den
+anden GRØN. Uden id'et afgøres valget af indsættelses-rækkefølgen, så én af de
+to rammer rigtigt ved et tilfælde. Havde der kun været skrevet den ene test,
+ville målingen have været held — og have set ud som et bevis.
