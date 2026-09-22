@@ -121,7 +121,7 @@ const SYSTEM =
   'Return ONLY JSON: {"label": "<one of the labels>"}. ' +
   'If none of the labels fit, return {"label": null} — do not invent a label.';
 
-interface GoldenRow {
+export interface GoldenRow {
   task: TaskId;
   id: string;
   label: string;
@@ -189,7 +189,7 @@ export function readAnswer(rawText: string, labels: string[]): Answer {
   return { label: null, kind: 'out-of-set', raw: JSON.stringify(parsed.label ?? null).slice(0, 200) };
 }
 
-function readGolden(): GoldenRow[] {
+export function readGolden(): GoldenRow[] {
   const raw = readFileSync(join(DATA, 'golden.jsonl'), 'utf8').trim();
   if (!raw) throw new Error('golden.jsonl er tom. Kør først: bun run apps/scout/src/build-dataset.ts');
   return raw.split('\n').map((l) => JSON.parse(l) as GoldenRow);
@@ -206,7 +206,7 @@ function readGolden(): GoldenRow[] {
  * Og routing/neuron-type har intet skema, så dér ER de observerede etiketter
  * hele rummet.
  */
-function labelSpace(): Record<TaskId, string[]> {
+export function labelSpace(): Record<TaskId, string[]> {
   const space = JSON.parse(readFileSync(join(DATA, 'label-space.json'), 'utf8')) as Record<
     string,
     { declared: string[] | null; labels?: Array<{ label: string }> }
