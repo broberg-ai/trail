@@ -317,6 +317,22 @@ documentRoutes.get('/documents', async (c) => {
   if (c.req.query('awaitingLocalCompile') !== 'true') {
     return c.json({ error: 'only ?awaitingLocalCompile=true is supported here' }, 400);
   }
+  // F191.9 — `?kb=<id|slug>[,…]` er en ALLOWLIST: proben skal kun vække den
+  // session der ejer Brainen. broberg-ai deles af Trail og Forager, og uden den
+  // vækkede Foragers ventende Music-kilder Trail hvert 2. minut (målt 22/9).
+  // En ukendt Brain giver 400 frem for en tom liste — buddys probe læser en tom
+  // liste som «drænet», så en slåfejl ville ellers gøre dispatch tavs.
+  const kbParam = c.req.query('kb');
+  let kbIds: string[] | null = null;
+  if (kbParam !== undefined) {
+    const wanted = kbParam.split(',').map((s) => s.trim()).filter(Boolean);
+    const resolved = await Promise.all(wanted.map((w) => resolveKbId(trail, tenant.id, w)));
+    const unknown = wanted.filter((_, i) => !resolved[i]);
+    if (wanted.length === 0 || unknown.length > 0) {
+      return c.json({ error: 'unknown knowledge base in ?kb=', unknown }, 400);
+    }
+    kbIds = resolved as string[];
+  }
   const rows = await trail.db
     .select({
       id: documents.id,
@@ -331,6 +347,7 @@ documentRoutes.get('/documents', async (c) => {
         kanTagesNu(new Date().toISOString()),
         eq(documents.kind, 'source'),
         eq(documents.archived, false),
+        kbIds ? inArray(documents.knowledgeBaseId, kbIds) : undefined,
       ),
     )
     .all();

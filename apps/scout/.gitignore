@@ -2,3 +2,7 @@
 # The export is reproducible from the API — the bytes do not belong in git.
 data/
 training/.venv/
+
+# F286.4 — trained weights: ~1 GB per task, regenerable with training/train.py.
+models/
+logs/
