@@ -897,3 +897,101 @@ mindre opgave end den der stod i planen.
 
 **AFVENTER STADIG:** arkivering af den gamle `scout-training-0001` (39 hele /
 41 knækkede). Den indeholder intet der ikke findes i v2. Sletningen er ejerens.
+
+## 14. F286.8 — presser man modellen, flytter fejlene ind i menuen
+
+**Målt 22. september 2026 kl. 21.16 dansk tid.** Alle 444 golden-eksempler,
+mistral-small-latest, temperatur 0. Kun prompten ændres. Afsnit 12's
+baseline-tal røres ikke — det er målt med vores prompt og står ved det.
+
+### Spørgsmålet
+
+ai-sdk-sessionen var i tvivl om deres egen `classify()`-prompt: forbyder man
+modellen at sige «ingen passer», vælger den så bare noget — og lander det svar
+INDE i menuen, hvor `label: null` ikke kan fange det? Vi er det eneste sted det
+kan måles, fordi vi har facit for alle 444.
+
+### Tre varianter, ikke to
+
+Kortet frygtede at vores prompt og ai-sdk's adskilte sig på to akser —
+invitationen til at afvise OG længden — så et udslag ville være tvetydigt.
+Aflæst i `@broberg/ai-sdk@0.48.0/dist/index.js:2949`: deres prompt er **ordret
+vores to første sætninger**. Forskellen er præcis to ting, og de kan isoleres:
+
+| variant | ændring i forhold til vores |
+|---|---|
+| `ours` | udgangspunkt — inviterer eksplicit til `{"label": null}` |
+| `ai-sdk` | ingen invitation; beder om et `confidence`-felt |
+| `ours-no-refusal` | vores minus afvisnings-sætningen, intet andet |
+
+### Resultatet
+
+```
+variant            træfsikkerhed  afvisninger  forkerte  kaldfejl
+ours                      43.0%           38       215         0
+ai-sdk                    44.6%            0       246         0
+ours-no-refusal           43.5%            0       251         0
+```
+
+**Det bærende tal — joinet pr. eksempel-id, ikke to aggregater:**
+
+```
+af de 38 eksempler vores prompt afviste      → ai-sdk   → no-refusal
+  blev RIGTIGE                                    4          3
+  blev FORKERTE gæt inde i menuen                34         35
+  afviste stadig                                  0          0
+
+pr. opgave (afvist→rigtig / afvist→forkert), ai-sdk:
+  routing     0 / 22
+  edge-type   1 / 10
+  admit       3 /  2
+```
+
+### Hvad det betyder
+
+**Ja, fejlene flytter ind i menuen.** Af 38 afvisninger blev 34-35 til forkerte
+gæt, der ser nøjagtig ud som et rigtigt svar. Kun 3-4 blev rigtige. ai-sdk's
+bekymring holder: et forbud mod at afvise gør «uden for menuen» usynligt ved at
+gøre det til «forkert inde i menuen» — den stillere og farligere kategori.
+
+**Den samlede træfsikkerhed lyver om det.** 43,0 % → 44,6 % ligner en lille
+forbedring. Det er det ikke. Den kommer af omrokering: 10 forkerte blev rigtige
+og 7 rigtige blev forkerte, på ANDRE eksempler end de afviste. En stigning på
+1,6 point dækker over 34 nye fejl man ikke kan se.
+
+**Afvisningerne var ægte, ikke dovenskab.** For routing blev **22 af 22**
+afvisninger til forkerte gæt, og for edge-type 10 af 11. Etiketterne dér er
+uigennemsigtige mappenavne og rå overskrifter, og modellen kunne reelt ikke
+vælge. Det passer med afsnit 12: routing og edge-type er de to svageste
+opgaver.
+
+**`admit` er undtagelsen.** 3 af 5 afvisninger blev rigtige under pres. Dér var
+en del af afvisningerne forsigtighed snarere end blindhed.
+
+**`confidence`-feltet er ligegyldigt.** `ai-sdk` og `ours-no-refusal` giver
+næsten samme overgange (34 mod 35 forkerte). Det er invitationen der betyder
+noget, ikke feltet.
+
+### Konsekvensen for Scout
+
+1. **Scout skal have et «ingen passer»-udfald og trænes til at bruge det.** En
+   klassifikator der altid svarer en etiket, vil på routing og edge-type
+   producere netop de gæt der ikke kan skelnes fra rigtige svar.
+2. **Træn ikke på pressede gæt.** Et datasæt lavet med en prompt der forbyder
+   afvisning, lærer Scout at gætte med selvtillid.
+3. **Routing- og edge-type-etiketterne er problemet, ikke modellen.** De bør
+   gøres forståelige (beskrivelse pr. etiket) før Scout trænes på dem — ellers
+   træner vi den på noget en stor model heller ikke kan.
+
+### Hvordan det er sikret
+
+- `apps/scout/src/prompt-ablation.ts` — varianterne med kildehenvisning pr.
+  prompt. Samme læser og samme fallback-spærre som `baseline.ts`.
+- `apps/scout/src/prompt-ablation.test.ts` — tre prøver, begge mutationer
+  bevist røde:
+  - fjernes `if (import.meta.main)`, måler import-prøven **1.332 kald** i stedet
+    for 0 — præcis hvad en hel kørsel koster
+  - joines der på position i stedet for id, bliver prøven med omvendt
+    rækkefølge rød
+- Rådata i `apps/scout/data/prompt-ablation.json` (ikke i git, som resten af
+  facit-sættet).
