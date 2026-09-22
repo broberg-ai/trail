@@ -40,7 +40,23 @@ while true; do
     fi
     stamp="$(date -u +%Y-%m-%dT%H%M%SZ)"
     tmp="/tmp/backup-$slug.db"
-    if sqlite3 "$src" ".backup $tmp"; then
+    rm -f "$tmp" "$tmp-journal" "$tmp.gz"
+    # VACUUM INTO, ikke .backup. Målt på trail-db-001 22/9 2026, broberg-ai
+    # (443 MB, husets travleste base):
+    #   sqlite3 .backup    8 TIMER, stod stille på 387.481.600 bytes
+    #   VACUUM INTO        221 sekunder, 435.003.392 bytes, hel og læsbar
+    # SQLite's backup-API starter FORFRA hver gang kilden skrives til, og en
+    # base under konstant skrivelast når derfor aldrig i mål. Den fejler ikke
+    # — den bliver ved. VACUUM INTO kører i én læse-transaktion og kan ikke
+    # startes forfra. Målingen blev taget MENS den hængende .backup hamrede
+    # på samme fil, altså under værre forhold end normalt.
+    #
+    # TIDSGRÆNSEN er den anden halvdel, og den er den vigtigste: løkken tager
+    # kunderne én ad gangen, så ÉN hængende kopi sultede de to andre. Præcis
+    # dét skete 21.-22. september — alle tre baser blev gamle samtidig fordi
+    # broberg-ai sad fast. En grænse gør en hængende kunde til ÉN mistet
+    # kopi frem for til alles.
+    if timeout "${BACKUP_TIMEOUT_SECONDS:-1800}" sqlite3 "$src" "VACUUM INTO '$tmp'"; then
       gzip -f "$tmp"
       dest="tigris:$BUCKET_NAME/_db-backups/$slug/$stamp.db.gz"
       if rclone copyto "$tmp.gz" "$dest" 2>&1; then
@@ -51,7 +67,13 @@ while true; do
       fi
       rm -f "$tmp.gz"
     else
-      echo "[trail-db-backup] $slug: sqlite3 .backup FAILED on $src" >&2
+      rc=$?
+      if [ "$rc" = "124" ]; then
+        echo "[trail-db-backup] $slug: VACUUM INTO TIMED OUT efter ${BACKUP_TIMEOUT_SECONDS:-1800}s — springer videre til næste kunde" >&2
+      else
+        echo "[trail-db-backup] $slug: VACUUM INTO FAILED on $src (exit $rc)" >&2
+      fi
+      rm -f "$tmp" "$tmp-journal"
     fi
   done
   # 30-day retention, per tenant prefix.
