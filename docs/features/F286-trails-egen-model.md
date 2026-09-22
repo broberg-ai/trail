@@ -789,3 +789,44 @@ en kilde *bidrog til* er ikke en side den *producerede*.
    resultat: ~80 hele par i stedet for 39.
 
 Mulighed 2 ødelægger intet — den lægger en ny brain ved siden af.
+
+### EFTERSKRIFT — 0001 kørt om, 80 af 80 hele par
+
+Christian, 22/9: *«Hvorfor er der 41 knækkede par? Kan du ikke lave det her
+ordentligt eller hvad sker der?»* Han har ret, og valget mellem «lad det stå»
+og «lav det om» var ikke et valg jeg skulle have lagt op til ham.
+
+`scout-training-0001-v2` er de SAMME 80 kilder kørt om med den rettede
+skrivemåde:
+
+```
+scout-training-0001-v2    80 hel ·  0 knækket ·  0 fraværende
+scout-training-0001       39 hel · 41 knækket      (den gamle, fejlbehæftede)
+flåden i alt              35 par i morges → 72 → 152
+```
+
+80 kilder ind, 173 neuroner ud. NUL meterede kald. `trail-research` urørt:
+80 kilder / 100 neuroner, samme tal som før.
+
+**RETTELSEN LIGGER NU I MEKANIKKEN, IKKE I EN HUSKEREGEL.** Skrivefunktionen
+vedhæfter kun `sourceDocumentId` når kommandoen er `create`:
+
+```python
+if sid is not None and kw.get("command") == "create":
+    kw["sourceDocumentId"] = sid
+```
+
+Et `str_replace`/`append` kan derfor ikke længere stemple en anden kildes side
+som sin egen — heller ikke hvis den der skriver det glemmer reglen. Det var
+præcis dét der fejlede første gang: reglen fandtes kun som noget man skulle
+huske ved hvert kaldsted.
+
+**DE 8 KILDER DEN FORRIGE SESSION HAVDE KOMPILERET** (F17, F18, F100, F102,
+F103, F104, F107, TRAIL-PERF-ROADMAP) er kompileret på ny i v2, så brainen er
+hel og ikke halvt arvet. Deres koncept- og entitetssider — Kurateringskoeen,
+Kuratorfladen, Ni-trins ingest, Levende ordliste, Obsidian-eksport,
+Ingest-profiler, Marp-slides, Outputformater fra Neurons, Maal foer du
+optimerer — findes derfor også i v2 med korrekt kilde-identitet.
+
+**AFVENTER:** arkivering af den gamle `scout-training-0001`. Den indeholder
+intet der ikke findes i v2, men en sletning er ejerens.
