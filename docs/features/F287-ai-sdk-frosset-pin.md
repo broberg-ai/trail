@@ -233,7 +233,7 @@ af `available`. Den skal bare læses af nogen, med en fast kadence.
 
 **Det er ejerens valg, ikke vores.**
 
-## 8. Reuse
+## Reuse
 
 Discovery-tjek 22. september 2026.
 
