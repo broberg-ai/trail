@@ -41,12 +41,13 @@ Vi så den stadig, fordi vi kører **0.38.0**.
 ```
 pin i repoet        "^0.38.0" i packages/shared, apps/server, apps/scout
 installeret         node_modules/.pnpm/@broberg+ai-sdk@0.38.0
-npm seneste         0.47.1
+npm seneste         0.47.1  (22/9 kl. 08.27: 0.48.0 — se afsnit 6)
 Discovery enrolled  0.38.0, registreret 8. september kl. 09.32 dansk tid
 
 0.38.0 udgivet  3. september
 0.47.1 udgivet 15. september
-13 udgivelser imellem
+0.48.0 udgivet 22. september kl. 08.27 dansk tid
+13 udgivelser imellem (23 til og med 0.48.0)
 ```
 
 ## 3. Mekanismen — og hvorfor intet så forkert ud
@@ -142,11 +143,29 @@ gennem `ai.chat`/`ai.vision`, ikke gennem `contracts`. Det gør ikke
 udrulningen til en formalitet — 13 udgivelser kan stadig bære noget ingen
 har navngivet — men den kendte brudflade mod os er nul.
 
-**MÅLVERSION: 0.48.0, når den findes.** `ai-sdk` taggede den mens dette blev
-skrevet. **Målt samme minut: npm har den IKKE endnu** (`npm view versions`
-slutter på 0.47.1). Et tag er ikke en udgivelse — pin ikke mod noget der ikke
-kan installeres. 0.47.1 bærer begge classify-rettelser og er den sikre
-målversion hvis 0.48.0 lader vente på sig.
+**MÅLVERSION: 0.48.0.** Den ER på npm nu — udgivet **22. september kl. 08.27
+dansk tid**, målt her mod registryet selv, ikke taget på `ai-sdk`'s ord:
+
+```
+curl -s https://registry.npmjs.org/@broberg%2Fai-sdk | jq -r '."dist-tags".latest'
+→ 0.48.0        time: 2026-09-22T06:27:39.542Z  (08.27 dansk tid)
+```
+
+> **Sætningen herover sagde indtil 22/9 kl. 11.58 dansk tid at 0.47.1 var den
+> sikre målversion «hvis 0.48.0 lader vente på sig».** Den var rigtig da den
+> blev skrevet — taggen var sat, npm havde den ikke — og den blev forkert to
+> timer senere uden at nogen rørte filen. Den står her frem for at være
+> slettet, fordi det er selve fejlformen kortet handler om: **et tal der var
+> sandt bliver til et forkert tal ved at blive stående.**
+
+**OG SPØRG REGISTRYET, IKKE npm-CLI'en.** `ai-sdk` målte at `npm pack
+@broberg/ai-sdk@0.48.0` svarede `notarget — a package version that doesn't
+exist` i flere minutter på en version registryet allerede havde. Et negativt
+svar fra `npm view` eller `npm pack` er altså ikke bevis for at en version ikke
+findes — det er CLI'ens cache der svarer med sin egen tilstand frem for kildens.
+
+0.47.1 bærer stadig begge classify-rettelser og er en gyldig nødplan, men der
+er ingen grund til at vælge den nu.
 
 2. Opgradér alle tre `package.json` samtidig.
 3. Skriv pinnet så det ikke kan fryse igen.
@@ -170,7 +189,7 @@ målversion hvis 0.48.0 lader vente på sig.
 
 To veje, og valget er reelt:
 
-| | Eksakt version (`0.47.1`) | Interval der følger minors (`>=0.47.1 <1.0.0`) |
+| | Eksakt version (`0.48.0`) | Interval der følger minors (`>=0.48.0 <1.0.0`) |
 |---|---|---|
 | Opgradering | bevidst, én commit pr. bump | automatisk ved næste install |
 | Risiko | glemmes — præcis dette kort | en 0.x minor kan være breaking, og lander uset |
