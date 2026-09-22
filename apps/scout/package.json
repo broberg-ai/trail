@@ -8,13 +8,15 @@
     "build-dataset": "bun run src/build-dataset.ts",
     "verify-split": "bun run src/verify-split.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "baseline": "bun run src/baseline.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.1.0",
     "typescript": "^5.5.0"
   },
   "dependencies": {
+    "@broberg/ai-sdk": "^0.38.0",
     "@trail/pipelines": "workspace:*",
     "@trail/shared": "workspace:*"
   }

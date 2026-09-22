@@ -256,6 +256,9 @@ importers:
 
   apps/scout:
     dependencies:
+      '@broberg/ai-sdk':
+        specifier: ^0.38.0
+        version: 0.38.0
       '@trail/pipelines':
         specifier: workspace:*
         version: link:../../packages/pipelines

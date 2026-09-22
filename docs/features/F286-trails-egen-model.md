@@ -17,7 +17,7 @@ de links over — navnet står i titlen, hvor en læser ser det.
 
 ## Åbne spørgsmål — læs først
 
-**Ét spørgsmål blokerer nu F286.3 (nr. 4).** Fem ting står åbne:
+**Intet blokerer længere. Nr. 4 er BESVARET — se afsnit 12.** Fire ting står åbne:
 
 1. **Hvilket emne bliver den nye store hjerne?** Ejeren har selv rejst det, og
    det er den hurtigste vej ud af compile-modellens datamangel. Kriterierne
@@ -31,11 +31,13 @@ de links over — navnet står i titlen, hvor en læser ser det.
    ikke dér.
 3. **Hvor meget disk må compile-modellen få?** Mindre presserende nu — se
    afsnit 4.
-4. **Hvad ER klassifikatorens baseline?** `apps/model-lab` måler compile, ikke
-   klassifikation, og der findes ingen klassifikator i produktionen at måle op
-   imod (målt 22/9, afsnit 3). Forslag: en sky-model stilles de samme seks
-   spørgsmål på golden-sættet gennem `@broberg/ai-sdk`, præcision pr. kategori.
-   Metereret forbrug — derfor din beslutning. **Den blokerer F286.3.**
+4. ~~**Hvad ER klassifikatorens baseline?**~~ **BESVARET 22/9.** Christian:
+   «Baseline skal selvfølgelig måles op mod den Mistral model vi kører med i
+   dag.» Målt til `mistral-small-latest`, 42,1 % samlet over 444 eksempler —
+   hele målingen står i afsnit 12. Samme svars FØRSTE halvdel («brug local
+   ingest på $0») hører til compile-modellens datamangel, ikke til baseline:
+   local ingest kører claude-sonnet-4-6, så en måling med den ville sammenligne
+   Scout med en model vi ikke betaler for.
 5. **Skal arkiverede kilder med i kildetype-opgaven?** Billed- og lydkilder
    FINDES, men hver eneste er arkiveret, så de to kategorier har nul aktive
    eksempler. For netop den opgave er en arkiveret kilde stadig et gyldigt
@@ -517,3 +519,124 @@ så en helt almindelig opgradering af runtime ville i stilhed have skåret
 golden-sættet om, og en model trænet i sidste måned ville være målt på rækker
 denne måneds eksport træner på. Præcis den lækage værktøjet findes for at
 forhindre, ankommet gennem værktøjet selv. Nu `sha256`.
+
+---
+
+## 12. Baseline — hvad den model vi betaler for præsterer i dag (F286.3)
+
+**Målt 22. september 2026, kl. 08.09 dansk tid.** Model: `mistral-small-latest`,
+provider `mistral`, kaldt gennem `@broberg/ai-sdk` 0.38. 444 golden-eksempler,
+to kørsler, temperatur 0, nul kald-fejl i begge kørsler.
+
+**Hvorfor netop den model:** produktionen kører den.
+
+```
+$ flyctl ssh console -a trail-engine-001 -C "printenv INGEST_BACKEND"
+mistral
+```
+
+`resolveIngestChain()` mapper `mistral` til `DEFAULT_CHAIN_MISTRAL`, hvis første
+trin er `mistral-small-latest` (`apps/server/src/services/ingest/chain.ts:66`).
+`mistral-large` er KUN provider-resiliens — F199.10 målte at large konsekvent
+underpræsterer small på netop denne ingest-løkke.
+
+Gentag med `bun run apps/scout/src/baseline.ts`.
+
+### Tallet
+
+```
+opgave           eks.  etik.  træfsikkerhed   spredning  intet svar
+────────────────────────────────────────────────────────────────────
+source-type        42      7         100,0%       0,0pp           0
+routing           122     13          22,1%       0,8pp          22
+neuron-type        80     17          38,8%       0,0pp           0
+edge-type          34      7          17,6%       0,0pp          11
+admit              83      3          66,3%       4,8pp           6
+candidate-kind     83     13          31,3%       1,2pp           0
+────────────────────────────────────────────────────────────────────
+I ALT             444                 42,1%                      39
+```
+
+Gentageligheden er god nok til at tallene kan bruges: to kørsler gav 42,1 % og
+41,7 % samlet. Den største udsving er `admit` med 4,8 procentpoint — så **et
+fremskridt på under 5 procentpoint på `admit` er ikke et fremskridt**, det er
+støj. De øvrige fem opgaver flyttede sig 1,2 procentpoint eller mindre.
+
+### HVAD TALLET ER, OG HVAD DET IKKE ER
+
+**Det er ikke «produktionens klassifikator målt».** Der findes ingen
+selvstændig klassifikator i produktionen: de seks valg træffes INDE i
+compile-prompten mens den store model skriver, med hele dokumentet foran sig.
+Det her er den samme model stillet de seks spørgsmål direkte, på ≤600 tegn, uden
+den kontekst. **Tallet er derfor et gulv for sammenligning med Scout — ikke en
+måling af hvor god vores nuværende ingest er.** Den sætning hører med hver gang
+42 % citeres, og den står også i `baseline.json`s eget `caveat`-felt, fordi en
+advarsel i en README ikke læses af den der om et halvt år citerer filen.
+
+**`source-type`s 100 % beviser ingenting.** Etiketten udledes deterministisk af
+FILNAVNET via `pickPipeline()`, og filnavnet står i den tekst modellen får. Den
+opgave er en opslagstabel forklædt som klassifikation. Den skal enten ud af
+Scouts omfang eller aldrig citeres som bevis for at Scout virker.
+
+### PR. KATEGORI — og det var her det blev interessant
+
+Et samlet tal på 42 % skjuler at modellen på tre opgaver har kategorier den
+**bogstaveligt talt aldrig vælger**, uanset hvor almindelige de er:
+
+| opgave | etiket den aldrig gættede | hvor stor er den i facit |
+|---|---|---|
+| `routing` | `sanne-andersen` | 33 af 122 — den STØRSTE |
+| `routing` | `cb-m1` | 5 af 122 |
+| `edge-type` | `cites` | 8 af 34 — og 98 % af alle kanter i produktionen |
+| `edge-type` | `part-of` | 8 af 34 |
+| `candidate-kind` | `external-feed` | 25 af 83 — den STØRSTE |
+
+Og den modsatte fejl, over-gætning:
+
+| opgave | etiket | gættet | rigtigt |
+|---|---|---|---|
+| `routing` | `trail-research` | 24 | 1 |
+| `routing` | `development-tester` | 15 | 1 |
+| `candidate-kind` | `ingest-summary` | 24 | 0 |
+| `candidate-kind` | `ingest-page-update` | 16 | 5 |
+
+**Det er derfor kortet krævede tal pr. kategori.** Havde vi kun rapporteret
+42 %, ville «Scout rammer 55 %» have set ud som et fremskridt selv hvis Scout
+lavede præcis de samme systematiske udfald.
+
+### Tre ting tallene fortæller, som ændrer de næste kort
+
+1. **`routing` bliver ikke løst af en bedre model.** Modellen ser kun
+   KB-navnet — `sanne-andersen`, `cb-m1`, `trail-research` — og et navn er ikke
+   en beskrivelse. Den gætter på emne-ord og lander på det navn der lyder mest
+   generisk. F286.4 bør give opgaven en beskrivelse af hver Brain at vælge ud
+   fra, ellers træner vi Scout på at efterligne en gætteleg.
+2. **`admit` opfandt en etiket produktionen aldrig bruger.** `ingested` er
+   deklareret i skemaet men har nul eksempler i produktionen, og modellen svarede
+   det 7 gange. At vi tog deklarerede-men-fraværende etiketter med i valgmulig-
+   hederne var rigtigt: uden dem ville den fejl have været usynlig.
+3. **`edge-type` er den svageste — 17,6 % på syv etiketter, og modellen nægtede
+   at svare 11 gange ud af 34.** Et kant-eksempel er to Neuron-titler og
+   ingenting andet; det er formentlig for lidt signal for enhver model. Dén
+   opgave skal have mere input, ikke en bedre klassifikator.
+
+### Tre udfald, ikke to — og hvorfor det ikke måtte bruges `contracts.classify()`
+
+`@broberg/ai-sdk`s egen `contracts.classify()` har en tavs redning
+(`dist/index.js:2680`): svarer modellen uden for etiket-listen, returneres
+`labels[0]`. I et produkt er det den rigtige afvejning. I en måling betyder det
+at hvert ikke-svar tælles som et gæt på første etiket — og hver gang den
+tilfældigvis er facit, tælles det som KORREKT. På `admit` er `labels[0]` =
+`approved` og 60 % af facit er `approved`, så de 6 ikke-svar ville være scoret
+rigtige tre ud af fem gange. Fejlen peger i den GRØNNE retning.
+
+`baseline.ts` kalder derfor `ai.chat` og tæller tre udfald: korrekt, forkert,
+**intet svar**. De 39 ikke-svar står i tabellen som deres egen søjle. Manglen er
+meldt til `components` som en pakke-mangel frem for omgået i stilhed.
+
+### Kørslen kasseres hvis en anden model svarer
+
+`baseline.ts` læser `usage.model` fra det svar der FAKTISK kom, og kaster hele
+kørslen hvis andet end `mistral-small-latest` har svaret. Et fallback-spring
+midt i en måling ville give et tal der ser rigtigt ud og sammenligner med den
+forkerte model.
