@@ -53,13 +53,50 @@
  * «eller slet ikke» og regnede derfor skaden for højt. Den parselige halvdel er
  * til gengæld netop den farlige, fordi den ligner et rigtigt svar.
  *
- * RETTET I 0.42.0 (F052) og igen i 0.47.1 (F052.2). Vi kører 0.38 fordi
- * `^0.38.0` under 1.0.0 er patch-only — se F287. Når den opgradering lander,
- * SKAL dette script migreres tilbage til `contracts.classify()`: dens
- * `label: string | null` + `rawLabel` er samme skel som `readAnswer()` nedenfor,
- * og den fanger oveni tvetydighed (et svar der prefixer to etiketter).
+ * RETTET I 0.42.0 (F052) og igen i 0.47.1 (F052.2). Afsnittet ovenfor beskriver
+ * altså en pakke vi ikke længere kører.
  *
- * Indtil da kalder vi `ai.chat` og tæller TRE udfald, ikke to: korrekt, forkert,
+ * ─────────────────────────────────────────────────────────────────────────────
+ * VI BLIVER ALLIGEVEL PÅ DEN EGNE PARSER — OG HER ER MÅLINGEN DER AFGJORDE DET
+ *
+ * F287 landede 22. september 2026: pinnet er nu eksakt 0.48.0, så den tavse
+ * `labels[0]`-redning ovenfor findes ikke mere. Den oplagte konklusion er at
+ * migrere tilbage. Den holder ikke endnu, og grunden er en TYPE vi har læst,
+ * ikke en fornemmelse.
+ *
+ * AFLÆST I `node_modules/.pnpm/@broberg+ai-sdk@0.48.0/.../dist/index.d.ts:717`:
+ *
+ *     interface ClassifyResult {
+ *       label: string | null;      // out-of-set → null   (F052, godt)
+ *       rawLabel?: string;         // modellens eget svar  (F052, godt)
+ *       confidence: number | null;
+ *       usage: Usage;
+ *     }                            // ← INTET `outcome`-felt
+ *
+ * To ting mangler for en MÅLING, og begge er præcis dét dette script findes for:
+ *
+ * 1. `out-of-set` og `unparseable` kan ikke skelnes. Begge ender som
+ *    `label: null`. De er to forskellige fejl i en modelvurdering — «svarede
+ *    forkert» og «svarede ikke på formen» — og et tal der blander dem er ikke
+ *    en måling af nogen af dem.
+ * 2. Et ULÆSELIGT svar KASTER stadig (`parseJsonLoose`). I et produkt er det
+ *    rigtigt. I en baseline-kørsel dræber det løkken på svar nr. 3 af 400, og
+ *    de resterende 397 bliver aldrig målt — altså den værste udgave af at
+ *    mangle et tal: man opdager ikke at det mangler.
+ *
+ * AI-SDK HAR BYGGET BEGGE DELE, OG DE ER IKKE UDGIVET ENDNU. Deres F059 (meldt
+ * til os 22/9) tilføjer `outcome: "answered" | "out-of-set" | "unparseable"` og
+ * `onUnparseable: "throw" | "value"` — vores egen skærpelse, med `throw` som
+ * uændret standard. Den ligger på deres `main`, ikke på npm; 0.48.0 har den
+ * ikke, hvilket er dét typen ovenfor beviser.
+ *
+ * SÅ BETINGELSEN ER PRÆCIS OG EFTERPRØVELIG, ikke «når det passer»: den dag
+ * `ClassifyResult` bærer `outcome`, migrerer `readAnswer()` til
+ * `contracts.classify({ onUnparseable: "value" })` og denne blok slettes. Indtil
+ * da er den egne parser ikke en dublet af pakken — den gør noget pakkens
+ * udgivne udgave ikke kan.
+ *
+ * Vi kalder derfor `ai.chat` og tæller TRE udfald, ikke to: korrekt, forkert,
  * og INTET SVAR — sidstnævnte delt i `out-of-set` og `unparseable`.
  */
 import { createAI } from '@broberg/ai-sdk';
