@@ -271,6 +271,28 @@ components:
           type: number
           format: float
           description: FTS5 BM25 rank, [0, 1]-normalised.
+        updatedAt:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            When the parent Source was last edited, as ISO-8601 UTC
+            (`...Z`). Use it to qualify an answer — "as of 13 Aug" —
+            rather than repeating a decision that may since have moved.
+
+            **Already normalised. Do not re-interpret the value.** The
+            stored column holds two formats: `2026-06-22 12:07:09`
+            (SQLite `datetime('now')`) and `2026-04-16T16:31:49.278Z`
+            (`toISOString()`). Both are UTC, but only the second says
+            so, so the naive `new Date(value)` reads the first as LOCAL
+            time — off by the viewer's offset, with no visible symptom.
+            This field is always the labelled form or `null`.
+
+            **`null` means UNKNOWN, not error.** It is returned when the
+            stored value cannot be parsed, because a wrong date is worse
+            than no date on a freshness field. Render "date unknown";
+            do not retry and do not treat it as a failed request.
+          examples:
+            - 2026-06-22T12:07:09.000Z
 
     RetrieveResponse:
       type: object
@@ -416,7 +438,7 @@ components:
         kind:
           type: string
           enum: [source, wiki]
-          description: Uploads always create `kind: source`. Compiled Neurons appear later as `kind: wiki`.
+          description: "Uploads always create `kind: source`. Compiled Neurons appear later as `kind: wiki`."
         filename:
           type: string
         path:
