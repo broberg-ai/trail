@@ -217,6 +217,16 @@ async function insertRef(
 export async function extractReferencesForDoc(
   trail: TrailDatabase,
   docId: string,
+  /**
+   * F288.1 — den kilde kalderen ALLEREDE ved det handler om.
+   *
+   * Citeres netop dens filnavn, bruges dens id direkte og navneopslaget
+   * springes over. Det er ikke en optimering: `findSourceByName` kan ikke
+   * skelne to aktive kilder med samme filnavn fra hinanden (målt — se
+   * apps/server/scripts/verify-neuroncount-filnavn.ts), og på den sti her
+   * BEHØVER den det ikke, fordi svaret blev sendt med.
+   */
+  kendtKilde?: SourceDoc,
 ): Promise<number> {
   const doc = await trail.db
     .select({
@@ -237,9 +247,14 @@ export async function extractReferencesForDoc(
   const candidates = parseFrontmatterSources(doc.content);
   if (candidates.length === 0) return 0;
 
+  const kendtNavn = kendtKilde?.filename.trim().normalize('NFC').toLowerCase();
+
   let inserted = 0;
   for (const name of candidates) {
-    const source = await findSourceByName(trail, doc.tenantId, doc.knowledgeBaseId, name);
+    // F288.1 — er det den kilde kalderen navngav, så brug DENS id.
+    const source = kendtNavn && name.trim().normalize('NFC').toLowerCase() === kendtNavn
+      ? kendtKilde
+      : await findSourceByName(trail, doc.tenantId, doc.knowledgeBaseId, name);
     if (!source) continue;
     const ok = await insertRef(trail, doc, source);
     if (ok) inserted += 1;
@@ -302,6 +317,18 @@ export async function backfillReferencesForSource(
   trail: TrailDatabase,
   kbId: string,
   sourceFilename: string,
+  /**
+   * F288.1 — kildens id, når kalderen kender det.
+   *
+   * MÅLT 22/9 i produktion: Music-kilden 181c3073 stod `ready` med
+   * neuronCount 0 mens 8 Neuroner kompileret fra den fandtes. Årsagen var at
+   * denne funktion fik FILNAVNET videre fra en rute der havde rækkens id i
+   * hånden, og navneopslaget valgte søsterkilden med samme navn.
+   *
+   * Udelades feltet, opfører funktionen sig nøjagtig som før — den navnebaserede
+   * vej bliver stående for boot-bagfyldningen, som ikke har et id at give.
+   */
+  kildeId?: string,
 ): Promise<number> {
   // Basenavnet uden endelse — frontmatteren skriver kilden både med og uden
   // `.md`/`.pdf`, så LIKE'en skal ramme begge former.
@@ -315,8 +342,12 @@ export async function backfillReferencesForSource(
     [kbId, `%${stamme}%`],
   )).rows as Array<{ id: string }>;
 
+  const kendtKilde: SourceDoc | undefined = kildeId
+    ? { id: kildeId, filename: sourceFilename }
+    : undefined;
+
   let total = 0;
-  for (const d of kandidater) total += await extractReferencesForDoc(trail, d.id);
+  for (const d of kandidater) total += await extractReferencesForDoc(trail, d.id, kendtKilde);
   return total;
 }
 

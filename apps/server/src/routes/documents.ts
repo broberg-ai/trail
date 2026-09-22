@@ -1346,7 +1346,11 @@ documentRoutes.post('/documents/:docId/local-compiled', async (c) => {
   // fordi femten markeringer i træk blev til femten gennemløb af 250 Neuroner
   // der serialiserede på skrivelåsen.
   if (!body.failed) {
-    await backfillReferencesForSource(trail, doc.knowledgeBaseId, doc.filename);
+    // F288.1 — `doc.id` sendes med. Uden den slog bagfyldningen kilden op på
+    // FILNAVN, og to aktive kilder med samme navn kunne bytte plads: målt i
+    // Music, hvor den ene blev arkiveret bagefter og den anden stod tilbage
+    // med neuronCount 0 selvom dens otte Neuroner fandtes.
+    await backfillReferencesForSource(trail, doc.knowledgeBaseId, doc.filename, doc.id);
   }
 
   // F191.8 — tell the Ingest Station (live) that this source left the awaiting
