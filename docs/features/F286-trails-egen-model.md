@@ -830,3 +830,70 @@ optimerer — findes derfor også i v2 med korrekt kilde-identitet.
 
 **AFVENTER:** arkivering af den gamle `scout-training-0001`. Den indeholder
 intet der ikke findes i v2, men en sletning er ejerens.
+
+---
+
+## EFTERSKRIFT 2 — 0002 er hel, og målingen aflyste 0003
+
+**22. september kl. 11.55 dansk tid.** De resterende 60 kilder i
+`scout-training-0002` er kompileret i en interaktiv Max-session. Nul meterede
+kald. Rundturen målt bagefter med `apps/scout/src/audit-roundtrip.ts`:
+
+```
+brain                            hel   knækket   fraværende
+broberg-ai/scout-training-0002    69         0            1
+broberg-ai/scout-training-0001-v  80         0            0
+broberg-ai/scout-training-0001    39        41            0   ← den gamle, erstattede
+broberg-ai/agent-memory           33         0            7
+-----------------------------------------------------------
+I ALT (hele flåden)              221        47          262
+```
+
+Den ene fraværende i 0002 er `tak.md` — en kvitteringsside efter en
+formular-indsendelse, markeret `failed` frem for skjult. Den producerede
+intet, og *fraværende* er det ærlige udfald for en kilde der intet producerede.
+**Alle 47 knækkede par ligger i den gamle 0001.** Ingen nye er opstået.
+
+Flåden gik fra 35 hele par i går morges til **221**.
+
+### MÅLINGEN AFLYSTE DET NÆSTE STYKKE ARBEJDE
+
+Planen var `scout-training-0003` fra `agent-memory`, 40 kilder. Den er **ikke
+kørt**, og den bør formentlig ikke køres som beskrevet. Målt i dag:
+
+```
+agent-memory              40 kilder
+  har allerede hele par   33
+  uden ét eneste spor      7
+```
+
+De 33 er gået gennem den NYE pipeline og er allerede brugbart
+træningsmateriale. En re-ingest til et nyt brain ville altså producere 40 par
+hvoraf 33 duplikerer noget der findes — og det var netop for at undgå den
+slags dobbeltarbejde at re-ingesten overhovedet blev målt først.
+
+**De 7 uden spor er ikke tilfældige, og det er den egentlige oplysning:**
+
+```
+trail__feedback_read_carefully_before_acting.md
+trail__feedback_plain_danish.md
+trail__feedback_never_pkill_shared_procs.md
+trail__feedback_dry_run_llm_subprocess.md
+trail__feedback_check_for_existing_spec.md
+trail__feedback_cc_runs_normalize.md
+trail__feedback_browser_refresh_exception.md
+```
+
+Alle 32 `buddy__feedback_*` har hele par. Alle `trail__feedback_*` har ingen.
+Det er et mønster, ikke støj — de to sæt er landet ad forskellige veje. Og
+`trail__feedback_browser_refresh_exception.md` ligger **to gange** i brainen
+(`0c1c71b9` og `3fea40fd`), hvilket peger samme vej: den ene vej bar ikke en
+kilde-identitet, så en genindsendelse blev læst som en ny kilde.
+
+**Konsekvensen for kortet:** 0003 er ikke 40 kilders arbejde, det er 7 — og
+de 7 er dette repos egne memory-filer, som ifølge CLAUDE.md skal gennem
+upload-ruten (`path:`-identitet), ikke kandidat-ruten. Det er en anden og
+mindre opgave end den der stod i planen.
+
+**AFVENTER STADIG:** arkivering af den gamle `scout-training-0001` (39 hele /
+41 knækkede). Den indeholder intet der ikke findes i v2. Sletningen er ejerens.
