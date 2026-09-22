@@ -995,3 +995,78 @@ noget, ikke feltet.
     rækkefølge rød
 - Rådata i `apps/scout/data/prompt-ablation.json` (ikke i git, som resten af
   facit-sættet).
+
+## 15. F286.4 — Scout 1.0 er trænet, og den slår baseline på fem af seks opgaver
+
+**Kørt natten til 23/9 2026 på M1 (MPS), $0.** mmBERT-base, ét klassifikationshoved
+pr. opgave, `apps/scout/training/train.py`: højst 800 eksempler pr. etiket, 10 %
+valideringsudsnit af TRÆNINGSDATA, 3 epoker, seed 42, frosne token-embeddings.
+Golden-sættet åbnes først efter træningen, og scriptet nægter at træne hvis et
+golden-id findes i træningsdata. `verify-split.ts`: 6/6 kontroller grønne før
+kørslen. Ingen golden-tekst findes i træningsdata, heller ikke med de første 200
+tegn ens (målt for routing og edge-type, de to største spring).
+
+```
+opgave           golden  mistral-small  Scout   rigtige  forkerte  afstået  tærskel
+source-type          42        100 %     100 %       42         0        0     0,00
+routing             122         23 %      88 %      102        12        8     0,62
+neuron-type          80         40 %      88 %       70        10        0     0,00
+edge-type            34         18 %      35 %       11        16        7     0,76
+admit                83         70 %      89 %       74         9        0     0,00
+candidate-kind       83         31 %      77 %       62        16        5     0,90
+```
+
+«Scout»-kolonnen er når den altid svarer. «rigtige/forkerte/afstået» er med
+tærsklen — under den siger Scout «ingen passer» (AC: afståelser tælles for sig).
+edge-type UDEN `cites`: 26 eksempler, Scout 15 %.
+
+**HVOR SCOUT ER DÅRLIGERE END MISTRAL — navngivet, ikke gemt i et gennemsnit:**
+
+```
+routing         helpdesk-dev 0/4 (mistral 3/4) · llm-technical-research 2/5 (3/5) · zoneterapi-demo 4/5 (5/5)
+neuron-type     architecture 0/1 (1/1) · heuristics 0/3 (3/3) · test 0/1 (1/1)
+edge-type       is-a 0/8 (5/8)
+candidate-kind  contradiction-alert 13/16 (16/16) · ingest-page-update 4/5 (5/5) · reader-feedback 0/3 (3/3)
+```
+
+**Mønsteret er ét:** hver etiket hvor Scout taber, havde 1-4 træningseksempler
+(helpdesk-dev 1, heuristics 1, architecture 1, test 2, reader-feedback 1, is-a 4).
+Mistral klarer dem fordi den læser etiketnavnet; Scout lærer kun af eksempler.
+Det peger på den naturlige arbejdsdeling for F286.5: Scout svarer hvor den har
+lært, og en sjælden etiket — eller et «ingen passer» — går videre til en LLM.
+
+**To forbehold der hører til tallene:**
+
+1. **«Ingen passer» virker kun inden for det Scout har set.** Et stykke sludder
+   («helt ukendt tekst uden mening xyz») får edge-type-svaret `cites` med 0,98 i
+   sikkerhed. Tærsklen fanger tvivl mellem kendte etiketter, ikke en tekst der
+   ikke hører hjemme nogen steder. Et rigtigt out-of-distribution-filter er ikke
+   bygget.
+2. **Golden-sættet er lille pr. etiket** (ofte 3-6), så en enkelt forskel flytter
+   en etiket 20-30 procentpoint. Opgave-tallene står stærkere end etiket-tallene.
+
+**Svartid på CPU** (4 tråde, M1, 50 golden-tekster, `training/predict.py --bench`):
+routing median 67 ms (p90 83), neuron-type 78 ms (p90 94), admit 113 ms (p90 135).
+Målt på M1'erens CPU — IKKE på cb-ubuntu, hvor F286.5 skal servere den. Den er
+ældre og vil være langsommere; tallet dér er ikke målt.
+
+**Disk:** 1,2 GB pr. opgave, 7,1 GB i alt under `apps/scout/models/`
+(gitignoret), ét sæt vægte pr. opgave — `train.py` sletter den forrige før den
+gemmer. 22 GB fri efter kørslen. Kørt to gange i træk på source-type: modelmappen
+fylder byte-for-byte det samme (7.409.440 KB før og efter begge), men maskinens
+frie plads faldt 129 MB og siden 27 MB — og den falder også uden træning, fordi
+andre sessioner skriver. Fri plads kan derfor ikke bære beviset alene; det kan
+modelmappens størrelse.
+
+**Hukommelse — målt, og den kostede en kørsel:** batch 16 sendte processen op på
+6,6 GB og Mac'en i swap på routing (0 skridt på 10 minutter). Nu 8 × 2
+mikrobatches, samme effektive batch. Første to opgaver kørte med 16 og er ikke
+kørt om; 8 × 2 giver i praksis samme gradient som 16 (små afvigelser ved en ufuld sidste batch).
+
+**Prøv den selv:**
+
+```
+cd apps/scout
+training/.venv/bin/python training/predict.py routing "Zoneterapi-forløb for gravide"
+training/.venv/bin/python training/predict.py admit "<tekst fra en kandidat>"
+```
