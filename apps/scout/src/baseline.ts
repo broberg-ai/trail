@@ -40,15 +40,27 @@
  *       ? parsed.label
  *       : input.labels[0] ?? "";
  *
- * Svarer modellen noget uden for listen — eller slet ikke — får kalderen
- * `labels[0]` tilbage, umuligt at skelne fra et ægte svar. I et produkt er det
- * den rigtige afvejning: du skal bruge en etiket. I en baseline betyder det at
- * hver gang `labels[0]` tilfældigvis ER facit, tælles et ikke-svar som korrekt.
- * Fejlen peger i den GRØNNE retning, og det er den slags der ikke opdages.
+ * Svarer modellen en etiket UDEN FOR listen, får kalderen `labels[0]` tilbage,
+ * umuligt at skelne fra et ægte svar. I et produkt er det den rigtige afvejning:
+ * du skal bruge en etiket. I en måling betyder det at hver gang `labels[0]`
+ * tilfældigvis ER facit, tælles et ikke-svar som korrekt. Fejlen peger i den
+ * GRØNNE retning, og det er den slags der ikke opdages.
  *
- * Derfor kalder vi `ai.chat` og tæller TRE udfald, ikke to: korrekt, forkert,
- * og INTET SVAR. Et tal der ikke kan se forskel på «modellen tog fejl» og
- * «modellen svarede ikke» er ikke en baseline.
+ * PRÆCISERING (F286.7, fra ai-sdk, efterprøvet i koden): redningen fyrer KUN på
+ * et PARSELIGT svar. `parseJsonLoose` (dist:2611) kaster når svaret slet ikke
+ * indeholder `{` eller `[`, så den halvdel ville have stoppet løkken højlydt
+ * frem for at blive scoret lydløst. Min første udgave af dette afsnit skrev
+ * «eller slet ikke» og regnede derfor skaden for højt. Den parselige halvdel er
+ * til gengæld netop den farlige, fordi den ligner et rigtigt svar.
+ *
+ * RETTET I 0.42.0 (F052) og igen i 0.47.1 (F052.2). Vi kører 0.38 fordi
+ * `^0.38.0` under 1.0.0 er patch-only — se F287. Når den opgradering lander,
+ * SKAL dette script migreres tilbage til `contracts.classify()`: dens
+ * `label: string | null` + `rawLabel` er samme skel som `readAnswer()` nedenfor,
+ * og den fanger oveni tvetydighed (et svar der prefixer to etiketter).
+ *
+ * Indtil da kalder vi `ai.chat` og tæller TRE udfald, ikke to: korrekt, forkert,
+ * og INTET SVAR — sidstnævnte delt i `out-of-set` og `unparseable`.
  */
 import { createAI } from '@broberg/ai-sdk';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -82,12 +94,62 @@ interface GoldenRow {
 
 type Outcome = 'correct' | 'wrong' | 'no-answer';
 
+/**
+ * HVORFOR «INTET SVAR» IKKE ER ÉN TING (F286.7).
+ *
+ * F286.3 talte 39 ikke-svar som ét tal, og jeg skrev derefter at de alle ville
+ * være blevet scoret som `labels[0]` af ai-sdk's classify(). Det var for højt
+ * sat, og ai-sdk fangede det. Målt i den installerede 0.38, dist/index.js:2611:
+ *
+ *     const start = fenced.search(/[[{]/);
+ *     if (start === -1) throw new Error("no JSON found in model output");
+ *
+ * Den KASTER når svaret ikke indeholder `{` eller `[`. labels[0]-redningen fyrer
+ * altså KUN på et PARSELIGT svar der navngiver en etiket uden for listen.
+ *
+ * De to fejl er også forskellige for SCOUT, og det er den varige grund til at
+ * skelne: `out-of-set` betyder at modellen forstod opgaven og valgte forkert
+ * uden for menuen — `unparseable` betyder at den slet ikke svarede på formen.
+ * Det første retter man med et bedre etiket-rum, det andet med et bedre format.
+ */
+type NoAnswerKind = 'out-of-set' | 'unparseable';
+
+interface Answer {
+  label: string | null;
+  /** Kun sat når label er null — så fejlen kan LÆSES, ikke bare tælles. */
+  raw?: string;
+  kind?: NoAnswerKind;
+}
+
 interface Prediction {
   task: TaskId;
   id: string;
   truth: string;
   predicted: string | null;
   outcome: Outcome;
+  noAnswerKind?: NoAnswerKind;
+  raw?: string;
+}
+
+/**
+ * Læs modellens rå svar som ét af tre udfald. Ren funktion, så den kan
+ * modprøves uden et netværkskald — en tæller der altid svarer det samme
+ * består ellers «vi tæller to slags» ved et uheld.
+ */
+export function readAnswer(rawText: string, labels: string[]): Answer {
+  const cleaned = rawText.replace(/^```(?:json)?\s*|\s*```$/g, '').trim();
+  let parsed: { label?: unknown };
+  try {
+    parsed = JSON.parse(cleaned) as { label?: unknown };
+  } catch {
+    return { label: null, kind: 'unparseable', raw: cleaned.slice(0, 200) };
+  }
+  if (typeof parsed.label === 'string' && labels.includes(parsed.label)) {
+    return { label: parsed.label };
+  }
+  // Parselig JSON, men etiketten er ikke på menuen — eller `label` var null,
+  // hvilket vores systemprompt udtrykkeligt beder om når ingen passer.
+  return { label: null, kind: 'out-of-set', raw: JSON.stringify(parsed.label ?? null).slice(0, 200) };
 }
 
 function readGolden(): GoldenRow[] {
@@ -125,7 +187,7 @@ async function classifyOne(
   ai: ReturnType<typeof createAI>,
   row: GoldenRow,
   labels: string[],
-): Promise<{ predicted: string | null; model: string; provider: string }> {
+): Promise<{ answer: Answer; model: string; provider: string }> {
   const res = await ai.chat({
     system: SYSTEM,
     prompt: `Labels: ${JSON.stringify(labels)}\n\nText:\n${row.text}`,
@@ -139,20 +201,11 @@ async function classifyOne(
     purpose: 'scout-baseline',
   });
 
-  let predicted: string | null = null;
-  try {
-    const parsed = JSON.parse(res.text.replace(/^```(?:json)?\s*|\s*```$/g, '').trim()) as {
-      label?: unknown;
-    };
-    // Et svar uden for etiket-rummet er INTET SVAR, ikke et forkert gæt på
-    // labels[0]. Se filens hoved — det er hele grunden til at vi ikke kalder
-    // contracts.classify().
-    if (typeof parsed.label === 'string' && labels.includes(parsed.label)) predicted = parsed.label;
-  } catch {
-    predicted = null;
-  }
-
-  return { predicted, model: res.usage.model ?? '?', provider: res.usage.provider ?? '?' };
+  // Et svar uden for etiket-rummet er INTET SVAR, ikke et forkert gæt på
+  // labels[0]. Se filens hoved — det er hele grunden til at vi ikke kalder
+  // contracts.classify() på 0.38.
+  const answer = readAnswer(res.text, labels);
+  return { answer, model: res.usage.model ?? '?', provider: res.usage.provider ?? '?' };
 }
 
 /** Kør `jobs` med højst `limit` i luften ad gangen. */
@@ -186,23 +239,32 @@ async function runOnce(rows: GoldenRow[], labels: Record<TaskId, string[]>): Pro
   let done = 0;
 
   const jobs = rows.map((row) => async (): Promise<Prediction> => {
-    let predicted: string | null = null;
+    let answer: Answer = { label: null, kind: 'unparseable', raw: '(kaldet lykkedes aldrig)' };
     try {
       const r = await classifyOne(ai, row, labels[row.task]!);
-      predicted = r.predicted;
+      answer = r.answer;
       models.add(r.model);
       providers.add(r.provider);
     } catch (err) {
-      // Et kald der aldrig lykkedes er heller ikke et svar. Det tælles som
-      // no-answer og rapporteres separat, så en dårlig forbindelse ikke kan
-      // ligne en dårlig model.
+      // Et kald der aldrig lykkedes er heller ikke et svar. Det tælles separat
+      // som callFailures, så en dårlig forbindelse ikke kan ligne en dårlig
+      // model — og kørslen med nul fejl er den eneste man kan citere.
       failures += 1;
       process.stderr.write(`  ! ${row.task}/${row.id}: ${err instanceof Error ? err.message : String(err)}\n`);
     }
     done += 1;
     if (done % 50 === 0) process.stderr.write(`  ${done}/${rows.length}\n`);
-    const outcome: Outcome = predicted === null ? 'no-answer' : predicted === row.label ? 'correct' : 'wrong';
-    return { task: row.task, id: row.id, truth: row.label, predicted, outcome };
+    const outcome: Outcome =
+      answer.label === null ? 'no-answer' : answer.label === row.label ? 'correct' : 'wrong';
+    return {
+      task: row.task,
+      id: row.id,
+      truth: row.label,
+      predicted: answer.label,
+      outcome,
+      noAnswerKind: answer.kind,
+      raw: answer.raw,
+    };
   });
 
   const predictions = await pool(jobs, CONCURRENCY);
@@ -324,12 +386,25 @@ async function main(): Promise<void> {
         accuracyPerRun: perRun,
         spread: Math.max(...perRun) - Math.min(...perRun),
         noAnswer: mine.filter((p) => p.outcome === 'no-answer').length,
+        // DELT, fordi de to fejl retter man forskelligt: out-of-set er et
+        // etiket-rums-problem, unparseable er et format-problem.
+        outOfSet: mine.filter((p) => p.noAnswerKind === 'out-of-set').length,
+        unparseable: mine.filter((p) => p.noAnswerKind === 'unparseable').length,
+        // Hvad modellen FAKTISK svarede, når den svarede uden for menuen.
+        // En optælling siger hvor mange; disse siger hvad man skal gøre ved det.
+        outOfSetExamples: [
+          ...new Set(mine.filter((p) => p.noAnswerKind === 'out-of-set').map((p) => p.raw ?? '')),
+        ]
+          .filter(Boolean)
+          .slice(0, 8),
         byLabel: scoreByLabel(mine),
       };
     }),
     overall: {
       accuracyPerRun: all.map((r) => accuracy(r.predictions)),
       noAnswer: first.filter((p) => p.outcome === 'no-answer').length,
+      outOfSet: first.filter((p) => p.noAnswerKind === 'out-of-set').length,
+      unparseable: first.filter((p) => p.noAnswerKind === 'unparseable').length,
       callFailures: all.map((r) => r.failures),
     },
   };
@@ -338,19 +413,30 @@ async function main(): Promise<void> {
 
   console.log(`\nBASELINE — ${report.model} (${report.provider.join(', ')}) · ${report.runAtCopenhagen} dansk tid`);
   console.log(`${rows.length} eksempler × ${runs} kørsler\n`);
-  console.log('opgave           eks.  etik.  træfsikkerhed   spredning  intet svar');
-  console.log('─'.repeat(72));
+  console.log('opgave           eks.  etik.  træfsikkerhed  spredning   udenfor  uparselig');
+  console.log('─'.repeat(76));
   for (const t of report.tasks) {
     console.log(
       `${t.task.padEnd(16)} ${String(t.examples).padStart(4)}  ${String(t.labels).padStart(5)}  ` +
-        `${pct(t.accuracy).padStart(13)}  ${pct(t.spread).padStart(9)}  ${String(t.noAnswer).padStart(10)}`,
+        `${pct(t.accuracy).padStart(12)}  ${pct(t.spread).padStart(9)}  ${String(t.outOfSet).padStart(8)}  ${String(t.unparseable).padStart(9)}`,
     );
   }
-  console.log('─'.repeat(72));
+  console.log('─'.repeat(76));
   console.log(
     `${'I ALT'.padEnd(16)} ${String(rows.length).padStart(4)}         ` +
-      `${pct(report.overall.accuracyPerRun[0]!).padStart(13)}             ${String(report.overall.noAnswer).padStart(10)}`,
+      `${pct(report.overall.accuracyPerRun[0]!).padStart(12)}             ` +
+      `${String(report.overall.outOfSet).padStart(8)}  ${String(report.overall.unparseable).padStart(9)}`,
   );
+  console.log(
+    `\n  «udenfor» = modellen svarede en etiket der ikke står på menuen (parseligt svar).` +
+      `\n  «uparselig» = svaret kunne ikke læses som JSON overhovedet.` +
+      `\n  De rettes forskelligt, og derfor tælles de hver for sig.`,
+  );
+  for (const t of report.tasks) {
+    if (t.outOfSetExamples.length > 0) {
+      console.log(`\n  ${t.task} svarede uden for menuen: ${t.outOfSetExamples.join(', ')}`);
+    }
+  }
 
   // PR. KATEGORI, og det er ikke pynt: `cites` er 98 % af alle kanter, så et
   // samlet tal kan være højt alene fordi modellen altid svarer `cites`.
@@ -368,4 +454,15 @@ async function main(): Promise<void> {
   console.log(`\nSkrevet: apps/scout/data/baseline.json`);
 }
 
-await main();
+/**
+ * KUN når filen køres som program — aldrig ved import.
+ *
+ * Uden denne linje kostede `bun test apps/scout/src/baseline.test.ts` en HEL
+ * baseline-kørsel: 444 meterede kald, 45 sekunder, og data/baseline.json
+ * overskrevet af en testkørsel. Målt første gang prøverne blev kørt.
+ *
+ * En test der i stilhed bruger penge og overskriver sit eget målegrundlag er
+ * værre end ingen test — og den så GRØN ud, fordi de ni prøver består
+ * uanset hvad der ellers skete under importen.
+ */
+if (import.meta.main) await main();

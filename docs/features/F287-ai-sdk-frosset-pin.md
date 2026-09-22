@@ -10,9 +10,29 @@ Jeg rapporterede en fejl i `contracts.classify()` til `ai-sdk`-sessionen: et
 svar uden for etiket-listen blev returneret som `labels[0]`, umuligt at skelne
 fra et ægte svar. Fundet var rigtigt — i den kode jeg havde foran mig.
 
-Den var rettet **9. september** (v0.41.1, deres F052) og igen **15. september**
+Den var rettet **9. september** (v0.42.0, deres F052) og igen **15. september**
 (v0.47.1, F052.2, hvor den modsatte fejl var opstået: matchningen blev for
 streng og kasserede rigtige svar).
+
+> **Versionsnummeret her blev rettet samme dag, og måden er værd at have.** Både
+> `ai-sdk` og `components` sagde først **0.41.1**. Vi regnede baglæns fra npm's
+> udgivelsestider og fandt at 0.41.1 udkom **4. september** — altså FIRE DAGE
+> før den commit der bærer rettelsen. `ai-sdk` målte selv efter og bekræftede:
+> rettelsen ligger i **0.42.0**.
+>
+> Årsagen er generel og rammer alle: **`package.json` på en commit er den version
+> grenen kom FRA, ikke den den blev udgivet I.** Bumpet ligger typisk i en senere
+> commit. Og det er uforudsigeligt i samme repo — F052.2 havde bumpet i SAMME
+> commit, så dér passede tallene.
+>
+> Kontrollen der svarer rigtigt:
+> `git tag --contains <commit> | sort -V | head -1`, krydstjekket mod
+> `npm view <pkg> time`. Er udgivelsestiden FØR commit-tiden, er nummeret
+> forkert læst.
+>
+> **Havde vi pinnet 0.41.1 som først oplyst, havde vi fået en version UDEN
+> rettelsen — og et grønt svar på at vi var dækket.** Samme fejlform som hele
+> dette kort handler om.
 
 Vi så den stadig, fordi vi kører **0.38.0**.
 
@@ -50,7 +70,7 @@ læsefejl, andet repo, og begge gange opdaget først da nogen målte noget andet
   `components` brugte en tur på at videresende den, og måtte selv trække den
   tilbage.
 - **En egen parser i `apps/scout/src/baseline.ts`** (F286.3) bygget for et skel
-  pakken allerede leverer siden 0.41.1: `label: string | null` + `rawLabel`.
+  pakken allerede leverer siden 0.42.0: `label: string | null` + `rawLabel`.
   Deres udgave er bedre end vores — den fanger også tvetydighed, hvor svaret
   prefixer to etiketter.
 
@@ -78,7 +98,18 @@ skridt 2 — ikke omvendt.
 **I scope:**
 
 1. Læs hvad der ændrede sig fra 0.38.0 til 0.47.1. Kilde: CHANGELOG, commits,
-   eller `ai-sdk`-sessionens eget svar — de har tilbudt at svare direkte.
+   eller `ai-sdk`-sessionens eget svar — de har tilbudt at svare direkte, og de
+   kender brudfladerne bedre end en changelog gør. **Tre er allerede navngivet af
+   dem, ugennemgået mod vores `ai.ts`:**
+
+   | fra | brudflade |
+   |---|---|
+   | 0.43+ | `override:{provider}` UDEN `model` KASTER nu. Før kørte den videre med tierens model og postede den til den forkerte udbyder — altså en rettelse, men en der kan vælte et kaldested der levede med fejlen |
+   | 0.45+ | `arguments` på en tool-call er valgfri når man læser en `Message` tilbage → `msg.toolCalls[0].arguments.x` kræver en narrow under strict |
+   | 0.47+ | `usage.region` findes og udledes af det endpoint der FAKTISK svarede |
+
+   Den sidste er ikke breaking, men den er den vi har mest brug for: den svarer
+   på hvor data endte, hvilket `resolveModel()` udtrykkeligt ikke gør.
 2. Opgradér alle tre `package.json` samtidig.
 3. Skriv pinnet så det ikke kan fryse igen.
 4. Kør motorens LLM-veje mod den nye SDK og se dem svare.

@@ -622,17 +622,76 @@ lavede præcis de samme systematiske udfald.
 
 ### Tre udfald, ikke to — og hvorfor det ikke måtte bruges `contracts.classify()`
 
-`@broberg/ai-sdk`s egen `contracts.classify()` har en tavs redning
-(`dist/index.js:2680`): svarer modellen uden for etiket-listen, returneres
+`@broberg/ai-sdk` 0.38's `contracts.classify()` har en tavs redning
+(`dist/index.js:2680`): svarer modellen en etiket uden for listen, returneres
 `labels[0]`. I et produkt er det den rigtige afvejning. I en måling betyder det
-at hvert ikke-svar tælles som et gæt på første etiket — og hver gang den
-tilfældigvis er facit, tælles det som KORREKT. På `admit` er `labels[0]` =
-`approved` og 60 % af facit er `approved`, så de 6 ikke-svar ville være scoret
-rigtige tre ud af fem gange. Fejlen peger i den GRØNNE retning.
+at et sådant svar tælles som et gæt på første etiket — og hver gang den
+tilfældigvis er facit, tælles det som KORREKT. Fejlen peger i den GRØNNE retning.
 
 `baseline.ts` kalder derfor `ai.chat` og tæller tre udfald: korrekt, forkert,
-**intet svar**. De 39 ikke-svar står i tabellen som deres egen søjle. Manglen er
-meldt til `components` som en pakke-mangel frem for omgået i stilhed.
+**intet svar**.
+
+> **RETTELSE (F286.7, 22. september).** Dette afsnit sagde først at «de 6
+> ikke-svar på `admit` ville være scoret rigtige tre ud af fem gange», og
+> regnede dermed med at ALLE ikke-svar ville ramme redningen. Det var en
+> antagelse, ikke en måling — `ai-sdk` påpegede at `parseJsonLoose`
+> (`dist:2611`) KASTER når svaret ikke indeholder `{` eller `[`, så redningen
+> kun fyrer på et PARSELIGT svar. De havde ret i mekanismen.
+>
+> **Så målte vi det, og tallet gør begge vores gæt forældede.**
+
+### De 36 ikke-svar er ÉN ting, ikke to — og det er ikke den vi troede
+
+Målt 22. september kl. 08.19 dansk tid, `--runs 1`, samme model og prompt:
+
+```
+opgave           eks.  træfsikkerhed   udenfor menuen   uparseligt
+source-type        42        100,0 %                0            0
+routing           122         23,0 %               20            0
+neuron-type        80         40,0 %                0            0
+edge-type          34         17,6 %               10            0
+admit              83         69,9 %                6            0
+candidate-kind     83         31,3 %                0            0
+I ALT             444         43,2 %               36            0
+```
+
+**Nul uparselige. Alle 36 var gyldig JSON.** Og hvert eneste af dem var det
+samme svar: `{"label": null}`.
+
+Tre konsekvenser, og de peger hver sin vej:
+
+1. **Mit oprindelige skadestal holdt alligevel.** Er alle 36 parselige, ville
+   de ALLE have ramt `labels[0]`-redningen i 0.38. Antagelsen var uunderbygget
+   da jeg skrev den; målingen giver den ret bagefter. De to ting er ikke det
+   samme, og det er grunden til at rettelsen står her frem for at blive slettet.
+2. **MEN tallet er delvist vores egen prompt.** Vores systemprompt siger
+   udtrykkeligt: «hvis ingen af etiketterne passer, svar `{"label": null}`».
+   `classify()`s egen prompt siger «Choose exactly one label» og inviterer ikke
+   et afslag. Med DEN prompt havde modellen formentlig valgt noget frem for at
+   afvise, og de 36 ville have fordelt sig anderledes. **Tallet beskriver vores
+   harness lige så meget som modellen** — det kan ikke læses som «mistral-small
+   afviser 8 % af opgaverne» uden den sætning ved siden af.
+3. **Modellen kan formatere. Den vælger at lade være med at svare.** Det er en
+   anden slags fejl end den vi ledte efter, og den retter man med et bedre
+   etiket-rum — ikke med et bedre svarformat. `routing` afviser 20 af 122 og
+   `edge-type` 10 af 34; det er de to opgaver hvor etiketterne er henholdsvis
+   uigennemsigtige mappenavne og to rå overskrifter.
+
+**Og det besvarer `ai-sdk`s eget åbne spørgsmål.** De spurgte om et uparseligt
+svar bør være en VÆRDI frem for et kast, når man måler. For denne model på
+denne opgave sker det **0 gange ud af 444**. Ændringen ville blive bygget til et
+tilfælde der ikke indtraf én gang — det argumenterer imod den, ikke for.
+
+`readAnswer()` i `baseline.ts` skelner de to, og `baseline.test.ts` beviser at
+skellet virker med en modprøve i begge retninger: muteres funktionen til altid
+at svare ét stempel, bliver mindst to prøver røde. Det er nødvendigt netop
+fordi svaret blev 36/0 — et split med et nul i ligner en tæller der ikke virker.
+
+**VI KØRER EN FORLDET PAKKE, og det er det egentlige fund.** Fejlen er rettet i
+0.42.0 og igen i 0.47.1. Vi står på 0.38, fordi `^0.38.0` under 1.0.0 er
+patch-only — se **F287**. Når den opgradering lander, migreres `baseline.ts`
+tilbage til `contracts.classify()`: dens `label: string | null` + `rawLabel` er
+samme skel som `readAnswer()`, og den fanger oveni tvetydighed.
 
 ### Kørslen kasseres hvis en anden model svarer
 
