@@ -118,8 +118,14 @@ async function main(): Promise<void> {
 
   const total: Udfald = { hel: 0, fravaerende: 0, knaekket: 0, detaljer: [] };
 
+  // Optional brain slugs as arguments. Measured 22/9: without them the audit
+  // spends over an hour on Forager's Music brain (/derived at 7-10 s per source)
+  // before reaching a single training brain.
+  const only = new Set(process.argv.slice(2));
+
   for (const tenant of TENANTS) {
     for (const kb of rowsOf<KnowledgeBase>(await get(tenant, '/api/v1/knowledge-bases'))) {
+      if (only.size > 0 && !only.has(kb.slug)) continue;
       const u = await maalBrain(tenant, kb);
       if (u.hel + u.knaekket + u.fravaerende === 0) continue;
       console.log(

@@ -42,7 +42,11 @@ SEED = 42
 MAX_PER_LABEL = 800
 VAL_FRACTION = 0.1
 MAX_LEN = 256
-BATCH = 16
+BATCH = 8
+# Two micro-batches of 8 per optimizer step = the same effective batch of 16 the
+# first two tasks ran with. Measured 22/9: batch 16 on routing's longer texts
+# pushed the process to 6.6 GB and the 16 GB Mac into swap — zero steps in 10 min.
+ACCUM = 2
 EPOCHS = 3
 LR = 3e-5
 TASKS = ["source-type", "routing", "neuron-type", "edge-type", "admit", "candidate-kind"]
@@ -164,7 +168,7 @@ def run(task):
     for p in model.get_input_embeddings().parameters():
         p.requires_grad = False
     opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=LR, weight_decay=0.01)
-    steps = EPOCHS * ((len(train) + BATCH - 1) // BATCH)
+    steps = EPOCHS * ((len(train) + BATCH * ACCUM - 1) // (BATCH * ACCUM))
     sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s: min(1.0, (s + 1) / (0.06 * steps)) * max(0.0, (steps - s) / steps))
 
     rng = random.Random(SEED)
@@ -172,12 +176,17 @@ def run(task):
     for epoch in range(EPOCHS):
         model.train()
         total = 0.0
+        micro = 0
         for x, y in batches(train, tok, labels, True, rng):
             loss = torch.nn.functional.cross_entropy(model(**x).logits.float(), y)
-            loss.backward()
+            (loss / ACCUM).backward()
+            total += loss.item() / ACCUM
+            micro += 1
+            if micro % ACCUM:
+                continue
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step(); sched.step(); opt.zero_grad()
-            total += loss.item(); step += 1
+            step += 1
             if step % 50 == 0:
                 print(f"[{task}] epoch {epoch + 1} step {step}/{steps} loss {total / 50:.4f} "
                       f"({time.time() - t0:.0f}s)", flush=True)
@@ -199,7 +208,7 @@ def run(task):
         shutil.rmtree(out)
     model.save_pretrained(out)
     tok.save_pretrained(out)
-    (out / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2))
+    (out / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2, default=lambda o: o.item()))
     g = result["golden"]
     print(f"[{task}] DONE golden always-answer {g['accuracyAlwaysAnswer']:.3f} · with abstain "
           f"{g['right']} right / {g['wrong']} wrong / {g['abstained']} abstained (t={threshold:.2f}) "
