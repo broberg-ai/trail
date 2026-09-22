@@ -699,3 +699,93 @@ samme skel som `readAnswer()`, og den fanger oveni tvetydighed.
 kørslen hvis andet end `mistral-small-latest` har svaret. Et fallback-spring
 midt i en måling ville give et tal der ser rigtigt ud og sammenligner med den
 forkerte model.
+
+## 13. F286.9 — alle 80 kilder kompileret, og en fejl jeg selv byggede ind undervejs
+
+**RESULTATET FØRST.** Scout Training 0001 er drænet: 80 af 80 kilder
+kompileret lokalt på Max-abonnementet, 0 kr. Brugbart træningsmateriale i
+flåden gik fra **35 til 72 kilder med hel rundtur**.
+
+```
+FØR drænet     hel  35   knækket  44   fraværende 301
+EFTER          hel  72   knækket  47   fraværende 261
+   heraf scout-training-0001:   39 hel · 41 knækket · 0 fraværende
+```
+
+### Fejlen, og hvordan den blev fundet
+
+Midtvejs stod 0001 på **2 hel / 38 knækket** — værre end de 8/8 den forrige
+session efterlod. Målingen fandt den; ingen assertion, ingen fejl, intet rødt.
+
+MÅLT, ikke gættet: et `wiki-write`-kald med `sourceDocumentId` **overskriver**
+Neuronens `sourceIdentity`. Sidste skriver vinder.
+
+```
+kurateringskoeen.md   oprettet af F17   → stod som PLAN-PATCH.md
+memex.md              oprettet af as-we-may-think → stod som KARPATHY-LLM-WIKI-ORIGINAL
+log.md                                  → stod som den sidst kompilerede kilde
+```
+
+Compile-promptens trin 4 **kræver** at eksisterende sider opdateres med den nye
+kilde. Følger man den instruktion og sender sin egen `sourceDocumentId` med,
+stempler man hver berørt side som sin egen — og den side dukker samtidig op som
+ens eget afledte output. Begge retninger af rundturen bliver forkerte på én gang.
+
+Det er præcis det farlige udfald `audit-roundtrip.ts` er skrevet for at fange:
+et knækket par ser HELT ud fra den side man kigger fra.
+
+### Rettelsen, og hvordan den blev bevist
+
+**Kun en CREATE fra denne kilde må bære `sourceDocumentId`.** En `str_replace`
+eller `append` på en side en anden kilde har oprettet — og altid `log.md`,
+`glossary.md`, `overview.md`, som deles af hver eneste kilde — skal sendes uden.
+
+Bevist med en læs-tilbage før/efter på det kørende system:
+
+```
+FØR  glossary identity = …/SAAS-SCALING-PLAN.md
+     write UDEN sourceDocumentId → ok
+EFTER glossary identity = …/SAAS-SCALING-PLAN.md   UÆNDRET
+```
+
+Negativ kontrol fra produktionsdata: de tre sider ovenfor, hvor feltet BLEV
+sendt og identiteten skiftede. Efter rettelsen kom de næste kilder ud hele —
+`F87-event-stream.md`, `F94-ambient-audio.md`, `F142-chunked-ingest.md`: 0 uenige.
+
+### Hvad der IKKE kan rettes, og hvorfor
+
+De 41 knækkede par i 0001 er skrevet før rettelsen. Fremad-pegeren kommer fra
+`queue_candidates.metadata.sourceDocumentId` → `wiki_events.sourceCandidateId`;
+der er ingen HTTP-rute der kan fjerne den igen, og
+`/maintenance/backfill-neuron-identity` hjælper ikke — den udleder identitet fra
+`document_references` og springer over de Neuroner der har flere kilder, hvilket
+er præcis de berørte.
+
+Fordelingen, målt:
+
+```
+22 af 41   knækket KUN af delte sider (log.md 34 forekomster, glossary.md 5)
+19 af 41   ægte kryds-opdatering af en anden kildes side
+```
+
+### Det fund der er større end min fejl
+
+**`log.md` kan aldrig indgå i et helt par.** Ni-trins-prompten kræver en
+log-linje ved HVER ingest, og `sourceIdentity` er ét felt. Enhver kilde
+kompileret efter instruktionen vil derfor pege frem på `log.md`, og `log.md` kan
+kun pege tilbage på én af dem.
+
+Det er ikke en fejl i min kørsel — det er en egenskab ved instrumentet: de
+delte sider (`log.md`, `glossary.md`, `overview.md`) og kryds-opdateringer af
+andre kilders sider burde ikke tælle som **afledt output** overhovedet. En side
+en kilde *bidrog til* er ikke en side den *producerede*.
+
+**Beslutningen er ejerens**, og de to muligheder er:
+
+1. **Lad de 41 stå.** 39 hele fra denne brain + 33 fra agent-memory = 72 par.
+   Koster ingenting, og 0001 er så halvt brugbar.
+2. **Kør 0002 fra samme 80 kilder med den rettede skrivemåde.** `trail-research`
+   er urørt, `reingest.ts` er genoptagelig, compile er stadig 0 kr. Forventet
+   resultat: ~80 hele par i stedet for 39.
+
+Mulighed 2 ødelægger intet — den lægger en ny brain ved siden af.
