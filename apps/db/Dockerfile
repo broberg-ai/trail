@@ -14,8 +14,37 @@
 FROM ghcr.io/tursodatabase/libsql-server:latest
 
 USER root
-RUN apt-get update && apt-get install -y --no-install-recommends \
+
+# F222.9 — basis-imaget er Debian 11 (bullseye), som er udløbet. Pakkefilerne
+# er flyttet til archive.debian.org, mens spejlet stadig serverer et INDEKS der
+# peger på dem. `apt-get update` lykkes derfor, og `apt-get install` fejler
+# med 404 på selve .deb-filerne — en fejl der ikke ligner en udløbet udgivelse.
+#
+# MÅLT 22. september 2026, og det aflyser den oplagte rettelse:
+#   deb.debian.org/debian-security/dists/bullseye-security/Release   200
+#   archive.debian.org/debian/dists/bullseye/Release                 200
+#   archive.debian.org/debian-security/…/bullseye-security/Release   404
+#
+# Arkivet bærer altså IKKE security-suiten. «Peg security mod arkivet» kan
+# ikke lade sig gøre; den eneste vej er main fra arkivet. Begge pakker findes
+# der (målt i binary-arm64/Packages): sqlite3 3.34.1-3 · rclone 1.53.3-1.
+#
+# PRISEN, sagt højt: vi installerer uden bullseye-security. sqlite3 og rclone
+# er CLI-værktøjer på en maskine UDEN offentlig IP, som kun motoren når over
+# Flys private net — men det er en reel afvejning, ikke et gratis valg. Den
+# rigtige langsigtede rettelse er et nyere basis-image; det er libsql-serverens
+# valg, ikke vores, og hører i sit eget kort.
+#
+# Kodenavnet læses af imaget frem for at stå her: et hardkodet «bullseye»
+# bliver forkert i tavshed den dag basis-imaget opgraderes, og så installerer
+# vi pakker fra en anden udgivelse end den vi kører.
+RUN . /etc/os-release \
+    && printf 'deb http://archive.debian.org/debian %s main\n' "$VERSION_CODENAME" > /etc/apt/sources.list \
+    && rm -f /etc/apt/sources.list.d/*.list \
+    && printf 'Acquire::Check-Valid-Until "false";\n' > /etc/apt/apt.conf.d/99archive \
+    && apt-get update && apt-get install -y --no-install-recommends \
       sqlite3 rclone ca-certificates \
+    && sqlite3 --version && rclone version | head -1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY start.sh /usr/local/bin/trail-db-start.sh
