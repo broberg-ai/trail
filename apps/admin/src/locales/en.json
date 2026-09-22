@@ -492,6 +492,7 @@
     "byAuthor": "by {who}",
     "conf": "conf {n}",
     "connectorFilterLabel": "Source:",
+    "deviceHint": "The device that captured it — derived from the device's key, not from what it sent",
     "connectorFilterClear": "clear",
     "confidenceFilter": {
       "label": "Confidence:",

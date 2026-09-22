@@ -5,7 +5,8 @@ import {
   ListQueueQuerySchema,
   canonicaliseTagString,
 } from '@trail/shared';
-import { requireAuth, getTenant, getUser, getTrail, getAmbientKbGrant } from '../middleware/auth.js';
+import { requireAuth, getTenant, getUser, getTrail, getAmbientKbGrant, getApiKey } from '../middleware/auth.js';
+import { deviceNameFromKeyName, stampAmbientDevice } from '../services/ambient-device.js';
 import {
   createCandidate,
   resolveCandidate,
@@ -33,7 +34,7 @@ import {
   erAlleredeDestilleret,
   stampDistill,
 } from '../services/ambient-distill.js';
-import { documents } from '@trail/db';
+import { documents, apiKeys } from '@trail/db';
 import { and, eq } from 'drizzle-orm';
 
 export const queueRoutes = new Hono();
@@ -199,6 +200,30 @@ queueRoutes.post('/queue/candidates', async (c) => {
       message: 'Din nøgle er ikke bevilget til den Trail du skriver til.',
       knowledgeBaseId: kbId,
     }, 403);
+  }
+
+  // F201.10 — HVILKEN ENHED. En ambient-nøgle hører til præcis én enhed (den
+  // blev mintet ved device-auth med enhedens navn). Afsenderen udledes af den
+  // nøgle auth-laget lige har godkendt — ikke af klientens `metadata`, som er
+  // en påstand. To brugere på hver sin Mac i samme delte Brain kan dermed
+  // skelnes i køen, og en enhed kan ikke udgive sig for at være en anden.
+  const noegle = getApiKey(c);
+  if (noegle?.scope === 'ambient') {
+    const r = await getTrail(c).db
+      .select({ name: apiKeys.name })
+      .from(apiKeys)
+      .where(eq(apiKeys.id, noegle.id))
+      .get();
+    if (r) {
+      const stemplet = stampAmbientDevice(payload.metadata, {
+        keyId: noegle.id,
+        name: deviceNameFromKeyName(r.name),
+      });
+      if (!stemplet.stamped) {
+        console.warn(`[queue] ambient-kandidat uden objekt-metadata — enheden kunne ikke stemples (nøgle ${noegle.id})`);
+      }
+      payload = { ...payload, metadata: stemplet.metadata };
+    }
   }
 
   // F201.11 — ambient distill-compile. An ambient candidate arrives as a RAW

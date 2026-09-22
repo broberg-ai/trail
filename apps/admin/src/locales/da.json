@@ -492,6 +492,7 @@
     "byAuthor": "af {who}",
     "conf": "sikkerhed {n}",
     "connectorFilterLabel": "Kilde:",
+    "deviceHint": "Enheden der optog det — udledt af enhedens nøgle, ikke af hvad den selv sendte",
     "connectorFilterClear": "ryd",
     "confidenceFilter": {
       "label": "Tillid:",

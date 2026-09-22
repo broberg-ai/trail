@@ -84,6 +84,12 @@ export interface AppBindings {
     // begrænsning optaget på nøglen (mintet før 7/9 2026).
     ambientKbIds?: string[] | null;
     /**
+     * F201.10 — nøglen der godkendte et bearer-kald. Kandidat-ruten læser den
+     * for at stemple hvilken enhed en ambient-kandidat kom fra, så afsenderen
+     * altid kommer fra serverens eget opslag og aldrig fra klientens krop.
+     */
+    apiKey?: { id: string; scope: string | null };
+    /**
      * F160 — how the request was authenticated. Lets routes pick
      * sane defaults for audience-aware behaviour: external Bearer
      * callers default to `tool` audience (no admin-only docs, no

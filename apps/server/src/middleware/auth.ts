@@ -149,6 +149,15 @@ export function getAmbientKbGrant(c: Context): string[] | null {
 }
 
 /**
+ * F201.10 — nøglen der godkendte kaldet, eller null for session-kald. Læses
+ * gennem en funktion af samme grund som getAmbientKbGrant: kbRoutes og
+ * queueRoutes er utypede Hono-routere.
+ */
+export function getApiKey(c: Context): { id: string; scope: string | null } | null {
+  return (c.get('apiKey') as { id: string; scope: string | null } | undefined) ?? null;
+}
+
+/**
  * F263.8 — de Trails en ambient-enhed er godkendt til, eller null når nøglen
  * ikke bærer nogen begrænsning (mintet før 7/9 2026). Null = som i dag.
  */
@@ -269,6 +278,7 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
         const naegtet = await kbGrantRefusal(tenantDb, row.tenant.id, grant, c.req.path);
         if (naegtet) return c.json({ error: naegtet }, 403);
         c.set('ambientKbIds', grant);
+        c.set('apiKey', { id: row.keyId, scope: row.scope });
         // F205.1 — the KB a partner key is confined to. Read from the KEY, so
         // the upload endpoint never takes a kbId the caller could tamper with.
         c.set('partnerKbId', row.kbId);
@@ -306,6 +316,7 @@ export async function requireAuth(c: Context, next: Next): Promise<Response | vo
       const naegtet = await kbGrantRefusal(trail, row.tenant.id, grant, c.req.path);
       if (naegtet) return c.json({ error: naegtet }, 403);
       c.set('ambientKbIds', grant);
+      c.set('apiKey', { id: row.keyId, scope: row.scope });
       c.set('partnerKbId', row.kbId);
       c.set('user', row.user);
       c.set('tenant', row.tenant);

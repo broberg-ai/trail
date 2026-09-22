@@ -63,6 +63,10 @@ interface CandidateOpMeta {
   tags?: string | null;
   /** F95 — which ingestion connector produced this candidate. */
   connector?: string;
+  /** F201.10 — the Ambient device that captured it. Stamped by the ENGINE
+   *  from the API key that authenticated the request, never taken from the
+   *  client, so two people's Macs in one shared Brain can be told apart. */
+  device?: { keyId: string; name: string };
   /** F96 — LLM-generated action recommendation. Arrives async a few
    *  seconds after candidate creation (via candidate_created re-emit). */
   recommendation?: {
@@ -1272,6 +1276,15 @@ function CandidateRow({
           <div class="flex items-center gap-2 mb-1 flex-wrap">
             {meta?.connector ? (
               <ConnectorBadge variant="tag" connector={meta.connector} />
+            ) : null}
+            {meta?.device?.name ? (
+              <span
+                data-testid="queue-candidate-device"
+                title={t('queue.deviceHint')}
+                class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-[color:var(--color-bg)] border border-[color:var(--color-border)] text-[color:var(--color-fg-muted)]"
+              >
+                {meta.device.name}
+              </span>
             ) : null}
             <span
               title={t(`queue.kindHints.${c.kind}`)}
