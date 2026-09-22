@@ -75,3 +75,17 @@ describe('transitions — join på id, ikke på position', () => {
     expect(c['correct→correct']).toBe(1);
   });
 });
+
+describe('transitions — et fejlet kald er ikke en afvisning', () => {
+  test('et kald der aldrig lykkedes tælles ikke som refusal→noget', async () => {
+    const { transitions } = await import('./prompt-ablation.js');
+    // Samme form som runVariant producerer ved en netværksfejl: label null,
+    // outcome no-answer — men failed. Uden spærren ville det her give
+    // refusal→correct = 1, altså en netværksfejl forklædt som en afvisning.
+    const from = [{ task: 'routing', id: 'x', truth: 't', predicted: null, outcome: 'no-answer', failed: true }];
+    const to = [{ task: 'routing', id: 'x', truth: 't', predicted: 't', outcome: 'correct' }];
+    const c = transitions(from as never, to as never);
+    expect(c['refusal→correct']).toBeUndefined();
+    expect(Object.keys(c)).toHaveLength(0);
+  });
+});

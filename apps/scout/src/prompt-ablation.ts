@@ -125,6 +125,10 @@ interface Prediction {
   predicted: string | null;
   outcome: Outcome;
   raw?: string;
+  /** Kaldet lykkedes aldrig. Så findes der intet svar at bedømme — og især
+   *  ingen AFVISNING. Uden flaget ville en ustabil forbindelse lande som
+   *  `no-answer` og puste netop det tal op kortet findes for. */
+  failed?: boolean;
 }
 
 /**
@@ -201,6 +205,7 @@ async function runVariant(
   const jobs = rows.map((row) => async (): Promise<Prediction> => {
     let label: string | null = null;
     let raw: string | undefined = '(kaldet lykkedes aldrig)';
+    let failed = false;
     try {
       const r = await classifyOne(ai, variant, row, labels[row.task]!);
       label = r.label;
@@ -208,6 +213,7 @@ async function runVariant(
       models.add(r.model);
     } catch (err) {
       failures += 1;
+      failed = true;
       process.stderr.write(
         `  ! ${variant.id} ${row.task}/${row.id}: ${err instanceof Error ? err.message : String(err)}\n`,
       );
@@ -221,6 +227,7 @@ async function runVariant(
       predicted: label,
       outcome: label === null ? 'no-answer' : label === row.label ? 'correct' : 'wrong',
       raw,
+      failed,
     };
   });
 
@@ -241,7 +248,9 @@ export function transitions(from: Prediction[], to: Prediction[]): Record<Transi
   const counts = {} as Record<Transition, number>;
   for (const a of from) {
     const b = byId.get(`${a.task}/${a.id}`);
-    if (!b) continue;
+    // Et fejlet kald er ikke en afvisning og ikke et gæt — det er intet. Tælles
+    // det med, bliver en netværksfejl til «refusal→…» i det bærende tal.
+    if (!b || a.failed || b.failed) continue;
     const key = `${outcomeOf(a)}→${outcomeOf(b)}` as Transition;
     counts[key] = (counts[key] ?? 0) + 1;
   }
@@ -315,7 +324,7 @@ async function main(): Promise<void> {
       return {
         id: v.id,
         accuracy: accuracy(preds),
-        refusals: preds.filter((p) => p.outcome === 'no-answer').length,
+        refusals: preds.filter((p) => p.outcome === 'no-answer' && !p.failed).length,
         wrong: preds.filter((p) => p.outcome === 'wrong').length,
         callFailures: results.get(v.id)!.failures,
         byTask: TASKS.map((task) => {
@@ -324,7 +333,7 @@ async function main(): Promise<void> {
             task,
             examples: mine.length,
             accuracy: accuracy(mine),
-            refusals: mine.filter((p) => p.outcome === 'no-answer').length,
+            refusals: mine.filter((p) => p.outcome === 'no-answer' && !p.failed).length,
           };
         }),
       };
