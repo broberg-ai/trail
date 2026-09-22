@@ -1,7 +1,17 @@
-# F286 — Trails egen model til klassificering og ingest
+# F286 — Trail Scout: Trails egen model til klassificering og ingest
 
 **Grundlag:** Christians `TRAIL-LOCAL-MODEL-PLAN.md`, 21. september 2026.
 **Denne plan:** samme mål, omskrevet efter at have målt hvad der faktisk findes.
+**Navnet:** **Trail Scout**, versioneret Scout 1.0, 1.1 osv. Christians valg,
+22. september 2026, ordret: «Som vi har Trail Ambient så kommer modellen til at
+hedde Trail Scout eller bare Scout 1.0 og 1.1 etc. scout går foran på stien og
+spejder». Søskende til Trail Ambient, og samme navnelogik — ét ord der siger
+hvad den GØR, ikke hvad den er bygget af. Koden bor derfor i `apps/scout/` og
+pakken hedder `@trail/scout` (F286.6).
+
+Plan-doc'ens FILNAVN er med vilje ikke ændret med. Seks kort linker til
+`F286-trails-egen-model.md`, og et filnavneskift for kosmetikkens skyld river
+de links over — navnet står i titlen, hvor en læser ser det.
 
 ---
 
@@ -55,7 +65,7 @@ Ejerens ordre 21/9: klassifikatoren først.
 **RETTELSE, 22. september 2026.** Dette afsnit stod med tal jeg havde talt i
 hånden: «~282 kilder, ~737 neuroner». F286.1's script målte dem, og det VÆLTEDE
 grundlaget. Tallene nedenfor kommer fra
-`bun run apps/trail-model/src/export-dataset.ts` og kan køres igen.
+`bun run apps/scout/src/export-dataset.ts` og kan køres igen.
 
 ```
 brain                       kilder  neuroner  kompileret   par
@@ -253,7 +263,7 @@ kontinuerlig træning. De venter på datagrundlaget.
 
 ## 7. Hvor det bor
 
-`apps/trail-model/`, som `apps/ambient-capture`.
+`apps/scout/`, som `apps/ambient-capture`.
 
 **Hvorfor `apps/` og ikke `packages/`:** intet andet importerer den. Motoren
 taler med modellen over HTTP gennem `@broberg/ai-sdk` (planens F4), præcis som
@@ -263,7 +273,7 @@ andre pakker importerer.
 **Todelt, som Ambient er Swift udenpå og TypeScript indeni:**
 
 ```
-apps/trail-model/
+apps/scout/
   src/          TypeScript — dataudtræk, evaluering, sammenligning, integration
   training/     Python — KUN selve træningen (MLX findes ikke i andet)
 ```
@@ -313,7 +323,7 @@ De to ligner hinanden lige indtil nogen anden prøver.
 
 ## 11. F286.2 — etiketterne, og et facit der aldrig trænes på
 
-Målt 22. september 2026 med `bun run apps/trail-model/src/build-dataset.ts`.
+Målt 22. september 2026 med `bun run apps/scout/src/build-dataset.ts`.
 Hele afsnittet kan køres om; intet her er talt i hånden.
 
 ### Seks opgaver, og hvor etiketten kommer fra
@@ -464,9 +474,9 @@ frem for gættet.
 ### Sådan bevises det, og hvordan det blev vist rødt
 
 ```
-bun run apps/trail-model/src/build-dataset.ts     # mål + skriv de to filer
-bun run apps/trail-model/src/verify-split.ts      # bevis adskillelsen
-bun test apps/trail-model/                        # 16 prøver, inkl. de negative
+bun run apps/scout/src/build-dataset.ts     # mål + skriv de to filer
+bun run apps/scout/src/verify-split.ts      # bevis adskillelsen
+bun test apps/scout/                        # 16 prøver, inkl. de negative
 ```
 
 `verify-split.ts` kører seks kontroller og går i exit 1 på den første der

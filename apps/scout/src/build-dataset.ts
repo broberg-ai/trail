@@ -23,7 +23,7 @@
  * READ-ONLY against production. Every call is a GET.
  *
  *   set -a; . ./.env.local-ingest; set +a
- *   bun run apps/trail-model/src/build-dataset.ts
+ *   bun run apps/scout/src/build-dataset.ts
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -294,7 +294,7 @@ function main(rows: Example[], tags: Map<string, number>): void {
       `hyppigste: ${topic.slice(0, 3).map(([l, n]) => `${l}=${n}`).join(', ')}`,
   );
   console.log(`\nSkrevet til ${OUT}/ — label-space.json, train.jsonl, golden.jsonl`);
-  console.log('Bevis adskillelsen:  bun run apps/trail-model/src/verify-split.ts');
+  console.log('Bevis adskillelsen:  bun run apps/scout/src/verify-split.ts');
 }
 
 if (import.meta.main) {

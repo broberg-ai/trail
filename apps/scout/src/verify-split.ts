@@ -9,7 +9,7 @@
  * the one failure that never asks to be looked at. So the claim is measured
  * every time, from the files as they are on disk.
  *
- *   bun run apps/trail-model/src/verify-split.ts
+ *   bun run apps/scout/src/verify-split.ts
  *
  * Exit 0 = the two sets are disjoint and the golden set is usable.
  * Exit 1 = it says which check failed and on which examples.
@@ -110,7 +110,7 @@ function main(): void {
   const goldenPath = join(DATA, 'golden.jsonl');
   if (!existsSync(trainPath) || !existsSync(goldenPath)) {
     console.error(
-      `Mangler ${trainPath} / ${goldenPath}.\nKør først:  bun run apps/trail-model/src/build-dataset.ts`,
+      `Mangler ${trainPath} / ${goldenPath}.\nKør først:  bun run apps/scout/src/build-dataset.ts`,
     );
     process.exit(1);
   }

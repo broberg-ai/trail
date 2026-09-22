@@ -39,8 +39,8 @@
  *
  * READ-ONLY. Every call is a GET. This tool measures; it never writes.
  *
- *   bun run apps/trail-model/src/export-dataset.ts            # count only
- *   bun run apps/trail-model/src/export-dataset.ts --export   # + write pairs
+ *   bun run apps/scout/src/export-dataset.ts            # count only
+ *   bun run apps/scout/src/export-dataset.ts --export   # + write pairs
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

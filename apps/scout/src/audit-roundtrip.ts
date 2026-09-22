@@ -29,7 +29,7 @@
  * READ-ONLY. Hvert kald er et GET.
  *
  *   set -a; . ./.env.local-ingest; set +a
- *   bun run apps/trail-model/src/audit-roundtrip.ts
+ *   bun run apps/scout/src/audit-roundtrip.ts
  */
 import {
   TENANTS,
