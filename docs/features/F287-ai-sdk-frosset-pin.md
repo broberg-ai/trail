@@ -136,6 +136,31 @@ fra pakken.**
 > siger «ja vi bruger den»; importlinjen siger nej. **Spørg
 > importlinjen, ikke navnet.**
 
+> **MÅLT 22. september kl. 13.5x dansk tid, EFTER opgraderingen: tabellen
+> ovenfor var UFULDSTÆNDIG, og sætningen «den kendte brudflade mod os er nul»
+> var forkert.** Den står her frem for at være slettet, af samme grund som
+> målversionen i afsnit 6 gør det.
+>
+> | udgivelse | brudflade | ramte os? |
+> |---|---|---|
+> | ≤0.48.0 | `ModelPrice` blev en UNION: `TokenModelPrice \| MediaModelPrice` | **JA** — to typefejl i `packages/shared/src/model-pricing.ts:79-80` |
+>
+> En medie-prissat model (per billede, per sekund, per 1000 tegn) har
+> **bevidst intet `inputPer1M`** — indtil 0.40.0 bar den `inputPer1M: 0`, og
+> «et felt der ikke gælder» og «en pris der er nul» var det samme tal. Splittet
+> gør det til en oversætterfejl at læse forkert. **Netop dét fangede den her:**
+> vores `modelPricing()` læste tokenfelterne uden at indsnævre, og vores
+> `isFreeModel()` ville have meldt en BETALT billedmodel som gratis.
+>
+> Rettet ved at indsnævre på `p.unit !== 'per_1m_tokens' → null`. `null` er det
+> ærlige svar: funktionens kontrakt ER en per-1M-token-pris, og vi har ikke én.
+> 0/0 ville have genindført præcis den fejl SDK'et splittede typen for at fjerne.
+>
+> **Lektien for næste opgradering:** «nul kaldesteder for `contracts.*`» er en
+> måling af ét eksport-område. Den siger intet om `pricing`, som vi også
+> importerer. En brudflade-tabel er kun så komplet som listen over de områder
+> nogen så efter i.
+
 **Konsekvens for afsnit 5:** blast radius er reelt ÉT kaldested — vores egen
 `ai`-facade — og de syv forbrugere (vision, chat-syntese, oversættelse,
 tag-forslag, source-infer, glossary-backfill, contradiction-lint) går alle

@@ -75,6 +75,18 @@ export function modelPricing(id: string): ModelPricing | null {
   }
   const p = getModelPrice(ALIASES[id] ?? id);
   if (!p) return null;
+  // @broberg/ai-sdk 0.48.0 split ModelPrice into a union: a token-priced model
+  // carries inputPer1M/outputPer1M, a media-priced one (per image, per second,
+  // per 1000 chars) carries `usd` + `unit` and DELIBERATELY has no per-1M rate.
+  // Narrowing is required — reading the token fields off the union is a compile
+  // error now, which is the point of the split.
+  //
+  // A media row returns null here, and that is the honest answer rather than a
+  // conservative one: this function's contract is a per-1M-token price, and we
+  // do not have one. Mapping it to 0/0 would make `isFreeModel` report a PAID
+  // image model as free — the exact "a field that does not apply and a price
+  // that is free are the same number" failure the SDK split the type to remove.
+  if (p.unit !== 'per_1m_tokens') return null;
   return {
     inputPer1M: p.inputPer1M,
     outputPer1M: p.outputPer1M,
