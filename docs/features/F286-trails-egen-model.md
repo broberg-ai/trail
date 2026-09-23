@@ -1115,3 +1115,38 @@ er ikke nok: den belønner en model der kopierer kilden.
 **Non-goals:** ingen produktionsbrug, ingen skyggetilstand for compile (det er
 et senere kort), ingen træning på Sanne-data i denne runde (hendes er PDF og
 kræver OCR, jf. F286.9's noter).
+
+### 16.1 F286.10 — datasættet er bygget (23/9)
+
+```
+                          par   over loft   træning   facit   facit-andel
+scout-training-0001-v2     80          5        63       12        16,0 %
+scout-training-0002        69          1        57       11        16,2 %
+music (wikipedia)         236         76       136       24        15,0 %
+                          385         82       256       47
+```
+
+**Længde (Qwen3.5-tokenizer, system + kilde + facit):** median 3.058, p75 7.458,
+p90 13.804, p95 16.250, max 19.951. Inden for 2.048: 126 · 4.096: 232 ·
+8.192: 303. **Loftet er 8.192**: det beholder 79 % af parrene; de 82 der
+droppes er overvejende lange Wikipedia-artikler (76 af dem). Et par over loftet
+kappes IKKE — en afskåret kilde med et helt facit lærer modellen at opfinde.
+
+**Hvad der er gjort ved facit:**
+- `{#claim-…}`-ankre fjernet (serveren sætter dem selv). 1 tilbage, og den står
+  i backticks som et eksempel i en tekst OM ankre — korrekt.
+- Trails Neuroner har fået æ/ø/å igen, titler og [[links]] med samme funktion.
+- **40 links pegede på sider, som brainen ikke har** (fx «Universet», «Webhouse
+  CMS», og eksempler på link-syntaks). Målt: 40 med og 40 uden
+  stavningsrettelsen, så de stammer fra kompileringen, ikke fra rettelsen. De
+  er lavet om til almindelig tekst; ellers lærer modellen at linke til sider
+  der ikke findes. Efter bygningen: 0 døde links.
+- Music: 0 ikke-Wikipedia-kilder og 0 entity-sider i facit (talt i filen).
+
+**Forbehold:** Music-facit er på ENGELSK med en fast skabelon (Summary, Career,
+Key facts, Connections) — 160 af 303 par. Modellen vil lære den skabelon for
+musik-kilder. Trails egne par er dansk og friere i formen.
+
+Kommandoer: `bun run src/export-dataset.ts --export --with-content
+"--only=scout-training-0001-v2,scout-training-0002,music:^wikipedia-"` ·
+`bun run src/export-titles.ts <brains>` · `training/build_compile.py build 8192`.

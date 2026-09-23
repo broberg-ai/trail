@@ -81,6 +81,19 @@ async function sourceText(tenant: string, id: string): Promise<string | null> {
   }
 }
 
+/**
+ * F286.10 — the Neuron TEXT is the compile model's target. Fetched one at a
+ * time: eight parallel calls on 22/9 slowed every call to 20 s and made the
+ * engine time out another session's writes.
+ */
+async function withNeuronText(tenant: string, neurons: DerivedNeuron[], include: boolean) {
+  const sorted = [...neurons].sort((a, b) => a.id.localeCompare(b.id));
+  if (!include) return sorted;
+  const out = [];
+  for (const n of sorted) out.push({ ...n, content: await sourceText(tenant, n.id) });
+  return out;
+}
+
 export interface BrainMeasurement {
   tenant: string;
   kb: string;
@@ -105,9 +118,14 @@ export interface BrainMeasurement {
 export async function measureBrain(
   tenant: string,
   kb: KnowledgeBase,
-  opts: { exportPairs: boolean },
+  opts: { exportPairs: boolean; sourceFilter?: RegExp; withContent?: boolean },
 ): Promise<BrainMeasurement> {
-  const sources = await allDocuments(tenant, kb.slug, 'source');
+  // F286.10 — Music's deterministic pages (musicbrainz, wikidata, discogs …) are
+  // templates, and a compile model trained on them learns the template. The
+  // filter runs BEFORE /derived, which costs 7-10 s per source on the engine.
+  const sources = (await allDocuments(tenant, kb.slug, 'source')).filter(
+    (s) => !opts.sourceFilter || opts.sourceFilter.test(s.filename ?? ''),
+  );
   const neurons = await allDocuments(tenant, kb.slug, 'wiki');
 
   const pairs: Array<{ source: DocumentRow; neurons: DerivedNeuron[] }> = [];
@@ -141,7 +159,7 @@ export async function measureBrain(
         sourceFilename: p.source.filename ?? null,
         sourcePath: p.source.path ?? null,
         sourceText: await sourceText(tenant, p.source.id),
-        neurons: [...p.neurons].sort((a, b) => a.id.localeCompare(b.id)),
+        neurons: await withNeuronText(tenant, p.neurons, !!opts.withContent),
         // Only edges BETWEEN this source's own Neurons. An edge pointing out
         // of the pair belongs to the wider graph, not to what this document
         // taught — including it would teach the model to invent links to
@@ -181,12 +199,23 @@ export async function measureBrain(
 
 async function main(): Promise<void> {
   const exportPairs = process.argv.includes('--export');
+  const withContent = process.argv.includes('--with-content');
+  // --only=<slug>:<filename regex>,… limits the run to those brains, and each
+  // brain to the sources whose filename matches (empty regex = all sources).
+  const onlyArg = process.argv.find((a) => a.startsWith('--only='));
+  const only = onlyArg
+    ? new Map(onlyArg.slice(7).split(',').map((e) => {
+        const [slug, rx] = e.split(':');
+        return [slug!, rx ? new RegExp(rx) : undefined] as const;
+      }))
+    : null;
   const results: BrainMeasurement[] = [];
 
   for (const tenant of TENANTS) {
     const kbs = rowsOf<KnowledgeBase>(await get(tenant, '/api/v1/knowledge-bases'));
     for (const kb of kbs) {
-      results.push(await measureBrain(tenant, kb, { exportPairs }));
+      if (only && !only.has(kb.slug)) continue;
+      results.push(await measureBrain(tenant, kb, { exportPairs, withContent, sourceFilter: only?.get(kb.slug) }));
     }
   }
 
