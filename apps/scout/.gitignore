@@ -9,3 +9,5 @@ logs/
 training/compile-data/
 training/adapters/
 probe-data/
+training/runpod-out/
+training/__pycache__/

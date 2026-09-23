@@ -19,10 +19,8 @@ Temperature 0 and a fixed cap on output length, so two runs are comparable.
 """
 
 import json
-import re
 import sys
 import time
-import unicodedata
 from pathlib import Path
 
 from mlx_lm import generate, load
@@ -30,38 +28,7 @@ from mlx_lm.sample_utils import make_sampler
 
 ROOT = Path(__file__).resolve().parent.parent
 BASE = "mlx-community/Qwen3.5-4B-MLX-4bit"
-SEP = "<<<NEURON>>>"
-FRONTMATTER = re.compile(r"^\s*---\s*\n(.*?)\n---\s*\n", re.S)
-
-
-def norm(t):
-    t = unicodedata.normalize("NFKD", t.lower())
-    return re.sub(r"[^a-z0-9]+", " ", "".join(c for c in t if not unicodedata.combining(c))).strip()
-
-
-def neurons(text):
-    return [p.strip() for p in text.split(SEP) if p.strip()]
-
-
-def title_of(neuron):
-    m = FRONTMATTER.match(neuron)
-    if not m:
-        return None
-    t = re.search(r"^title:\s*(.+)$", m.group(1), re.M)
-    return t.group(1).strip().strip("\"'") if t else None
-
-
-def valid(neuron):
-    return title_of(neuron) is not None and re.search(r"^#{1,3} \S", neuron, re.M) is not None
-
-
-def copying(output, source):
-    words = lambda s: re.findall(r"\w+", s.lower())
-    src = words(source)
-    grams = {tuple(src[i:i + 8]) for i in range(len(src) - 7)}
-    out = words(output)
-    mine = [tuple(out[i:i + 8]) for i in range(len(out) - 7)]
-    return sum(g in grams for g in mine) / len(mine) if mine else 0.0
+from compile_metrics import copying, neurons, norm, title_of, valid
 
 
 def main():
