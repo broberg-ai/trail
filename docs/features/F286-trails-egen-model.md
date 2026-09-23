@@ -1201,6 +1201,23 @@ broberg.ai og Wikipedia — ingen kundedata forlader huset, og kun til EU).
   `causal_conv1d`, så to beregningsdele kører i en langsom reference-udgave
   (transformers advarer selv). Installeres i næste kørsel.
 
+### 17.1b M1 kan ikke træne compile-modellen — droppet (24/9)
+
+Målt 24/9 kl. ~01:10 med ro på M1 (4 cc-agenter, ingen andre apps): 10-trins
+prøve, `mlx_lm lora`, `mlx-community/Qwen3.5-4B-MLX-4bit`, samme data og
+indstillinger som Runpod (rank 8, 8 lag, max 8.192 tokens, grad-checkpoint).
+
+- Modellen indlæses og validerings-tabet beregnes (0,841).
+- Da træningen startede: fri hukommelse 66 % → 1 % på 40 s, swap næsten fuld.
+  Vagten stoppede kørslen efter ~2 min — **ikke ét træningstrin gennemført.**
+- Maskinen: 16 GB RAM, swap 9,8/11 GB brugt allerede før start, 18 GB fri disk.
+
+**Christians beslutning 24/9: «vi dropper træning på m1».** Træning sker på
+lejet GPU (Runpod, $2–5 pr. kørsel). M1's rolle er at KØRE Scout (inferens,
+afsnit 18 / oMLX), som kræver langt mindre hukommelse end træning.
+Forkastet: kortere eksempler (2.048 tokens) — ville smide de lange, fyldige
+kilder ud, altså træne Scout på noget andet end opgaven; 0.8B-model — for svag.
+
 ### 17.2 Næste runde: et større og BREDERE datasæt (ejerens retning 24/9)
 
 **Christian 24/9:** resultatet ser ikke rystende dårligt ud men potentielt
