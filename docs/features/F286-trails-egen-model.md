@@ -1201,6 +1201,41 @@ broberg.ai og Wikipedia — ingen kundedata forlader huset, og kun til EU).
   `causal_conv1d`, så to beregningsdele kører i en langsom reference-udgave
   (transformers advarer selv). Installeres i næste kørsel.
 
+### 17.2 Næste runde: et større og BREDERE datasæt (ejerens retning 24/9)
+
+**Christian 24/9:** resultatet ser ikke rystende dårligt ud men potentielt
+brugbart — så er vejen et langt større træningsmateriale med par mellem kilde
+og Neuron, og en ny kørsel. En investering i Trail og i fremtidige
+kundespecifikke modeller, ikke noget der gøres hver dag.
+
+**Hvad datasættet ER i dag (talt i 16.1):**
+
+| Kilde | Træningspar | Andel | Art |
+|---|---|---|---|
+| music (Wikipedia) | 136 | 53 % | engelsk, fast skabelon, **1 Neuron pr. kilde**, 0 entitetssider |
+| scout-training-0001-v2 | 63 | 25 % | engelske Trail-planer → danske Neuroner, 2,1 Neuroner/kilde |
+| scout-training-0002 | 57 | 22 % | dansk broberg.ai → dansk, 1,5 Neuroner/kilde |
+
+Over halvdelen af det Scout har lært, er at skrive engelske musiker-biografier
+efter én skabelon. Delresultaterne fra kørsel 5/6 viser mønstret man ville
+forvente: hovedneuronen rammes, **begrebs-neuronerne ved siden af mangler ofte**
+[sandsynlig sammenhæng, ikke bevist].
+
+**Retning for næste runde:**
+1. **Flere par** — mål [gæt] ~1.000 i stedet for 256.
+2. **Bredere** — flere danske kilder af den slags Trail faktisk får: planer,
+   artikler, referater, mails, PDF'er. Music skæres ned til en mindre andel.
+3. **Flere Neuroner pr. kilde** i facit — de eksempler hvor læreren laver
+   begrebs- og entitetssider ved siden af hovedneuronen.
+4. **Facit holdes ude**, og målingen deles op pr. kilde-brain, så en høj
+   music-score ikke skjuler en lav dansk score.
+
+**Pris:** parrene laves af læreren i en interaktiv Max-session → 0 kr., men
+tid. Træning ≈ $2–5 pr. kørsel (målt i aften); selv 1.000 par [gæt] under $20.
+
+**Afventer før planen låses:** de endelige tal fra kørsel 5 og 6, inkl. den
+utrænede basismodel — er den næsten lige så god, er mængde ikke svaret.
+
 ## Reuse (F286.12)
 
 Discovery 23/9: `runpod` → 0 træffere; `gpu` → kun voice-engine (L3-domæne,
