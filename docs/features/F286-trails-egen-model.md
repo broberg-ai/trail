@@ -1186,6 +1186,21 @@ lånes ikke (deres ord).
 genoptag-flow; ingen Sanne-data (datasættet er Trails egne dokumenter,
 broberg.ai og Wikipedia — ingen kundedata forlader huset, og kun til EU).
 
+### 17.1 Kørslerne 23/9 om aftenen — undervejs (tal følger)
+
+- **Region:** Christian 23/9: «Træning af scout må gøres i hele verden, det er
+  ikke kundedata.» `runpod_train.py --anywhere` slår EU-låsen fra — KUN for den
+  generelle Scout (Trails egne dokumenter). Uden flaget gælder EU-låsen;
+  kundedata (Scout-Sanne, F286.14) kører aldrig med det.
+- **Kørsel 5 — 4B:** L40S 48 GB, EU-NL-1, $1,09/t. Top 34,3 GB GPU-hukommelse.
+- **Kørsel 6 — 9B:** A100 80 GB, CA-MTL-3 (Montreal), $1,59/t, top 44,3 GB.
+  Startet ved siden af kørsel 5 — scriptet sletter nu kun Trail-pods ældre end
+  7 timer, ikke alle. Christian 23/9: han havde forventet den største model der
+  passer til kortet; 4B var valgt for at kunne sammenligne med M1.
+- **Hastighed at hente:** poden mangler `flash-linear-attention` og
+  `causal_conv1d`, så to beregningsdele kører i en langsom reference-udgave
+  (transformers advarer selv). Installeres i næste kørsel.
+
 ## Reuse (F286.12)
 
 Discovery 23/9: `runpod` → 0 træffere; `gpu` → kun voice-engine (L3-domæne,
@@ -1299,6 +1314,33 @@ lokalt, $0), som i dag.
 **Skal afgøres senere, med tal:** hvor stor en mængde der tæller som «bulk»
 (tærsklen hvor en GPU-time er billigere end Mistral pr. kilde — [gæt] omkring
 25+ kilder i én portion).
+
+### 18.3 Større model = dyrere inferens — hvor langt op giver mening
+
+**Christians spørgsmål 23/9:** eksploderer prisen for inferens hvis vi træner
+en rigtig stor open source-model? Svar: den stiger trinvist, ikke eksplosivt —
+men Scouts prisfordel mod Mistral forsvinder hurtigt. [Alt nedenfor er gæt
+indtil målt.]
+
+| Model | Kort | Pr. kilde i bulk [gæt] |
+|---|---|---|
+| Qwen3.5-4B | 48 GB | 1–3 øre |
+| Qwen3.5-9B | 48–80 GB | 2–6 øre |
+| Qwen3.5-27B | 80 GB | 5–15 øre — på højde med Mistral (10–30 øre, målt) |
+| Qwen3.5-122B-A10B | flere kort | dyrere end Mistral |
+
+**Undtagelsen: mixture-of-experts.** Qwen3.5-35B-A3B har 35B parametre men
+bruger kun ~3B pr. token → hastighed og pris tæt på 4B, viden fra en langt
+større model. Kræver dog 80 GB hukommelse at ligge i. **Den er næste kandidat
+hvis 9B ikke måler god nok.**
+
+**Hvad der trækker ned ud over prisen:**
+- Store kort er knappe — 23/9 var der NUL ledige 80 GB-kort i EU.
+- Større model = længere kold start (flere GB at hente pr. opstart).
+- M1 kan kun køre de små lokalt; «gratis på eget jern» forsvinder opad.
+
+**Regel:** gå kun op i størrelse når målingen viser at den mindre ikke er god
+nok. Scouts pointe er den MINDSTE model der kan opgaven.
 
 ## Reuse (F286.13)
 
