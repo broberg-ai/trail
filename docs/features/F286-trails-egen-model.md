@@ -1268,6 +1268,38 @@ facit-kilder.
    ændre hvad modellen skriver.
 4. Kan den tale til `@broberg/ai-sdk` som OpenAI-kompatibel provider (husreglen)?
 
+### 18.2 Hvem kompilerer hvad i drift — Scout til bulk, Mistral til enkeltkilder
+
+**Christians beslutning 23/9:** «vi skal anvende Scout (hvis brugbar) til bulk
+sources der er samlet af en kunde og Mistral til drop-vise sources.»
+
+| Situation | Kompileres af | Hvorfor |
+|---|---|---|
+| **Bulk:** en kunde afleverer en samlet mængde kilder (arkiv, eksport, en mappe) | **Scout** på lejet GPU — lej, kør alt, luk | Pr.-time-pris spredt over mange kilder |
+| **Drop-vis:** én kilde her og der i løbet af dagen | **Mistral** (`mistral-small-latest`, cloud-ingest som i dag) | Ingen tomgang, ingen opstartstid |
+| Scout er usikker på en kilde (også i bulk) | **Mistral** (nødudgang) | Kvaliteten falder ikke |
+
+**Grundlaget (ballpark 23/9):**
+- Mistral, **målt** (F199.10): $0,015 for 1 side · $0,019 for 3 sider ·
+  $0,044 for en 15-siders PDF → ca. 10–30 øre pr. kilde. Betaler kun pr. kilde.
+- Scout på vLLM hos Runpod, **ikke målt**: kortet koster pr. time
+  (A40 ≈ $0,49/t, L40S ≈ $1,09/t) uanset last, opstart 5–10 min
+  (voice-engines måling). Med samtidige forespørgsler [gæt] 100–500 kilder/time
+  → 1–3 øre pr. kilde. Tændt døgnet rundt ≈ $12/døgn uanset antal.
+- 1.000 kilder: Mistral ≈ $20–45 · Scout i én bulk-kørsel ≈ $2–5 [gæt].
+- Konsekvens: ved nuværende volumen er besparelsen få hundrede kroner om
+  måneden. Scouts værdi er lige så meget egen model, EU/eget jern,
+  kundetilpasning og en pris der ikke vokser med kundens volumen.
+
+**Forudsætning:** «hvis brugbar» — reglen træder først i kraft når Scouts
+eval_compile-tal på facit-sættet er gode nok, og andelen der sendes videre
+til Mistral er målt. Indtil da kompilerer Mistral alt i cloud (og Max-sessionen
+lokalt, $0), som i dag.
+
+**Skal afgøres senere, med tal:** hvor stor en mængde der tæller som «bulk»
+(tærsklen hvor en GPU-time er billigere end Mistral pr. kilde — [gæt] omkring
+25+ kilder i én portion).
+
 ## Reuse (F286.13)
 
 Discovery 23/9: intet `@broberg/*` for model-servering. `@broberg/ai-sdk`
