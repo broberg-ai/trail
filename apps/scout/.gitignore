@@ -6,3 +6,6 @@ training/.venv/
 # F286.4 — trained weights: ~1 GB per task, regenerable with training/train.py.
 models/
 logs/
+training/compile-data/
+training/adapters/
+probe-data/
