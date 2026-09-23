@@ -1150,3 +1150,45 @@ musik-kilder. Trails egne par er dansk og friere i formen.
 Kommandoer: `bun run src/export-dataset.ts --export --with-content
 "--only=scout-training-0001-v2,scout-training-0002,music:^wikipedia-"` ·
 `bun run src/export-titles.ts <brains>` · `training/build_compile.py build 8192`.
+
+## 17. F286.12 — samme træning på en lejet GPU (Runpod), side om side med M1
+
+**Christians ord 23/9:** «Jeg siger ikke at vi går væk fra at køre en omgang på
+m1 når jeg går i seng, men jeg er nysgerrig efter hvad en ægte GPU kan gøre og
+hvad det koster?» — og efter vurderingen: «Ja, lav kortet, jeg opretter nøglen i
+vaulten».
+
+**Hvorfor:** M1 kunne ikke engang starte 4B med 8.192 tokens, mens flåden kørte
+(F286.11). Et RTX A6000 (48 GB) koster ~$0,50/time (voice-engine målte 23/9).
+Hele jobbet forventes at vare en time og koste ~4 kr. [ikke målt]. Samme træning
+på begge maskiner giver to tal side om side: tid, pris og kvalitet på facit-sættet.
+
+**Arkitektur (voice-engines erfaring, målt hos dem, genbrugt som mønster):**
+- **Pod, ikke serverless;** SECURE, on-demand, aldrig spot.
+- **Kun EU:** `dataCenterIds` = EU-CZ-1, EU-DK-1, EU-FR-1, EU-NL-1, EU-RO-1,
+  EU-SE-1, EU-SE-2. Tjekkes mod Runpods live-liste før hver leje, og hvor poden
+  landede, læses tilbage. Uden låsen landede 6 af deres kørsler i USA.
+- **Kortvalg:** billigste ledige med ≥ 40 GB VRAM; udsolgt → næste. En fejlet
+  pris-forespørgsel må ikke ligne «udsolgt».
+- **Nedrivning i `finally`**, beskyttet mod afbrydelse; en ny leje rydder først
+  vores egne pods ældre end loftet; hårdt tidsloft pr. kørsel (sat efter målt
+  jobtid + margen). Efterladte pods var voice-engines eneste reelle udgift.
+- **Træning:** PyTorch + PEFT/Unsloth på poden (MLX findes kun på Apple). Samme
+  datasæt (`compile-data/`), samme seed, samme loft på 8.192 tokens. Adapteren
+  hentes hjem, poden slettes.
+- **Måling:** samme 47 facit-kilder og samme metrikker som `eval_compile.py`
+  (gyldig Neuron, titel-match, kopi-andel), kørt på poden mens den er lejet.
+
+**Nøgle:** Trails EGEN Runpod-nøgle i cardmem-vaulten. Voice-engines nøgle
+lånes ikke (deres ord).
+
+**Non-goals:** ingen servering af modellen på Runpod; intet automatisk
+genoptag-flow; ingen Sanne-data (datasættet er Trails egne dokumenter,
+broberg.ai og Wikipedia — ingen kundedata forlader huset, og kun til EU).
+
+## Reuse (F286.12)
+
+Discovery 23/9: `runpod` → 0 træffere; `gpu` → kun voice-engine (L3-domæne,
+ikke en pakke). Intet `@broberg/*` dækker GPU-leje. Voice-engines
+`services/forwarder/lejer.py` er mønsteret; bliver det brugt af et tredje repo,
+er den rigtige vej at løfte det til components som en pakke — ikke at kopiere.
