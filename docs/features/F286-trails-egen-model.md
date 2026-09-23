@@ -1315,6 +1315,30 @@ lokalt, $0), som i dag.
 (tærsklen hvor en GPU-time er billigere end Mistral pr. kilde — [gæt] omkring
 25+ kilder i én portion).
 
+**Kandidat til drop-vis: Runpod Serverless (skal måles).** Christian 23/9 pegede
+på Runpod Serverless (skalerer til nul, betaling pr. sekund, ingen tomgang).
+Priser læst 23/9 på runpod.io/pricing (flex): A40/A6000 48 GB $0,00034/s ·
+L40S 48 GB $0,00049/s · A100 80 GB $0,00076/s. Runpods egen beregner er
+«kilder × sekunder × pris/s» — **den medregner ikke kold start.**
+
+Scout 4B på A40, sekunder pr. kilde er et gæt (20–60 s):
+
+| Kilder/dag | Scout 20 s | Scout 60 s | Mistral (målt 10–30 øre) |
+|---|---|---|---|
+| 10 | ~$2/md. | ~$6/md. | ~$4,5–13/md. |
+| 100 | ~$20/md. | ~$61/md. | ~$45–130/md. |
+| pr. kilde | ~5 øre | ~14 øre | 10–30 øre |
+
+**Den ubekendte er kold start.** Runpod lover opstart «på 250 ms» for en
+worker der allerede har modellen; ellers skal ~8 GB indlæses [gæt 30–90 s,
++1–3 cent pr. kold kilde, hvis tiden faktureres — ikke oplyst på prissiden].
+- Varm (kilder tæt efter hinanden): Scout serverless 2–5× billigere end Mistral.
+- Kold (én kilde, så pause): ≈ samme pris som Mistral, og ~1 min længere ventetid.
+
+**Skal måles før serverless kan erstatte Mistral på drop-vise kilder:** kold
+start-tid og om den faktureres; sekunder pr. kilde for Scout på vLLM-workeren;
+EU-lås på et serverless-endpoint (åbent spørgsmål 1 i afsnit 18).
+
 ### 18.3 Større model = dyrere inferens — hvor langt op giver mening
 
 **Christians spørgsmål 23/9:** eksploderer prisen for inferens hvis vi træner
