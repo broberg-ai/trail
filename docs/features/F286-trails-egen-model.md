@@ -1241,6 +1241,33 @@ er arbejde. Det er IKKE besluttet; det er det dette kort skal give tal til.
 **Non-goals:** ingen produktionstrafik; intet kunde-endpoint; ingen
 beslutning om kundespecifikke modeller — kun tal til den.
 
+### 18.1 oMLX som lokal inferens-kandidat på M1
+
+**Christians ord 23/9:** «skriv ind i planen at vi skal teste oMLX til
+inferens.»
+
+[oMLX](https://github.com/jundot/omlx) er en MLX-baseret inferens-server til
+Apple Silicon (ikke et træningsværktøj — træning på M1 forbliver `mlx-lm`).
+Dens kerne er **genbrug af et fælles prompt-præfiks**: KV-cachen gemmes i
+blokke i RAM og på SSD, så en forespørgsel der starter som den forrige ikke
+skal regne præfikset forfra — også efter en genstart. Brugere melder tid til
+første token fra 30–90 s ned til 1–3 s på lange kontekster [deres tal, ikke
+målt af os].
+
+**Hvorfor det rammer os præcist:** compile-prompten har et langt, fast præfiks
+(de 9 trin, tag-vokabularet, entitetslisten) og kun kilden skifter. Det er den
+situation oMLX er bygget til — både for Scout i drift og for eval_compile's 47
+facit-kilder.
+
+**Skal måles, ikke antages:**
+1. Kan oMLX indlæse Qwen3.5-4B/9B **med vores LoRA-adapter** uden at flette?
+   Kan den ikke, er det et fletningstrin før hver ny adapter.
+2. Tid til første token og samlet tid pr. kilde: oMLX mod ren `mlx-lm` på M1,
+   samme adapter, samme 47 facit-kilder — og mod vLLM på Runpod (ovenfor).
+3. Output-kvalitet uændret (samme eval_compile-metrikker) — cachen må ikke
+   ændre hvad modellen skriver.
+4. Kan den tale til `@broberg/ai-sdk` som OpenAI-kompatibel provider (husreglen)?
+
 ## Reuse (F286.13)
 
 Discovery 23/9: intet `@broberg/*` for model-servering. `@broberg/ai-sdk`
