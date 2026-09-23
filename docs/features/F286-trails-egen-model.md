@@ -1201,6 +1201,39 @@ broberg.ai og Wikipedia — ingen kundedata forlader huset, og kun til EU).
   `causal_conv1d`, så to beregningsdele kører i en langsom reference-udgave
   (transformers advarer selv). Installeres i næste kørsel.
 
+### 17.1a Resultat, kørsel 5 — Scout 4B (målt 24/9)
+
+Qwen3.5-4B + LoRA, L40S 48 GB, EU-NL-1, $1,09/t. Træning 693 trin (3 epoker),
+måling på de 47 facit-kilder (aldrig trænet på) + den utrænede model på 15.
+**Pris: $2,95** for hele kørslen (2 t 42 min lejet, heraf ~1 t 25 min træning
+og ~1 t 15 min måling). Adapter (16 MB) hentet til `runpod-out/1790196924/`.
+
+| | Utrænet (15) | **Scout 4B (47)** |
+|---|---|---|
+| Gyldigt Neuron-format | 0 % | **100 %** |
+| Titel-præcision | 0 % | **72 %** |
+| Titel-dækning (facit fundet) | 0 % | **63 %** |
+| Kopi-andel fra kilden | 72 % | **29 %** |
+| Sek. pr. kilde | 74 | 74 |
+
+**Pr. kilde-brain (`score_by_brain.py`) — gennemsnittet skjuler forskellen:**
+
+| Brain | n | præc. | dækn. | Neuroner/kilde (facit) | kopi |
+|---|---|---|---|---|---|
+| music (en, Wikipedia) | 24 | 96 % | 96 % | 1,0 (1,0) | 0,16 |
+| scout-training-0001-v2 (en→da, Trail-planer) | 12 | 71 % | 59 % | 1,2 (1,4) | 0,38 |
+| **scout-training-0002 (da→da, broberg.ai)** | 11 | **25 %** | **19 %** | 1,1 (1,5) | **0,50** |
+
+**Læsning:**
+- Træningen virker: fra ingenting til gyldige Neuroner hver gang. En del af
+  springet fra 0 % er at den utrænede model ikke kender formatet (skilletegn,
+  frontmatter) — indholdsmålet er 63–72 % og kopi-andelen.
+- Music (53 % af træningen, fast skabelon, 1 Neuron/kilde) scorer næsten
+  perfekt og trækker gennemsnittet op.
+- **Dansk → dansk er svagest:** kopierer halvdelen af kilden, rammer sjældent
+  lærerens titler, laver for få Neuroner pr. kilde. Det er præcis den slags
+  materiale der er for lidt af i træningen — bekræfter retningen i 17.2.
+
 ### 17.1b M1 kan ikke træne compile-modellen — droppet (24/9)
 
 Målt 24/9 kl. ~01:10 med ro på M1 (4 cc-agenter, ingen andre apps): 10-trins
