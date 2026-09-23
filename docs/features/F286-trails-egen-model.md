@@ -1070,3 +1070,48 @@ cd apps/scout
 training/.venv/bin/python training/predict.py routing "Zoneterapi-forløb for gravide"
 training/.venv/bin/python training/predict.py admit "<tekst fra en kandidat>"
 ```
+
+## 16. Compile-modellen — plan (F286.10 datasæt, F286.11 træning)
+
+**Ejerens ordre 23/9:** «Fortsæt med compile-modellen.» Afsnit 5 satte den til
+«senere, venter på datagrundlaget». Grundlaget er nu målt, så den tages op.
+
+**Datagrundlag, målt 22-23/9:**
+
+```
+kilde                         par    sprog     facit (Neuron)
+scout-training-0001-v2         80    en→da     Opus-kompileret, 2,1 Neuroner/kilde
+scout-training-0002            69    da→da     Opus-kompileret, 1,5 Neuroner/kilde
+music (kun wikipedia-kilder)  236    en/da→en  Forager, læst og rettet (37 fejl fanget)
+                              ---
+                              385
+```
+
+Deterministiske Music-sider (musicbrainz, wikidata, wikiquote, discogs) og
+entity-siderne er UDE: de er skabeloner, og en model lærer skabelonen.
+
+**Tre ting der skal afgøres i F286.10, før der trænes:**
+
+1. **Længden.** Wikipedia-artikler er lange. En 4B-model med LoRA på 16 GB kan
+   ikke træne på 30.000 tokens pr. eksempel. Længdefordelingen måles, og et loft
+   vælges ud fra den — ikke ud fra hvad der lyder rimeligt.
+2. **Stavningen.** Trails Neuroner skrives om med `restore_danish.py` ved
+   udtrækket (afsnit 15/F286.9), inklusive titler og [[links]] — konsistent
+   inden for datasættet, så intet link peger på en titel der ikke findes.
+3. **Facit.** Mindst 15 % af kilderne holdes ude, lagdelt pr. kilde-brain, og
+   mærket i dataen selv (samme regel som F286.2).
+
+**F286.11 — træningen.** LoRA via MLX (`mlx-lm`) på M1. Modelvalg efter
+afsnit 6 («én modelfamilie»): Qwen3.5 i den største størrelse der kan trænes
+uden swap — måles, ikke antages, fordi F286.4 viste at hukommelsen er den reelle
+grænse på en maskine med mange sessioner. Disken (22 GB fri) skal have en
+oprydning: kun det sidste adapter-checkpoint bevares.
+
+**Hvad «virker» betyder:** på facit-kilderne måles (a) at output er gyldig
+Neuron-markdown med frontmatter, (b) om titlerne svarer til facit, og (c) en
+læst stikprøve — samme metode som F286.9 AC#6. En automatisk tekstlighed alene
+er ikke nok: den belønner en model der kopierer kilden.
+
+**Non-goals:** ingen produktionsbrug, ingen skyggetilstand for compile (det er
+et senere kort), ingen træning på Sanne-data i denne runde (hendes er PDF og
+kræver OCR, jf. F286.9's noter).
