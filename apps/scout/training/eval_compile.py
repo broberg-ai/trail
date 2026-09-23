@@ -1,6 +1,6 @@
 """F286.11 — measure a compile model on the golden sources it never trained on.
 
-  eval_compile.py <name> [--adapter <path>] [--limit N]
+  eval_compile.py <name> [--adapter <path>] [--limit N] [--base <model>]
 
 Runs the model (with or without a LoRA adapter) on every row of
 data/compile-golden.jsonl, writes each output to data/compile-eval-<name>.jsonl
@@ -68,8 +68,9 @@ def main():
     name = sys.argv[1]
     adapter = sys.argv[sys.argv.index("--adapter") + 1] if "--adapter" in sys.argv else None
     limit = int(sys.argv[sys.argv.index("--limit") + 1]) if "--limit" in sys.argv else None
+    base = sys.argv[sys.argv.index("--base") + 1] if "--base" in sys.argv else BASE
     rows = [json.loads(l) for l in open(ROOT / "data" / "compile-golden.jsonl")][:limit]
-    model, tok = load(BASE, adapter_path=adapter)
+    model, tok = load(base, adapter_path=adapter)
     sampler = make_sampler(temp=0.0)
     out_path = ROOT / "data" / f"compile-eval-{name}.jsonl"
     totals = {"neurons": 0, "valid": 0, "tp": 0, "outTitles": 0, "goldTitles": 0, "copying": 0.0}
@@ -101,7 +102,7 @@ def main():
                   f"({time.time() - t0:.0f}s)", flush=True)
     n = len(rows)
     report = {
-        "name": name, "adapter": adapter, "sources": n,
+        "name": name, "base": base, "adapter": adapter, "sources": n,
         "neurons": totals["neurons"],
         "validShare": totals["valid"] / totals["neurons"] if totals["neurons"] else 0.0,
         "titlePrecision": totals["tp"] / totals["outTitles"] if totals["outTitles"] else 0.0,
