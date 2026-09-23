@@ -1192,3 +1192,57 @@ Discovery 23/9: `runpod` → 0 træffere; `gpu` → kun voice-engine (L3-domæne
 ikke en pakke). Intet `@broberg/*` dækker GPU-leje. Voice-engines
 `services/forwarder/lejer.py` er mønsteret; bliver det brugt af et tredje repo,
 er den rigtige vej at løfte det til components som en pakke — ikke at kopiere.
+
+## 18. F286.13 — at KØRE Scout: M1 lokalt mod vLLM på Runpod (en OPTION)
+
+**Christians ord 23/9:** «det er BLOT en option lige som voice-engine er en
+option til at afvikle transkription på en hurtig cloud GPU, så kunne en vLLM
+med vores egen (egne) modeller være en ide til kundespecifikke løsninger. Vi
+starter med at teste Scout træning på Runpod og derefter kan vi afprøve
+afvikling (inferens) på m1 og i vLLM hos Runpod.»
+
+**Rækkefølgen er hans og bindende:** F286.11 (træning M1) → F286.12 (træning
+Runpod) → DETTE kort. Intet her startes før der findes en trænet adapter.
+
+**Hvad Runpods vLLM-worker kan (læst 23/9 i Runpod Hub, worker-vllm v2.27.1,
+vLLM 0.28.0):**
+- Serverless endpoint, pr. sekund, auto-skalering. Svarer i OpenAI-format
+  (`/openai/v1/chat/completions`) OG Anthropic Messages-format
+  (`/openai/v1/messages`) — det sidste er værd at kende, fordi flådens egne
+  værktøjer taler det.
+- Model via `MODEL_NAME` (HF-repo eller mappe), `MAX_MODEL_LEN`,
+  `QUANTIZATION`. Alle andre vLLM-flag sendes igennem som store-bogstavs
+  env-vars eller `VLLM_EXTRA_ARGS` — **siden nævner LoRA eksplicit som noget
+  der virker ad den vej**, så en adapter kan serveres uden først at flette den
+  ind i modellen [skal efterprøves].
+- Alternativt: «Load Balancer»-endpoint med det officielle
+  `vllm/vllm-openai`-image — ingen kø, en forespørgsel under kold start giver
+  FEJL i stedet for at vente, så klienten skal prøve igen.
+
+**Hvad der skal måles, side om side:**
+- svartid pr. kilde (median, p90) og tid til første token — M1 (mlx-lm) mod
+  vLLM på Runpod, samme adapter, samme 47 facit-kilder;
+- pris pr. kompileret kilde i kr. (Runpod) mod 0 kr. (M1);
+- kold start: hvor længe venter den første forespørgsel efter pause;
+- at output er IDENTISK nok til at kvaliteten ikke flytter sig mellem de to
+  (samme eval_compile-metrikker).
+
+**Hvorfor det er interessant ud over Scout:** kundespecifikke modeller — en
+kunde får sin egen adapter, serveret fra et EU-endpoint der kun kører når der
+er arbejde. Det er IKKE besluttet; det er det dette kort skal give tal til.
+
+**Åbne spørgsmål der skal besvares med målinger, ikke antagelser:**
+1. Kan et serverless endpoint låses til EU-datacentre som pods kan?
+   (Voice-engines EU-lås gælder pods; for serverless er det ikke læst.)
+2. Kan Qwen3.5-4B + vores adapter indlæses af vLLM 0.28 uden at flette?
+3. Hvordan kobles det på `@broberg/ai-sdk` — som OpenAI-kompatibel provider
+   med egen base-URL — uden at gå udenom SDK'et (husreglen)?
+
+**Non-goals:** ingen produktionstrafik; intet kunde-endpoint; ingen
+beslutning om kundespecifikke modeller — kun tal til den.
+
+## Reuse (F286.13)
+
+Discovery 23/9: intet `@broberg/*` for model-servering. `@broberg/ai-sdk`
+er integrationspunktet (planens afsnit 8): endpointet skal ind som provider
+dér, ikke som et rå `fetch`.
