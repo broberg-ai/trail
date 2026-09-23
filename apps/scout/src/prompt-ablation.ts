@@ -82,7 +82,7 @@ const HEAD =
   'You are a zero-shot classifier. Choose exactly one label from the provided list. ';
 
 export interface Variant {
-  id: 'ours' | 'ai-sdk' | 'ours-no-refusal';
+  id: 'ours' | 'ai-sdk' | 'ours-no-refusal' | 'ai-sdk-f060';
   /** Hvad varianten ændrer i forhold til `ours`, i én linje — så tabellen kan
    *  læses uden at slå prompten op. */
   changes: string;
@@ -113,6 +113,14 @@ export const VARIANTS: Variant[] = [
     changes: 'ours minus afvisnings-sætningen — intet andet ændret',
     system: `${HEAD}Return ONLY JSON: {"label": "<one of the labels>"}.`,
     provenance: 'ours med sidste sætning fjernet; isolerer invitationen fra confidence-feltet',
+  },
+  {
+    id: 'ai-sdk-f060',
+    changes: 'ai-sdk + afvisnings-sætningen, men JSON-linjen siger stadig "<one of the labels>"',
+    system:
+      `${HEAD}If none of the labels fit, return {"label": null}. Return ONLY JSON: ` +
+      '{"label": "<one of the labels>", "confidence": <0..1>}.',
+    provenance: 'ORDRET fra ai-sdk-sessionens besked #31301 23/9 (F060, commits 8dad976 + e51c051, ikke udgivet)',
   },
 ];
 
@@ -270,6 +278,12 @@ async function main(): Promise<void> {
     throw new Error('MISTRAL_API_KEY mangler. Den ligger i repoets .env — kør fra repo-roden.');
   }
 
+  // --variants a,b kører kun de navngivne. 'ours' kræves altid: overgangene
+  // måles pr. eksempel mod den, og F286.8-rapporten gemte ikke per-eksempel-svar.
+  const variantsArg = args.indexOf('--variants');
+  const chosen = variantsArg >= 0
+    ? VARIANTS.filter((v) => v.id === 'ours' || args[variantsArg + 1]!.split(',').includes(v.id))
+    : VARIANTS.filter((v) => v.id !== 'ai-sdk-f060');
   const labels = labelSpace();
   let rows = readGolden();
   if (limit > 0) {
@@ -283,12 +297,12 @@ async function main(): Promise<void> {
   }
 
   process.stderr.write(
-    `Prompt-ablation mod ${PROVIDER}/${MODEL} — ${rows.length} eksempler × ${VARIANTS.length} varianter\n`,
+    `Prompt-ablation mod ${PROVIDER}/${MODEL} — ${rows.length} eksempler × ${chosen.length} varianter\n`,
   );
 
   const results = new Map<string, { predictions: Prediction[]; failures: number }>();
   const allModels = new Set<string>();
-  for (const v of VARIANTS) {
+  for (const v of chosen) {
     process.stderr.write(`\n${v.id} — ${v.changes}\n`);
     const r = await runVariant(v, rows, labels);
     results.set(v.id, { predictions: r.predictions, failures: r.failures });
@@ -318,8 +332,8 @@ async function main(): Promise<void> {
     examples: rows.length,
     question:
       'Presser en prompt der forbyder afslag fejlene IND i menuen, hvor label:null ikke kan fange dem?',
-    variants: VARIANTS.map((v) => ({ id: v.id, changes: v.changes, provenance: v.provenance, system: v.system })),
-    perVariant: VARIANTS.map((v) => {
+    variants: chosen.map((v) => ({ id: v.id, changes: v.changes, provenance: v.provenance, system: v.system })),
+    perVariant: chosen.map((v) => {
       const preds = results.get(v.id)!.predictions;
       return {
         id: v.id,
@@ -339,7 +353,7 @@ async function main(): Promise<void> {
       };
     }),
     // DET BÆRENDE: hvad blev de afviste eksempler til, pr. eksempel-id.
-    transitions: VARIANTS.filter((v) => v.id !== 'ours').map((v) => {
+    transitions: chosen.filter((v) => v.id !== 'ours').map((v) => {
       const to = results.get(v.id)!.predictions;
       return {
         from: 'ours',
@@ -356,7 +370,9 @@ async function main(): Promise<void> {
     }),
   };
 
-  writeFileSync(join(DATA, 'prompt-ablation.json'), `${JSON.stringify(report, null, 2)}\n`);
+  // En delmængde skriver til sin egen fil, så F286.8's rapport ikke overskrives.
+  const outFile = variantsArg >= 0 ? `prompt-ablation-${chosen.map((v) => v.id).join('+')}.json` : 'prompt-ablation.json';
+  writeFileSync(join(DATA, outFile), `${JSON.stringify(report, null, 2)}\n`);
 
   console.log(`\nPROMPT-ABLATION — ${report.model} · ${report.runAtCopenhagen} dansk tid`);
   console.log(`${rows.length} eksempler, temperatur 0, kun prompten ændres\n`);
@@ -393,7 +409,7 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log(`\nSkrevet: apps/scout/data/prompt-ablation.json`);
+  console.log(`\nSkrevet: apps/scout/data/${outFile}`);
 }
 
 /**
