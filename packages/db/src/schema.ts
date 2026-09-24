@@ -73,6 +73,13 @@ export const knowledgeBases = sqliteTable(
     contradictionLintEnabled: integer('contradiction_lint_enabled', { mode: 'boolean' })
       .notNull()
       .default(true),
+    // F200.3 — per-KB toggle for the maintenance detectors (stale, orphans,
+    // faded heuristics). Default ON. Session KBs are never edited, so every
+    // week a new batch ages past the stale threshold; turning this OFF makes
+    // the scheduled lint pass skip those detectors for the KB.
+    maintenanceLintEnabled: integer('maintenance_lint_enabled', { mode: 'boolean' })
+      .notNull()
+      .default(true),
     /**
      * F263.17.3 — er dette en PRØVE-Brain?
      *

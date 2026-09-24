@@ -560,7 +560,9 @@ export function setKbDecayEnabled(kbId: string, enabled: boolean): Promise<{ dec
 }
 
 /** F200.1 — read the per-KB contradiction-lint toggle. */
-export function getLintSettings(kbId: string): Promise<{ contradictionLintEnabled: boolean }> {
+export function getLintSettings(
+  kbId: string,
+): Promise<{ contradictionLintEnabled: boolean; maintenanceLintEnabled: boolean }> {
   return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/lint-settings`);
 }
 
@@ -574,6 +576,18 @@ export function setKbContradictionLint(
   return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/lint-settings`, {
     method: 'PATCH',
     body: JSON.stringify({ contradictionLintEnabled: enabled }),
+  });
+}
+
+/** F200.3 — turn the maintenance detectors (stale / orphans / faded heuristics)
+ *  on/off for ONE Trail in the scheduled lint pass. */
+export function setKbMaintenanceLint(
+  kbId: string,
+  enabled: boolean,
+): Promise<{ contradictionLintEnabled: boolean; maintenanceLintEnabled: boolean }> {
+  return api(`/api/v1/knowledge-bases/${encodeURIComponent(kbId)}/lint-settings`, {
+    method: 'PATCH',
+    body: JSON.stringify({ maintenanceLintEnabled: enabled }),
   });
 }
 

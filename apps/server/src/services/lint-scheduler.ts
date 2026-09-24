@@ -96,11 +96,12 @@ function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
-type ScannedKB = {
+export type ScannedKB = {
   id: string;
   tenantId: string;
   name: string;
   lintScheduleDays: number | null;
+  maintenanceLintEnabled: boolean;
   createdAt: string;
 };
 
@@ -266,7 +267,7 @@ async function lastScheduledPassFor(
  * shim during transitions. Returns aggregate counters so the caller
  * can roll them up across multiple KBs in one tick.
  */
-async function runLintPassForKb(
+export async function runLintPassForKb(
   trail: TrailDatabase,
   kb: ScannedKB,
   trigger: 'scheduled' | 'manual',
@@ -286,9 +287,14 @@ async function runLintPassForKb(
     metadata: { skipContradictions: SKIP_CONTRADICTIONS, trigger },
   });
 
+  // F200.3 — the maintenance detectors (stale, orphans, faded heuristics) are
+  // skipped when the KB has them switched off. Link-check and contradictions
+  // below keep their own controls.
   try {
-    const report = await runOrphansStale(trail, kb);
-    findings += report.totalEmitted;
+    if (kb.maintenanceLintEnabled) {
+      const report = await runOrphansStale(trail, kb);
+      findings += report.totalEmitted;
+    }
   } catch (err) {
     console.error(
       `[lint-scheduler] orphans-stale failed for KB "${kb.name}":`,
@@ -359,6 +365,7 @@ async function listKBs(trail: TrailDatabase): Promise<ScannedKB[]> {
       tenantId: knowledgeBases.tenantId,
       name: knowledgeBases.name,
       lintScheduleDays: knowledgeBases.lintScheduleDays,
+      maintenanceLintEnabled: knowledgeBases.maintenanceLintEnabled,
       createdAt: knowledgeBases.createdAt,
     })
     .from(knowledgeBases)

@@ -917,6 +917,17 @@
         "saved": "Indstilling gemt",
         "error": "Kunne ikke ændre indstillingen"
       },
+      "maintenanceToggle": {
+        "title": "Vedligeholdelses-tjek",
+        "subtitle": "Natlige tjek for forældede Neuroner (ikke opdateret i 90 dage), forældreløse uden links og udtjente tommelfingerregler — flages til kuratorgennemgang. Slå dette fra for sessions-/log-KB'er der aldrig redigeres, hvor en ny portion ellers flages som forældet hver uge.",
+        "stateOff": "Fra",
+        "stateOn": "Til",
+        "turnOn": "Slå til",
+        "turnOff": "Slå fra",
+        "saving": "Gemmer…",
+        "saved": "Indstilling gemt",
+        "error": "Kunne ikke ændre indstillingen"
+      },
       "ambientMode": {
         "title": "Ambient-tilstand",
         "subtitle": "Én knap gør dette Brain selvstyrende: destilleret viden fra Ambient-optagelser bliver automatisk til Neuroner, ren støj afvises automatisk (ryger ud af køen, ligger i Afvist til revision), og modsigelses-lint slås fra. Resultat: køen holder sig tom uden manuelt arbejde. Gælder kun dette Brain.",

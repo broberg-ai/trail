@@ -23,6 +23,7 @@ import {
   setKbDecayEnabled,
   getLintSettings,
   setKbContradictionLint,
+  setKbMaintenanceLint,
   type LintStatus,
   type IngestSettingsResponse,
   type IngestBackendId,
@@ -128,6 +129,9 @@ export function SettingsTrailPanel() {
   const [kanon, setKanon] = useState<KanonIndstillinger | null>(null);
   const [kanonGemmer, setKanonGemmer] = useState<string | null>(null);
   const [lintToggling, setLintToggling] = useState(false);
+  // F200.3 — maintenance detectors (stale / orphans / faded heuristics).
+  const [maintEnabled, setMaintEnabled] = useState<boolean | null>(null);
+  const [maintToggling, setMaintToggling] = useState(false);
 
   useEffect(() => {
     listKnowledgeBases()
@@ -189,8 +193,14 @@ export function SettingsTrailPanel() {
             .catch(() => setDecayEnabled(null));
           // F200.1 — contradiction-lint on/off for this Trail. Fail-soft.
           getLintSettings(match.id)
-            .then((s) => setLintEnabled(s.contradictionLintEnabled))
-            .catch(() => setLintEnabled(null));
+            .then((s) => {
+              setLintEnabled(s.contradictionLintEnabled);
+              setMaintEnabled(s.maintenanceLintEnabled);
+            })
+            .catch(() => {
+              setLintEnabled(null);
+              setMaintEnabled(null);
+            });
           // F275.2 — de to kontakter for denne Trail. Samme fail-soft.
           getKanonSettings(match.id)
             .then((k) => setKanon(k))
@@ -211,6 +221,20 @@ export function SettingsTrailPanel() {
       setToast({ kind: 'error', text: t('settings.trail.decay.error') });
     } finally {
       setDecayToggling(false);
+    }
+  }
+
+  async function handleToggleMaint() {
+    if (!kb || maintToggling || maintEnabled === null) return;
+    setMaintToggling(true);
+    try {
+      const r = await setKbMaintenanceLint(kb.id, !maintEnabled);
+      setMaintEnabled(r.maintenanceLintEnabled);
+      setToast({ kind: 'success', text: t('settings.trail.maintenanceToggle.saved') });
+    } catch {
+      setToast({ kind: 'error', text: t('settings.trail.maintenanceToggle.error') });
+    } finally {
+      setMaintToggling(false);
     }
   }
 
@@ -823,6 +847,51 @@ export function SettingsTrailPanel() {
                   : lintEnabled
                     ? t('settings.trail.lintToggle.turnOff')
                     : t('settings.trail.lintToggle.turnOn')}
+              </button>
+            ) : null}
+          </div>
+        </section>
+
+        {/* F200.3 — per-Trail maintenance-lint toggle (stale / orphans / faded heuristics). */}
+        <section class="pt-2 border-t border-[color:var(--color-border)]">
+          <div class="mb-3">
+            <h2 class="text-sm font-medium">{t('settings.trail.maintenanceToggle.title')}</h2>
+            <p class="mt-1 text-[11px] text-[color:var(--color-fg-subtle)] max-w-xl">
+              {t('settings.trail.maintenanceToggle.subtitle')}
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span
+              data-testid="settings-maintenance-toggle-state"
+              style={{
+                fontSize: 12,
+                fontWeight: 500,
+                padding: '4px 10px',
+                borderRadius: 999,
+                background: maintEnabled ? 'var(--color-bg-sunk)' : 'var(--color-accent-soft)',
+                color: 'var(--color-fg)',
+              }}
+            >
+              {maintEnabled === null
+                ? '…'
+                : maintEnabled
+                  ? t('settings.trail.maintenanceToggle.stateOn')
+                  : t('settings.trail.maintenanceToggle.stateOff')}
+            </span>
+            {maintEnabled !== null ? (
+              <button
+                type="button"
+                data-testid="settings-maintenance-toggle"
+                onClick={handleToggleMaint}
+                disabled={maintToggling}
+                class="btn active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ padding: '6px 14px', fontSize: 12.5 }}
+              >
+                {maintToggling
+                  ? t('settings.trail.maintenanceToggle.saving')
+                  : maintEnabled
+                    ? t('settings.trail.maintenanceToggle.turnOff')
+                    : t('settings.trail.maintenanceToggle.turnOn')}
               </button>
             ) : null}
           </div>

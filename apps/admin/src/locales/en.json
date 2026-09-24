@@ -917,6 +917,17 @@
         "saved": "Setting saved",
         "error": "Couldn't change the setting"
       },
+      "maintenanceToggle": {
+        "title": "Maintenance lint",
+        "subtitle": "Nightly checks for stale Neurons (not updated in 90 days), orphans without links, and faded heuristics — flagged for curator review. Turn this off for session/log KBs that are never edited, where every week a new batch would be flagged as stale.",
+        "stateOff": "Off",
+        "stateOn": "On",
+        "turnOn": "Turn on",
+        "turnOff": "Turn off",
+        "saving": "Saving…",
+        "saved": "Setting saved",
+        "error": "Couldn't change the setting"
+      },
       "ambientMode": {
         "title": "Ambient mode",
         "subtitle": "One switch makes this Brain self-managing: distilled knowledge from Ambient captures becomes Neurons automatically, pure noise is auto-rejected (dropped from the queue, kept in Rejected for review), and contradiction-lint is turned off. Result: the queue stays empty with no manual work. This Brain only.",

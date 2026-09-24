@@ -3,7 +3,7 @@
  *
  * GET   /api/v1/knowledge-bases/:kbId/lint-settings — current toggles.
  * PATCH /api/v1/knowledge-bases/:kbId/lint-settings — set
- *   `contradictionLintEnabled` (boolean). High-volume session KBs (e.g.
+ *   `contradictionLintEnabled` and/or `maintenanceLintEnabled` (F200.3). High-volume session KBs (e.g.
  *   buddy-sessions) flip this OFF so contradiction-lint stops emitting
  *   contradiction-alert candidates that flood the queue — the root-cause
  *   throttle (see docs/features/F200-tame-contradiction-lint-flood.md).
@@ -22,7 +22,20 @@ export const lintSettingsRoutes = new Hono<AppBindings>();
 
 lintSettingsRoutes.use('*', requireAuth);
 
-const PatchBodySchema = z.object({ contradictionLintEnabled: z.boolean() }).strict();
+// F200.3 — `maintenanceLintEnabled` switches the stale / orphan / faded-heuristic
+// detectors in the scheduled pass. Either field may be sent alone; the other is
+// left as it is.
+const PatchBodySchema = z
+  .object({ contradictionLintEnabled: z.boolean().optional(), maintenanceLintEnabled: z.boolean().optional() })
+  .strict()
+  .refine((b) => b.contradictionLintEnabled !== undefined || b.maintenanceLintEnabled !== undefined, {
+    message: 'at least one of contradictionLintEnabled / maintenanceLintEnabled',
+  });
+
+const settingsColumns = {
+  contradictionLintEnabled: knowledgeBases.contradictionLintEnabled,
+  maintenanceLintEnabled: knowledgeBases.maintenanceLintEnabled,
+};
 
 lintSettingsRoutes.get('/knowledge-bases/:kbId/lint-settings', async (c) => {
   const trail = getTrail(c);
@@ -31,13 +44,13 @@ lintSettingsRoutes.get('/knowledge-bases/:kbId/lint-settings', async (c) => {
   if (!kbId) return c.json({ error: 'Knowledge base not found' }, 404);
 
   const kb = await trail.db
-    .select({ contradictionLintEnabled: knowledgeBases.contradictionLintEnabled })
+    .select(settingsColumns)
     .from(knowledgeBases)
     .where(and(eq(knowledgeBases.id, kbId), eq(knowledgeBases.tenantId, tenant.id)))
     .get();
   if (!kb) return c.json({ error: 'Knowledge base not found' }, 404);
 
-  return c.json({ contradictionLintEnabled: kb.contradictionLintEnabled });
+  return c.json(kb);
 });
 
 lintSettingsRoutes.patch('/knowledge-bases/:kbId/lint-settings', async (c) => {
@@ -53,9 +66,15 @@ lintSettingsRoutes.patch('/knowledge-bases/:kbId/lint-settings', async (c) => {
 
   await trail.db
     .update(knowledgeBases)
-    .set({ contradictionLintEnabled: parsed.data.contradictionLintEnabled })
+    .set(parsed.data)
     .where(and(eq(knowledgeBases.id, kbId), eq(knowledgeBases.tenantId, tenant.id)))
     .run();
 
-  return c.json({ contradictionLintEnabled: parsed.data.contradictionLintEnabled });
+  // Read back from the DB, so the answer is what was stored — not an echo.
+  const kb = await trail.db
+    .select(settingsColumns)
+    .from(knowledgeBases)
+    .where(and(eq(knowledgeBases.id, kbId), eq(knowledgeBases.tenantId, tenant.id)))
+    .get();
+  return c.json(kb);
 });
