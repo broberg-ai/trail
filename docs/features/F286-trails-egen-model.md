@@ -1526,3 +1526,72 @@ nok. Scouts pointe er den MINDSTE model der kan opgaven.
 Discovery 23/9: intet `@broberg/*` for model-servering. `@broberg/ai-sdk`
 er integrationspunktet (planens afsnit 8): endpointet skal ind som provider
 dér, ikke som et rå `fetch`.
+
+## 19. F286.15 — det danske træningssæt: 2.500 kilder, 100 % dansk output
+
+**Christians retning 24/9:** «Vi har 98 % fokus på dansk og danske kunder så
+hvorfor ikke lave en 100 % dansk trænet scout — det er jo konceptet der er
+interessant: at få den trænet i at compile Neuroner meget billigt for os.»
+Mål: **2.500 kilder**. Valgt: **kun den danske vej** (se forkastet nedenfor).
+
+**Hvorfor:** kørsel 5/6 (17.1a, 17.1a2) viste at Scout rammer 96 % på engelske
+music-biografier men kun 19 % dækning på dansk → dansk, og at 9B ikke løser
+det. Flaskehalsen er data: 57 af 256 par var dansk → dansk.
+
+### Sammensætning
+
+| Kilde → Neuron | Andel | Hvorfor |
+|---|---|---|
+| dansk → dansk | ~90 % | Det danske kunder sender |
+| engelsk → dansk | ~10 % | Danske kunder dropper også engelske PDF'er/manualer |
+| engelsk → engelsk | 0 % | Music-biografierne udgår |
+
+**Kilder, i prioriteret rækkefølge:**
+1. **Sannes brain** — zoneterapi-fagviden, ingen patientdata (Christian 24/9,
+   17.1). 82 kilder / 239 Neuroner talt 21/9; kilderne er PDF og skal have
+   tekst trukket ud først (F286.9).
+2. **Flådens egne danske dokumenter** — plan-docs, referater, breve,
+   webhouse.dk / broberg.ai.
+3. **Folketinget (ft.dk åbne data)** — referater, betænkninger, lovforslag.
+4. **Kommunale dagsordener og referater.**
+5. **Danish Dynaword** (Hugging Face) — plukket efter genre, ikke i bulk.
+6. **Retsinformation** og **spredt dansk Wikipedia** — små andele.
+
+Genren skal ligne det Trail får: planer, referater, rapporter, artikler, PDF'er.
+Ingen enkelt skabelon må dominere (music-fælden).
+
+### Sådan
+
+- **Facit først:** ~150 danske facit-kilder udtages FØR træningspar laves og
+  bruges aldrig til træning. I dag er kun 11 danske i facit — for få til at
+  måle sikkert.
+- **Læreren** kompilerer i interaktive Max-sessioner (0 kr.). Tiden er den
+  reelle pris: [gæt] 1–3 min pr. kilde → 40–125 sessionstimer. Måles på de
+  første 100 før der loves en dato.
+- **Etaper med måling:** træn og mål ved 500, 1.000 og 2.500 par. Flader
+  dansk dækning ud, stoppes der; stiger den stadig ved 2.500, går vi højere.
+- **Token-loft:** dansk fylder flere tokens end engelsk. Andelen af kilder der
+  rammer 8.192-loftet måles ved datasæt-bygningen, ikke under træningen.
+- **Træning:** Runpod, `--anywhere` (intet persondata). Pris [gæt ud fra
+  kørsel 5]: 12–15 t på L40S ≈ $15–20 for 2.500 par.
+
+### Non-goals
+
+- Ingen engelsk Scout med oversættelseslag (forkastet, se nedenfor).
+- Ingen persondata i datasættet. Findes der persondata i en kilde, er den ude.
+- Ingen ny modelstørrelse — 4B (17.1a2).
+
+### Forkastet
+
+- **Engelsk Scout + oversættelse til dansk** (Christians spørgsmål 24/9):
+  kilderne er danske alligevel, så kun output-sproget skifter; fagord, navne og
+  titler slides i en rundtur dansk → engelsk → dansk, og titler skal være ens
+  for at links holder; et ekstra oversættelsestrin koster enten et Mistral-kald
+  pr. Neuron eller en model mere. Christian 24/9: «Kun den danske del.»
+- **Blandet sprog som i dag (53 % engelsk music):** lærer Scout noget ingen
+  kunde beder om.
+
+## Reuse (F286.15)
+
+Intet nyt: samme træningsvej (`runpod_train.py`, `remote_train.py`), samme
+måling (`eval_compile`, `score_by_brain.py`), samme lærer-flow som F286.10.
