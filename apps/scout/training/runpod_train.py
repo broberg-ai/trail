@@ -123,7 +123,7 @@ def main():
     flag = lambda name, default: next((a.split("=", 1)[1] for a in sys.argv if a.startswith(f"--{name}=")), default)
     base, min_gb = flag("base", "Qwen/Qwen3.5-4B"), int(flag("min-gb", "40"))
     # --anywhere: Christian 23/9 — "træning af scout må gøres i hele verden, det er ikke kundedata".
-    # ONLY for the generic Scout (Trail's own documents). Customer data (Sanne, F286.14) never passes it.
+    # Allowed for any dataset WITHOUT personal data (incl. Sanne's zone-therapy facts, Christian 24/9). Personal data never passes it.
     anywhere = "--anywhere" in sys.argv
     global MAX_MINUTES
     MAX_MINUTES = int(flag("max-minutes", str(MAX_MINUTES)))

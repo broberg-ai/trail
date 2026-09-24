@@ -257,8 +257,9 @@ kontinuerlig træning. De venter på datagrundlaget.
   Ministral 3. Tid rækker ikke til tre. Vælg én, mål den, skift kun ved
   dokumenteret fejl.
 - **Ingen ny målestok.** `apps/model-lab` er den.
-- **Ingen kundedata ud af huset.** Tilladelsen til Sanne-data gælder træning på
-  eget jern — M1 og cb-ubuntu er begge eget jern.
+- **Ingen PERSONDATA ud af huset.** Sannes brain er fagviden om zoneterapi,
+  ikke patientdata, og må trænes hvor som helst (Christian 24/9, se 17.1).
+  Grænsen går ved persondata, ikke ved hvem der ejer teksten.
 - **Ingen udskiftning af den kørende pipeline i denne runde.** Skyggetilstand
   kun. Kaskaden er en senere beslutning på målte tal.
 - **Ingen træning på cb-ubuntu.** Den serverer. Se afsnit 4.
@@ -1183,15 +1184,21 @@ på begge maskiner giver to tal side om side: tid, pris og kvalitet på facit-s�
 lånes ikke (deres ord).
 
 **Non-goals:** ingen servering af modellen på Runpod; intet automatisk
-genoptag-flow; ingen Sanne-data (datasættet er Trails egne dokumenter,
-broberg.ai og Wikipedia — ingen kundedata forlader huset, og kun til EU).
+genoptag-flow. (Oprindeligt også «ingen Sanne-data, kun EU» — ophævet af
+Christian 23/9 og 24/9, se 17.1.)
 
 ### 17.1 Kørslerne 23/9 om aftenen — undervejs (tal følger)
 
 - **Region:** Christian 23/9: «Træning af scout må gøres i hele verden, det er
-  ikke kundedata.» `runpod_train.py --anywhere` slår EU-låsen fra — KUN for den
-  generelle Scout (Trails egne dokumenter). Uden flaget gælder EU-låsen;
-  kundedata (Scout-Sanne, F286.14) kører aldrig med det.
+  ikke kundedata.» `runpod_train.py --anywhere` slår EU-låsen fra.
+- **Sannes data, Christian 24/9:** «Sannes data er hendes fakta om zoneterapi
+  og der er NULL patient data i så det er stadig en god brugbar kilde og
+  træning kan foregå alle steder i verden.» En pod er et lukket miljø; der
+  kommer ikke tekst ud af den. Samme vurdering som at bruge Anthropic til
+  kodning. **Reglen er derfor: `--anywhere` er tilladt for alt uden
+  persondata** — Trails egne dokumenter, broberg.ai, Wikipedia OG Sannes
+  fagviden. EU-låsen er stadig standard og bruges, hvis et datasæt nogensinde
+  indeholder persondata (fx klient- eller patientoplysninger).
 - **Kørsel 5 — 4B:** L40S 48 GB, EU-NL-1, $1,09/t. Top 34,3 GB GPU-hukommelse.
 - **Kørsel 6 — 9B:** A100 80 GB, CA-MTL-3 (Montreal), $1,59/t, top 44,3 GB.
   Startet ved siden af kørsel 5 — scriptet sletter nu kun Trail-pods ældre end
@@ -1333,6 +1340,11 @@ forvente: hovedneuronen rammes, **begrebs-neuronerne ved siden af mangler ofte**
 1. **Flere par** — mål [gæt] ~1.000 i stedet for 256.
 2. **Bredere** — flere danske kilder af den slags Trail faktisk får: planer,
    artikler, referater, mails, PDF'er. Music skæres ned til en mindre andel.
+   Kandidater: flådens egne danske dokumenter, **Sannes brain (zoneterapi-
+   fagviden, 82 kilder / 239 Neuroner talt 21/9 — Neuronerne findes allerede,
+   så parrene er tæt på færdige [sandsynligt]; kilderne er PDF og skal have
+   tekst trukket ud først, jf. F286.9)**, Folketingets og kommunernes referater, Danish
+   Dynaword, Retsinformation, spredt dansk Wikipedia.
 3. **Flere Neuroner pr. kilde** i facit — de eksempler hvor læreren laver
    begrebs- og entitetssider ved siden af hovedneuronen.
 4. **Facit holdes ude**, og målingen deles op pr. kilde-brain, så en høj
