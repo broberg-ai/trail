@@ -1591,6 +1591,10 @@ Ingen enkelt skabelon må dominere (music-fælden).
 - **Blandet sprog som i dag (53 % engelsk music):** lærer Scout noget ingen
   kunde beder om.
 
+**Engelsk senere:** Christian 24/9: «Virker konceptet er det jo nemt at
+replikere til en ren engelsk scout model.» Samme pipeline og måling, kun
+datasættet skiftes — en selvstændig kørsel, ikke en blanding.
+
 ## Reuse (F286.15)
 
 Intet nyt: samme træningsvej (`runpod_train.py`, `remote_train.py`), samme
