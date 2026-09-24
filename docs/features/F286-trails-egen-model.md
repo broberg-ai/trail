@@ -1234,6 +1234,39 @@ og ~1 t 15 min måling). Adapter (16 MB) hentet til `runpod-out/1790196924/`.
   lærerens titler, laver for få Neuroner pr. kilde. Det er præcis den slags
   materiale der er for lidt af i træningen — bekræfter retningen i 17.2.
 
+### 17.1a2 Resultat, kørsel 6 — Scout 9B, og valget af modelstørrelse (24/9)
+
+Qwen3.5-9B + LoRA, samme data og indstillinger, A100 80 GB, CA-MTL-3
+(`--anywhere`, generisk data), $1,59/t. **Pris: $3,80** (2 t 23 min lejet).
+Adapter hentet til `runpod-out/1790199605/`.
+
+| Alle 47 facit-kilder | 4B | 9B |
+|---|---|---|
+| Gyldigt format | **100 %** | 94 % |
+| Titel-præcision / -dækning | **72 % / 63 %** | 67 % / 56 % |
+| music | 96 / 96 % | 83 / 83 % |
+| Trail-planer (en→da) | 71 / 59 % | 69 / 53 % |
+| broberg.ai (da→da) | 25 / 19 % | 27 / 19 % |
+| Kopi-andel | 29 % | 27 % |
+
+**Retfærdig sammenligning — de SAMME 15 kilder (Trail-planer + 3 broberg.ai):**
+
+| | gyldigt | præc. | dækn. | kopi |
+|---|---|---|---|---|
+| 4B utrænet | 0 % | 0 % | 0 % | 0,72 |
+| **4B trænet** | **100 %** | 61 % | **50 %** | 0,43 |
+| 9B utrænet | 51 % | 28 % | 41 % | 0,67 |
+| 9B trænet | 84 % | 62 % | 45 % | 0,37 |
+
+**Beslutningsgrundlag:**
+- Den utrænede 9B kan allerede noget; efter træning lander 4B og 9B samme sted.
+- **4B vælges:** samme kvalitet, 100 % gyldigt format, billigere at træne og
+  køre, og kan køres på M1 (afsnit 18.3: gå kun op i størrelse når målingen
+  kræver det — det gør den ikke).
+- **Flaskehalsen er data, ikke modelstørrelse:** dansk→dansk er 19 % dækning i
+  BEGGE modeller. Næste runde = 17.2 (flere, bredere, danske par).
+- Aftenens samlede Runpod-forbrug (kørsel 2–6): ≈ $6,80.
+
 ### 17.1b M1 kan ikke træne compile-modellen — droppet (24/9)
 
 Målt 24/9 kl. ~01:10 med ro på M1 (4 cc-agenter, ingen andre apps): 10-trins
