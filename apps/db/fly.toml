@@ -35,6 +35,7 @@ primary_region = "arn"
   destination = "/var/lib/sqld"
 
 [[vm]]
-  memory = "1gb"
+  memory = "2gb"
+  # F391 24/9 2026 (ejerens GO): 7d-top 911 MB af 1024 — over 80 %, derfor 2 GB
   cpu_kind = "shared"
   cpus = 1
