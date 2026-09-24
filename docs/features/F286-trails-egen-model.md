@@ -1267,6 +1267,31 @@ Adapter hentet til `runpod-out/1790199605/`.
   BEGGE modeller. Næste runde = 17.2 (flere, bredere, danske par).
 - Aftenens samlede Runpod-forbrug (kørsel 2–6): ≈ $6,80.
 
+### 17.1a3 Kortets AC holdt op mod målingerne (24/9)
+
+Tal fra `runpod-out/run-1790196924.json` (4B) og `run-1790199605.json` (9B),
+skrevet af `runpod_train.py` selv. Kurs: ECB 23/9, 1 USD = 6,5512 kr.
+
+| | Kørsel 5 — 4B | Kørsel 6 — 9B |
+|---|---|---|
+| Kort | L40S 48 GB | A100 80 GB PCIe |
+| Datacenter (læst tilbage fra API) | EU-NL-1 | CA-MTL-3 (`--anywhere`, ejerens ok) |
+| Pris/time | $1,09 | $1,59 |
+| Opstart (pod klar) | 108 s | 97 s |
+| Pakke-installation | 12 s | 14 s |
+| Træning + måling på poden | 9.619 s (2 t 40 min) | 8.477 s (2 t 21 min) |
+| Samlet lejet | 9.746 s | 8.606 s |
+| **Samlet pris** | **$2,95 ≈ 19,33 kr.** | **$3,80 ≈ 24,90 kr.** |
+
+- **Nedrivning:** Runpod-kontoen listet 24/9 efter kørslerne — 0 Trail-pods,
+  0 pods i alt. Tidsloftet i koden er `MAX_MINUTES = 180`; den længste målte
+  kørsel lejede 162 min.
+- **Nøgle:** hentes fra vaulten på Trails egen secret (`SECRET_ID` i
+  `runpod_train.py`). `scripts/scan-secrets.ts`: clean.
+- **«Side om side med M1»:** kan ikke opfyldes som skrevet — M1 kunne ikke
+  gennemføre ét træningstrin, og træning på M1 er droppet af Christian (17.1b).
+  Sammenligningen er i stedet utrænet vs. trænet og 4B vs. 9B (17.1a, 17.1a2).
+
 ### 17.1b M1 kan ikke træne compile-modellen — droppet (24/9)
 
 Målt 24/9 kl. ~01:10 med ro på M1 (4 cc-agenter, ingen andre apps): 10-trins
