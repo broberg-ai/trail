@@ -1595,6 +1595,54 @@ Ingen enkelt skabelon må dominere (music-fælden).
 replikere til en ren engelsk scout model.» Samme pipeline og måling, kun
 datasættet skiftes — en selvstændig kørsel, ikke en blanding.
 
+### 19.1 Datasættet og regnestykket (25/9)
+
+**Kilder hentet af Forager (F008), hver kildetype stikprøve-godkendt af trail:**
+
+| Kildetype | Antal | Status 25/9 |
+|---|---|---|
+| Folketinget (Dynaword `folketingets-dokumenter`) | 300 | godkendt |
+| Kommunale referater (Dynaword `municipality_meetings`) | 250 | godkendt |
+| Dynaword-bredde (10 undersæt × 25) | 250 | godkendt |
+| Retsinformation (≥50 % vejledninger) | 100 | i gang |
+| Dansk Wikipedia | 100 | venter |
+
+Filtre, målt og strammet undervejs: ingen persondata (brevform, mail-hoveder,
+«Kære …», hilsner, bylines, krimi-nyheder med navngivne), ingen før-1948-
+stavning, ingen norsk (`ncc_newspaper` udelukket), tilfældigt træk med fast
+seed, maks-andele pr. dokumenttype.
+
+**Gamle par der tages med:** broberg.ai da→da (57) og Trail-planer en→da (63).
+**Ikke med:** music en→en (136). I alt ~1.120 kilder, heraf ~15 % facit
+(`GOLDEN_FRACTION` i `build_compile.py`) → ~950–1.000 træningspar.
+
+**Regnestykke** (grundlag kørsel 5: 7,4 s/trin og 74 s/facit-kilde på L40S,
+$1,09/t) [gæt, ikke målt for dansk]:
+
+| Del | Tid | Pris |
+|---|---|---|
+| Træning, 3 epoker (~3.150 trin × 7–13 s) | 6,5–11,5 t | $7–12,5 |
+| Måling på ~150 danske facit (75–120 s pr. kilde) | 3–5 t | $3,5–5,5 |
+| **Pr. fuld kørsel** | **10–17 t** | **$11–18 ≈ 70–120 kr.** |
+| Tre etaper (500 / 1.000 / alle) | | $30–45 ≈ 200–300 kr. |
+
+Kørsler over 3 t kræver `--max-minutes` (fx 1080); `STALE_MINUTES` er hævet
+til 1260, så en parallel kørsel ikke rydder en lang kørsels pod.
+
+### 19.2 Kompileringen (læreren = `/local-ingest` i Max)
+
+1. `bun run apps/scout/src/upload-folder.ts --dir <forager>/out/scout-da-1000 --to "Scout Training 0004 DA"`
+   lægger kilderne i én ny brain, parkeret (`?localCompile=true`) — 0 kr. i skyen.
+2. Den nye brain står IKKE på buddys probe-allowlist (F191.9), så den
+   auto-dispatches ikke; kompilering startes bevidst i portioner.
+3. **Kvote-måling først:** de første 50 kompileres med Opus i Max, og forbruget
+   måles. Christians spørgsmål 25/9 var om 1.000 kompileringer tømmer Max-kvoten —
+   [gæt] 20–40k tokens pr. kilde ≈ 20–40 mio. i alt. Ud fra målingen vælges
+   tempo (fx 150–200/dag), Sonnet som lærer, eller Mistral Large via API
+   (~150–300 kr., [gæt], lavere facit-kvalitet).
+4. `export-titles.ts` + `build_compile.py build 8192` bygger parrene.
+5. Træning i etaper på Runpod.
+
 ## Reuse (F286.15)
 
 Intet nyt: samme træningsvej (`runpod_train.py`, `remote_train.py`), samme

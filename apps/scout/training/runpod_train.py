@@ -41,7 +41,7 @@ GPUS = ["NVIDIA RTX A6000", "NVIDIA A40", "NVIDIA L40S", "NVIDIA RTX 6000 Ada Ge
         "NVIDIA A100-SXM4-80GB", "NVIDIA H100 80GB HBM3", "NVIDIA H100 PCIe"]
 IMAGE = "runpod/pytorch:1.0.3-cu1281-torch280-ubuntu2404"
 MAX_MINUTES = 180
-STALE_MINUTES = 420  # longer than any ceiling we pass with --max-minutes
+STALE_MINUTES = 1260  # longer than any ceiling we pass with --max-minutes (F286.15: a ~1.050-pair run is 10–17 h)
 SSH_KEY = Path.home() / ".ssh" / "trail_runpod_ed25519"
 # The python.org build in the venv ships without the system's root certificates;
 # certifi's bundle is the standard list, so verification stays ON.
