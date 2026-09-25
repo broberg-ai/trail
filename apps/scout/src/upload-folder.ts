@@ -1,9 +1,11 @@
 /**
- * F286.15 — læg Foragers danske kilder i en Scout Training-brain, PARKERET til
- * lokal kompilering (?localCompile=true), så læreren kompilerer dem i en
- * interaktiv Max-session til 0 kr. Samme upload-rute og samme flag som
- * reingest.ts — forskellen er kun hvor teksten kommer fra (en mappe med
- * manifest.jsonl i stedet for en eksisterende brain).
+ * F286.15 — læg Foragers danske kilder i en Scout Training-brain.
+ *
+ * Læreren er Trail Clouds egen compile (Mistral), Christians valg 25/9: den er
+ * målt god nok, den kører i drift, og Scouts opgave er at overtage netop dét
+ * arbejde. Default er derfor en almindelig upload, som motoren kompilerer.
+ * --local parkerer i stedet (?localCompile=true) til /local-ingest i Max, som
+ * reingest.ts gør.
  *
  * Kør:
  *   bun run apps/scout/src/upload-folder.ts --dir <forager>/out/scout-da-1000 --to "Scout Training 0004 DA" --dry-run
@@ -60,7 +62,8 @@ async function main(): Promise<void> {
   const kbIdArg = arg('--kb-id');
   const limit = Number(arg('--limit') ?? Infinity);
   const dryRun = args.includes('--dry-run');
-  if (!dir || (!to && !kbIdArg)) throw new Error('brug: --dir <mappe> (--to "<navn>" | --kb-id <id>) [--limit N] [--dry-run]');
+  const local = args.includes('--local');
+  if (!dir || (!to && !kbIdArg)) throw new Error('brug: --dir <mappe> (--to "<navn>" | --kb-id <id>) [--limit N] [--local] [--dry-run]');
 
   const rows = readFileSync(join(dir, 'manifest.jsonl'), 'utf8')
     .split('\n')
@@ -98,7 +101,7 @@ async function main(): Promise<void> {
     const form = new FormData();
     form.append('file', new File([readFileSync(join(dir, row.file), 'utf8')], name, { type: 'text/markdown' }));
     form.append('path', `/${row.source_type}/`);
-    const res = await fetch(`${API}/api/v1/knowledge-bases/${kb.id}/documents/upload?localCompile=true`, {
+    const res = await fetch(`${API}/api/v1/knowledge-bases/${kb.id}/documents/upload${local ? '?localCompile=true' : ''}`, {
       method: 'POST',
       headers: headers(),
       body: form,

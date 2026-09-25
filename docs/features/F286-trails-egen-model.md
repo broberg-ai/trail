@@ -1629,19 +1629,25 @@ $1,09/t) [gæt, ikke målt for dansk]:
 Kørsler over 3 t kræver `--max-minutes` (fx 1080); `STALE_MINUTES` er hævet
 til 1260, så en parallel kørsel ikke rydder en lang kørsels pod.
 
-### 19.2 Kompileringen (læreren = `/local-ingest` i Max)
+### 19.2 Kompileringen — læreren er Trail Clouds Mistral (Christian 25/9)
 
-1. `bun run apps/scout/src/upload-folder.ts --dir <forager>/out/scout-da-1000 --to "Scout Training 0004 DA"`
-   lægger kilderne i én ny brain, parkeret (`?localCompile=true`) — 0 kr. i skyen.
-2. Den nye brain står IKKE på buddys probe-allowlist (F191.9), så den
-   auto-dispatches ikke; kompilering startes bevidst i portioner.
-3. **Kvote-måling først:** de første 50 kompileres med Opus i Max, og forbruget
-   måles. Christians spørgsmål 25/9 var om 1.000 kompileringer tømmer Max-kvoten —
-   [gæt] 20–40k tokens pr. kilde ≈ 20–40 mio. i alt. Ud fra målingen vælges
-   tempo (fx 150–200/dag), Sonnet som lærer, eller Mistral Large via API
-   (~150–300 kr., [gæt], lavere facit-kvalitet).
-4. `export-titles.ts` + `build_compile.py build 8192` bygger parrene.
-5. Træning i etaper på Runpod.
+**Christian 25/9:** «Vi har tidligere målt mistral og den var god nok den kører
+i production så når der er nye der kommer ind eks. med Web Clipper så er det
+via mistral.» Læreren er derfor den samme compile der kører i drift. Scout
+lærer at gøre præcis det arbejde den skal overtage, og parrene har garanteret
+produktionens format.
+
+1. `bun run apps/scout/src/upload-folder.ts --dir <forager>/out/scout-da-1000 --to "Scout Training 0004 DA" --limit 50`
+   — almindelig upload; motoren kompilerer med Mistral.
+2. **Pris måles på de første 50** før resten uploades. [gæt] 130–400 kr. for
+   1.000. Motorens backpressure (5 samtidige, 60/t pr. tenant) betyder ~17 t
+   for 1.000 — de drypper ind, ingen spidsbelastning.
+3. `export-titles.ts` + `build_compile.py build 8192` bygger parrene.
+4. Træning i etaper på Runpod.
+
+**Forkastet:** Opus/Sonnet via `/local-ingest` (0 kr., men 20–40 mio. tokens
+af den Max-kvote hele flåden deler); en Sonnet-mod-Mistral-sammenligning
+(overflødig — Mistral er målt og i drift). `--local` findes stadig i scriptet.
 
 ## Reuse (F286.15)
 
